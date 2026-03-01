@@ -1,0 +1,129 @@
+package fix2
+
+import (
+	"fmt"
+	"strconv"
+)
+
+// Builder constructs a FIX message from individual fields.
+// Tags 8, 9, 35 and 10 are managed by Build — callers set body and header
+// fields only.
+type Builder struct {
+	beginString string
+	msgType     string
+	fields      []Field // body fields (owned []byte, not zero-copy)
+}
+
+// NewBuilder creates a Builder for the given BeginString and MsgType.
+func NewBuilder(beginString, msgType string) *Builder {
+	return &Builder{
+		beginString: beginString,
+		msgType:     msgType,
+	}
+}
+
+// Set sets a body/header field to a raw byte value.
+// If the tag already exists it is replaced; otherwise it is appended.
+func (b *Builder) Set(tag int, value []byte) *Builder {
+	cp := make([]byte, len(value))
+	copy(cp, value)
+	for i := range b.fields {
+		if b.fields[i].Tag == tag {
+			b.fields[i].Value = cp
+			return b
+		}
+	}
+	b.fields = append(b.fields, Field{Tag: tag, Value: cp})
+	return b
+}
+
+// SetString sets a field to a string value.
+func (b *Builder) SetString(tag int, value string) *Builder {
+	return b.Set(tag, []byte(value))
+}
+
+// SetInt sets a field to an integer value.
+func (b *Builder) SetInt(tag int, value int) *Builder {
+	return b.Set(tag, strconv.AppendInt(nil, int64(value), 10))
+}
+
+// SetFloat sets a field to a float64 value.
+// The value is formatted with up to 10 significant digits and no trailing zeros.
+func (b *Builder) SetFloat(tag int, value float64) *Builder {
+	return b.Set(tag, strconv.AppendFloat(nil, value, 'f', -1, 64))
+}
+
+// SetBool sets a field to a FIX boolean value ("Y" or "N").
+func (b *Builder) SetBool(tag int, value bool) *Builder {
+	if value {
+		return b.Set(tag, []byte("Y"))
+	}
+	return b.Set(tag, []byte("N"))
+}
+
+// Append appends a field without checking for duplicates.
+// This is needed for repeating groups where the same tag appears multiple times.
+func (b *Builder) Append(tag int, value []byte) *Builder {
+	cp := make([]byte, len(value))
+	copy(cp, value)
+	b.fields = append(b.fields, Field{Tag: tag, Value: cp})
+	return b
+}
+
+// AppendString appends a string field.
+func (b *Builder) AppendString(tag int, value string) *Builder {
+	return b.Append(tag, []byte(value))
+}
+
+// AppendInt appends an integer field.
+func (b *Builder) AppendInt(tag int, value int) *Builder {
+	return b.Append(tag, strconv.AppendInt(nil, int64(value), 10))
+}
+
+// AppendFloat appends a float64 field.
+func (b *Builder) AppendFloat(tag int, value float64) *Builder {
+	return b.Append(tag, strconv.AppendFloat(nil, value, 'f', -1, 64))
+}
+
+// AppendBool appends a FIX boolean field ("Y" or "N").
+func (b *Builder) AppendBool(tag int, value bool) *Builder {
+	if value {
+		return b.Append(tag, []byte("Y"))
+	}
+	return b.Append(tag, []byte("N"))
+}
+
+// Build serializes the message into a complete FIX wire-format byte slice:
+//
+//	8=<beginString>\x01 9=<bodyLen>\x01 35=<msgType>\x01 <fields>\x01 10=<checksum>\x01
+func (b *Builder) Build() []byte {
+	// Build body: 35=<msgType>\x01 + all user fields.
+	var body []byte
+	body = append(body, "35="...)
+	body = append(body, b.msgType...)
+	body = append(body, soh)
+	for _, f := range b.fields {
+		body = strconv.AppendInt(body, int64(f.Tag), 10)
+		body = append(body, '=')
+		body = append(body, f.Value...)
+		body = append(body, soh)
+	}
+
+	// Header: 8=<beginString>\x01 9=<bodyLen>\x01
+	var msg []byte
+	msg = append(msg, "8="...)
+	msg = append(msg, b.beginString...)
+	msg = append(msg, soh)
+	msg = append(msg, "9="...)
+	msg = strconv.AppendInt(msg, int64(len(body)), 10)
+	msg = append(msg, soh)
+	msg = append(msg, body...)
+
+	// Checksum: sum of all bytes mod 256, formatted as 3-digit string.
+	var csum uint32
+	for _, c := range msg {
+		csum += uint32(c)
+	}
+	msg = fmt.Appendf(msg, "10=%03d\x01", csum%256)
+	return msg
+}

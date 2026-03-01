@@ -184,6 +184,35 @@ func TestResolve_GroupCounterAndChildren(t *testing.T) {
 	}
 }
 
+func TestResolve_GroupStructure(t *testing.T) {
+	d := loadTestDict(t)
+	nos := d.Messages["D"]
+
+	if len(nos.Groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(nos.Groups))
+	}
+
+	g := nos.Groups[0]
+	if g.Name != "NoAllocs" {
+		t.Errorf("group name = %q, want %q", g.Name, "NoAllocs")
+	}
+	if g.CounterTag != 78 {
+		t.Errorf("CounterTag = %d, want 78", g.CounterTag)
+	}
+	if g.DelimTag != 79 {
+		t.Errorf("DelimTag = %d, want 79", g.DelimTag)
+	}
+	if g.Required {
+		t.Error("group should not be required")
+	}
+	if len(g.Fields) != 1 {
+		t.Fatalf("expected 1 child field, got %d", len(g.Fields))
+	}
+	if g.Fields[0].Tag != 79 {
+		t.Errorf("child field tag = %d, want 79", g.Fields[0].Tag)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Validation tests
 // ---------------------------------------------------------------------------

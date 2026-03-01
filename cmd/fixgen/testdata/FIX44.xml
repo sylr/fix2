@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fix type="FIX" major="4" minor="4" servicepack="0">
+  <header>
+    <field name="BeginString" required="Y"/>
+    <field name="BodyLength" required="Y"/>
+    <field name="MsgType" required="Y"/>
+    <field name="SenderCompID" required="Y"/>
+    <field name="TargetCompID" required="Y"/>
+    <field name="MsgSeqNum" required="Y"/>
+    <field name="SendingTime" required="Y"/>
+  </header>
+  <trailer>
+    <field name="CheckSum" required="Y"/>
+  </trailer>
+  <messages>
+    <message name="Heartbeat" msgtype="0" msgcat="admin">
+      <field name="TestReqID" required="N"/>
+    </message>
+    <message name="NewOrderSingle" msgtype="D" msgcat="app">
+      <field name="ClOrdID" required="Y"/>
+      <field name="Side" required="Y"/>
+      <field name="TransactTime" required="Y"/>
+      <field name="OrdType" required="Y"/>
+      <field name="Price" required="N"/>
+      <field name="OrderQty" required="N"/>
+      <component name="Instrument" required="Y"/>
+      <group name="NoAllocs" required="N">
+        <field name="AllocAccount" required="N"/>
+        <field name="AllocQty" required="N"/>
+        <field name="AllocPrice" required="N"/>
+        <field name="IndividualAllocID" required="N"/>
+      </group>
+    </message>
+  </messages>
+  <components>
+    <component name="Instrument">
+      <field name="Symbol" required="Y"/>
+    </component>
+  </components>
+  <fields>
+    <field number="8" name="BeginString" type="STRING"/>
+    <field number="9" name="BodyLength" type="LENGTH"/>
+    <field number="10" name="CheckSum" type="STRING"/>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="49" name="SenderCompID" type="STRING"/>
+    <field number="56" name="TargetCompID" type="STRING"/>
+    <field number="34" name="MsgSeqNum" type="SEQNUM"/>
+    <field number="52" name="SendingTime" type="UTCTIMESTAMP"/>
+    <field number="112" name="TestReqID" type="STRING"/>
+    <field number="11" name="ClOrdID" type="STRING"/>
+    <field number="54" name="Side" type="CHAR">
+      <value enum="1" description="BUY"/>
+      <value enum="2" description="SELL"/>
+    </field>
+    <field number="60" name="TransactTime" type="UTCTIMESTAMP"/>
+    <field number="40" name="OrdType" type="CHAR">
+      <value enum="1" description="MARKET"/>
+      <value enum="2" description="LIMIT"/>
+    </field>
+    <field number="44" name="Price" type="PRICE"/>
+    <field number="38" name="OrderQty" type="QTY"/>
+    <field number="55" name="Symbol" type="STRING"/>
+    <field number="78" name="NoAllocs" type="NUMINGROUP"/>
+    <field number="79" name="AllocAccount" type="STRING"/>
+    <field number="80" name="AllocQty" type="QTY"/>
+    <field number="366" name="AllocPrice" type="PRICE"/>
+    <field number="467" name="IndividualAllocID" type="STRING"/>
+  </fields>
+</fix>

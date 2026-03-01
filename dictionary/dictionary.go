@@ -103,12 +103,23 @@ type FieldRef struct {
 	Required bool
 }
 
+// GroupDef describes a repeating group within a message.
+type GroupDef struct {
+	CounterTag int        // NUMINGROUP tag (e.g. 78)
+	Name       string     // field name (e.g. "NoAllocs")
+	Required   bool
+	DelimTag   int        // first child tag — instance delimiter (e.g. 79)
+	Fields     []FieldRef // child fields in order (delimiter is Fields[0])
+	Groups     []GroupDef // nested sub-groups
+}
+
 // MessageDef describes a single FIX message type.
 type MessageDef struct {
 	Name    string
 	MsgType string
 	MsgCat  string
 	Fields  []FieldRef // flattened (components/groups resolved)
+	Groups  []GroupDef // top-level groups in this message
 
 	fieldSet map[int]bool
 	required map[int]bool
@@ -129,6 +140,11 @@ type Dict struct {
 	trailerReq map[int]bool
 
 	fieldsByName map[string]*FieldDef
+}
+
+// FieldByName returns the field definition with the given name, or nil if not found.
+func (d *Dict) FieldByName(name string) *FieldDef {
+	return d.fieldsByName[name]
 }
 
 // ---------------------------------------------------------------------------
@@ -207,18 +223,35 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.trailerSet, d.trailerReq = buildMaps(d.Trailer)
 
-	// 5. Flatten each message.
+	// 5. Flatten each message and resolve groups.
 	for _, xm := range xd.Messages.Messages {
 		refs, err := flatten(xm.Fields, xm.Components, xm.Groups, d.fieldsByName, compMap)
 		if err != nil {
 			return nil, fmt.Errorf("dictionary: message %s: %w", xm.Name, err)
 		}
 		fs, req := buildMaps(refs)
+		groups, err := resolveGroups(xm.Groups, d.fieldsByName, compMap)
+		if err != nil {
+			return nil, fmt.Errorf("dictionary: message %s: groups: %w", xm.Name, err)
+		}
+		// Also resolve groups from message-level components.
+		for _, c := range xm.Components {
+			comp, ok := compMap[c.Name]
+			if !ok {
+				continue // already caught by flatten
+			}
+			cg, err := resolveGroups(comp.Groups, d.fieldsByName, compMap)
+			if err != nil {
+				return nil, fmt.Errorf("dictionary: message %s: component %s: groups: %w", xm.Name, c.Name, err)
+			}
+			groups = append(groups, cg...)
+		}
 		d.Messages[xm.MsgType] = &MessageDef{
 			Name:     xm.Name,
 			MsgType:  xm.MsgType,
 			MsgCat:   xm.MsgCat,
 			Fields:   refs,
+			Groups:   groups,
 			fieldSet: fs,
 			required: req,
 		}
@@ -297,6 +330,51 @@ func flattenInner(
 	}
 
 	return refs, nil
+}
+
+// resolveGroups converts XML groups into structured GroupDefs, recursively
+// handling nested groups and expanding component refs within groups.
+func resolveGroups(
+	groups []xmlGroup,
+	byName map[string]*FieldDef,
+	compMap map[string]*xmlComponent,
+) ([]GroupDef, error) {
+	if len(groups) == 0 {
+		return nil, nil
+	}
+	var out []GroupDef
+	for _, g := range groups {
+		fd, ok := byName[g.Name]
+		if !ok {
+			return nil, fmt.Errorf("unknown group field %q", g.Name)
+		}
+
+		// Resolve child fields: direct fields + component-expanded fields.
+		childRefs, err := flattenInner(g.Fields, g.Components, nil, byName, compMap, make(map[string]bool))
+		if err != nil {
+			return nil, fmt.Errorf("group %s: %w", g.Name, err)
+		}
+
+		if len(childRefs) == 0 {
+			return nil, fmt.Errorf("group %s: no child fields", g.Name)
+		}
+
+		// Recursively resolve nested groups.
+		nested, err := resolveGroups(g.Groups, byName, compMap)
+		if err != nil {
+			return nil, fmt.Errorf("group %s: %w", g.Name, err)
+		}
+
+		out = append(out, GroupDef{
+			CounterTag: fd.Tag,
+			Name:       g.Name,
+			Required:   g.Required == "Y",
+			DelimTag:   childRefs[0].Tag,
+			Fields:     childRefs,
+			Groups:     nested,
+		})
+	}
+	return out, nil
 }
 
 // buildMaps precomputes allowed and required sets from a list of FieldRefs.

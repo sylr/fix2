@@ -1,0 +1,132 @@
+package fix2
+
+import "testing"
+
+func TestBuilderRoundTrip(t *testing.T) {
+	raw := NewBuilder("FIX.4.4", "D").
+		SetString(49, "SENDER").
+		SetString(56, "TARGET").
+		SetInt(34, 1).
+		SetString(52, "20231015-10:00:00").
+		SetString(11, "ORD-001").
+		SetString(54, "1").
+		SetString(55, "AAPL").
+		SetInt(38, 100).
+		SetFloat(44, 150.5).
+		Build()
+
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse of built message failed: %v", err)
+	}
+
+	checks := []struct {
+		tag  int
+		want string
+	}{
+		{8, "FIX.4.4"},
+		{35, "D"},
+		{49, "SENDER"},
+		{56, "TARGET"},
+		{34, "1"},
+		{11, "ORD-001"},
+		{54, "1"},
+		{55, "AAPL"},
+		{38, "100"},
+		{44, "150.5"},
+	}
+	for _, c := range checks {
+		got := string(msg.Get(c.tag))
+		if got != c.want {
+			t.Errorf("tag %d = %q, want %q", c.tag, got, c.want)
+		}
+	}
+}
+
+func TestBuilderSetReplaces(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "0")
+	b.SetString(49, "OLD")
+	b.SetString(49, "NEW")
+
+	raw := b.Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if got := string(msg.Get(49)); got != "NEW" {
+		t.Errorf("SenderCompID = %q, want %q", got, "NEW")
+	}
+}
+
+func TestBuilderBool(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D")
+	b.SetBool(114, true)  // LocateReqd
+	b.SetBool(130, false) // IOINaturalFlag
+
+	raw := b.Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if got := string(msg.Get(114)); got != "Y" {
+		t.Errorf("tag 114 = %q, want %q", got, "Y")
+	}
+	if got := string(msg.Get(130)); got != "N" {
+		t.Errorf("tag 130 = %q, want %q", got, "N")
+	}
+}
+
+func TestBuilderAppend(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D")
+	b.SetInt(78, 2)
+	b.AppendString(79, "ACC1")
+	b.AppendFloat(80, 500)
+	b.AppendString(79, "ACC2")
+	b.AppendFloat(80, 300)
+	b.AppendBool(114, true)
+	b.AppendInt(38, 100)
+
+	raw := b.Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Append should not replace — both tag 79 values should be present.
+	var tag79Values []string
+	for _, f := range msg.Fields() {
+		if f.Tag == 79 {
+			tag79Values = append(tag79Values, string(f.Value))
+		}
+	}
+	if len(tag79Values) != 2 {
+		t.Fatalf("expected 2 tag 79 values, got %d", len(tag79Values))
+	}
+	if tag79Values[0] != "ACC1" || tag79Values[1] != "ACC2" {
+		t.Errorf("tag 79 values = %v, want [ACC1, ACC2]", tag79Values)
+	}
+
+	// Check AppendBool
+	if got := string(msg.Get(114)); got != "Y" {
+		t.Errorf("tag 114 = %q, want %q", got, "Y")
+	}
+
+	// Check AppendInt
+	if got := string(msg.Get(38)); got != "100" {
+		t.Errorf("tag 38 = %q, want %q", got, "100")
+	}
+}
+
+func TestBuilderMinimal(t *testing.T) {
+	raw := NewBuilder("FIX.4.0", "0").Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if msg.Count() != 4 { // 8, 9, 35, 10
+		t.Errorf("Count = %d, want 4", msg.Count())
+	}
+	if string(msg.MsgType()) != "0" {
+		t.Errorf("MsgType = %q, want %q", msg.MsgType(), "0")
+	}
+}
