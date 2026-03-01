@@ -221,13 +221,12 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, pkg, outDir 
 		})),
 	)
 
-	// Getters + Has methods — skip group child tags
+	// Getters — skip group child tags
 	for _, fi := range allFields {
 		if groupChildTags[fi.tag] {
 			continue
 		}
 		addGetter(f, name, fi.tag, fi.name, fi.fixType, fi.goInfo, fi.hasEnums)
-		addHasMethod(f, name, fi.tag, fi.name)
 	}
 
 	// --- Group entry reader types + iteration methods ---
@@ -315,7 +314,6 @@ func writeGroupEntryReader(f *jen.File, dict *dictionary.Dict, msgName string, g
 		info := lookupType(fd.Type)
 		hasEnums := len(fd.Enums) > 0
 		addEntryGetter(f, entryName, fr.Tag, fd.Name, fd.Type, info, hasEnums)
-		addEntryHasMethod(f, entryName, fr.Tag, fd.Name)
 	}
 }
 
@@ -368,70 +366,67 @@ func appendNestedChildTags(dict *dictionary.Dict, groups []dictionary.GroupDef, 
 func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("e").Op("*").Id(entryName)
 	tid := tagID(fieldName)
+	getCall := jen.Id("e").Dot("grp").Dot("Get").Call(tid)
 
 	switch {
 	case hasEnums:
-		f.Func().Params(recv).Id(fieldName).Params().Id(fieldName).Block(
-			jen.Return(jen.Id(fieldName).Call(jen.Id("e").Dot("grp").Dot("Get").Call(tid))),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Id(fieldName), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.Id(fieldName).Call(jen.Id("v")), jen.Id("v").Op("!=").Nil()),
 		)
 
 	case info.Category == "string":
-		f.Func().Params(recv).Id(fieldName).Params().String().Block(
-			jen.Return(jen.String().Call(jen.Id("e").Dot("grp").Dot("Get").Call(tid))),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.String(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.String().Call(jen.Id("v")), jen.Id("v").Op("!=").Nil()),
 		)
 
 	case info.Category == "int":
-		f.Func().Params(recv).Id(fieldName).Params().Int().Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Int(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0)),
+				jen.Return(jen.Lit(0), jen.False()),
 			),
 			jen.Id("n").Op(":=").Lit(0),
 			jen.For(jen.List(jen.Id("_"), jen.Id("c")).Op(":=").Range().Id("v")).Block(
 				jen.Id("n").Op("=").Id("n").Op("*").Lit(10).Op("+").Int().Call(jen.Id("c").Op("-").LitRune('0')),
 			),
-			jen.Return(jen.Id("n")),
+			jen.Return(jen.Id("n"), jen.True()),
 		)
 
 	case info.Category == "float":
-		f.Func().Params(recv).Id(fieldName).Params().Float64().Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Float64(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0.0)),
+				jen.Return(jen.Lit(0.0), jen.False()),
 			),
 			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual("strconv", "ParseFloat").Call(jen.String().Call(jen.Id("v")), jen.Lit(64)),
-			jen.Return(jen.Id("f")),
+			jen.Return(jen.Id("f"), jen.True()),
 		)
 
 	case info.Category == "bool":
-		f.Func().Params(recv).Id(fieldName).Params().Bool().Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
-			jen.Return(jen.Len(jen.Id("v")).Op("==").Lit(1).Op("&&").Id("v").Index(jen.Lit(0)).Op("==").LitRune('Y')),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Bool(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.Len(jen.Id("v")).Op("==").Lit(1).Op("&&").Id("v").Index(jen.Lit(0)).Op("==").LitRune('Y'), jen.Id("v").Op("!=").Nil()),
 		)
 
 	case info.Category == "time":
 		parseFunc := timeParseFunc(fixType)
-		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Qual("time", "Time"), jen.Error()).Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Qual("time", "Time"), jen.Bool(), jen.Error()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Qual("time", "Time").Values(), jen.Nil()),
+				jen.Return(jen.Qual("time", "Time").Values(), jen.False(), jen.Nil()),
 			),
-			jen.Return(jen.Id(parseFunc).Call(jen.Id("v"))),
+			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Id(parseFunc).Call(jen.Id("v")),
+			jen.Return(jen.Id("t"), jen.True(), jen.Id("err")),
 		)
 
 	case info.Category == "bytes":
-		f.Func().Params(recv).Id(fieldName).Params().Index().Byte().Block(
-			jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(tid)),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Index().Byte(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.Id("v"), jen.Id("v").Op("!=").Nil()),
 		)
 	}
-}
-
-func addEntryHasMethod(f *jen.File, entryName string, tag int, fieldName string) {
-	f.Func().Params(
-		jen.Id("e").Op("*").Id(entryName),
-	).Id("Has"+fieldName).Params().Bool().Block(
-		jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(tagID(fieldName)).Op("!=").Nil()),
-	)
 }
 
 // ---------------------------------------------------------------------------
@@ -577,71 +572,67 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 func addGetter(f *jen.File, structName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("m").Op("*").Id(structName)
 	tid := tagID(fieldName)
+	getCall := jen.Id("m").Dot("msg").Dot("Get").Call(tid)
 
 	switch {
 	case hasEnums:
-		// Returns the enum type (which is string-based).
-		f.Func().Params(recv).Id(fieldName).Params().Id(fieldName).Block(
-			jen.Return(jen.Id(fieldName).Call(jen.Id("m").Dot("msg").Dot("Get").Call(tid))),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Id(fieldName), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.Id(fieldName).Call(jen.Id("v")), jen.Id("v").Op("!=").Nil()),
 		)
 
 	case info.Category == "string":
-		f.Func().Params(recv).Id(fieldName).Params().String().Block(
-			jen.Return(jen.String().Call(jen.Id("m").Dot("msg").Dot("Get").Call(tid))),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.String(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.String().Call(jen.Id("v")), jen.Id("v").Op("!=").Nil()),
 		)
 
 	case info.Category == "int":
-		f.Func().Params(recv).Id(fieldName).Params().Int().Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Int(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0)),
+				jen.Return(jen.Lit(0), jen.False()),
 			),
 			jen.Id("n").Op(":=").Lit(0),
 			jen.For(jen.List(jen.Id("_"), jen.Id("c")).Op(":=").Range().Id("v")).Block(
 				jen.Id("n").Op("=").Id("n").Op("*").Lit(10).Op("+").Int().Call(jen.Id("c").Op("-").LitRune('0')),
 			),
-			jen.Return(jen.Id("n")),
+			jen.Return(jen.Id("n"), jen.True()),
 		)
 
 	case info.Category == "float":
-		f.Func().Params(recv).Id(fieldName).Params().Float64().Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Float64(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0.0)),
+				jen.Return(jen.Lit(0.0), jen.False()),
 			),
 			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual("strconv", "ParseFloat").Call(jen.String().Call(jen.Id("v")), jen.Lit(64)),
-			jen.Return(jen.Id("f")),
+			jen.Return(jen.Id("f"), jen.True()),
 		)
 
 	case info.Category == "bool":
-		f.Func().Params(recv).Id(fieldName).Params().Bool().Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
-			jen.Return(jen.Len(jen.Id("v")).Op("==").Lit(1).Op("&&").Id("v").Index(jen.Lit(0)).Op("==").LitRune('Y')),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Bool(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.Len(jen.Id("v")).Op("==").Lit(1).Op("&&").Id("v").Index(jen.Lit(0)).Op("==").LitRune('Y'), jen.Id("v").Op("!=").Nil()),
 		)
 
 	case info.Category == "time":
 		parseFunc := timeParseFunc(fixType)
-		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Qual("time", "Time"), jen.Error()).Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Qual("time", "Time"), jen.Bool(), jen.Error()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Qual("time", "Time").Values(), jen.Nil()),
+				jen.Return(jen.Qual("time", "Time").Values(), jen.False(), jen.Nil()),
 			),
-			jen.Return(jen.Id(parseFunc).Call(jen.Id("v"))),
+			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Id(parseFunc).Call(jen.Id("v")),
+			jen.Return(jen.Id("t"), jen.True(), jen.Id("err")),
 		)
 
 	case info.Category == "bytes":
-		f.Func().Params(recv).Id(fieldName).Params().Index().Byte().Block(
-			jen.Return(jen.Id("m").Dot("msg").Dot("Get").Call(tid)),
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Index().Byte(), jen.Bool()).Block(
+			jen.Id("v").Op(":=").Add(getCall),
+			jen.Return(jen.Id("v"), jen.Id("v").Op("!=").Nil()),
 		)
 	}
-}
-
-func addHasMethod(f *jen.File, structName string, tag int, fieldName string) {
-	f.Func().Params(
-		jen.Id("m").Op("*").Id(structName),
-	).Id("Has"+fieldName).Params().Bool().Block(
-		jen.Return(jen.Id("m").Dot("msg").Dot("Get").Call(tagID(fieldName)).Op("!=").Nil()),
-	)
 }
 
 // ---------------------------------------------------------------------------

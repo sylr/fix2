@@ -89,37 +89,31 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	nos := WrapNewOrderSingle(&msg)
-	if got := nos.ClOrdID(); got != "ORD-001" {
-		t.Errorf("ClOrdID = %q, want %q", got, "ORD-001")
+	if got, ok := nos.ClOrdID(); !ok || got != "ORD-001" {
+		t.Errorf("ClOrdID = (%q, %v), want (%q, true)", got, ok, "ORD-001")
 	}
-	if got := nos.Side(); got != SideBuy {
-		t.Errorf("Side = %q, want %q", got, SideBuy)
+	if got, ok := nos.Side(); !ok || got != SideBuy {
+		t.Errorf("Side = (%q, %v), want (%q, true)", got, ok, SideBuy)
 	}
-	if got := nos.Symbol(); got != "AAPL" {
-		t.Errorf("Symbol = %q, want %q", got, "AAPL")
+	if got, ok := nos.Symbol(); !ok || got != "AAPL" {
+		t.Errorf("Symbol = (%q, %v), want (%q, true)", got, ok, "AAPL")
 	}
-	if got := nos.Price(); got != 150.5 {
-		t.Errorf("Price = %v, want %v", got, 150.5)
+	if got, ok := nos.Price(); !ok || got != 150.5 {
+		t.Errorf("Price = (%v, %v), want (%v, true)", got, ok, 150.5)
 	}
-	if got := nos.OrderQty(); got != 100 {
-		t.Errorf("OrderQty = %v, want %v", got, 100.0)
+	if got, ok := nos.OrderQty(); !ok || got != 100 {
+		t.Errorf("OrderQty = (%v, %v), want (%v, true)", got, ok, 100.0)
 	}
-	if got := nos.SenderCompID(); got != "SENDER" {
-		t.Errorf("SenderCompID = %q, want %q", got, "SENDER")
+	if got, ok := nos.SenderCompID(); !ok || got != "SENDER" {
+		t.Errorf("SenderCompID = (%q, %v), want (%q, true)", got, ok, "SENDER")
 	}
-	if got := nos.MsgSeqNum(); got != 1 {
-		t.Errorf("MsgSeqNum = %d, want %d", got, 1)
-	}
-	if !nos.HasClOrdID() {
-		t.Error("HasClOrdID should be true")
+	if got, ok := nos.MsgSeqNum(); !ok || got != 1 {
+		t.Errorf("MsgSeqNum = (%d, %v), want (%d, true)", got, ok, 1)
 	}
 
 	// Repeating group via typed API.
-	if got := nos.NoAllocs(); got != 2 {
-		t.Errorf("NoAllocs = %d, want %d", got, 2)
-	}
-	if !nos.HasNoAllocs() {
-		t.Error("HasNoAllocs should be true")
+	if got, ok := nos.NoAllocs(); !ok || got != 2 {
+		t.Errorf("NoAllocs = (%d, %v), want (%d, true)", got, ok, 2)
 	}
 
 	entries := nos.NoAllocsEntries()
@@ -128,39 +122,39 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	// First entry
-	if got := entries[0].AllocAccount(); got != "ACC1" {
-		t.Errorf("entry[0].AllocAccount = %q, want %q", got, "ACC1")
+	if got, ok := entries[0].AllocAccount(); !ok || got != "ACC1" {
+		t.Errorf("entry[0].AllocAccount = (%q, %v), want (%q, true)", got, ok, "ACC1")
 	}
-	if got := entries[0].AllocQty(); got != 500 {
-		t.Errorf("entry[0].AllocQty = %v, want %v", got, 500.0)
+	if got, ok := entries[0].AllocQty(); !ok || got != 500 {
+		t.Errorf("entry[0].AllocQty = (%v, %v), want (%v, true)", got, ok, 500.0)
 	}
-	if got := entries[0].AllocPrice(); got != 149.75 {
-		t.Errorf("entry[0].AllocPrice = %v, want %v", got, 149.75)
+	if got, ok := entries[0].AllocPrice(); !ok || got != 149.75 {
+		t.Errorf("entry[0].AllocPrice = (%v, %v), want (%v, true)", got, ok, 149.75)
 	}
-	if got := entries[0].IndividualAllocID(); got != "ALLOC-001" {
-		t.Errorf("entry[0].IndividualAllocID = %q, want %q", got, "ALLOC-001")
-	}
-	if !entries[0].HasAllocAccount() {
-		t.Error("entry[0].HasAllocAccount should be true")
+	if got, ok := entries[0].IndividualAllocID(); !ok || got != "ALLOC-001" {
+		t.Errorf("entry[0].IndividualAllocID = (%q, %v), want (%q, true)", got, ok, "ALLOC-001")
 	}
 
 	// Second entry
-	if got := entries[1].AllocAccount(); got != "ACC2" {
-		t.Errorf("entry[1].AllocAccount = %q, want %q", got, "ACC2")
+	if got, ok := entries[1].AllocAccount(); !ok || got != "ACC2" {
+		t.Errorf("entry[1].AllocAccount = (%q, %v), want (%q, true)", got, ok, "ACC2")
 	}
-	if got := entries[1].AllocQty(); got != 300 {
-		t.Errorf("entry[1].AllocQty = %v, want %v", got, 300.0)
+	if got, ok := entries[1].AllocQty(); !ok || got != 300 {
+		t.Errorf("entry[1].AllocQty = (%v, %v), want (%v, true)", got, ok, 300.0)
 	}
-	if got := entries[1].AllocPrice(); got != 150.25 {
-		t.Errorf("entry[1].AllocPrice = %v, want %v", got, 150.25)
+	if got, ok := entries[1].AllocPrice(); !ok || got != 150.25 {
+		t.Errorf("entry[1].AllocPrice = (%v, %v), want (%v, true)", got, ok, 150.25)
 	}
-	if got := entries[1].IndividualAllocID(); got != "ALLOC-002" {
-		t.Errorf("entry[1].IndividualAllocID = %q, want %q", got, "ALLOC-002")
+	if got, ok := entries[1].IndividualAllocID(); !ok || got != "ALLOC-002" {
+		t.Errorf("entry[1].IndividualAllocID = (%q, %v), want (%q, true)", got, ok, "ALLOC-002")
 	}
 
-	tt, err := nos.TransactTime()
+	tt, ok, err := nos.TransactTime()
 	if err != nil {
 		t.Fatalf("TransactTime: %v", err)
+	}
+	if !ok {
+		t.Fatal("TransactTime ok = false, want true")
 	}
 	if tt.Year() != 2023 {
 		t.Errorf("TransactTime year = %d, want 2023", tt.Year())
@@ -182,8 +176,8 @@ func TestHeartbeat(t *testing.T) {
 	}
 
 	hb := WrapHeartbeat(&msg)
-	if got := hb.TestReqID(); got != "TEST123" {
-		t.Errorf("TestReqID = %q, want %q", got, "TEST123")
+	if got, ok := hb.TestReqID(); !ok || got != "TEST123" {
+		t.Errorf("TestReqID = (%q, %v), want (%q, true)", got, ok, "TEST123")
 	}
 }
 
