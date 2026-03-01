@@ -357,23 +357,23 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 		)
 
 	case info.Category == "int":
-		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Int(), jen.Bool()).Block(
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Int(), jen.Bool(), jen.Error()).Block(
 			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0), jen.False()),
+				jen.Return(jen.Lit(0), jen.False(), jen.Nil()),
 			),
-			jen.List(jen.Id("n"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseInt").Call(jen.Id("v")),
-			jen.Return(jen.Id("n"), jen.True()),
+			jen.List(jen.Id("n"), jen.Id("err")).Op(":=").Qual(fix2Pkg, "ParseInt").Call(jen.Id("v")),
+			jen.Return(jen.Id("n"), jen.True(), jen.Id("err")),
 		)
 
 	case info.Category == "float":
-		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Float64(), jen.Bool()).Block(
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Float64(), jen.Bool(), jen.Error()).Block(
 			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0.0), jen.False()),
+				jen.Return(jen.Lit(0.0), jen.False(), jen.Nil()),
 			),
-			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseFloat").Call(jen.Id("v")),
-			jen.Return(jen.Id("f"), jen.True()),
+			jen.List(jen.Id("f"), jen.Id("err")).Op(":=").Qual(fix2Pkg, "ParseFloat").Call(jen.Id("v")),
+			jen.Return(jen.Id("f"), jen.True(), jen.Id("err")),
 		)
 
 	case info.Category == "bool":
@@ -645,23 +645,23 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 		)
 
 	case info.Category == "int":
-		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Int(), jen.Bool()).Block(
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Int(), jen.Bool(), jen.Error()).Block(
 			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0), jen.False()),
+				jen.Return(jen.Lit(0), jen.False(), jen.Nil()),
 			),
-			jen.List(jen.Id("n"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseInt").Call(jen.Id("v")),
-			jen.Return(jen.Id("n"), jen.True()),
+			jen.List(jen.Id("n"), jen.Id("err")).Op(":=").Qual(fix2Pkg, "ParseInt").Call(jen.Id("v")),
+			jen.Return(jen.Id("n"), jen.True(), jen.Id("err")),
 		)
 
 	case info.Category == "float":
-		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Float64(), jen.Bool()).Block(
+		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Float64(), jen.Bool(), jen.Error()).Block(
 			jen.Id("v").Op(":=").Add(getCall),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
-				jen.Return(jen.Lit(0.0), jen.False()),
+				jen.Return(jen.Lit(0.0), jen.False(), jen.Nil()),
 			),
-			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseFloat").Call(jen.Id("v")),
-			jen.Return(jen.Id("f"), jen.True()),
+			jen.List(jen.Id("f"), jen.Id("err")).Op(":=").Qual(fix2Pkg, "ParseFloat").Call(jen.Id("v")),
+			jen.Return(jen.Id("f"), jen.True(), jen.Id("err")),
 		)
 
 	case info.Category == "bool":

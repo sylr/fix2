@@ -107,22 +107,22 @@ func TestRoundTrip(t *testing.T) {
 	if got, ok := nos.Symbol(); !ok || got != "AAPL" {
 		t.Errorf("Symbol = (%q, %v), want (%q, true)", got, ok, "AAPL")
 	}
-	if got, ok := nos.Price(); !ok || got != 150.5 {
-		t.Errorf("Price = (%v, %v), want (%v, true)", got, ok, 150.5)
+	if got, ok, err := nos.Price(); err != nil || !ok || got != 150.5 {
+		t.Errorf("Price = (%v, %v, %v), want (%v, true, nil)", got, ok, err, 150.5)
 	}
-	if got, ok := nos.OrderQty(); !ok || got != 100 {
-		t.Errorf("OrderQty = (%v, %v), want (%v, true)", got, ok, 100.0)
+	if got, ok, err := nos.OrderQty(); err != nil || !ok || got != 100 {
+		t.Errorf("OrderQty = (%v, %v, %v), want (%v, true, nil)", got, ok, err, 100.0)
 	}
 	if got, ok := nos.SenderCompID(); !ok || got != "SENDER" {
 		t.Errorf("SenderCompID = (%q, %v), want (%q, true)", got, ok, "SENDER")
 	}
-	if got, ok := nos.MsgSeqNum(); !ok || got != 1 {
-		t.Errorf("MsgSeqNum = (%d, %v), want (%d, true)", got, ok, 1)
+	if got, ok, err := nos.MsgSeqNum(); err != nil || !ok || got != 1 {
+		t.Errorf("MsgSeqNum = (%d, %v, %v), want (%d, true, nil)", got, ok, err, 1)
 	}
 
 	// Repeating group via typed API.
-	if got, ok := nos.NoAllocs(); !ok || got != 2 {
-		t.Errorf("NoAllocs = (%d, %v), want (%d, true)", got, ok, 2)
+	if got, ok, err := nos.NoAllocs(); err != nil || !ok || got != 2 {
+		t.Errorf("NoAllocs = (%d, %v, %v), want (%d, true, nil)", got, ok, err, 2)
 	}
 
 	entries := nos.NoAllocsEntries()
@@ -134,19 +134,19 @@ func TestRoundTrip(t *testing.T) {
 	if got, ok := entries[0].AllocAccount(); !ok || got != "ACC1" {
 		t.Errorf("entry[0].AllocAccount = (%q, %v), want (%q, true)", got, ok, "ACC1")
 	}
-	if got, ok := entries[0].AllocQty(); !ok || got != 500 {
-		t.Errorf("entry[0].AllocQty = (%v, %v), want (%v, true)", got, ok, 500.0)
+	if got, ok, err := entries[0].AllocQty(); err != nil || !ok || got != 500 {
+		t.Errorf("entry[0].AllocQty = (%v, %v, %v), want (%v, true, nil)", got, ok, err, 500.0)
 	}
-	if got, ok := entries[0].AllocPrice(); !ok || got != 149.75 {
-		t.Errorf("entry[0].AllocPrice = (%v, %v), want (%v, true)", got, ok, 149.75)
+	if got, ok, err := entries[0].AllocPrice(); err != nil || !ok || got != 149.75 {
+		t.Errorf("entry[0].AllocPrice = (%v, %v, %v), want (%v, true, nil)", got, ok, err, 149.75)
 	}
 	if got, ok := entries[0].IndividualAllocID(); !ok || got != "ALLOC-001" {
 		t.Errorf("entry[0].IndividualAllocID = (%q, %v), want (%q, true)", got, ok, "ALLOC-001")
 	}
 
 	// Nested group: first alloc entry has 2 delivery instructions.
-	if got, ok := entries[0].NoDlvyInst(); !ok || got != 2 {
-		t.Errorf("entry[0].NoDlvyInst = (%d, %v), want (%d, true)", got, ok, 2)
+	if got, ok, err := entries[0].NoDlvyInst(); err != nil || !ok || got != 2 {
+		t.Errorf("entry[0].NoDlvyInst = (%d, %v, %v), want (%d, true, nil)", got, ok, err, 2)
 	}
 	dlvy0 := entries[0].NoDlvyInstEntries()
 	if len(dlvy0) != 2 {
@@ -169,19 +169,19 @@ func TestRoundTrip(t *testing.T) {
 	if got, ok := entries[1].AllocAccount(); !ok || got != "ACC2" {
 		t.Errorf("entry[1].AllocAccount = (%q, %v), want (%q, true)", got, ok, "ACC2")
 	}
-	if got, ok := entries[1].AllocQty(); !ok || got != 300 {
-		t.Errorf("entry[1].AllocQty = (%v, %v), want (%v, true)", got, ok, 300.0)
+	if got, ok, err := entries[1].AllocQty(); err != nil || !ok || got != 300 {
+		t.Errorf("entry[1].AllocQty = (%v, %v, %v), want (%v, true, nil)", got, ok, err, 300.0)
 	}
-	if got, ok := entries[1].AllocPrice(); !ok || got != 150.25 {
-		t.Errorf("entry[1].AllocPrice = (%v, %v), want (%v, true)", got, ok, 150.25)
+	if got, ok, err := entries[1].AllocPrice(); err != nil || !ok || got != 150.25 {
+		t.Errorf("entry[1].AllocPrice = (%v, %v, %v), want (%v, true, nil)", got, ok, err, 150.25)
 	}
 	if got, ok := entries[1].IndividualAllocID(); !ok || got != "ALLOC-002" {
 		t.Errorf("entry[1].IndividualAllocID = (%q, %v), want (%q, true)", got, ok, "ALLOC-002")
 	}
 
 	// Nested group: second alloc entry has 1 delivery instruction.
-	if got, ok := entries[1].NoDlvyInst(); !ok || got != 1 {
-		t.Errorf("entry[1].NoDlvyInst = (%d, %v), want (%d, true)", got, ok, 1)
+	if got, ok, err := entries[1].NoDlvyInst(); err != nil || !ok || got != 1 {
+		t.Errorf("entry[1].NoDlvyInst = (%d, %v, %v), want (%d, true, nil)", got, ok, err, 1)
 	}
 	dlvy1 := entries[1].NoDlvyInstEntries()
 	if len(dlvy1) != 1 {
