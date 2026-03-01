@@ -1,5 +1,7 @@
 package fix2
 
+import "slices"
+
 // Message represents a parsed FIX message.
 // The inline field buffer avoids heap allocation for messages with up to 32 fields.
 type Message struct {
@@ -46,12 +48,6 @@ func (m *Message) Groups(counterTag int, childTags []int) []Group {
 	}
 	delimTag := childTags[0]
 
-	// Build lookup set from the slice.
-	childSet := make(map[int]bool, len(childTags))
-	for _, t := range childTags {
-		childSet[t] = true
-	}
-
 	// 1. Find the counter field and parse its value.
 	counterIdx := -1
 	count := 0
@@ -73,7 +69,7 @@ func (m *Message) Groups(counterTag int, childTags []int) []Group {
 	var cur []Field
 	for i := counterIdx + 1; i < len(m.fields) && len(groups) < count; i++ {
 		f := m.fields[i]
-		if !childSet[f.Tag] {
+		if !slices.Contains(childTags, f.Tag) {
 			break // non-child tag terminates the group block
 		}
 		if f.Tag == delimTag {
