@@ -104,6 +104,58 @@ func TestGroupGetMissing(t *testing.T) {
 	}
 }
 
+func TestGroupNestedGroups(t *testing.T) {
+	// Build a message with 1 parent group entry containing 2 nested group entries:
+	// 78=1|79=ACC1|80=500|5000=2|5001=INST1|5002=CODE1|5001=INST2|5002=CODE2|
+	raw := NewBuilder("FIX.4.4", "D").
+		SetString(11, "ORD-001").
+		SetInt(78, 1).
+		AppendString(79, "ACC1").
+		AppendFloat(80, 500).
+		AppendInt(5000, 2).
+		AppendString(5001, "INST1").
+		AppendString(5002, "CODE1").
+		AppendString(5001, "INST2").
+		AppendString(5002, "CODE2").
+		Build()
+
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	parentChildTags := []int{79, 80, 5000, 5001, 5002}
+	groups := msg.Groups(78, parentChildTags)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 parent group, got %d", len(groups))
+	}
+
+	// The parent group should contain all fields including nested.
+	if got := string(groups[0].Get(79)); got != "ACC1" {
+		t.Errorf("parent tag 79 = %q, want %q", got, "ACC1")
+	}
+
+	// Extract nested groups from the parent group entry.
+	nestedChildTags := []int{5001, 5002}
+	nested := groups[0].Groups(5000, nestedChildTags)
+	if len(nested) != 2 {
+		t.Fatalf("expected 2 nested groups, got %d", len(nested))
+	}
+
+	if got := string(nested[0].Get(5001)); got != "INST1" {
+		t.Errorf("nested[0] tag 5001 = %q, want %q", got, "INST1")
+	}
+	if got := string(nested[0].Get(5002)); got != "CODE1" {
+		t.Errorf("nested[0] tag 5002 = %q, want %q", got, "CODE1")
+	}
+	if got := string(nested[1].Get(5001)); got != "INST2" {
+		t.Errorf("nested[1] tag 5001 = %q, want %q", got, "INST2")
+	}
+	if got := string(nested[1].Get(5002)); got != "CODE2" {
+		t.Errorf("nested[1] tag 5002 = %q, want %q", got, "CODE2")
+	}
+}
+
 func TestGroupsNilChildTags(t *testing.T) {
 	raw := NewBuilder("FIX.4.4", "D").
 		SetInt(78, 1).

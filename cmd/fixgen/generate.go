@@ -112,51 +112,7 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 		f.Const().Defs(enumConsts...)
 	}
 
-	// --- Time parse helpers ---
-	addTimeHelpers(f)
-
 	return f.Save(filepath.Join(outDir, "fields.go"))
-}
-
-func addTimeHelpers(f *jen.File) {
-	timePkg := "time"
-
-	// parseUTCTimestamp
-	f.Func().Id("parseUTCTimestamp").Params(jen.Id("v").Index().Byte()).Params(jen.Qual(timePkg, "Time"), jen.Error()).Block(
-		jen.Id("s").Op(":=").String().Call(jen.Id("v")),
-		jen.For(jen.List(jen.Id("_"), jen.Id("layout")).Op(":=").Range().Index().String().Values(
-			jen.Lit("20060102-15:04:05.000000000"),
-			jen.Lit("20060102-15:04:05.000"),
-			jen.Lit("20060102-15:04:05"),
-		)).Block(
-			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Qual(timePkg, "Parse").Call(jen.Id("layout"), jen.Id("s")),
-			jen.If(jen.Id("err").Op("==").Nil()).Block(
-				jen.Return(jen.Id("t"), jen.Nil()),
-			),
-		),
-		jen.Return(jen.Qual(timePkg, "Time").Values(), jen.Qual("fmt", "Errorf").Call(jen.Lit("parseUTCTimestamp: cannot parse %q"), jen.Id("s"))),
-	)
-
-	// parseUTCDate
-	f.Func().Id("parseUTCDate").Params(jen.Id("v").Index().Byte()).Params(jen.Qual(timePkg, "Time"), jen.Error()).Block(
-		jen.Return(jen.Qual(timePkg, "Parse").Call(jen.Lit("20060102"), jen.String().Call(jen.Id("v")))),
-	)
-
-	// parseUTCTimeOnly
-	f.Func().Id("parseUTCTimeOnly").Params(jen.Id("v").Index().Byte()).Params(jen.Qual(timePkg, "Time"), jen.Error()).Block(
-		jen.Id("s").Op(":=").String().Call(jen.Id("v")),
-		jen.For(jen.List(jen.Id("_"), jen.Id("layout")).Op(":=").Range().Index().String().Values(
-			jen.Lit("15:04:05.000000000"),
-			jen.Lit("15:04:05.000"),
-			jen.Lit("15:04:05"),
-		)).Block(
-			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Qual(timePkg, "Parse").Call(jen.Id("layout"), jen.Id("s")),
-			jen.If(jen.Id("err").Op("==").Nil()).Block(
-				jen.Return(jen.Id("t"), jen.Nil()),
-			),
-		),
-		jen.Return(jen.Qual(timePkg, "Time").Values(), jen.Qual("fmt", "Errorf").Call(jen.Lit("parseUTCTimeOnly: cannot parse %q"), jen.Id("s"))),
-	)
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +128,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, pkg, outDir 
 	// Build sets of group child tags and counter tags from group definitions.
 	groupChildTags := map[int]bool{}
 	counterTags := map[int]bool{}
-	collectGroupTags(md.Groups, groupChildTags, counterTags)
+	collectGroupTags(md.Groups, groupChildTags, counterTags, false)
 
 	// Collect fields for this message: header fields + message fields, skip structural.
 	type fieldInfo struct {
@@ -232,7 +188,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, pkg, outDir 
 	// --- Group entry reader types + iteration methods ---
 	for _, gd := range md.Groups {
 		writeGroupEntryReader(f, dict, name, gd)
-		writeGroupIterator(f, dict, name, gd)
+		writeGroupIterator(f, dict, name, "m", "msg", gd)
 	}
 
 	// --- Builder struct with counter fields ---
@@ -275,13 +231,18 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, pkg, outDir 
 }
 
 // collectGroupTags recursively collects child tags and counter tags from groups.
-func collectGroupTags(groups []dictionary.GroupDef, childTags, counterTags map[int]bool) {
+// Nested counter tags are added to childTags so they are skipped from the base
+// message getters/setters (they only belong on the parent group entry).
+func collectGroupTags(groups []dictionary.GroupDef, childTags, counterTags map[int]bool, nested bool) {
 	for _, gd := range groups {
 		counterTags[gd.CounterTag] = true
+		if nested {
+			childTags[gd.CounterTag] = true
+		}
 		for _, fr := range gd.Fields {
 			childTags[fr.Tag] = true
 		}
-		collectGroupTags(gd.Groups, childTags, counterTags)
+		collectGroupTags(gd.Groups, childTags, counterTags, true)
 	}
 }
 
@@ -305,7 +266,7 @@ func writeGroupEntryReader(f *jen.File, dict *dictionary.Dict, msgName string, g
 		jen.Id("grp").Qual(fix2Pkg, "Group"),
 	)
 
-	// Typed getters on the entry
+	// Typed getters for direct child fields.
 	for _, fr := range gd.Fields {
 		fd := dict.Fields[fr.Tag]
 		if fd == nil {
@@ -315,9 +276,23 @@ func writeGroupEntryReader(f *jen.File, dict *dictionary.Dict, msgName string, g
 		hasEnums := len(fd.Enums) > 0
 		addEntryGetter(f, entryName, fr.Tag, fd.Name, fd.Type, info, hasEnums)
 	}
+
+	// Nested groups: counter getter + entry reader + iteration method.
+	for _, nestedGd := range gd.Groups {
+		// Counter getter (int) on the parent entry.
+		addEntryGetter(f, entryName, nestedGd.CounterTag, nestedGd.Name, "NUMINGROUP", lookupType("NUMINGROUP"), false)
+		// Nested entry reader type (recurse).
+		writeGroupEntryReader(f, dict, entryName, nestedGd)
+		// Iteration method on the parent entry.
+		writeGroupIterator(f, dict, entryName, "e", "grp", nestedGd)
+	}
 }
 
-func writeGroupIterator(f *jen.File, dict *dictionary.Dict, msgName string, gd dictionary.GroupDef) {
+// writeGroupIterator generates the child tags var and the Entries() iteration method.
+// ownerName is the type that owns the method (message name or parent entry name).
+// ownerRecv is the receiver variable name ("m" for message, "e" for entry).
+// ownerField is the field to call Groups on ("msg" for message, "grp" for entry).
+func writeGroupIterator(f *jen.File, dict *dictionary.Dict, ownerName, ownerRecv, ownerField string, gd dictionary.GroupDef) {
 	entryName := gd.Name + "Entry"
 	varName := unexport(gd.Name) + "ChildTags"
 
@@ -330,11 +305,11 @@ func writeGroupIterator(f *jen.File, dict *dictionary.Dict, msgName string, gd d
 	tagLits = appendNestedChildTags(dict, gd.Groups, tagLits)
 	f.Var().Id(varName).Op("=").Index().Int().Values(tagLits...)
 
-	// func (m *MsgName) NoAllocsEntries() []NoAllocsEntry
+	// func (x *OwnerName) GroupEntries() []GroupEntry
 	f.Func().Params(
-		jen.Id("m").Op("*").Id(msgName),
+		jen.Id(ownerRecv).Op("*").Id(ownerName),
 	).Id(gd.Name+"Entries").Params().Index().Id(entryName).Block(
-		jen.Id("groups").Op(":=").Id("m").Dot("msg").Dot("Groups").Call(
+		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("Groups").Call(
 			tagID(gd.Name),
 			jen.Id(varName),
 		),
@@ -417,7 +392,7 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Qual("time", "Time").Values(), jen.False(), jen.Nil()),
 			),
-			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Id(parseFunc).Call(jen.Id("v")),
+			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Qual(fix2Pkg, parseFunc).Call(jen.Id("v")),
 			jen.Return(jen.Id("t"), jen.True(), jen.Id("err")),
 		)
 
@@ -436,17 +411,23 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 func writeGroupEntryBuilder(f *jen.File, dict *dictionary.Dict, gd dictionary.GroupDef) {
 	entryBuilderName := gd.Name + "EntryBuilder"
 
-	// type NoAllocsEntryBuilder struct { fields []fix2.Field }
-	f.Type().Id(entryBuilderName).Struct(
+	// Struct with counter fields for nested groups.
+	structFields := []jen.Code{
 		jen.Id("fields").Index().Qual(fix2Pkg, "Field"),
-	)
+	}
+	for _, nestedGd := range gd.Groups {
+		structFields = append(structFields,
+			jen.Id(unexport(nestedGd.Name)+"Count").Int(),
+		)
+	}
+	f.Type().Id(entryBuilderName).Struct(structFields...)
 
-	// func NewNoAllocsEntry() *NoAllocsEntryBuilder
+	// Constructor.
 	f.Func().Id("New"+gd.Name+"Entry").Params().Op("*").Id(entryBuilderName).Block(
 		jen.Return(jen.Op("&").Id(entryBuilderName).Values()),
 	)
 
-	// Typed setters
+	// Typed setters for direct child fields.
 	for _, fr := range gd.Fields {
 		fd := dict.Fields[fr.Tag]
 		if fd == nil {
@@ -455,6 +436,12 @@ func writeGroupEntryBuilder(f *jen.File, dict *dictionary.Dict, gd dictionary.Gr
 		info := lookupType(fd.Type)
 		hasEnums := len(fd.Enums) > 0
 		addEntryBuilderSetter(f, entryBuilderName, fr.Tag, fd.Name, fd.Type, info, hasEnums)
+	}
+
+	// Nested groups: entry builder type + Add method.
+	for _, nestedGd := range gd.Groups {
+		writeGroupEntryBuilder(f, dict, nestedGd)
+		writeEntryGroupAddMethod(f, dict, entryBuilderName, nestedGd)
 	}
 }
 
@@ -517,10 +504,19 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 		)
 
 	case info.Category == "time":
+		fmtConst := timeFormatConst(fixType)
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Qual("time", "Time"),
 		).Op("*").Id(entryBuilderName).Block(
-			appendField(jen.Index().Byte().Call(jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Lit(timeFormatLayout(fixType))))),
+			appendField(jen.Index().Byte().Call(jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Qual(fix2Pkg, fmtConst)))),
+			jen.Return(jen.Id("e")),
+		)
+		// Set*2 variant accepting a TimeFormat.
+		f.Func().Params(recv).Id("Set"+fieldName+"2").Params(
+			jen.Id("v").Qual("time", "Time"),
+			jen.Id("f").Qual(fix2Pkg, "TimeFormat"),
+		).Op("*").Id(entryBuilderName).Block(
+			appendField(jen.Index().Byte().Call(jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Id("f")))),
 			jen.Return(jen.Id("e")),
 		)
 
@@ -562,6 +558,70 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 			jen.Id("b").Dot("Append").Call(jen.Id("f").Dot("Tag"), jen.Id("f").Dot("Value")),
 		),
 		jen.Return(jen.Id("b")),
+	)
+}
+
+// writeEntryGroupAddMethod generates an Add method for nested groups on an entry builder.
+// Unlike the message-level writeGroupAddMethod (which uses b.SetInt/b.Append),
+// this manipulates the e.fields slice directly.
+func writeEntryGroupAddMethod(f *jen.File, dict *dictionary.Dict, parentBuilderName string, gd dictionary.GroupDef) {
+	entryBuilderName := gd.Name + "EntryBuilder"
+	countFieldName := unexport(gd.Name) + "Count"
+	delimName := dict.Fields[gd.DelimTag].Name
+
+	// func (e *ParentEntryBuilder) AddNoDlvyInstEntry(ne *NoDlvyInstEntryBuilder) *ParentEntryBuilder {
+	//     e.noDlvyInstCount++
+	//     counterVal := strconv.AppendInt(nil, int64(e.noDlvyInstCount), 10)
+	//     updated := false
+	//     for i := range e.fields { ... replace counter ... }
+	//     if !updated { e.fields = append(e.fields, ...) }
+	//     fields := ne.fields
+	//     // ensure delimiter first
+	//     e.fields = append(e.fields, fields...)
+	//     return e
+	// }
+	f.Func().Params(
+		jen.Id("e").Op("*").Id(parentBuilderName),
+	).Id("Add"+gd.Name+"Entry").Params(
+		jen.Id("ne").Op("*").Id(entryBuilderName),
+	).Op("*").Id(parentBuilderName).Block(
+		// Increment counter.
+		jen.Id("e").Dot(countFieldName).Op("++"),
+		// Build counter value.
+		jen.Id("counterVal").Op(":=").Qual("strconv", "AppendInt").Call(
+			jen.Nil(), jen.Int64().Call(jen.Id("e").Dot(countFieldName)), jen.Lit(10),
+		),
+		// Update or insert counter field.
+		jen.Id("updated").Op(":=").False(),
+		jen.For(jen.Id("i").Op(":=").Range().Id("e").Dot("fields")).Block(
+			jen.If(jen.Id("e").Dot("fields").Index(jen.Id("i")).Dot("Tag").Op("==").Add(tagID(gd.Name))).Block(
+				jen.Id("e").Dot("fields").Index(jen.Id("i")).Dot("Value").Op("=").Id("counterVal"),
+				jen.Id("updated").Op("=").True(),
+				jen.Break(),
+			),
+		),
+		jen.If(jen.Op("!").Id("updated")).Block(
+			jen.Id("e").Dot("fields").Op("=").Append(
+				jen.Id("e").Dot("fields"),
+				jen.Qual(fix2Pkg, "Field").Values(jen.Dict{
+					jen.Id("Tag"):   tagID(gd.Name),
+					jen.Id("Value"): jen.Id("counterVal"),
+				}),
+			),
+		),
+		// Ensure delimiter tag is first in nested entry.
+		jen.Id("fields").Op(":=").Id("ne").Dot("fields"),
+		jen.For(jen.List(jen.Id("i"), jen.Id("f")).Op(":=").Range().Id("fields")).Block(
+			jen.If(jen.Id("f").Dot("Tag").Op("==").Id("Tag"+delimName)).Block(
+				jen.If(jen.Id("i").Op("!=").Lit(0)).Block(
+					jen.List(jen.Id("fields").Index(jen.Lit(0)), jen.Id("fields").Index(jen.Id("i"))).Op("=").List(jen.Id("fields").Index(jen.Id("i")), jen.Id("fields").Index(jen.Lit(0))),
+				),
+				jen.Break(),
+			),
+		),
+		// Append nested entry fields.
+		jen.Id("e").Dot("fields").Op("=").Append(jen.Id("e").Dot("fields"), jen.Id("fields").Op("...")),
+		jen.Return(jen.Id("e")),
 	)
 }
 
@@ -623,7 +683,7 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Qual("time", "Time").Values(), jen.False(), jen.Nil()),
 			),
-			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Id(parseFunc).Call(jen.Id("v")),
+			jen.List(jen.Id("t"), jen.Id("err")).Op(":=").Qual(fix2Pkg, parseFunc).Call(jen.Id("v")),
 			jen.Return(jen.Id("t"), jen.True(), jen.Id("err")),
 		)
 
@@ -685,10 +745,19 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		)
 
 	case info.Category == "time":
+		fmtConst := timeFormatConst(fixType)
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Qual("time", "Time"),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Lit(timeFormatLayout(fixType)))),
+			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Qual(fix2Pkg, fmtConst))),
+			jen.Return(jen.Id("b")),
+		)
+		// Set*2 variant accepting a TimeFormat.
+		f.Func().Params(recv).Id("Set"+fieldName+"2").Params(
+			jen.Id("v").Qual("time", "Time"),
+			jen.Id("f").Qual(fix2Pkg, "TimeFormat"),
+		).Op("*").Id(builderName).Block(
+			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Id("f"))),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -714,22 +783,22 @@ func tagID(fieldName string) *jen.Statement {
 func timeParseFunc(fixType string) string {
 	switch fixType {
 	case "UTCDATE", "LOCALMKTDATE":
-		return "parseUTCDate"
+		return "ParseUTCDate"
 	case "UTCTIMEONLY":
-		return "parseUTCTimeOnly"
+		return "ParseUTCTimeOnly"
 	default:
-		return "parseUTCTimestamp"
+		return "ParseUTCTimestamp"
 	}
 }
 
-func timeFormatLayout(fixType string) string {
+func timeFormatConst(fixType string) string {
 	switch fixType {
 	case "UTCDATE", "LOCALMKTDATE":
-		return "20060102"
+		return "TimeFormatDate"
 	case "UTCTIMEONLY":
-		return "15:04:05.000"
+		return "TimeFormatTimeOnly"
 	default:
-		return "20060102-15:04:05.000"
+		return "TimeFormatTimestamp"
 	}
 }
 

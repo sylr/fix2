@@ -29,6 +29,15 @@
         <field name="AllocQty" required="N"/>
         <field name="AllocPrice" required="N"/>
         <field name="IndividualAllocID" required="N"/>
+        <group name="NoDlvyInst" required="N">
+          <field name="DlvyInst" required="N"/>
+          <field name="DlvyInstCode" required="N"/>
+          <field name="DlvyInstCountry" required="N"/>
+          <field name="DlvyInstPhone" required="N"/>
+          <field name="DlvyInstEmail" required="N"/>
+          <field name="DlvyInstFax" required="N"/>
+          <field name="DlvyInstContact" required="N"/>
+        </group>
       </group>
     </message>
   </messages>
@@ -65,5 +74,13 @@
     <field number="80" name="AllocQty" type="QTY"/>
     <field number="366" name="AllocPrice" type="PRICE"/>
     <field number="467" name="IndividualAllocID" type="STRING"/>
+    <field number="5000" name="NoDlvyInst" type="NUMINGROUP"/>
+    <field number="5001" name="DlvyInst" type="STRING"/>
+    <field number="5002" name="DlvyInstCode" type="STRING"/>
+    <field number="5003" name="DlvyInstCountry" type="STRING"/>
+    <field number="5004" name="DlvyInstPhone" type="STRING"/>
+    <field number="5005" name="DlvyInstEmail" type="STRING"/>
+    <field number="5006" name="DlvyInstFax" type="STRING"/>
+    <field number="5007" name="DlvyInstContact" type="STRING"/>
   </fields>
 </fix>

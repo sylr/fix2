@@ -75,12 +75,21 @@ func TestRoundTrip(t *testing.T) {
 			SetAllocAccount("ACC1").
 			SetAllocQty(500).
 			SetAllocPrice(149.75).
-			SetIndividualAllocID("ALLOC-001")).
+			SetIndividualAllocID("ALLOC-001").
+			AddNoDlvyInstEntry(NewNoDlvyInstEntry().
+				SetDlvyInst("INST-A1").
+				SetDlvyInstCode("CODE-A1")).
+			AddNoDlvyInstEntry(NewNoDlvyInstEntry().
+				SetDlvyInst("INST-A2").
+				SetDlvyInstCode("CODE-A2"))).
 		AddNoAllocsEntry(NewNoAllocsEntry().
 			SetAllocAccount("ACC2").
 			SetAllocQty(300).
 			SetAllocPrice(150.25).
-			SetIndividualAllocID("ALLOC-002")).
+			SetIndividualAllocID("ALLOC-002").
+			AddNoDlvyInstEntry(NewNoDlvyInstEntry().
+				SetDlvyInst("INST-B1").
+				SetDlvyInstCode("CODE-B1"))).
 		Build()
 
 	msg, err := fix2.Parse(raw)
@@ -135,6 +144,27 @@ func TestRoundTrip(t *testing.T) {
 		t.Errorf("entry[0].IndividualAllocID = (%q, %v), want (%q, true)", got, ok, "ALLOC-001")
 	}
 
+	// Nested group: first alloc entry has 2 delivery instructions.
+	if got, ok := entries[0].NoDlvyInst(); !ok || got != 2 {
+		t.Errorf("entry[0].NoDlvyInst = (%d, %v), want (%d, true)", got, ok, 2)
+	}
+	dlvy0 := entries[0].NoDlvyInstEntries()
+	if len(dlvy0) != 2 {
+		t.Fatalf("entry[0].NoDlvyInstEntries len = %d, want 2", len(dlvy0))
+	}
+	if got, ok := dlvy0[0].DlvyInst(); !ok || got != "INST-A1" {
+		t.Errorf("dlvy0[0].DlvyInst = (%q, %v), want (%q, true)", got, ok, "INST-A1")
+	}
+	if got, ok := dlvy0[0].DlvyInstCode(); !ok || got != "CODE-A1" {
+		t.Errorf("dlvy0[0].DlvyInstCode = (%q, %v), want (%q, true)", got, ok, "CODE-A1")
+	}
+	if got, ok := dlvy0[1].DlvyInst(); !ok || got != "INST-A2" {
+		t.Errorf("dlvy0[1].DlvyInst = (%q, %v), want (%q, true)", got, ok, "INST-A2")
+	}
+	if got, ok := dlvy0[1].DlvyInstCode(); !ok || got != "CODE-A2" {
+		t.Errorf("dlvy0[1].DlvyInstCode = (%q, %v), want (%q, true)", got, ok, "CODE-A2")
+	}
+
 	// Second entry
 	if got, ok := entries[1].AllocAccount(); !ok || got != "ACC2" {
 		t.Errorf("entry[1].AllocAccount = (%q, %v), want (%q, true)", got, ok, "ACC2")
@@ -147,6 +177,21 @@ func TestRoundTrip(t *testing.T) {
 	}
 	if got, ok := entries[1].IndividualAllocID(); !ok || got != "ALLOC-002" {
 		t.Errorf("entry[1].IndividualAllocID = (%q, %v), want (%q, true)", got, ok, "ALLOC-002")
+	}
+
+	// Nested group: second alloc entry has 1 delivery instruction.
+	if got, ok := entries[1].NoDlvyInst(); !ok || got != 1 {
+		t.Errorf("entry[1].NoDlvyInst = (%d, %v), want (%d, true)", got, ok, 1)
+	}
+	dlvy1 := entries[1].NoDlvyInstEntries()
+	if len(dlvy1) != 1 {
+		t.Fatalf("entry[1].NoDlvyInstEntries len = %d, want 1", len(dlvy1))
+	}
+	if got, ok := dlvy1[0].DlvyInst(); !ok || got != "INST-B1" {
+		t.Errorf("dlvy1[0].DlvyInst = (%q, %v), want (%q, true)", got, ok, "INST-B1")
+	}
+	if got, ok := dlvy1[0].DlvyInstCode(); !ok || got != "CODE-B1" {
+		t.Errorf("dlvy1[0].DlvyInstCode = (%q, %v), want (%q, true)", got, ok, "CODE-B1")
 	}
 
 	tt, ok, err := nos.TransactTime()
@@ -301,7 +346,48 @@ func TestGeneratedFileContents(t *testing.T) {
 	if !strings.Contains(fieldsStr, "SideBuy") {
 		t.Error("fields.go missing SideBuy enum constant")
 	}
-	if !strings.Contains(fieldsStr, "parseUTCTimestamp") {
-		t.Error("fields.go missing parseUTCTimestamp helper")
+	if strings.Contains(fieldsStr, "parseUTCTimestamp") {
+		t.Error("fields.go should not contain local parseUTCTimestamp helper (now in fix2 package)")
+	}
+
+	// Verify nested group fields are not on the base message.
+	nos, err := os.ReadFile(filepath.Join(outDir, "msg_new_order_single.go"))
+	if err != nil {
+		t.Fatalf("read msg_new_order_single.go: %v", err)
+	}
+	nosStr := string(nos)
+
+	// NoDlvyInst counter getter should be on NoAllocsEntry, not on NewOrderSingle.
+	if strings.Contains(nosStr, "func (m *NewOrderSingle) NoDlvyInst()") {
+		t.Error("NoDlvyInst() getter should not exist on NewOrderSingle (nested group counter)")
+	}
+	if !strings.Contains(nosStr, "func (e *NoAllocsEntry) NoDlvyInst()") {
+		t.Error("NoDlvyInst() getter missing on NoAllocsEntry")
+	}
+
+	// DlvyInst getter should be on NoDlvyInstEntry, not on NewOrderSingle.
+	if strings.Contains(nosStr, "func (m *NewOrderSingle) DlvyInst()") {
+		t.Error("DlvyInst() getter should not exist on NewOrderSingle (nested group child)")
+	}
+	if !strings.Contains(nosStr, "func (e *NoDlvyInstEntry) DlvyInst()") {
+		t.Error("DlvyInst() getter missing on NoDlvyInstEntry")
+	}
+
+	// NoDlvyInstEntries iteration should be on NoAllocsEntry.
+	if !strings.Contains(nosStr, "func (e *NoAllocsEntry) NoDlvyInstEntries()") {
+		t.Error("NoDlvyInstEntries() missing on NoAllocsEntry")
+	}
+
+	// AddNoDlvyInstEntry should be on NoAllocsEntryBuilder.
+	if !strings.Contains(nosStr, "func (e *NoAllocsEntryBuilder) AddNoDlvyInstEntry(") {
+		t.Error("AddNoDlvyInstEntry() missing on NoAllocsEntryBuilder")
+	}
+
+	// No setter for NoDlvyInst or DlvyInst on the message builder.
+	if strings.Contains(nosStr, "func (b *NewOrderSingleBuilder) SetNoDlvyInst(") {
+		t.Error("SetNoDlvyInst() should not exist on NewOrderSingleBuilder")
+	}
+	if strings.Contains(nosStr, "func (b *NewOrderSingleBuilder) SetDlvyInst(") {
+		t.Error("SetDlvyInst() should not exist on NewOrderSingleBuilder")
 	}
 }
