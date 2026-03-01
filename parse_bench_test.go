@@ -44,6 +44,23 @@ func BenchmarkParse(b *testing.B) {
 	}
 }
 
+func BenchmarkParseWithChecksum(b *testing.B) {
+	for _, extra := range []int{0, 10, 50} {
+		raw := benchMsg(extra)
+		name := fmt.Sprintf("fields=%d", extra+4)
+		b.Run(name, func(b *testing.B) {
+			b.SetBytes(int64(len(raw)))
+			b.ReportAllocs()
+			for b.Loop() {
+				_, err := ParseWithChecksum(raw)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkFindByte(b *testing.B) {
 	for _, size := range []int{16, 64, 256, 1024} {
 		data := make([]byte, size)

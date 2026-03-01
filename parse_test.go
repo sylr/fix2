@@ -222,6 +222,38 @@ func TestChecksumBlock(t *testing.T) {
 	}
 }
 
+func TestParseWithChecksumMatchesParse(t *testing.T) {
+	msgs := [][]byte{
+		buildMsg("FIX.4.4", "35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231015-10:00:00\x0111=order1\x0155=AAPL\x0154=1\x0138=100\x0140=2\x0144=150.50\x01"),
+		buildMsg("FIXT.1.1", "35=A\x0149=S\x0156=T\x01"),
+		buildMsg("FIX.4.0", "35=0\x01"),
+		buildMsg("FIX.4.4", "35=D\x0149=SENDER\x01"),
+	}
+	for i, raw := range msgs {
+		m1, err1 := Parse(raw)
+		m2, err2 := ParseWithChecksum(raw)
+
+		if (err1 == nil) != (err2 == nil) {
+			t.Fatalf("msg[%d]: Parse err=%v, ParseWithChecksum err=%v", i, err1, err2)
+		}
+		if err1 != nil {
+			continue
+		}
+		if m1.Count() != m2.Count() {
+			t.Fatalf("msg[%d]: field count %d vs %d", i, m1.Count(), m2.Count())
+		}
+		for j, f1 := range m1.Fields() {
+			f2 := m2.Fields()[j]
+			if f1.Tag != f2.Tag {
+				t.Errorf("msg[%d] field[%d]: tag %d vs %d", i, j, f1.Tag, f2.Tag)
+			}
+			if string(f1.Value) != string(f2.Value) {
+				t.Errorf("msg[%d] field[%d]: value %q vs %q", i, j, f1.Value, f2.Value)
+			}
+		}
+	}
+}
+
 func FuzzParse(f *testing.F) {
 	// Seed with a valid message.
 	body := "35=D\x0149=SENDER\x0156=TARGET\x01"
@@ -232,8 +264,14 @@ func FuzzParse(f *testing.F) {
 	f.Add([]byte("not a fix message"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Parse must not panic.
+		// Both parsers must not panic.
 		msg, err := Parse(data)
+		msg2, err2 := ParseWithChecksum(data)
+
+		// Both must agree on success/failure.
+		if (err == nil) != (err2 == nil) {
+			t.Fatalf("Parse err=%v, ParseWithChecksum err=%v", err, err2)
+		}
 		if err != nil {
 			return
 		}
@@ -246,6 +284,16 @@ func FuzzParse(f *testing.F) {
 		}
 		if msg.MsgType() == nil {
 			t.Error("MsgType is nil on successful parse")
+		}
+		// Both must produce identical fields.
+		if msg.Count() != msg2.Count() {
+			t.Fatalf("field count %d vs %d", msg.Count(), msg2.Count())
+		}
+		for i, f1 := range msg.Fields() {
+			f2 := msg2.Fields()[i]
+			if f1.Tag != f2.Tag || string(f1.Value) != string(f2.Value) {
+				t.Errorf("field[%d] mismatch: %d=%q vs %d=%q", i, f1.Tag, f1.Value, f2.Tag, f2.Value)
+			}
 		}
 	})
 }
