@@ -323,13 +323,13 @@ func writeGroupIterator(f *jen.File, dict *dictionary.Dict, msgName string, gd d
 	entryName := gd.Name + "Entry"
 	varName := unexport(gd.Name) + "ChildTags"
 
-	// var noAllocsChildTags = []int{79, 80, ...}  — delimiter (Fields[0]) is first
+	// var noAllocsChildTags = []int{TagAllocAccount, TagAllocQty, ...}  — delimiter first
 	var tagLits []jen.Code
 	for _, fr := range gd.Fields {
-		tagLits = append(tagLits, jen.Lit(fr.Tag))
+		tagLits = append(tagLits, tagID(dict.Fields[fr.Tag].Name))
 	}
 	// Also include child tags from nested groups.
-	tagLits = appendNestedChildTags(gd.Groups, tagLits)
+	tagLits = appendNestedChildTags(dict, gd.Groups, tagLits)
 	f.Var().Id(varName).Op("=").Index().Int().Values(tagLits...)
 
 	// func (m *MsgName) NoAllocsEntries() []NoAllocsEntry
@@ -337,7 +337,7 @@ func writeGroupIterator(f *jen.File, dict *dictionary.Dict, msgName string, gd d
 		jen.Id("m").Op("*").Id(msgName),
 	).Id(gd.Name+"Entries").Params().Index().Id(entryName).Block(
 		jen.Id("groups").Op(":=").Id("m").Dot("msg").Dot("Groups").Call(
-			jen.Lit(gd.CounterTag),
+			tagID(gd.Name),
 			jen.Id(varName),
 		),
 		jen.Id("entries").Op(":=").Make(jen.Index().Id(entryName), jen.Len(jen.Id("groups"))),
@@ -350,13 +350,13 @@ func writeGroupIterator(f *jen.File, dict *dictionary.Dict, msgName string, gd d
 	)
 }
 
-func appendNestedChildTags(groups []dictionary.GroupDef, tagLits []jen.Code) []jen.Code {
+func appendNestedChildTags(dict *dictionary.Dict, groups []dictionary.GroupDef, tagLits []jen.Code) []jen.Code {
 	for _, gd := range groups {
-		tagLits = append(tagLits, jen.Lit(gd.CounterTag))
+		tagLits = append(tagLits, tagID(gd.Name))
 		for _, fr := range gd.Fields {
-			tagLits = append(tagLits, jen.Lit(fr.Tag))
+			tagLits = append(tagLits, tagID(dict.Fields[fr.Tag].Name))
 		}
-		tagLits = appendNestedChildTags(gd.Groups, tagLits)
+		tagLits = appendNestedChildTags(dict, gd.Groups, tagLits)
 	}
 	return tagLits
 }
@@ -367,21 +367,22 @@ func appendNestedChildTags(groups []dictionary.GroupDef, tagLits []jen.Code) []j
 
 func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("e").Op("*").Id(entryName)
+	tid := tagID(fieldName)
 
 	switch {
 	case hasEnums:
 		f.Func().Params(recv).Id(fieldName).Params().Id(fieldName).Block(
-			jen.Return(jen.Id(fieldName).Call(jen.Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)))),
+			jen.Return(jen.Id(fieldName).Call(jen.Id("e").Dot("grp").Dot("Get").Call(tid))),
 		)
 
 	case info.Category == "string":
 		f.Func().Params(recv).Id(fieldName).Params().String().Block(
-			jen.Return(jen.String().Call(jen.Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)))),
+			jen.Return(jen.String().Call(jen.Id("e").Dot("grp").Dot("Get").Call(tid))),
 		)
 
 	case info.Category == "int":
 		f.Func().Params(recv).Id(fieldName).Params().Int().Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0)),
 			),
@@ -394,7 +395,7 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 
 	case info.Category == "float":
 		f.Func().Params(recv).Id(fieldName).Params().Float64().Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0.0)),
 			),
@@ -404,14 +405,14 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 
 	case info.Category == "bool":
 		f.Func().Params(recv).Id(fieldName).Params().Bool().Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
 			jen.Return(jen.Len(jen.Id("v")).Op("==").Lit(1).Op("&&").Id("v").Index(jen.Lit(0)).Op("==").LitRune('Y')),
 		)
 
 	case info.Category == "time":
 		parseFunc := timeParseFunc(fixType)
 		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Qual("time", "Time"), jen.Error()).Block(
-			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("e").Dot("grp").Dot("Get").Call(tid),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Qual("time", "Time").Values(), jen.Nil()),
 			),
@@ -420,7 +421,7 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 
 	case info.Category == "bytes":
 		f.Func().Params(recv).Id(fieldName).Params().Index().Byte().Block(
-			jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag))),
+			jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(tid)),
 		)
 	}
 }
@@ -429,7 +430,7 @@ func addEntryHasMethod(f *jen.File, entryName string, tag int, fieldName string)
 	f.Func().Params(
 		jen.Id("e").Op("*").Id(entryName),
 	).Id("Has"+fieldName).Params().Bool().Block(
-		jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(jen.Lit(tag)).Op("!=").Nil()),
+		jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(tagID(fieldName)).Op("!=").Nil()),
 	)
 }
 
@@ -464,11 +465,12 @@ func writeGroupEntryBuilder(f *jen.File, dict *dictionary.Dict, gd dictionary.Gr
 
 func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("e").Op("*").Id(entryBuilderName)
+	tid := tagID(fieldName)
 	appendField := func(valExpr jen.Code) jen.Code {
 		return jen.Id("e").Dot("fields").Op("=").Append(
 			jen.Id("e").Dot("fields"),
 			jen.Qual(fix2Pkg, "Field").Values(jen.Dict{
-				jen.Id("Tag"):   jen.Lit(tag),
+				jen.Id("Tag"):   tid,
 				jen.Id("Value"): valExpr,
 			}),
 		)
@@ -540,6 +542,7 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string, gd dictionary.GroupDef) {
 	entryBuilderName := gd.Name + "EntryBuilder"
 	countFieldName := unexport(gd.Name) + "Count"
+	delimName := dict.Fields[gd.DelimTag].Name
 
 	// func (b *MsgBuilder) AddNoAllocsEntry(e *NoAllocsEntryBuilder) *MsgBuilder
 	f.Func().Params(
@@ -549,11 +552,11 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 	).Op("*").Id(builderName).Block(
 		// Update counter first so it appears before group children in the wire.
 		jen.Id("b").Dot(countFieldName).Op("++"),
-		jen.Id("b").Dot("SetInt").Call(jen.Lit(gd.CounterTag), jen.Id("b").Dot(countFieldName)),
+		jen.Id("b").Dot("SetInt").Call(tagID(gd.Name), jen.Id("b").Dot(countFieldName)),
 		// Ensure delimiter tag is first.
 		jen.Id("fields").Op(":=").Id("e").Dot("fields"),
 		jen.For(jen.List(jen.Id("i"), jen.Id("f")).Op(":=").Range().Id("fields")).Block(
-			jen.If(jen.Id("f").Dot("Tag").Op("==").Lit(gd.DelimTag)).Block(
+			jen.If(jen.Id("f").Dot("Tag").Op("==").Id("Tag"+delimName)).Block(
 				jen.If(jen.Id("i").Op("!=").Lit(0)).Block(
 					jen.List(jen.Id("fields").Index(jen.Lit(0)), jen.Id("fields").Index(jen.Id("i"))).Op("=").List(jen.Id("fields").Index(jen.Id("i")), jen.Id("fields").Index(jen.Lit(0))),
 				),
@@ -573,22 +576,23 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 
 func addGetter(f *jen.File, structName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("m").Op("*").Id(structName)
+	tid := tagID(fieldName)
 
 	switch {
 	case hasEnums:
 		// Returns the enum type (which is string-based).
 		f.Func().Params(recv).Id(fieldName).Params().Id(fieldName).Block(
-			jen.Return(jen.Id(fieldName).Call(jen.Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)))),
+			jen.Return(jen.Id(fieldName).Call(jen.Id("m").Dot("msg").Dot("Get").Call(tid))),
 		)
 
 	case info.Category == "string":
 		f.Func().Params(recv).Id(fieldName).Params().String().Block(
-			jen.Return(jen.String().Call(jen.Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)))),
+			jen.Return(jen.String().Call(jen.Id("m").Dot("msg").Dot("Get").Call(tid))),
 		)
 
 	case info.Category == "int":
 		f.Func().Params(recv).Id(fieldName).Params().Int().Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0)),
 			),
@@ -601,7 +605,7 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 
 	case info.Category == "float":
 		f.Func().Params(recv).Id(fieldName).Params().Float64().Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0.0)),
 			),
@@ -611,14 +615,14 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 
 	case info.Category == "bool":
 		f.Func().Params(recv).Id(fieldName).Params().Bool().Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
 			jen.Return(jen.Len(jen.Id("v")).Op("==").Lit(1).Op("&&").Id("v").Index(jen.Lit(0)).Op("==").LitRune('Y')),
 		)
 
 	case info.Category == "time":
 		parseFunc := timeParseFunc(fixType)
 		f.Func().Params(recv).Id(fieldName).Params().Params(jen.Qual("time", "Time"), jen.Error()).Block(
-			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)),
+			jen.Id("v").Op(":=").Id("m").Dot("msg").Dot("Get").Call(tid),
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Qual("time", "Time").Values(), jen.Nil()),
 			),
@@ -627,7 +631,7 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 
 	case info.Category == "bytes":
 		f.Func().Params(recv).Id(fieldName).Params().Index().Byte().Block(
-			jen.Return(jen.Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag))),
+			jen.Return(jen.Id("m").Dot("msg").Dot("Get").Call(tid)),
 		)
 	}
 }
@@ -636,7 +640,7 @@ func addHasMethod(f *jen.File, structName string, tag int, fieldName string) {
 	f.Func().Params(
 		jen.Id("m").Op("*").Id(structName),
 	).Id("Has"+fieldName).Params().Bool().Block(
-		jen.Return(jen.Id("m").Dot("msg").Dot("Get").Call(jen.Lit(tag)).Op("!=").Nil()),
+		jen.Return(jen.Id("m").Dot("msg").Dot("Get").Call(tagID(fieldName)).Op("!=").Nil()),
 	)
 }
 
@@ -646,13 +650,14 @@ func addHasMethod(f *jen.File, structName string, tag int, fieldName string) {
 
 func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("b").Op("*").Id(builderName)
+	tid := tagID(fieldName)
 
 	switch {
 	case hasEnums:
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Id(fieldName),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetString").Call(jen.Lit(tag), jen.String().Call(jen.Id("v"))),
+			jen.Id("b").Dot("SetString").Call(tid, jen.String().Call(jen.Id("v"))),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -660,7 +665,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").String(),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetString").Call(jen.Lit(tag), jen.Id("v")),
+			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v")),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -668,7 +673,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Int(),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetInt").Call(jen.Lit(tag), jen.Id("v")),
+			jen.Id("b").Dot("SetInt").Call(tid, jen.Id("v")),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -676,7 +681,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Float64(),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetFloat").Call(jen.Lit(tag), jen.Id("v")),
+			jen.Id("b").Dot("SetFloat").Call(tid, jen.Id("v")),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -684,7 +689,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Bool(),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetBool").Call(jen.Lit(tag), jen.Id("v")),
+			jen.Id("b").Dot("SetBool").Call(tid, jen.Id("v")),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -692,7 +697,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Qual("time", "Time"),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetString").Call(jen.Lit(tag), jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Lit(timeFormatLayout(fixType)))),
+			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Lit(timeFormatLayout(fixType)))),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -700,10 +705,15 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Index().Byte(),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("Set").Call(jen.Lit(tag), jen.Id("v")),
+			jen.Id("b").Dot("Set").Call(tid, jen.Id("v")),
 			jen.Return(jen.Id("b")),
 		)
 	}
+}
+
+// tagID returns a jen expression for the tag constant (e.g. TagSide).
+func tagID(fieldName string) *jen.Statement {
+	return jen.Id("Tag" + fieldName)
 }
 
 // ---------------------------------------------------------------------------
