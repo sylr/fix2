@@ -23,9 +23,7 @@ func (m *Message) groupsWithMap(counterTag int, childTags []int) []Group {
 	for i := range m.fields {
 		if m.fields[i].Tag == counterTag {
 			counterIdx = i
-			for _, c := range m.fields[i].Value {
-				count = count*10 + int(c-'0')
-			}
+			count, _ = ParseInt(m.fields[i].Value)
 			break
 		}
 	}

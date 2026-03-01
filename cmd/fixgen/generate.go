@@ -362,10 +362,7 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0), jen.False()),
 			),
-			jen.Id("n").Op(":=").Lit(0),
-			jen.For(jen.List(jen.Id("_"), jen.Id("c")).Op(":=").Range().Id("v")).Block(
-				jen.Id("n").Op("=").Id("n").Op("*").Lit(10).Op("+").Int().Call(jen.Id("c").Op("-").LitRune('0')),
-			),
+			jen.List(jen.Id("n"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseInt").Call(jen.Id("v")),
 			jen.Return(jen.Id("n"), jen.True()),
 		)
 
@@ -375,7 +372,7 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0.0), jen.False()),
 			),
-			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual("strconv", "ParseFloat").Call(jen.String().Call(jen.Id("v")), jen.Lit(64)),
+			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseFloat").Call(jen.Id("v")),
 			jen.Return(jen.Id("f"), jen.True()),
 		)
 
@@ -653,10 +650,7 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0), jen.False()),
 			),
-			jen.Id("n").Op(":=").Lit(0),
-			jen.For(jen.List(jen.Id("_"), jen.Id("c")).Op(":=").Range().Id("v")).Block(
-				jen.Id("n").Op("=").Id("n").Op("*").Lit(10).Op("+").Int().Call(jen.Id("c").Op("-").LitRune('0')),
-			),
+			jen.List(jen.Id("n"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseInt").Call(jen.Id("v")),
 			jen.Return(jen.Id("n"), jen.True()),
 		)
 
@@ -666,7 +660,7 @@ func addGetter(f *jen.File, structName string, tag int, fieldName, fixType strin
 			jen.If(jen.Id("v").Op("==").Nil()).Block(
 				jen.Return(jen.Lit(0.0), jen.False()),
 			),
-			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual("strconv", "ParseFloat").Call(jen.String().Call(jen.Id("v")), jen.Lit(64)),
+			jen.List(jen.Id("f"), jen.Id("_")).Op(":=").Qual(fix2Pkg, "ParseFloat").Call(jen.Id("v")),
 			jen.Return(jen.Id("f"), jen.True()),
 		)
 

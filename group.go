@@ -36,9 +36,7 @@ func (g *Group) Groups(counterTag int, childTags []int) []Group {
 	for i := range g.fields {
 		if g.fields[i].Tag == counterTag {
 			counterIdx = i
-			for _, c := range g.fields[i].Value {
-				count = count*10 + int(c-'0')
-			}
+			count, _ = ParseInt(g.fields[i].Value)
 			break
 		}
 	}
