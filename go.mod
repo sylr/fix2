@@ -1,8 +1,3 @@
 module github.com/sylr/fix2
 
 go 1.26
-
-require (
-	github.com/aclements/go-moremath v0.0.0-20210112150236-f10218a38794 // indirect
-	golang.org/x/perf v0.0.0-20260211190930-8161c38c6cdc // indirect
-)

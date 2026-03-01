@@ -1,6 +1,10 @@
 package fix2
 
-import "bytes"
+import (
+	"bytes"
+	"fmt"
+	"io"
+)
 
 const (
 	soh         = 0x01 // FIX field delimiter
@@ -13,124 +17,10 @@ const (
 
 // Parse parses a FIX message from data. All field values are zero-copy slices
 // into data. The caller must not modify data while the returned Message is in use.
+// The checksum is computed incrementally during the single parsing pass; the
+// bytes are already L1-hot from findByte, so the scalar addition has near-zero
+// marginal cost.
 func Parse(data []byte) (Message, error) {
-	var msg Message
-	msg.init()
-
-	if len(data) < minMsgLen {
-		return msg, &ParseError{Err: ErrMessageTooShort, Offset: 0}
-	}
-
-	cursor := 0
-
-	// --- Tag 8: BeginString ---
-	// Must start with "8="
-	if data[0] != '8' || data[1] != '=' {
-		return msg, &ParseError{Err: ErrInvalidBeginTag, Offset: 0}
-	}
-	sohPos := findByte(data, 2, soh)
-	if sohPos < 0 {
-		return msg, &ParseError{Err: ErrInvalidBeginTag, Offset: 0}
-	}
-	beginVal := data[2:sohPos]
-	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return msg, &ParseError{Err: ErrInvalidBeginTag, Offset: 0}
-	}
-	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
-	cursor = sohPos + 1
-
-	// --- Tag 9: BodyLength ---
-	tag, eqPos, err := parseNextExpectedTag(data, cursor, []byte("9"))
-	if err != nil {
-		return msg, err
-	}
-	if tag != tagBodyLen {
-		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
-	}
-	sohPos = findByte(data, eqPos+1, soh)
-	if sohPos < 0 {
-		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
-	}
-	bodyLenVal := data[eqPos+1 : sohPos]
-	bodyLen, ok := parseUint(bodyLenVal)
-	if !ok {
-		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
-	}
-	msg.append(Field{Tag: tagBodyLen, Value: bodyLenVal})
-	cursor = sohPos + 1
-
-	// Compute body region: from cursor to cursor+bodyLen.
-	bodyStart := cursor
-	bodyEnd := bodyStart + bodyLen
-	if bodyEnd > len(data) {
-		return msg, &ParseError{Err: ErrBodyLenMismatch, Offset: cursor}
-	}
-
-	// --- Parse body fields ---
-	for cursor < bodyEnd {
-		tag, eqPos, err = parseNextTag(data, cursor)
-		if err != nil {
-			return msg, err
-		}
-		sohPos = findByte(data, eqPos+1, soh)
-		if sohPos < 0 || sohPos > bodyEnd {
-			return msg, &ParseError{Err: ErrMalformedField, Offset: cursor}
-		}
-		msg.append(Field{Tag: tag, Value: data[eqPos+1 : sohPos]})
-		cursor = sohPos + 1
-	}
-
-	// Verify tag 35 (MsgType) is the third field (index 2).
-	if msg.Count() < 3 || msg.fields[2].Tag != tagMsgType {
-		return msg, &ParseError{Err: ErrMissingMsgType, Offset: bodyStart}
-	}
-
-	// --- Tag 10: CheckSum (trailer) ---
-	trailerStart := cursor
-	tag, eqPos, err = parseNextExpectedTag(data, cursor, []byte("10"))
-	if err != nil {
-		return msg, err
-	}
-	if tag != tagCheckSum {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
-	}
-	sohPos = findByte(data, eqPos+1, soh)
-	if sohPos < 0 {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
-	}
-	csVal := data[eqPos+1 : sohPos]
-	if len(csVal) != 3 {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
-	}
-	expected, ok := parseUint(csVal)
-	if !ok || expected > 255 {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
-	}
-	msg.append(Field{Tag: tagCheckSum, Value: csVal})
-
-	// Validate checksum: sum of all bytes before "10=" trailer.
-	computed := checksumBlock(data[:trailerStart]) % 256
-	if int(computed) != expected {
-		return msg, &ParseError{Err: ErrChecksumMismatch, Offset: cursor}
-	}
-
-	return msg, nil
-}
-
-// checksumRange returns the sum of data[from:to] as uint32.
-func checksumRange(data []byte, from, to int) uint32 {
-	var sum uint32
-	for i := from; i < to; i++ {
-		sum += uint32(data[i])
-	}
-	return sum
-}
-
-// ParseWithChecksum is like Parse but computes the checksum incrementally
-// during the single parsing pass instead of making a separate pass over the
-// data. The bytes are already L1-hot from findByte, so the scalar addition
-// has near-zero marginal cost.
-func ParseWithChecksum(data []byte) (Message, error) {
 	var msg Message
 	msg.init()
 
@@ -144,15 +34,15 @@ func ParseWithChecksum(data []byte) (Message, error) {
 
 	// --- Tag 8: BeginString ---
 	if data[0] != '8' || data[1] != '=' {
-		return msg, &ParseError{Err: ErrInvalidBeginTag, Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected '8=' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, data[:2]), Offset: 0}
 	}
 	sohPos := findByte(data, 2, soh)
 	if sohPos < 0 {
-		return msg, &ParseError{Err: ErrInvalidBeginTag, Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBeginTag, ErrInvalidTag), Offset: 0}
 	}
 	beginVal := data[2:sohPos]
 	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return msg, &ParseError{Err: ErrInvalidBeginTag, Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 'FIX.' or 'FIXT.' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 	cursor = sohPos + 1
@@ -162,14 +52,14 @@ func ParseWithChecksum(data []byte) (Message, error) {
 	// --- Tag 9: BodyLength ---
 	tag, eqPos, err := parseNextExpectedTag(data, cursor, []byte("9"))
 	if err != nil {
-		return msg, err
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidBodyLen, err), Offset: cursor}
 	}
 	if tag != tagBodyLen {
-		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 9, got %d", ErrInvalidBodyLen, ErrInvalidTag, tag), Offset: cursor}
 	}
 	sohPos = findByte(data, eqPos+1, soh)
 	if sohPos < 0 {
-		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBodyLen, ErrInvalidTag), Offset: cursor}
 	}
 	bodyLenVal := data[eqPos+1 : sohPos]
 	bodyLen, ok := parseUint(bodyLenVal)
@@ -212,29 +102,161 @@ func ParseWithChecksum(data []byte) (Message, error) {
 	// --- Tag 10: CheckSum (trailer) ---
 	tag, eqPos, err = parseNextExpectedTag(data, cursor, []byte("10"))
 	if err != nil {
-		return msg, err
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidCheckSum, err), Offset: cursor}
 	}
 	if tag != tagCheckSum {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 10, got %d", ErrInvalidCheckSum, ErrInvalidTag, tag), Offset: cursor}
 	}
 	sohPos = findByte(data, eqPos+1, soh)
 	if sohPos < 0 {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidCheckSum, ErrInvalidTag), Offset: cursor}
 	}
 	csVal := data[eqPos+1 : sohPos]
 	if len(csVal) != 3 {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 3 bytes, got %d", ErrInvalidCheckSum, ErrInvalidTag, len(csVal)), Offset: cursor}
 	}
 	expected, ok := parseUint(csVal)
 	if !ok || expected > 255 {
-		return msg, &ParseError{Err: ErrInvalidCheckSum, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 0-255, got %d", ErrInvalidCheckSum, ErrInvalidTag, expected), Offset: cursor}
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
 
 	// Validate checksum using incrementally accumulated sum.
 	computed := csum % 256
 	if int(computed) != expected {
-		return msg, &ParseError{Err: ErrChecksumMismatch, Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(computed)), Offset: cursor}
+	}
+
+	return msg, nil
+}
+
+// checksumRange returns the sum of data[from:to] as uint32.
+func checksumRange(data []byte, from, to int) uint32 {
+	var sum uint32
+	for i := from; i < to; i++ {
+		sum += uint32(data[i])
+	}
+	return sum
+}
+
+// ParseFromReader reads a single FIX message from r and parses it.
+// It reads the header byte-by-byte to determine BodyLength without
+// over-reading, then uses io.ReadFull for the remaining body and trailer.
+// Parsing is done inline from the two buffers (header, rest) with
+// incremental checksum — no full-message buffer is assembled.
+func ParseFromReader(r io.Reader) (Message, error) {
+	// Read tags 8 and 9 (terminated by SOH each) byte by byte so we
+	// never consume bytes belonging to the next message on a stream.
+	header := make([]byte, 0, 32)
+	var b [1]byte
+	sohCount := 0
+	for sohCount < 2 {
+		if _, err := io.ReadFull(r, b[:]); err != nil {
+			return Message{}, &ParseError{Err: fmt.Errorf("%w: %w", ErrMessageTooShort, err), Offset: len(header)}
+		}
+		header = append(header, b[0])
+		if b[0] == soh {
+			sohCount++
+		}
+	}
+
+	var msg Message
+	msg.init()
+
+	// --- Tag 8: BeginString (from header) ---
+	if len(header) < 4 || header[0] != '8' || header[1] != '=' {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected '8=' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, header[:2]), Offset: 0}
+	}
+	firstSOH := findByte(header, 2, soh)
+	if firstSOH < 0 {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBeginTag, ErrInvalidTag), Offset: 0}
+	}
+	beginVal := header[2:firstSOH]
+	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 'FIX.' or 'FIXT.' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
+	}
+	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
+
+	// --- Tag 9: BodyLength (from header) ---
+	cursor := firstSOH + 1
+	if len(header) < cursor+4 { // need at least "9=X\x01"
+		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
+	}
+	tag, eqPos, err := parseNextExpectedTag(header, cursor, []byte("9"))
+	if err != nil {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidBodyLen, err), Offset: cursor}
+	}
+	if tag != tagBodyLen {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 9, got %d", ErrInvalidBodyLen, ErrInvalidTag, tag), Offset: cursor}
+	}
+	sohPos := findByte(header, eqPos+1, soh)
+	if sohPos < 0 {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBodyLen, ErrInvalidTag), Offset: cursor}
+	}
+	bodyLenVal := header[eqPos+1 : sohPos]
+	bodyLen, ok := parseUint(bodyLenVal)
+	if !ok {
+		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
+	}
+	msg.append(Field{Tag: tagBodyLen, Value: bodyLenVal})
+
+	// Checksum the entire header.
+	csum := checksumBlock(header)
+
+	// Read body + trailer "10=XXX\x01" (7 bytes) in one call.
+	rest := make([]byte, bodyLen+7)
+	if _, err := io.ReadFull(r, rest); err != nil {
+		return Message{}, &ParseError{Err: fmt.Errorf("%w: %w", ErrBodyLenMismatch, err), Offset: len(header)}
+	}
+
+	// --- Parse body fields from rest[0:bodyLen] ---
+	cursor = 0
+	bodyEnd := bodyLen
+	for cursor < bodyEnd {
+		tag, eqPos, err = parseNextTag(rest, cursor)
+		if err != nil {
+			return msg, err
+		}
+		sohPos = findByte(rest, eqPos+1, soh)
+		if sohPos < 0 || sohPos > bodyEnd {
+			return msg, &ParseError{Err: ErrMalformedField, Offset: len(header) + cursor}
+		}
+		msg.append(Field{Tag: tag, Value: rest[eqPos+1 : sohPos]})
+		csum += checksumRange(rest, cursor, sohPos+1)
+		cursor = sohPos + 1
+	}
+
+	// Verify tag 35 (MsgType) is the third field (index 2).
+	if msg.Count() < 3 || msg.fields[2].Tag != tagMsgType {
+		return msg, &ParseError{Err: ErrMissingMsgType, Offset: len(header)}
+	}
+
+	// --- Tag 10: CheckSum (trailer from rest[bodyLen:]) ---
+	cursor = bodyLen
+	tag, eqPos, err = parseNextExpectedTag(rest, cursor, []byte("10"))
+	if err != nil {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidCheckSum, err), Offset: len(header) + cursor}
+	}
+	if tag != tagCheckSum {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 10, got %d", ErrInvalidCheckSum, ErrInvalidTag, tag), Offset: len(header) + cursor}
+	}
+	sohPos = findByte(rest, eqPos+1, soh)
+	if sohPos < 0 {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidCheckSum, ErrInvalidTag), Offset: len(header) + cursor}
+	}
+	csVal := rest[eqPos+1 : sohPos]
+	if len(csVal) != 3 {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 3 bytes, got %d", ErrInvalidCheckSum, ErrInvalidTag, len(csVal)), Offset: len(header) + cursor}
+	}
+	expected, ok := parseUint(csVal)
+	if !ok || expected > 255 {
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 0-255, got %d", ErrInvalidCheckSum, ErrInvalidTag, expected), Offset: len(header) + cursor}
+	}
+	msg.append(Field{Tag: tagCheckSum, Value: csVal})
+
+	// Validate checksum: sum of header + body, mod 256.
+	if int(csum%256) != expected {
+		return msg, &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(csum%256)), Offset: len(header) + bodyLen}
 	}
 
 	return msg, nil

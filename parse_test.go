@@ -1,9 +1,12 @@
 package fix2
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
+	"testing/iotest"
 )
 
 // buildMsg constructs a raw FIX message with a correct checksum.
@@ -20,7 +23,7 @@ func buildMsg(beginStr, body string) []byte {
 		sum += uint32(preTrailer[i])
 	}
 	cs := sum % 256
-	return []byte(fmt.Sprintf("%s10=%03d\x01", preTrailer, cs))
+	return fmt.Appendf(nil, "%s10=%03d\x01", preTrailer, cs)
 }
 
 func TestParseValidNewOrderSingle(t *testing.T) {
@@ -222,35 +225,188 @@ func TestChecksumBlock(t *testing.T) {
 	}
 }
 
-func TestParseWithChecksumMatchesParse(t *testing.T) {
-	msgs := [][]byte{
-		buildMsg("FIX.4.4", "35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231015-10:00:00\x0111=order1\x0155=AAPL\x0154=1\x0138=100\x0140=2\x0144=150.50\x01"),
-		buildMsg("FIXT.1.1", "35=A\x0149=S\x0156=T\x01"),
-		buildMsg("FIX.4.0", "35=0\x01"),
-		buildMsg("FIX.4.4", "35=D\x0149=SENDER\x01"),
-	}
-	for i, raw := range msgs {
-		m1, err1 := Parse(raw)
-		m2, err2 := ParseWithChecksum(raw)
+func TestParseFromReader(t *testing.T) {
+	body := "35=D\x0149=SENDER\x0156=TARGET\x0134=1\x01"
+	raw := buildMsg("FIX.4.4", body)
+	raw = append(raw, raw...) // add a null byte to the end
+	reader := bytes.NewReader(raw)
 
-		if (err1 == nil) != (err2 == nil) {
-			t.Fatalf("msg[%d]: Parse err=%v, ParseWithChecksum err=%v", i, err1, err2)
+	for {
+		msg, err := ParseFromReader(reader)
+		if errors.Is(err, io.EOF) {
+			break
 		}
-		if err1 != nil {
-			continue
+		if err != nil {
+			t.Fatalf("ParseFromReader failed: %v", err)
 		}
-		if m1.Count() != m2.Count() {
-			t.Fatalf("msg[%d]: field count %d vs %d", i, m1.Count(), m2.Count())
+
+		// Compare against Parse.
+		want, _ := Parse(raw)
+		if msg.Count() != want.Count() {
+			t.Fatalf("field count %d vs %d", msg.Count(), want.Count())
 		}
-		for j, f1 := range m1.Fields() {
-			f2 := m2.Fields()[j]
-			if f1.Tag != f2.Tag {
-				t.Errorf("msg[%d] field[%d]: tag %d vs %d", i, j, f1.Tag, f2.Tag)
+		for i, f1 := range want.Fields() {
+			f2 := msg.Fields()[i]
+			if f1.Tag != f2.Tag || string(f1.Value) != string(f2.Value) {
+				t.Errorf("field[%d]: %d=%q vs %d=%q", i, f1.Tag, f1.Value, f2.Tag, f2.Value)
 			}
-			if string(f1.Value) != string(f2.Value) {
-				t.Errorf("msg[%d] field[%d]: value %q vs %q", i, j, f1.Value, f2.Value)
-			}
 		}
+	}
+}
+
+func TestParseFromReaderStream(t *testing.T) {
+	// Two messages concatenated — ParseFromReader must consume exactly the first.
+	msg1 := buildMsg("FIX.4.4", "35=A\x0149=S\x0156=T\x01")
+	msg2 := buildMsg("FIX.4.4", "35=D\x0149=X\x0156=Y\x01")
+	stream := bytes.NewReader(append(msg1, msg2...))
+
+	m, err := ParseFromReader(stream)
+	if err != nil {
+		t.Fatalf("first ParseFromReader failed: %v", err)
+	}
+	if string(m.MsgType()) != "A" {
+		t.Errorf("first msg MsgType = %q, want %q", m.MsgType(), "A")
+	}
+
+	// Second message should still be readable.
+	m, err = ParseFromReader(stream)
+	if err != nil {
+		t.Fatalf("second ParseFromReader failed: %v", err)
+	}
+	if string(m.MsgType()) != "D" {
+		t.Errorf("second msg MsgType = %q, want %q", m.MsgType(), "D")
+	}
+}
+
+func TestParseFromReaderTruncated(t *testing.T) {
+	raw := buildMsg("FIX.4.4", "35=A\x01")
+	// Truncate the message mid-body.
+	truncated := raw[:len(raw)-5]
+	_, err := ParseFromReader(bytes.NewReader(truncated))
+	if err == nil {
+		t.Fatal("expected error for truncated message")
+	}
+}
+
+func TestParseFromReaderEmpty(t *testing.T) {
+	_, err := ParseFromReader(bytes.NewReader(nil))
+	if err == nil {
+		t.Fatal("expected error for empty reader")
+	}
+}
+
+func TestParseFromReaderOneByteReader(t *testing.T) {
+	// Wrap in a one-byte-at-a-time reader to stress the byte-by-byte header logic.
+	raw := buildMsg("FIX.4.4", "35=D\x0149=S\x01")
+	r := iotest.OneByteReader(bytes.NewReader(raw))
+	msg, err := ParseFromReader(r)
+	if err != nil {
+		t.Fatalf("ParseFromReader with OneByteReader failed: %v", err)
+	}
+	want, _ := Parse(raw)
+	if msg.Count() != want.Count() {
+		t.Fatalf("field count %d vs %d", msg.Count(), want.Count())
+	}
+}
+
+func TestParseErrorConsistency(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      []byte
+		sentinel error
+	}{
+		{
+			name: "wrong tag at begin",
+			raw:  []byte("9=123\x018=FIX.4.4\x0135=A\x0110=000\x01"),
+			sentinel: ErrInvalidBeginTag,
+		},
+		{
+			name: "invalid begin string prefix",
+			raw: func() []byte {
+				body := "35=A\x01"
+				header := fmt.Sprintf("8=NOTFIX\x019=%d\x01", len(body))
+				preTrailer := header + body
+				var sum uint32
+				for i := range len(preTrailer) {
+					sum += uint32(preTrailer[i])
+				}
+				return fmt.Appendf(nil, "%s10=%03d\x01", preTrailer, sum%256)
+			}(),
+			sentinel: ErrInvalidBeginTag,
+		},
+		{
+			name:     "invalid body length separator",
+			raw:      []byte("8=FIX.4.4\x019X5\x0135=A\x0110=000\x01"),
+			sentinel: ErrInvalidBodyLen,
+		},
+		{
+			name:     "missing MsgType",
+			raw:      buildMsg("FIX.4.4", "49=S\x0156=T\x01"),
+			sentinel: ErrMissingMsgType,
+		},
+		{
+			name: "wrong tag at checksum",
+			raw: func() []byte {
+				body := "35=A\x01"
+				header := fmt.Sprintf("8=FIX.4.4\x019=%d\x01", len(body))
+				return []byte(header + body + "11=000\x01")
+			}(),
+			sentinel: ErrInvalidCheckSum,
+		},
+		{
+			name: "checksum non-numeric",
+			raw: func() []byte {
+				body := "35=A\x01"
+				header := fmt.Sprintf("8=FIX.4.4\x019=%d\x01", len(body))
+				return []byte(header + body + "10=ABC\x01")
+			}(),
+			sentinel: ErrInvalidCheckSum,
+		},
+		{
+			name: "checksum out of range",
+			raw: func() []byte {
+				body := "35=A\x01"
+				header := fmt.Sprintf("8=FIX.4.4\x019=%d\x01", len(body))
+				return []byte(header + body + "10=999\x01")
+			}(),
+			sentinel: ErrInvalidCheckSum,
+		},
+		{
+			name: "checksum mismatch",
+			raw: func() []byte {
+				raw := buildMsg("FIX.4.4", "35=D\x0149=S\x0156=T\x01")
+				raw[len(raw)-4] = '0'
+				raw[len(raw)-3] = '0'
+				raw[len(raw)-2] = '0'
+				return raw
+			}(),
+			sentinel: ErrChecksumMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, errParse := Parse(tt.raw)
+			_, errReader := ParseFromReader(bytes.NewReader(tt.raw))
+
+			if errParse == nil {
+				t.Fatal("expected Parse to return error")
+			}
+			if errReader == nil {
+				t.Fatal("expected ParseFromReader to return error")
+			}
+
+			if !errors.Is(errParse, tt.sentinel) {
+				t.Errorf("Parse: expected %v, got %v", tt.sentinel, errParse)
+			}
+			if !errors.Is(errReader, tt.sentinel) {
+				t.Errorf("ParseFromReader: expected %v, got %v", tt.sentinel, errReader)
+			}
+
+			if errParse.Error() != errReader.Error() {
+				t.Errorf("error messages differ:\n  Parse:           %q\n  ParseFromReader: %q", errParse.Error(), errReader.Error())
+			}
+		})
 	}
 }
 
@@ -264,14 +420,8 @@ func FuzzParse(f *testing.F) {
 	f.Add([]byte("not a fix message"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Both parsers must not panic.
+		// Parser must not panic.
 		msg, err := Parse(data)
-		msg2, err2 := ParseWithChecksum(data)
-
-		// Both must agree on success/failure.
-		if (err == nil) != (err2 == nil) {
-			t.Fatalf("Parse err=%v, ParseWithChecksum err=%v", err, err2)
-		}
 		if err != nil {
 			return
 		}
@@ -284,16 +434,6 @@ func FuzzParse(f *testing.F) {
 		}
 		if msg.MsgType() == nil {
 			t.Error("MsgType is nil on successful parse")
-		}
-		// Both must produce identical fields.
-		if msg.Count() != msg2.Count() {
-			t.Fatalf("field count %d vs %d", msg.Count(), msg2.Count())
-		}
-		for i, f1 := range msg.Fields() {
-			f2 := msg2.Fields()[i]
-			if f1.Tag != f2.Tag || string(f1.Value) != string(f2.Value) {
-				t.Errorf("field[%d] mismatch: %d=%q vs %d=%q", i, f1.Tag, f1.Value, f2.Tag, f2.Value)
-			}
 		}
 	})
 }

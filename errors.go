@@ -16,6 +16,7 @@ var (
 	ErrBodyLenMismatch        = fmt.Errorf("%w: body length mismatch", ErrFix2)
 	ErrMalformedField         = fmt.Errorf("%w: malformed field", ErrFix2)
 	ErrInvalidTag             = fmt.Errorf("%w: invalid tag number", ErrFix2)
+	ErrInvalidField           = fmt.Errorf("%w: invalid field", ErrFix2)
 	ErrFieldSeparatorNotFound = fmt.Errorf("%w: field separator not found where expected", ErrFix2)
 )
 
