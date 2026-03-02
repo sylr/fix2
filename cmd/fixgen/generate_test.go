@@ -26,6 +26,8 @@ func TestGenerate(t *testing.T) {
 	want := []string{
 		"doc.go",
 		"fields.go",
+		"group_no_allocs.go",
+		"group_no_dlvy_inst.go",
 		"msg_heartbeat.go",
 		"msg_new_order_single.go",
 	}
@@ -357,30 +359,20 @@ func TestGeneratedFileContents(t *testing.T) {
 	}
 	nosStr := string(nos)
 
-	// NoDlvyInst counter getter should be on NoAllocsEntry, not on NewOrderSingle.
+	// Group entry types should NOT be in the message file (they're in group_*.go now).
+	if strings.Contains(nosStr, "type NoAllocsEntry struct") {
+		t.Error("NoAllocsEntry struct should not be in msg_new_order_single.go (moved to group file)")
+	}
+	if strings.Contains(nosStr, "type NoAllocsEntryBuilder struct") {
+		t.Error("NoAllocsEntryBuilder struct should not be in msg_new_order_single.go (moved to group file)")
+	}
+
+	// NoDlvyInst counter getter should not exist on NewOrderSingle.
 	if strings.Contains(nosStr, "func (m *NewOrderSingle) NoDlvyInst()") {
 		t.Error("NoDlvyInst() getter should not exist on NewOrderSingle (nested group counter)")
 	}
-	if !strings.Contains(nosStr, "func (e *NoAllocsEntry) NoDlvyInst()") {
-		t.Error("NoDlvyInst() getter missing on NoAllocsEntry")
-	}
-
-	// DlvyInst getter should be on NoDlvyInstEntry, not on NewOrderSingle.
 	if strings.Contains(nosStr, "func (m *NewOrderSingle) DlvyInst()") {
 		t.Error("DlvyInst() getter should not exist on NewOrderSingle (nested group child)")
-	}
-	if !strings.Contains(nosStr, "func (e *NoDlvyInstEntry) DlvyInst()") {
-		t.Error("DlvyInst() getter missing on NoDlvyInstEntry")
-	}
-
-	// NoDlvyInstEntries iteration should be on NoAllocsEntry.
-	if !strings.Contains(nosStr, "func (e *NoAllocsEntry) NoDlvyInstEntries()") {
-		t.Error("NoDlvyInstEntries() missing on NoAllocsEntry")
-	}
-
-	// AddNoDlvyInstEntry should be on NoAllocsEntryBuilder.
-	if !strings.Contains(nosStr, "func (e *NoAllocsEntryBuilder) AddNoDlvyInstEntry(") {
-		t.Error("AddNoDlvyInstEntry() missing on NoAllocsEntryBuilder")
 	}
 
 	// No setter for NoDlvyInst or DlvyInst on the message builder.
@@ -389,5 +381,49 @@ func TestGeneratedFileContents(t *testing.T) {
 	}
 	if strings.Contains(nosStr, "func (b *NewOrderSingleBuilder) SetDlvyInst(") {
 		t.Error("SetDlvyInst() should not exist on NewOrderSingleBuilder")
+	}
+
+	// Message file should have iteration method and Add method.
+	if !strings.Contains(nosStr, "func (m *NewOrderSingle) NoAllocsEntries()") {
+		t.Error("NoAllocsEntries() missing on NewOrderSingle")
+	}
+	if !strings.Contains(nosStr, "func (b *NewOrderSingleBuilder) AddNoAllocsEntry(") {
+		t.Error("AddNoAllocsEntry() missing on NewOrderSingleBuilder")
+	}
+
+	// Verify group files contain the entry types.
+	allocsGrp, err := os.ReadFile(filepath.Join(outDir, "group_no_allocs.go"))
+	if err != nil {
+		t.Fatalf("read group_no_allocs.go: %v", err)
+	}
+	allocsStr := string(allocsGrp)
+
+	if !strings.Contains(allocsStr, "type NoAllocsEntry struct") {
+		t.Error("NoAllocsEntry struct missing from group_no_allocs.go")
+	}
+	if !strings.Contains(allocsStr, "type NoAllocsEntryBuilder struct") {
+		t.Error("NoAllocsEntryBuilder struct missing from group_no_allocs.go")
+	}
+	if !strings.Contains(allocsStr, "func (e *NoAllocsEntry) NoDlvyInst()") {
+		t.Error("NoDlvyInst() getter missing on NoAllocsEntry in group file")
+	}
+	if !strings.Contains(allocsStr, "func (e *NoAllocsEntry) NoDlvyInstEntries()") {
+		t.Error("NoDlvyInstEntries() missing on NoAllocsEntry in group file")
+	}
+	if !strings.Contains(allocsStr, "func (e *NoAllocsEntryBuilder) AddNoDlvyInstEntry(") {
+		t.Error("AddNoDlvyInstEntry() missing on NoAllocsEntryBuilder in group file")
+	}
+
+	dlvyGrp, err := os.ReadFile(filepath.Join(outDir, "group_no_dlvy_inst.go"))
+	if err != nil {
+		t.Fatalf("read group_no_dlvy_inst.go: %v", err)
+	}
+	dlvyStr := string(dlvyGrp)
+
+	if !strings.Contains(dlvyStr, "type NoDlvyInstEntry struct") {
+		t.Error("NoDlvyInstEntry struct missing from group_no_dlvy_inst.go")
+	}
+	if !strings.Contains(dlvyStr, "func (e *NoDlvyInstEntry) DlvyInst()") {
+		t.Error("DlvyInst() getter missing on NoDlvyInstEntry in group file")
 	}
 }
