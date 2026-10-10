@@ -1194,3 +1194,55 @@ func TestOnce(t *testing.T) {
 }
 `)
 }
+
+// TestGenerateClashCases complements TestGenerateClashCatchAll with the
+// remaining combinations from review; successful cases are compiled.
+func TestGenerateClashCases(t *testing.T) {
+	field := func(num int, name, typ string, enums ...string) string {
+		var v strings.Builder
+		for i, e := range enums {
+			fmt.Fprintf(&v, `<value enum="%d" description="%s"/>`, i+1, e)
+		}
+		return fmt.Sprintf(`<field number="%d" name="%s" type="%s">%s</field>`, num, name, typ, v.String())
+	}
+	dict := func(msgs, fields string) string {
+		return `<fix type="FIX" major="4" minor="4"><header/><trailer/><messages>` + msgs + `</messages><components/><fields>` + fields + `</fields></fix>`
+	}
+	for _, tc := range []struct{ name, msgs, fields string }{
+		{"WrapFoo message", `<message name="Foo" msgtype="U1" msgcat="app"/><message name="WrapFoo" msgtype="U2" msgcat="app"/>`, ""},
+		{"NoXEntry message", `<message name="M" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="A" required="N"/></group></message><message name="NoXEntry" msgtype="U2" msgcat="app"/>`,
+			field(5001, "NoX", "NUMINGROUP") + field(5002, "A", "STRING")},
+		{"TagFoo message", `<message name="TagFoo" msgtype="U1" msgcat="app"><field name="Foo" required="N"/></message>`, field(5001, "Foo", "STRING")},
+		{"cross-field enum constants", `<message name="M" msgtype="U1" msgcat="app"><field name="A" required="N"/><field name="AB" required="N"/></message>`,
+			field(5001, "A", "CHAR", "B_C") + field(5002, "AB", "CHAR", "C")},
+		{"Time and TimeWithFormat", `<message name="M" msgtype="U1" msgcat="app"><field name="Time" required="N"/><field name="TimeWithFormat" required="N"/></message>`,
+			field(5001, "Time", "UTCTIMESTAMP") + field(5002, "TimeWithFormat", "STRING")},
+		{"nested DATA delimiter", `<message name="M" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="A" required="N"/><group name="NoY" required="N"><field name="EncodedText" required="N"/></group></group></message>`,
+			field(5001, "NoX", "NUMINGROUP") + field(5002, "A", "STRING") + field(5003, "NoY", "NUMINGROUP") + field(354, "EncodedTextLen", "LENGTH") + field(355, "EncodedText", "DATA")},
+	} {
+		d, err := dictionary.Load(strings.NewReader(dict(tc.msgs, tc.fields)))
+		if err != nil {
+			t.Fatalf("%s: Load: %v", tc.name, err)
+		}
+		if err := generate(d, "x", t.TempDir()); err == nil {
+			t.Errorf("%s: expected an error", tc.name)
+		}
+	}
+
+	// A String field used only inside a group, and one never used, generate
+	// compiling code: only a message-level setter would shadow SetString.
+	runGenerated(t, dict(
+		`<message name="M" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="String" required="N"/></group></message>`,
+		field(5001, "NoX", "NUMINGROUP")+field(5002, "String", "STRING")+field(5003, "Unused", "STRING")),
+		"strs", "package strs\n")
+	// The successful catch-all fixtures compile too.
+	runGenerated(t, dict(
+		`<message name="Foo" msgtype="U1" msgcat="app"><field name="Foo" required="N"/><field name="FooEnum" required="N"/></message>`,
+		field(5001, "Foo", "CHAR", "A")+field(5002, "FooEnum", "CHAR", "B")),
+		"fooenum", "package fooenum\n")
+	runGenerated(t, dict(
+		`<message name="A" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="B" required="N"/></group></message>
+		 <message name="C" msgtype="U2" msgcat="app"><field name="NoXEntries" required="N"/></message>`,
+		field(5001, "NoX", "NUMINGROUP")+field(5002, "B", "STRING")+field(5003, "NoXEntries", "STRING")),
+		"noxentries", "package noxentries\n")
+}
