@@ -142,9 +142,10 @@ func (b *Builder) AppendInt(tag int, value int) *Builder {
 	return b.Append(tag, strconv.AppendInt(nil, int64(value), 10))
 }
 
-// AppendFloat appends a float64 field.
+// AppendFloat appends a float64 field, formatted as SetFloat formats it. It
+// panics if value is NaN or infinite.
 func (b *Builder) AppendFloat(tag int, value float64) *Builder {
-	return b.Append(tag, strconv.AppendFloat(nil, value, 'f', -1, 64))
+	return b.Append(tag, AppendFloat(nil, value))
 }
 
 // AppendBool appends a FIX boolean field ("Y" or "N").

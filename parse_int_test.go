@@ -1,8 +1,10 @@
 package fix2
 
 import (
+	"bytes"
 	"errors"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -178,7 +180,7 @@ func FuzzParseFloat(f *testing.F) {
 		if err != nil {
 			return
 		}
-		if math.IsNaN(got) || math.IsInf(got, 0) || !isFIXFloat(v) {
+		if math.IsNaN(got) || math.IsInf(got, 0) || !fixFloat.Match(v) {
 			t.Fatalf("ParseFloat(%q) = %v, accepted", v, got)
 		}
 		// Round-trip: format back and re-parse.
@@ -266,4 +268,30 @@ func TestAppendFloat(t *testing.T) {
 			AppendFloat(nil, v)
 		}()
 	}
+}
+
+// fixFloat is the FIX float syntax, independently of isFIXFloat.
+var fixFloat = regexp.MustCompile(`^-?([0-9]+\.?[0-9]*|\.[0-9]+)$`)
+
+func TestFloatEdges(t *testing.T) {
+	for _, v := range []float64{math.MaxFloat64, -math.MaxFloat64, math.SmallestNonzeroFloat64, math.Copysign(0, -1), 0.1, 1e-300} {
+		b := AppendFloat([]byte("x="), v)
+		if !bytes.HasPrefix(b, []byte("x=")) || !fixFloat.Match(b[2:]) {
+			t.Errorf("AppendFloat(%v) = %q", v, b)
+			continue
+		}
+		got, err := ParseFloat(b[2:])
+		if err != nil || math.Float64bits(got) != math.Float64bits(v) {
+			t.Errorf("ParseFloat(AppendFloat(%v)) = %v, %v", v, got, err)
+		}
+	}
+	if _, err := ParseFloat([]byte("1" + strings.Repeat("0", 400))); !errors.Is(err, strconv.ErrRange) {
+		t.Errorf("overflow: err = %v, want strconv.ErrRange", err)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("Builder.AppendFloat(NaN) did not panic")
+		}
+	}()
+	NewBuilder("FIX.4.4", "D").AppendFloat(44, math.NaN())
 }
