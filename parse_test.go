@@ -550,6 +550,8 @@ func FuzzParse(f *testing.F) {
 	f.Add(buildMsg("FIX.4.0", "35=0\x01"))
 	// Seed with garbage.
 	f.Add([]byte("not a fix message"))
+	// Seed with DATA fields (embedded SOH, read by length).
+	f.Add(buildMsg("FIX.4.4", "35=A\x0195=6\x0196=A\x0155=X\x01212=3\x01213=\x01\x01\x01"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Parser must not panic.
@@ -635,5 +637,96 @@ func TestParseFromReaderHeaderLimit(t *testing.T) {
 	}
 	if read := int(r.Size()) - r.Len(); read > maxHeaderLen {
 		t.Errorf("read %d bytes, want at most %d", read, maxHeaderLen)
+	}
+}
+
+// TestParseDataFields checks that a DATA field announced by its LENGTH field
+// is read as exactly that many bytes, even when they contain SOH or "tag=".
+func TestParseDataFields(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		want  map[int]string // expected field values; "" key absent means not checked
+		count int            // expected number of fields, 0 = not checked
+		err   error
+	}{
+		{
+			name:  "RawData with embedded SOH and tag=value",
+			body:  "35=A\x0195=6\x0196=A\x0155=X\x01",
+			want:  map[int]string{96: "A\x0155=X"},
+			count: 6, // 8, 9, 35, 95, 96, 10: no separate 55
+		},
+		{
+			name: "XmlData",
+			body: "35=A\x01212=7\x01213=<a>\x01</>\x01",
+			want: map[int]string{213: "<a>\x01</>"},
+		},
+		{
+			name: "EncodedText",
+			body: "35=A\x01354=3\x01355=\x01\x01\x01\x0158=t\x01",
+			want: map[int]string{355: "\x01\x01\x01", 58: "t"},
+		},
+		{
+			name: "EncodedSymbol",
+			body: "35=A\x011359=2\x011360=\x01\x01\x01",
+			want: map[int]string{1360: "\x01\x01"},
+		},
+		{
+			name: "zero length",
+			body: "35=A\x0195=0\x0196=\x0158=t\x01",
+			want: map[int]string{96: "", 58: "t"},
+		},
+		{
+			name: "DATA not right after its LENGTH is SOH-terminated",
+			body: "35=A\x0195=6\x0158=t\x0196=AB\x01",
+			want: map[int]string{96: "AB", 58: "t"},
+		},
+		{
+			name: "declared length longer than the body",
+			body: "35=A\x0195=99\x0196=A\x01",
+			err:  ErrMalformedField,
+		},
+		{
+			name: "declared length does not end at SOH",
+			body: "35=A\x0195=3\x0196=ABCD\x01",
+			err:  ErrMalformedField,
+		},
+		{
+			name: "invalid length",
+			body: "35=A\x0195=x\x0196=A\x01",
+			err:  ErrMalformedField,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := buildMsg("FIX.4.4", tt.body)
+			for _, p := range []struct {
+				name  string
+				parse func([]byte) (Message, error)
+			}{
+				{"Parse", Parse},
+				{"ParseFromReader", func(b []byte) (Message, error) { return ParseFromReader(bytes.NewReader(b)) }},
+			} {
+				msg, err := p.parse(raw)
+				if tt.err != nil {
+					if !errors.Is(err, tt.err) {
+						t.Errorf("%s: got %v, want %v", p.name, err, tt.err)
+					}
+					continue
+				}
+				if err != nil {
+					t.Errorf("%s: %v", p.name, err)
+					continue
+				}
+				for tag, want := range tt.want {
+					if got := msg.Get(tag); string(got) != want || got == nil {
+						t.Errorf("%s: tag %d = %q, want %q", p.name, tag, got, want)
+					}
+				}
+				if tt.count != 0 && msg.Count() != tt.count {
+					t.Errorf("%s: %d fields, want %d", p.name, msg.Count(), tt.count)
+				}
+			}
+		})
 	}
 }

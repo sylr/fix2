@@ -95,16 +95,30 @@ func Parse(data []byte) (Message, error) {
 	bodyEnd := bodyStart + bodyLen
 
 	// --- Parse body fields ---
+	var next dataField // DATA field announced by the previous LENGTH field
 	for cursor < bodyEnd {
 		tag, eqPos, err = parseNextTag(data, cursor)
 		if err != nil {
 			return msg, err
 		}
-		sohPos = findByte(data, eqPos+1, soh)
-		if sohPos < 0 || sohPos > bodyEnd {
-			return msg, &ParseError{Err: ErrMalformedField, Offset: cursor}
+		if next.tag != 0 && tag == next.tag {
+			if sohPos, err = next.end(data, cursor, eqPos+1, bodyEnd); err != nil {
+				return msg, err
+			}
+		} else {
+			sohPos = findByte(data, eqPos+1, soh)
+			if sohPos < 0 || sohPos > bodyEnd {
+				return msg, &ParseError{Err: ErrMalformedField, Offset: cursor}
+			}
 		}
-		msg.append(Field{Tag: tag, Value: data[eqPos+1 : sohPos]})
+		value := data[eqPos+1 : sohPos]
+		next.tag = 0
+		if tag < len(dataTagFor) && dataTagFor[tag] != 0 {
+			if next, err = announceData(tag, value, cursor); err != nil {
+				return msg, err
+			}
+		}
+		msg.append(Field{Tag: tag, Value: value})
 		cursor = sohPos + 1
 		csum += checksumRange(data, csumPos, cursor)
 		csumPos = cursor
@@ -234,16 +248,30 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	// --- Parse body fields from rest[0:bodyLen] ---
 	cursor = 0
 	bodyEnd := bodyLen
+	var next dataField // DATA field announced by the previous LENGTH field
 	for cursor < bodyEnd {
 		tag, eqPos, err = parseNextTag(rest, cursor)
 		if err != nil {
-			return msg, err
+			return msg, withOffset(err, len(header))
 		}
-		sohPos = findByte(rest, eqPos+1, soh)
-		if sohPos < 0 || sohPos > bodyEnd {
-			return msg, &ParseError{Err: ErrMalformedField, Offset: len(header) + cursor}
+		if next.tag != 0 && tag == next.tag {
+			if sohPos, err = next.end(rest, cursor, eqPos+1, bodyEnd); err != nil {
+				return msg, withOffset(err, len(header))
+			}
+		} else {
+			sohPos = findByte(rest, eqPos+1, soh)
+			if sohPos < 0 || sohPos > bodyEnd {
+				return msg, &ParseError{Err: ErrMalformedField, Offset: len(header) + cursor}
+			}
 		}
-		msg.append(Field{Tag: tag, Value: rest[eqPos+1 : sohPos]})
+		value := rest[eqPos+1 : sohPos]
+		next.tag = 0
+		if tag < len(dataTagFor) && dataTagFor[tag] != 0 {
+			if next, err = announceData(tag, value, cursor); err != nil {
+				return msg, withOffset(err, len(header))
+			}
+		}
+		msg.append(Field{Tag: tag, Value: value})
 		csum += checksumRange(rest, cursor, sohPos+1)
 		cursor = sohPos + 1
 	}
@@ -282,6 +310,44 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	}
 
 	return msg, nil
+}
+
+// dataField is the DATA field announced by the LENGTH field just parsed (see
+// dataFields). If it comes next, its value is read as exactly length bytes,
+// which may include SOH; otherwise fields end at the next SOH.
+type dataField struct {
+	tag    int // expected DATA tag, 0 if none
+	length int // its size in bytes
+}
+
+// end returns the index of the SOH ending the announced DATA value, which
+// starts at valStart and must fit, with its SOH, before bodyEnd. The length
+// comes from the peer, so it is compared by subtraction. cursor is the start
+// of the field, for the error offset.
+func (d dataField) end(data []byte, cursor, valStart, bodyEnd int) (int, error) {
+	if d.length >= bodyEnd-valStart || data[valStart+d.length] != soh {
+		return 0, &ParseError{Err: fmt.Errorf("%w: DATA tag %d does not end after its declared %d bytes", ErrMalformedField, d.tag, d.length), Offset: cursor}
+	}
+	return valStart + d.length, nil
+}
+
+// announceData parses the value of LENGTH tag, which announces the DATA field
+// that must follow it.
+func announceData(tag int, value []byte, cursor int) (dataField, error) {
+	n, ok := parseUint(value)
+	if !ok {
+		return dataField{}, &ParseError{Err: fmt.Errorf("%w: invalid length %q in tag %d", ErrMalformedField, value, tag), Offset: cursor}
+	}
+	return dataField{tag: int(dataTagFor[tag]), length: n}, nil
+}
+
+// withOffset shifts the offset of a *ParseError by delta, e.g. from the body
+// buffer of ParseFromReader to the whole message.
+func withOffset(err error, delta int) error {
+	if pe, ok := err.(*ParseError); ok {
+		pe.Offset += delta
+	}
+	return err
 }
 
 // parseNextTag parses a tag number at data[cursor:] up to '='.
