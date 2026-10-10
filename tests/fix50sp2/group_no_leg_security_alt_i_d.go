@@ -34,12 +34,12 @@ func (e *NoLegSecurityAltIDEntryBuilder) SetLegSecurityAltIDSource(v string) *No
 	return e
 }
 
-// noLegSecurityAltIDLayout lists the tags of a NoLegSecurityAltID entry in dictionary order.
-var noLegSecurityAltIDLayout = []int{TagLegSecurityAltID, TagLegSecurityAltIDSource}
+// noLegSecurityAltID_layout lists the tags of a NoLegSecurityAltID entry in dictionary order.
+var noLegSecurityAltID_layout = []int{TagLegSecurityAltID, TagLegSecurityAltIDSource}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoLegSecurityAltIDEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noLegSecurityAltIDLayout {
+	for _, tag := range noLegSecurityAltID_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

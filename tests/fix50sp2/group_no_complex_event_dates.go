@@ -84,12 +84,12 @@ func (e *NoComplexEventDatesEntryBuilder) AddNoComplexEventTimesEntry(ne *NoComp
 	return e
 }
 
-// noComplexEventDatesLayout lists the tags of a NoComplexEventDates entry in dictionary order.
-var noComplexEventDatesLayout = []int{TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes}
+// noComplexEventDates_layout lists the tags of a NoComplexEventDates entry in dictionary order.
+var noComplexEventDates_layout = []int{TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoComplexEventDatesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noComplexEventDatesLayout {
+	for _, tag := range noComplexEventDates_layout {
 		switch tag {
 		case TagNoComplexEventTimes:
 			if len(e.noComplexEventTimesEntries) > 0 {

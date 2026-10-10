@@ -50,12 +50,12 @@ func (e *NoMsgTypesEntryBuilder) SetRefCstmApplVerID(v string) *NoMsgTypesEntryB
 	return e
 }
 
-// noMsgTypesLayout lists the tags of a NoMsgTypes entry in dictionary order.
-var noMsgTypesLayout = []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}
+// noMsgTypes_layout lists the tags of a NoMsgTypes entry in dictionary order.
+var noMsgTypes_layout = []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noMsgTypesLayout {
+	for _, tag := range noMsgTypes_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

@@ -67,6 +67,42 @@ func resolveEnumTypeNames(dict *dictionary.Dict) map[string]string {
 // shadow it.
 var builderMethods = []string{"Set", "SetString", "SetInt", "SetFloat", "SetBool", "SetData", "SetGroups", "SetSections", "Append", "Build", "BuildWith"}
 
+// checkNames rejects dictionaries the generator cannot name safely: every
+// field, group and message name must be an exported Go identifier made of
+// ASCII letters and digits (as all FIX names are), so that the unexported
+// identifiers derived from them, joined with "_", never clash; and a group
+// cannot start with a DATA field, which FIX requires to follow its LENGTH
+// field while the delimiter must come first.
+func checkNames(dict *dictionary.Dict) error {
+	valid := func(name string) bool {
+		if name == "" || name[0] < 'A' || name[0] > 'Z' {
+			return false
+		}
+		for _, c := range name {
+			if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
+				return false
+			}
+		}
+		return true
+	}
+	for _, fd := range dict.Fields {
+		if !valid(fd.Name) {
+			return fmt.Errorf("field %q: name must be an ASCII letter followed by letters and digits, starting upper case", fd.Name)
+		}
+	}
+	for _, md := range dict.Messages {
+		if !valid(md.Name) {
+			return fmt.Errorf("message %q: name must be an ASCII letter followed by letters and digits, starting upper case", md.Name)
+		}
+	}
+	for name, mg := range mergeAllGroups(dict) {
+		if fix2.DataLengthTag(mg.DelimTag) != 0 {
+			return fmt.Errorf("group %s starts with DATA field %s, which must follow its LENGTH field", name, dict.Fields[mg.DelimTag].Name)
+		}
+	}
+	return nil
+}
+
 // checkMethodClashes reports dictionaries whose names would make generated
 // methods clash, rather than generating code that does not compile: a field
 // named like a group's Entries method, or a setter named like a method of
@@ -97,6 +133,9 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 		return err
 	}
 	written := map[string]bool{"doc.go": true, "fields.go": true}
+	if err := checkNames(dict); err != nil {
+		return err
+	}
 	enumTypeNames = resolveEnumTypeNames(dict)
 	if err := checkMethodClashes(dict); err != nil {
 		return err
@@ -613,7 +652,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	// Specs come from this message's own group definitions: the same group
 	// can hold different fields in other messages.
 	for _, gd := range groups {
-		v := unexport(name) + gd.Name + "Spec"
+		v := unexport(name) + "_" + gd.Name + "_spec"
 		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd))
 		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v))
 	}
@@ -623,7 +662,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	builderFields := []jen.Code{
 		jen.Op("*").Qual(fix2Pkg, "Builder"),
 	}
-	groupsType := unexport(name) + "Groups"
+	groupsType := unexport(name) + "_groups"
 	if len(groups) > 0 {
 		// Group entries live in state allocated by the constructor: a copy
 		// of the builder shares them, as it shares the embedded Builder, and
@@ -1003,7 +1042,7 @@ func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef)
 // written with the group's entries. The delimiter comes first; when it is a
 // nested group's counter, it is written even with no entries.
 func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName string, mg dictionary.GroupDef) {
-	layoutVar := unexport(mg.Name) + "Layout"
+	layoutVar := unexport(mg.Name) + "_layout"
 	var tags []jen.Code
 	for _, tag := range pairDataLengths(dict, mg.Layout) {
 		tags = append(tags, tagID(dict.Fields[tag].Name))

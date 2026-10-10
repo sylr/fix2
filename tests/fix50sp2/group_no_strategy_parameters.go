@@ -42,12 +42,12 @@ func (e *NoStrategyParametersEntryBuilder) SetStrategyParameterValue(v string) *
 	return e
 }
 
-// noStrategyParametersLayout lists the tags of a NoStrategyParameters entry in dictionary order.
-var noStrategyParametersLayout = []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue}
+// noStrategyParameters_layout lists the tags of a NoStrategyParameters entry in dictionary order.
+var noStrategyParameters_layout = []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoStrategyParametersEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noStrategyParametersLayout {
+	for _, tag := range noStrategyParameters_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

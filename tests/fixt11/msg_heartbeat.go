@@ -151,14 +151,14 @@ func (m *Heartbeat) TestReqID() (string, bool) {
 	return string(v), v != nil
 }
 
-var heartbeatNoHopsSpec = &fix2.GroupSpec{
+var heartbeat_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *Heartbeat) NoHopsEntries() []NoHopsEntry {
-	spec := heartbeatNoHopsSpec
+	spec := heartbeat_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func (m *Heartbeat) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-type heartbeatGroups struct {
+type heartbeat_groups struct {
 	noHopsEntries []*NoHopsEntryBuilder
 }
 
@@ -181,13 +181,13 @@ type heartbeatGroups struct {
 // groups with the original.
 type HeartbeatBuilder struct {
 	*fix2.Builder
-	groups *heartbeatGroups
+	groups *heartbeat_groups
 }
 
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
 	b := &HeartbeatBuilder{
 		Builder: fix2.NewBuilder(beginString, "0"),
-		groups:  &heartbeatGroups{},
+		groups:  &heartbeat_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
@@ -310,7 +310,7 @@ func (b *HeartbeatBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *HeartbeatBuild
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *heartbeatGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *heartbeat_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {

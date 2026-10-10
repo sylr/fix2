@@ -541,11 +541,11 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 	// NoDlvyInst inline; entries look nested specs up in their context.
 	nos := read("msg_new_order_single.go")
 	for _, want := range []string{
-		"var newOrderSingleNoAllocsSpec = &fix2.GroupSpec{",
+		"var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{",
 		"Counter: TagNoAllocs,",
 		"Delim:   TagAllocAccount,",
 		"Counter: TagNoDlvyInst,",
-		"spec := newOrderSingleNoAllocsSpec",
+		"spec := newOrderSingle_NoAllocs_spec",
 		"m.msg.GroupsOf(spec)",
 	} {
 		if !strings.Contains(nos, want) {
@@ -816,9 +816,8 @@ func TestPairDataLengths(t *testing.T) {
 		{[]int{1, 618, 600, 619}, []int{1, 600, 618, 619}},
 		{[]int{1, 619, 600}, []int{1, 618, 619, 600}},
 		{[]int{1, 618, 619}, []int{1, 618, 619}},
-		// The delimiter stays first: DATA as delimiter is left alone,
-		// LENGTH as delimiter pulls DATA right behind it.
-		{[]int{619, 600}, []int{619, 600}},
+		// LENGTH as delimiter pulls DATA right behind it. (A DATA
+		// delimiter is rejected by checkNames.)
 		{[]int{618, 600, 619}, []int{618, 619, 600}},
 	} {
 		if got := pairDataLengths(dict, tc.in); !slices.Equal(got, tc.want) {
@@ -1039,5 +1038,29 @@ func TestGenerateMethodClashErrors(t *testing.T) {
 	}
 	if err := generate(dict("Plain"), "m", t.TempDir()); err != nil {
 		t.Errorf("field Plain: %v", err)
+	}
+}
+
+func TestGenerateRejectsUnnameable(t *testing.T) {
+	gen := func(xml string) error {
+		d, err := dictionary.Load(strings.NewReader(xml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return generate(d, "x", t.TempDir())
+	}
+	const tmpl = `<fix type="FIX" major="4" minor="4"><header/><trailer/>
+  <messages><message name="%s" msgtype="U1" msgcat="app">%s</message></messages>
+  <components/><fields>%s</fields></fix>`
+	for name, xml := range map[string]string{
+		"lower-case message":  fmt.Sprintf(tmpl, "m", "", ""),
+		"underscore in field": fmt.Sprintf(tmpl, "M", `<field name="A_B" required="N"/>`, `<field number="5000" name="A_B" type="STRING"/>`),
+		"DATA delimiter": fmt.Sprintf(tmpl, "M",
+			`<group name="NoX" required="N"><field name="EncodedText" required="N"/><field name="EncodedTextLen" required="N"/></group>`,
+			`<field number="5001" name="NoX" type="NUMINGROUP"/><field number="354" name="EncodedTextLen" type="LENGTH"/><field number="355" name="EncodedText" type="DATA"/>`),
+	} {
+		if err := gen(xml); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
 	}
 }

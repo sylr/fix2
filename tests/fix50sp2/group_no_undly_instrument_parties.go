@@ -80,12 +80,12 @@ func (e *NoUndlyInstrumentPartiesEntryBuilder) AddNoUndlyInstrumentPartySubIDsEn
 	return e
 }
 
-// noUndlyInstrumentPartiesLayout lists the tags of a NoUndlyInstrumentParties entry in dictionary order.
-var noUndlyInstrumentPartiesLayout = []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs}
+// noUndlyInstrumentParties_layout lists the tags of a NoUndlyInstrumentParties entry in dictionary order.
+var noUndlyInstrumentParties_layout = []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoUndlyInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noUndlyInstrumentPartiesLayout {
+	for _, tag := range noUndlyInstrumentParties_layout {
 		switch tag {
 		case TagNoUndlyInstrumentPartySubIDs:
 			if len(e.noUndlyInstrumentPartySubIDsEntries) > 0 {

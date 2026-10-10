@@ -58,12 +58,12 @@ func (e *NoHopsEntryBuilder) SetHopRefID(v int) *NoHopsEntryBuilder {
 	return e
 }
 
-// noHopsLayout lists the tags of a NoHops entry in dictionary order.
-var noHopsLayout = []int{TagHopCompID, TagHopSendingTime, TagHopRefID}
+// noHops_layout lists the tags of a NoHops entry in dictionary order.
+var noHops_layout = []int{TagHopCompID, TagHopSendingTime, TagHopRefID}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoHopsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noHopsLayout {
+	for _, tag := range noHops_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

@@ -151,14 +151,14 @@ func (m *TestRequest) TestReqID() (string, bool) {
 	return string(v), v != nil
 }
 
-var testRequestNoHopsSpec = &fix2.GroupSpec{
+var testRequest_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
-	spec := testRequestNoHopsSpec
+	spec := testRequest_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-type testRequestGroups struct {
+type testRequest_groups struct {
 	noHopsEntries []*NoHopsEntryBuilder
 }
 
@@ -181,13 +181,13 @@ type testRequestGroups struct {
 // groups with the original.
 type TestRequestBuilder struct {
 	*fix2.Builder
-	groups *testRequestGroups
+	groups *testRequest_groups
 }
 
 func BuildTestRequest(beginString string) *TestRequestBuilder {
 	b := &TestRequestBuilder{
 		Builder: fix2.NewBuilder(beginString, "1"),
-		groups:  &testRequestGroups{},
+		groups:  &testRequest_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
@@ -310,7 +310,7 @@ func (b *TestRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *TestRequestB
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *testRequestGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *testRequest_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {

@@ -163,14 +163,14 @@ func (m *ResendRequest) EndSeqNo() (int, bool, error) {
 	return n, true, err
 }
 
-var resendRequestNoHopsSpec = &fix2.GroupSpec{
+var resendRequest_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *ResendRequest) NoHopsEntries() []NoHopsEntry {
-	spec := resendRequestNoHopsSpec
+	spec := resendRequest_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -185,7 +185,7 @@ func (m *ResendRequest) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-type resendRequestGroups struct {
+type resendRequest_groups struct {
 	noHopsEntries []*NoHopsEntryBuilder
 }
 
@@ -193,13 +193,13 @@ type resendRequestGroups struct {
 // groups with the original.
 type ResendRequestBuilder struct {
 	*fix2.Builder
-	groups *resendRequestGroups
+	groups *resendRequest_groups
 }
 
 func BuildResendRequest(beginString string) *ResendRequestBuilder {
 	b := &ResendRequestBuilder{
 		Builder: fix2.NewBuilder(beginString, "2"),
-		groups:  &resendRequestGroups{},
+		groups:  &resendRequest_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
@@ -326,7 +326,7 @@ func (b *ResendRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *ResendRequ
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *resendRequestGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *resendRequest_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {

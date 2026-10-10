@@ -77,12 +77,12 @@ func (e *NoTrdRegTimestampsEntryBuilder) SetDeskOrderHandlingInst(v DeskOrderHan
 	return e
 }
 
-// noTrdRegTimestampsLayout lists the tags of a NoTrdRegTimestamps entry in dictionary order.
-var noTrdRegTimestampsLayout = []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}
+// noTrdRegTimestamps_layout lists the tags of a NoTrdRegTimestamps entry in dictionary order.
+var noTrdRegTimestamps_layout = []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoTrdRegTimestampsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noTrdRegTimestampsLayout {
+	for _, tag := range noTrdRegTimestamps_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

@@ -187,14 +187,14 @@ func (m *Reject) EncodedText() ([]byte, bool) {
 	return v, v != nil
 }
 
-var rejectNoHopsSpec = &fix2.GroupSpec{
+var reject_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *Reject) NoHopsEntries() []NoHopsEntry {
-	spec := rejectNoHopsSpec
+	spec := reject_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -209,7 +209,7 @@ func (m *Reject) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-type rejectGroups struct {
+type reject_groups struct {
 	noHopsEntries []*NoHopsEntryBuilder
 }
 
@@ -217,13 +217,13 @@ type rejectGroups struct {
 // groups with the original.
 type RejectBuilder struct {
 	*fix2.Builder
-	groups *rejectGroups
+	groups *reject_groups
 }
 
 func BuildReject(beginString string) *RejectBuilder {
 	b := &RejectBuilder{
 		Builder: fix2.NewBuilder(beginString, "3"),
-		groups:  &rejectGroups{},
+		groups:  &reject_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
@@ -368,7 +368,7 @@ func (b *RejectBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *RejectBuilder {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *rejectGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *reject_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {

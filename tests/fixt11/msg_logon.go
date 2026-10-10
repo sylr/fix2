@@ -215,14 +215,14 @@ func (m *Logon) NoMsgTypes() (int, bool, error) {
 	return n, true, err
 }
 
-var logonNoHopsSpec = &fix2.GroupSpec{
+var logon_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *Logon) NoHopsEntries() []NoHopsEntry {
-	spec := logonNoHopsSpec
+	spec := logon_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -237,14 +237,14 @@ func (m *Logon) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-var logonNoMsgTypesSpec = &fix2.GroupSpec{
+var logon_NoMsgTypes_spec = &fix2.GroupSpec{
 	Counter: TagNoMsgTypes,
 	Delim:   TagRefMsgType,
 	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID},
 }
 
 func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
-	spec := logonNoMsgTypesSpec
+	spec := logon_NoMsgTypes_spec
 	if spec == nil {
 		return nil
 	}
@@ -259,7 +259,7 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	return entries
 }
 
-type logonGroups struct {
+type logon_groups struct {
 	noHopsEntries     []*NoHopsEntryBuilder
 	noMsgTypesEntries []*NoMsgTypesEntryBuilder
 }
@@ -268,13 +268,13 @@ type logonGroups struct {
 // groups with the original.
 type LogonBuilder struct {
 	*fix2.Builder
-	groups *logonGroups
+	groups *logon_groups
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
 	b := &LogonBuilder{
 		Builder: fix2.NewBuilder(beginString, "A"),
-		groups:  &logonGroups{},
+		groups:  &logon_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(b.groups.appendTo, TagNoHops, TagNoMsgTypes)
@@ -442,7 +442,7 @@ func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuild
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *logonGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *logon_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
@@ -453,7 +453,7 @@ func (b *logonGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *logonGroups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *logon_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noMsgTypesEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypesEntries))
 		for _, entry := range b.noMsgTypesEntries {

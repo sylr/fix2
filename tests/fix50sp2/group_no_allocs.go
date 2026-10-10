@@ -100,12 +100,12 @@ func (e *NoAllocsEntryBuilder) AddNoNestedPartyIDsEntry(ne *NoNestedPartyIDsEntr
 	return e
 }
 
-// noAllocsLayout lists the tags of a NoAllocs entry in dictionary order.
-var noAllocsLayout = []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagNoNestedPartyIDs, TagAllocQty}
+// noAllocs_layout lists the tags of a NoAllocs entry in dictionary order.
+var noAllocs_layout = []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagNoNestedPartyIDs, TagAllocQty}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoAllocsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noAllocsLayout {
+	for _, tag := range noAllocs_layout {
 		switch tag {
 		case TagNoNestedPartyIDs:
 			if len(e.noNestedPartyIDsEntries) > 0 {

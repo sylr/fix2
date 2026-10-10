@@ -339,14 +339,14 @@ func (m *ExecutionReport) Text() (string, bool) {
 	return string(v), v != nil
 }
 
-var executionReportNoMiscFeesSpec = &fix2.GroupSpec{
+var executionReport_NoMiscFees_spec = &fix2.GroupSpec{
 	Counter: TagNoMiscFees,
 	Delim:   TagMiscFeeAmt,
 	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType},
 }
 
 func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
-	spec := executionReportNoMiscFeesSpec
+	spec := executionReport_NoMiscFees_spec
 	if spec == nil {
 		return nil
 	}
@@ -361,7 +361,7 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	return entries
 }
 
-type executionReportGroups struct {
+type executionReport_groups struct {
 	noMiscFeesEntries []*NoMiscFeesEntryBuilder
 }
 
@@ -369,13 +369,13 @@ type executionReportGroups struct {
 // groups with the original.
 type ExecutionReportBuilder struct {
 	*fix2.Builder
-	groups *executionReportGroups
+	groups *executionReport_groups
 }
 
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
 	b := &ExecutionReportBuilder{
 		Builder: fix2.NewBuilder(beginString, "8"),
-		groups:  &executionReportGroups{},
+		groups:  &executionReport_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoMiscFees)
@@ -648,7 +648,7 @@ func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *executionReport_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noMiscFeesEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFeesEntries))
 		for _, entry := range b.noMiscFeesEntries {

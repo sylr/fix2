@@ -57,12 +57,12 @@ func (e *NoMiscFeesEntryBuilder) SetMiscFeeBasis(v MiscFeeBasis) *NoMiscFeesEntr
 	return e
 }
 
-// noMiscFeesLayout lists the tags of a NoMiscFees entry in dictionary order.
-var noMiscFeesLayout = []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType, TagMiscFeeBasis}
+// noMiscFees_layout lists the tags of a NoMiscFees entry in dictionary order.
+var noMiscFees_layout = []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType, TagMiscFeeBasis}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoMiscFeesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noMiscFeesLayout {
+	for _, tag := range noMiscFees_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

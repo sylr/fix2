@@ -80,12 +80,12 @@ func (e *NoNested3PartyIDsEntryBuilder) AddNoNested3PartySubIDsEntry(ne *NoNeste
 	return e
 }
 
-// noNested3PartyIDsLayout lists the tags of a NoNested3PartyIDs entry in dictionary order.
-var noNested3PartyIDsLayout = []int{TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs}
+// noNested3PartyIDs_layout lists the tags of a NoNested3PartyIDs entry in dictionary order.
+var noNested3PartyIDs_layout = []int{TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoNested3PartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noNested3PartyIDsLayout {
+	for _, tag := range noNested3PartyIDs_layout {
 		switch tag {
 		case TagNoNested3PartySubIDs:
 			if len(e.noNested3PartySubIDsEntries) > 0 {

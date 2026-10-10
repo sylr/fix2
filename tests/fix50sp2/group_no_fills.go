@@ -96,12 +96,12 @@ func (e *NoFillsEntryBuilder) AddNoNested4PartyIDsEntry(ne *NoNested4PartyIDsEnt
 	return e
 }
 
-// noFillsLayout lists the tags of a NoFills entry in dictionary order.
-var noFillsLayout = []int{TagFillExecID, TagFillPx, TagFillQty, TagNoNested4PartyIDs, TagFillLiquidityInd}
+// noFills_layout lists the tags of a NoFills entry in dictionary order.
+var noFills_layout = []int{TagFillExecID, TagFillPx, TagFillQty, TagNoNested4PartyIDs, TagFillLiquidityInd}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoFillsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noFillsLayout {
+	for _, tag := range noFills_layout {
 		switch tag {
 		case TagNoNested4PartyIDs:
 			if len(e.noNested4PartyIDsEntries) > 0 {

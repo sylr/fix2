@@ -34,12 +34,12 @@ func (e *NoLegStipulationsEntryBuilder) SetLegStipulationValue(v string) *NoLegS
 	return e
 }
 
-// noLegStipulationsLayout lists the tags of a NoLegStipulations entry in dictionary order.
-var noLegStipulationsLayout = []int{TagLegStipulationType, TagLegStipulationValue}
+// noLegStipulations_layout lists the tags of a NoLegStipulations entry in dictionary order.
+var noLegStipulations_layout = []int{TagLegStipulationType, TagLegStipulationValue}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoLegStipulationsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noLegStipulationsLayout {
+	for _, tag := range noLegStipulations_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

@@ -163,14 +163,14 @@ func (m *Logout) EncodedText() ([]byte, bool) {
 	return v, v != nil
 }
 
-var logoutNoHopsSpec = &fix2.GroupSpec{
+var logout_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *Logout) NoHopsEntries() []NoHopsEntry {
-	spec := logoutNoHopsSpec
+	spec := logout_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -185,7 +185,7 @@ func (m *Logout) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-type logoutGroups struct {
+type logout_groups struct {
 	noHopsEntries []*NoHopsEntryBuilder
 }
 
@@ -193,13 +193,13 @@ type logoutGroups struct {
 // groups with the original.
 type LogoutBuilder struct {
 	*fix2.Builder
-	groups *logoutGroups
+	groups *logout_groups
 }
 
 func BuildLogout(beginString string) *LogoutBuilder {
 	b := &LogoutBuilder{
 		Builder: fix2.NewBuilder(beginString, "5"),
-		groups:  &logoutGroups{},
+		groups:  &logout_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
@@ -328,7 +328,7 @@ func (b *LogoutBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogoutBuilder {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *logoutGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *logout_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {

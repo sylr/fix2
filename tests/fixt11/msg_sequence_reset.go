@@ -159,14 +159,14 @@ func (m *SequenceReset) NewSeqNo() (int, bool, error) {
 	return n, true, err
 }
 
-var sequenceResetNoHopsSpec = &fix2.GroupSpec{
+var sequenceReset_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
 
 func (m *SequenceReset) NoHopsEntries() []NoHopsEntry {
-	spec := sequenceResetNoHopsSpec
+	spec := sequenceReset_NoHops_spec
 	if spec == nil {
 		return nil
 	}
@@ -181,7 +181,7 @@ func (m *SequenceReset) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-type sequenceResetGroups struct {
+type sequenceReset_groups struct {
 	noHopsEntries []*NoHopsEntryBuilder
 }
 
@@ -189,13 +189,13 @@ type sequenceResetGroups struct {
 // groups with the original.
 type SequenceResetBuilder struct {
 	*fix2.Builder
-	groups *sequenceResetGroups
+	groups *sequenceReset_groups
 }
 
 func BuildSequenceReset(beginString string) *SequenceResetBuilder {
 	b := &SequenceResetBuilder{
 		Builder: fix2.NewBuilder(beginString, "4"),
-		groups:  &sequenceResetGroups{},
+		groups:  &sequenceReset_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
@@ -322,7 +322,7 @@ func (b *SequenceResetBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *SequenceRe
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *sequenceResetGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *sequenceReset_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {

@@ -34,12 +34,12 @@ func (e *NoTradingSessionsEntryBuilder) SetTradingSessionSubID(v TradingSessionS
 	return e
 }
 
-// noTradingSessionsLayout lists the tags of a NoTradingSessions entry in dictionary order.
-var noTradingSessionsLayout = []int{TagTradingSessionID, TagTradingSessionSubID}
+// noTradingSessions_layout lists the tags of a NoTradingSessions entry in dictionary order.
+var noTradingSessions_layout = []int{TagTradingSessionID, TagTradingSessionSubID}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoTradingSessionsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noTradingSessionsLayout {
+	for _, tag := range noTradingSessions_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

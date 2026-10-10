@@ -74,12 +74,12 @@ func (e *NoContraBrokersEntryBuilder) SetContraLegRefID(v string) *NoContraBroke
 	return e
 }
 
-// noContraBrokersLayout lists the tags of a NoContraBrokers entry in dictionary order.
-var noContraBrokersLayout = []int{TagContraBroker, TagContraTrader, TagContraTradeQty, TagContraTradeTime, TagContraLegRefID}
+// noContraBrokers_layout lists the tags of a NoContraBrokers entry in dictionary order.
+var noContraBrokers_layout = []int{TagContraBroker, TagContraTrader, TagContraTradeQty, TagContraTradeTime, TagContraLegRefID}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoContraBrokersEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noContraBrokersLayout {
+	for _, tag := range noContraBrokers_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

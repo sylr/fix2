@@ -41,12 +41,12 @@ func (e *NoNested4PartySubIDsEntryBuilder) SetNested4PartySubIDType(v int) *NoNe
 	return e
 }
 
-// noNested4PartySubIDsLayout lists the tags of a NoNested4PartySubIDs entry in dictionary order.
-var noNested4PartySubIDsLayout = []int{TagNested4PartySubID, TagNested4PartySubIDType}
+// noNested4PartySubIDs_layout lists the tags of a NoNested4PartySubIDs entry in dictionary order.
+var noNested4PartySubIDs_layout = []int{TagNested4PartySubID, TagNested4PartySubIDType}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoNested4PartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noNested4PartySubIDsLayout {
+	for _, tag := range noNested4PartySubIDs_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

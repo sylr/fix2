@@ -34,12 +34,12 @@ func (e *NoStipulationsEntryBuilder) SetStipulationValue(v string) *NoStipulatio
 	return e
 }
 
-// noStipulationsLayout lists the tags of a NoStipulations entry in dictionary order.
-var noStipulationsLayout = []int{TagStipulationType, TagStipulationValue}
+// noStipulations_layout lists the tags of a NoStipulations entry in dictionary order.
+var noStipulations_layout = []int{TagStipulationType, TagStipulationValue}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoStipulationsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noStipulationsLayout {
+	for _, tag := range noStipulations_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)

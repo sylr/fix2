@@ -1871,7 +1871,7 @@ func (m *ExecutionReport) NoRateSources() (int, bool, error) {
 	return n, true, err
 }
 
-var executionReportNoPartyIDsSpec = &fix2.GroupSpec{
+var executionReport_NoPartyIDs_spec = &fix2.GroupSpec{
 	Counter: TagNoPartyIDs,
 	Delim:   TagPartyID,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1883,7 +1883,7 @@ var executionReportNoPartyIDsSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoPartyIDsEntries() []NoPartyIDsEntry {
-	spec := executionReportNoPartyIDsSpec
+	spec := executionReport_NoPartyIDs_spec
 	if spec == nil {
 		return nil
 	}
@@ -1898,14 +1898,14 @@ func (m *ExecutionReport) NoPartyIDsEntries() []NoPartyIDsEntry {
 	return entries
 }
 
-var executionReportNoContraBrokersSpec = &fix2.GroupSpec{
+var executionReport_NoContraBrokers_spec = &fix2.GroupSpec{
 	Counter: TagNoContraBrokers,
 	Delim:   TagContraBroker,
 	Tags:    []int{TagContraBroker, TagContraTrader, TagContraTradeQty, TagContraTradeTime, TagContraLegRefID},
 }
 
 func (m *ExecutionReport) NoContraBrokersEntries() []NoContraBrokersEntry {
-	spec := executionReportNoContraBrokersSpec
+	spec := executionReport_NoContraBrokers_spec
 	if spec == nil {
 		return nil
 	}
@@ -1920,14 +1920,14 @@ func (m *ExecutionReport) NoContraBrokersEntries() []NoContraBrokersEntry {
 	return entries
 }
 
-var executionReportNoSecurityAltIDSpec = &fix2.GroupSpec{
+var executionReport_NoSecurityAltID_spec = &fix2.GroupSpec{
 	Counter: TagNoSecurityAltID,
 	Delim:   TagSecurityAltID,
 	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
 }
 
 func (m *ExecutionReport) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
-	spec := executionReportNoSecurityAltIDSpec
+	spec := executionReport_NoSecurityAltID_spec
 	if spec == nil {
 		return nil
 	}
@@ -1942,14 +1942,14 @@ func (m *ExecutionReport) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	return entries
 }
 
-var executionReportNoEventsSpec = &fix2.GroupSpec{
+var executionReport_NoEvents_spec = &fix2.GroupSpec{
 	Counter: TagNoEvents,
 	Delim:   TagEventType,
 	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
 }
 
 func (m *ExecutionReport) NoEventsEntries() []NoEventsEntry {
-	spec := executionReportNoEventsSpec
+	spec := executionReport_NoEvents_spec
 	if spec == nil {
 		return nil
 	}
@@ -1964,7 +1964,7 @@ func (m *ExecutionReport) NoEventsEntries() []NoEventsEntry {
 	return entries
 }
 
-var executionReportNoInstrumentPartiesSpec = &fix2.GroupSpec{
+var executionReport_NoInstrumentParties_spec = &fix2.GroupSpec{
 	Counter: TagNoInstrumentParties,
 	Delim:   TagInstrumentPartyID,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1976,7 +1976,7 @@ var executionReportNoInstrumentPartiesSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
-	spec := executionReportNoInstrumentPartiesSpec
+	spec := executionReport_NoInstrumentParties_spec
 	if spec == nil {
 		return nil
 	}
@@ -1991,7 +1991,7 @@ func (m *ExecutionReport) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntr
 	return entries
 }
 
-var executionReportNoComplexEventsSpec = &fix2.GroupSpec{
+var executionReport_NoComplexEvents_spec = &fix2.GroupSpec{
 	Counter: TagNoComplexEvents,
 	Delim:   TagComplexEventType,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -2008,7 +2008,7 @@ var executionReportNoComplexEventsSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoComplexEventsEntries() []NoComplexEventsEntry {
-	spec := executionReportNoComplexEventsSpec
+	spec := executionReport_NoComplexEvents_spec
 	if spec == nil {
 		return nil
 	}
@@ -2023,7 +2023,7 @@ func (m *ExecutionReport) NoComplexEventsEntries() []NoComplexEventsEntry {
 	return entries
 }
 
-var executionReportNoUnderlyingsSpec = &fix2.GroupSpec{
+var executionReport_NoUnderlyings_spec = &fix2.GroupSpec{
 	Counter: TagNoUnderlyings,
 	Delim:   TagUnderlyingSymbol,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -2048,7 +2048,7 @@ var executionReportNoUnderlyingsSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoUnderlyingsEntries() []NoUnderlyingsEntry {
-	spec := executionReportNoUnderlyingsSpec
+	spec := executionReport_NoUnderlyings_spec
 	if spec == nil {
 		return nil
 	}
@@ -2063,14 +2063,14 @@ func (m *ExecutionReport) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	return entries
 }
 
-var executionReportNoStipulationsSpec = &fix2.GroupSpec{
+var executionReport_NoStipulations_spec = &fix2.GroupSpec{
 	Counter: TagNoStipulations,
 	Delim:   TagStipulationType,
 	Tags:    []int{TagStipulationType, TagStipulationValue},
 }
 
 func (m *ExecutionReport) NoStipulationsEntries() []NoStipulationsEntry {
-	spec := executionReportNoStipulationsSpec
+	spec := executionReport_NoStipulations_spec
 	if spec == nil {
 		return nil
 	}
@@ -2085,14 +2085,14 @@ func (m *ExecutionReport) NoStipulationsEntries() []NoStipulationsEntry {
 	return entries
 }
 
-var executionReportNoContAmtsSpec = &fix2.GroupSpec{
+var executionReport_NoContAmts_spec = &fix2.GroupSpec{
 	Counter: TagNoContAmts,
 	Delim:   TagContAmtType,
 	Tags:    []int{TagContAmtType, TagContAmtValue, TagContAmtCurr},
 }
 
 func (m *ExecutionReport) NoContAmtsEntries() []NoContAmtsEntry {
-	spec := executionReportNoContAmtsSpec
+	spec := executionReport_NoContAmts_spec
 	if spec == nil {
 		return nil
 	}
@@ -2107,7 +2107,7 @@ func (m *ExecutionReport) NoContAmtsEntries() []NoContAmtsEntry {
 	return entries
 }
 
-var executionReportNoLegsSpec = &fix2.GroupSpec{
+var executionReport_NoLegs_spec = &fix2.GroupSpec{
 	Counter: TagNoLegs,
 	Delim:   TagLegSymbol,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -2146,7 +2146,7 @@ var executionReportNoLegsSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoLegsEntries() []NoLegsEntry {
-	spec := executionReportNoLegsSpec
+	spec := executionReport_NoLegs_spec
 	if spec == nil {
 		return nil
 	}
@@ -2161,14 +2161,14 @@ func (m *ExecutionReport) NoLegsEntries() []NoLegsEntry {
 	return entries
 }
 
-var executionReportNoMiscFeesSpec = &fix2.GroupSpec{
+var executionReport_NoMiscFees_spec = &fix2.GroupSpec{
 	Counter: TagNoMiscFees,
 	Delim:   TagMiscFeeAmt,
 	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType, TagMiscFeeBasis},
 }
 
 func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
-	spec := executionReportNoMiscFeesSpec
+	spec := executionReport_NoMiscFees_spec
 	if spec == nil {
 		return nil
 	}
@@ -2183,14 +2183,14 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	return entries
 }
 
-var executionReportNoStrategyParametersSpec = &fix2.GroupSpec{
+var executionReport_NoStrategyParameters_spec = &fix2.GroupSpec{
 	Counter: TagNoStrategyParameters,
 	Delim:   TagStrategyParameterName,
 	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
 }
 
 func (m *ExecutionReport) NoStrategyParametersEntries() []NoStrategyParametersEntry {
-	spec := executionReportNoStrategyParametersSpec
+	spec := executionReport_NoStrategyParameters_spec
 	if spec == nil {
 		return nil
 	}
@@ -2205,14 +2205,14 @@ func (m *ExecutionReport) NoStrategyParametersEntries() []NoStrategyParametersEn
 	return entries
 }
 
-var executionReportNoTrdRegTimestampsSpec = &fix2.GroupSpec{
+var executionReport_NoTrdRegTimestamps_spec = &fix2.GroupSpec{
 	Counter: TagNoTrdRegTimestamps,
 	Delim:   TagTrdRegTimestamp,
 	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
 }
 
 func (m *ExecutionReport) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
-	spec := executionReportNoTrdRegTimestampsSpec
+	spec := executionReport_NoTrdRegTimestamps_spec
 	if spec == nil {
 		return nil
 	}
@@ -2227,7 +2227,7 @@ func (m *ExecutionReport) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry 
 	return entries
 }
 
-var executionReportNoAllocsSpec = &fix2.GroupSpec{
+var executionReport_NoAllocs_spec = &fix2.GroupSpec{
 	Counter: TagNoAllocs,
 	Delim:   TagAllocAccount,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -2244,7 +2244,7 @@ var executionReportNoAllocsSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoAllocsEntries() []NoAllocsEntry {
-	spec := executionReportNoAllocsSpec
+	spec := executionReport_NoAllocs_spec
 	if spec == nil {
 		return nil
 	}
@@ -2259,7 +2259,7 @@ func (m *ExecutionReport) NoAllocsEntries() []NoAllocsEntry {
 	return entries
 }
 
-var executionReportNoFillsSpec = &fix2.GroupSpec{
+var executionReport_NoFills_spec = &fix2.GroupSpec{
 	Counter: TagNoFills,
 	Delim:   TagFillExecID,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -2276,7 +2276,7 @@ var executionReportNoFillsSpec = &fix2.GroupSpec{
 }
 
 func (m *ExecutionReport) NoFillsEntries() []NoFillsEntry {
-	spec := executionReportNoFillsSpec
+	spec := executionReport_NoFills_spec
 	if spec == nil {
 		return nil
 	}
@@ -2291,14 +2291,14 @@ func (m *ExecutionReport) NoFillsEntries() []NoFillsEntry {
 	return entries
 }
 
-var executionReportNoRateSourcesSpec = &fix2.GroupSpec{
+var executionReport_NoRateSources_spec = &fix2.GroupSpec{
 	Counter: TagNoRateSources,
 	Delim:   TagRateSource,
 	Tags:    []int{TagRateSource, TagRateSourceType, TagReferencePage},
 }
 
 func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
-	spec := executionReportNoRateSourcesSpec
+	spec := executionReport_NoRateSources_spec
 	if spec == nil {
 		return nil
 	}
@@ -2313,7 +2313,7 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 	return entries
 }
 
-type executionReportGroups struct {
+type executionReport_groups struct {
 	noPartyIDsEntries           []*NoPartyIDsEntryBuilder
 	noContraBrokersEntries      []*NoContraBrokersEntryBuilder
 	noSecurityAltIDEntries      []*NoSecurityAltIDEntryBuilder
@@ -2336,13 +2336,13 @@ type executionReportGroups struct {
 // groups with the original.
 type ExecutionReportBuilder struct {
 	*fix2.Builder
-	groups *executionReportGroups
+	groups *executionReport_groups
 }
 
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
 	b := &ExecutionReportBuilder{
 		Builder: fix2.NewBuilder(beginString, "8"),
-		groups:  &executionReportGroups{},
+		groups:  &executionReport_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoContraBrokers, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoContAmts, TagNoLegs, TagNoMiscFees, TagNoStrategyParameters, TagNoTrdRegTimestamps, TagNoAllocs, TagNoFills, TagNoRateSources)
@@ -3786,7 +3786,7 @@ func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuil
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *executionReport_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDsEntries))
 		for _, entry := range b.noPartyIDsEntries {

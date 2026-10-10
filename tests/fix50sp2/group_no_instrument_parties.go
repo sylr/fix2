@@ -80,12 +80,12 @@ func (e *NoInstrumentPartiesEntryBuilder) AddNoInstrumentPartySubIDsEntry(ne *No
 	return e
 }
 
-// noInstrumentPartiesLayout lists the tags of a NoInstrumentParties entry in dictionary order.
-var noInstrumentPartiesLayout = []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole, TagNoInstrumentPartySubIDs}
+// noInstrumentParties_layout lists the tags of a NoInstrumentParties entry in dictionary order.
+var noInstrumentParties_layout = []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole, TagNoInstrumentPartySubIDs}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noInstrumentPartiesLayout {
+	for _, tag := range noInstrumentParties_layout {
 		switch tag {
 		case TagNoInstrumentPartySubIDs:
 			if len(e.noInstrumentPartySubIDsEntries) > 0 {

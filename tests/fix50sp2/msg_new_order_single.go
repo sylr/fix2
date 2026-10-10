@@ -1347,7 +1347,7 @@ func (m *NewOrderSingle) ExDestinationIDSource() (ExDestinationIDSource, bool) {
 	return ExDestinationIDSource(v), v != nil
 }
 
-var newOrderSingleNoPartyIDsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoPartyIDs_spec = &fix2.GroupSpec{
 	Counter: TagNoPartyIDs,
 	Delim:   TagPartyID,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1359,7 +1359,7 @@ var newOrderSingleNoPartyIDsSpec = &fix2.GroupSpec{
 }
 
 func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
-	spec := newOrderSingleNoPartyIDsSpec
+	spec := newOrderSingle_NoPartyIDs_spec
 	if spec == nil {
 		return nil
 	}
@@ -1374,7 +1374,7 @@ func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
 	return entries
 }
 
-var newOrderSingleNoAllocsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{
 	Counter: TagNoAllocs,
 	Delim:   TagAllocAccount,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1391,7 +1391,7 @@ var newOrderSingleNoAllocsSpec = &fix2.GroupSpec{
 }
 
 func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
-	spec := newOrderSingleNoAllocsSpec
+	spec := newOrderSingle_NoAllocs_spec
 	if spec == nil {
 		return nil
 	}
@@ -1406,14 +1406,14 @@ func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
 	return entries
 }
 
-var newOrderSingleNoTradingSessionsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoTradingSessions_spec = &fix2.GroupSpec{
 	Counter: TagNoTradingSessions,
 	Delim:   TagTradingSessionID,
 	Tags:    []int{TagTradingSessionID, TagTradingSessionSubID},
 }
 
 func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
-	spec := newOrderSingleNoTradingSessionsSpec
+	spec := newOrderSingle_NoTradingSessions_spec
 	if spec == nil {
 		return nil
 	}
@@ -1428,14 +1428,14 @@ func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
 	return entries
 }
 
-var newOrderSingleNoSecurityAltIDSpec = &fix2.GroupSpec{
+var newOrderSingle_NoSecurityAltID_spec = &fix2.GroupSpec{
 	Counter: TagNoSecurityAltID,
 	Delim:   TagSecurityAltID,
 	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
 }
 
 func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
-	spec := newOrderSingleNoSecurityAltIDSpec
+	spec := newOrderSingle_NoSecurityAltID_spec
 	if spec == nil {
 		return nil
 	}
@@ -1450,14 +1450,14 @@ func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	return entries
 }
 
-var newOrderSingleNoEventsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoEvents_spec = &fix2.GroupSpec{
 	Counter: TagNoEvents,
 	Delim:   TagEventType,
 	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
 }
 
 func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
-	spec := newOrderSingleNoEventsSpec
+	spec := newOrderSingle_NoEvents_spec
 	if spec == nil {
 		return nil
 	}
@@ -1472,7 +1472,7 @@ func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
 	return entries
 }
 
-var newOrderSingleNoInstrumentPartiesSpec = &fix2.GroupSpec{
+var newOrderSingle_NoInstrumentParties_spec = &fix2.GroupSpec{
 	Counter: TagNoInstrumentParties,
 	Delim:   TagInstrumentPartyID,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1484,7 +1484,7 @@ var newOrderSingleNoInstrumentPartiesSpec = &fix2.GroupSpec{
 }
 
 func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
-	spec := newOrderSingleNoInstrumentPartiesSpec
+	spec := newOrderSingle_NoInstrumentParties_spec
 	if spec == nil {
 		return nil
 	}
@@ -1499,7 +1499,7 @@ func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry
 	return entries
 }
 
-var newOrderSingleNoComplexEventsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoComplexEvents_spec = &fix2.GroupSpec{
 	Counter: TagNoComplexEvents,
 	Delim:   TagComplexEventType,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1516,7 +1516,7 @@ var newOrderSingleNoComplexEventsSpec = &fix2.GroupSpec{
 }
 
 func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
-	spec := newOrderSingleNoComplexEventsSpec
+	spec := newOrderSingle_NoComplexEvents_spec
 	if spec == nil {
 		return nil
 	}
@@ -1531,7 +1531,7 @@ func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
 	return entries
 }
 
-var newOrderSingleNoUnderlyingsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoUnderlyings_spec = &fix2.GroupSpec{
 	Counter: TagNoUnderlyings,
 	Delim:   TagUnderlyingSymbol,
 	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
@@ -1556,7 +1556,7 @@ var newOrderSingleNoUnderlyingsSpec = &fix2.GroupSpec{
 }
 
 func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
-	spec := newOrderSingleNoUnderlyingsSpec
+	spec := newOrderSingle_NoUnderlyings_spec
 	if spec == nil {
 		return nil
 	}
@@ -1571,14 +1571,14 @@ func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	return entries
 }
 
-var newOrderSingleNoStipulationsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoStipulations_spec = &fix2.GroupSpec{
 	Counter: TagNoStipulations,
 	Delim:   TagStipulationType,
 	Tags:    []int{TagStipulationType, TagStipulationValue},
 }
 
 func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
-	spec := newOrderSingleNoStipulationsSpec
+	spec := newOrderSingle_NoStipulations_spec
 	if spec == nil {
 		return nil
 	}
@@ -1593,14 +1593,14 @@ func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
 	return entries
 }
 
-var newOrderSingleNoStrategyParametersSpec = &fix2.GroupSpec{
+var newOrderSingle_NoStrategyParameters_spec = &fix2.GroupSpec{
 	Counter: TagNoStrategyParameters,
 	Delim:   TagStrategyParameterName,
 	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
 }
 
 func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEntry {
-	spec := newOrderSingleNoStrategyParametersSpec
+	spec := newOrderSingle_NoStrategyParameters_spec
 	if spec == nil {
 		return nil
 	}
@@ -1615,14 +1615,14 @@ func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEnt
 	return entries
 }
 
-var newOrderSingleNoTrdRegTimestampsSpec = &fix2.GroupSpec{
+var newOrderSingle_NoTrdRegTimestamps_spec = &fix2.GroupSpec{
 	Counter: TagNoTrdRegTimestamps,
 	Delim:   TagTrdRegTimestamp,
 	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
 }
 
 func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
-	spec := newOrderSingleNoTrdRegTimestampsSpec
+	spec := newOrderSingle_NoTrdRegTimestamps_spec
 	if spec == nil {
 		return nil
 	}
@@ -1637,7 +1637,7 @@ func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
 	return entries
 }
 
-type newOrderSingleGroups struct {
+type newOrderSingle_groups struct {
 	noPartyIDsEntries           []*NoPartyIDsEntryBuilder
 	noAllocsEntries             []*NoAllocsEntryBuilder
 	noTradingSessionsEntries    []*NoTradingSessionsEntryBuilder
@@ -1655,13 +1655,13 @@ type newOrderSingleGroups struct {
 // groups with the original.
 type NewOrderSingleBuilder struct {
 	*fix2.Builder
-	groups *newOrderSingleGroups
+	groups *newOrderSingle_groups
 }
 
 func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
 	b := &NewOrderSingleBuilder{
 		Builder: fix2.NewBuilder(beginString, "D"),
-		groups:  &newOrderSingleGroups{},
+		groups:  &newOrderSingle_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoAllocs, TagNoTradingSessions, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoStrategyParameters, TagNoTrdRegTimestamps)
@@ -2742,7 +2742,7 @@ func (b *NewOrderSingleBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestamps
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *newOrderSingleGroups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *newOrderSingle_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDsEntries))
 		for _, entry := range b.noPartyIDsEntries {

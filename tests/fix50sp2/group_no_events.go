@@ -82,12 +82,12 @@ func (e *NoEventsEntryBuilder) SetEventTimeWithFormat(v time.Time, f fix2.TimeFo
 	return e
 }
 
-// noEventsLayout lists the tags of a NoEvents entry in dictionary order.
-var noEventsLayout = []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime}
+// noEvents_layout lists the tags of a NoEvents entry in dictionary order.
+var noEvents_layout = []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime}
 
 // appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoEventsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noEventsLayout {
+	for _, tag := range noEvents_layout {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
