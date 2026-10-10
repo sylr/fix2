@@ -1355,3 +1355,100 @@ func TestLoad_EnvelopeSpecsNotPerMessage(t *testing.T) {
 		t.Errorf("4x the messages and header groups allocated %.1fx more (%d vs %d bytes), want about 4x", ratio, large, small)
 	}
 }
+
+func TestValidate_DataLengthEdgeCases(t *testing.T) {
+	// Z is optional with no number (tag 0); EncodedText(355) is declared but
+	// its LENGTH, EncodedTextLen(354), is not; RawData(96) leads NoR entries
+	// with its RawDataLength(95) declared later in the group.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="F" required="Y"/>
+      <field name="Z" required="N"/>
+      <group name="NoD" required="N"><field name="EncodedText" required="N"/><field name="F" required="N"/></group>
+      <group name="NoR" required="N"><field name="RawData" required="N"/><field name="F" required="N"/><field name="RawDataLength" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field name="Z" type="STRING"/>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="95" name="RawDataLength" type="LENGTH"/>
+    <field number="96" name="RawData" type="DATA"/>
+    <field number="100" name="F" type="STRING"/>
+    <field number="160" name="NoD" type="NUMINGROUP"/>
+    <field number="161" name="NoR" type="NUMINGROUP"/>
+    <field number="355" name="EncodedText" type="DATA"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	tests := []struct {
+		name string
+		body string
+		err  error // nil when valid
+		tag  int
+	}{
+		{"unknown tag with a tag 0 field declared", "35=M\x01100=f\x01999=x\x01", ErrUnexpectedTag, 999},
+		{"LENGTH of an allowed DATA field, undeclared", "35=M\x01100=f\x01160=1\x01354=2\x01355=ab\x01", nil, 0},
+		{"F only in a group led by undeclared LENGTH", "35=M\x01160=1\x01354=2\x01355=ab\x01100=in\x01", ErrRequiredTag, 100},
+		{"F only in a group led by LENGTH declared later", "35=M\x01161=1\x0195=2\x0196=ab\x01100=in\x01", ErrRequiredTag, 100},
+		{"F direct after a group led by LENGTH declared later", "35=M\x01161=1\x0195=2\x0196=ab\x01100=in\x01100=f\x01", nil, 0},
+	}
+	for _, tt := range tests {
+		msg := parseMsg(t, buildFIXMsg(tt.body))
+		err := d.Validate(&msg)
+		if tt.err == nil {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tt.name, err)
+			}
+			continue
+		}
+		var ve *ValidationError
+		if !errors.As(err, &ve) || !errors.Is(err, tt.err) || ve.Tag != tt.tag {
+			t.Errorf("%s: got %v, want %v for tag %d", tt.name, err, tt.err, tt.tag)
+		}
+	}
+}
+
+func TestValidate_MalformedCounts(t *testing.T) {
+	// Entries after a count of zero, a negative or non-numeric count, or
+	// beyond the count are not group entries, as GroupsOf reads them: their
+	// fields are top level. Nothing panics.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="F" required="Y"/>
+      <group name="NoG" required="N"><field name="D" required="N"/><field name="F" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="100" name="F" type="STRING"/>
+    <field number="101" name="NoG" type="NUMINGROUP"/>
+    <field number="102" name="D" type="STRING"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, count := range []string{"0", "-1", "x", "99999999999999999999"} {
+		msg := parseMsg(t, buildFIXMsg("35=M\x01101="+count+"\x01102=d\x01100=f\x01"))
+		if err := d.Validate(&msg); err != nil {
+			t.Errorf("count %s: %v", count, err)
+		}
+	}
+	// Undercounted: the second entry's F is top level.
+	msg := parseMsg(t, buildFIXMsg("35=M\x01101=1\x01102=a\x01100=in\x01102=b\x01100=f\x01"))
+	if err := d.Validate(&msg); err != nil {
+		t.Errorf("undercounted: %v", err)
+	}
+}

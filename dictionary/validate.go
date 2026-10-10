@@ -80,7 +80,14 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		present[f.Tag] = true
 	}
 	top := make(map[int]bool, msg.Count())
-	for f := range msg.TopLevelFields(slices.Concat(d.envelopeSpecs, mdef.specs)...) {
+	specs := mdef.specs
+	switch {
+	case len(specs) == 0:
+		specs = d.envelopeSpecs
+	case len(d.envelopeSpecs) > 0:
+		specs = slices.Concat(d.envelopeSpecs, specs)
+	}
+	for f := range msg.TopLevelFields(specs...) {
 		top[f.Tag] = true
 	}
 
@@ -144,7 +151,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		// Tag must be in header, trailer, or message fields, or be the
 		// LENGTH of such a DATA field: the parser requires it right before
 		// its DATA field even when the dictionary does not declare it.
-		if !allowed(tag) && !allowed(fix2.DataTag(tag)) {
+		if dt := fix2.DataTag(tag); !allowed(tag) && (dt == 0 || !allowed(dt)) {
 			return &ValidationError{
 				Err: ErrUnexpectedTag,
 				Tag: tag,
@@ -221,16 +228,16 @@ func checkConditions(conds []condition, present, top map[int]bool, where string)
 	return nil
 }
 
-// groupSpecs returns the specs of groups, built as fixgen builds them: an
-// entry may also hold the LENGTH field of its DATA fields, which generated
-// builders write even when the group does not declare it.
+// groupSpecs returns the specs of groups. An entry may also hold the LENGTH
+// field of its DATA fields, which the parser requires right before them and
+// generated builders write, even when the dictionary does not declare it.
 func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 	specs := make([]*fix2.GroupSpec, 0, len(groups))
 	for _, gd := range groups {
 		s := &fix2.GroupSpec{Counter: gd.CounterTag, Delim: gd.DelimTag}
-		// LENGTH comes right before its DATA field, so an entry whose first
-		// field is DATA starts with LENGTH.
-		if l := fix2.DataLengthTag(gd.DelimTag); l != 0 && d.Fields[l] != nil {
+		// LENGTH comes right before its DATA field, declared or not, so an
+		// entry whose first field is DATA starts with LENGTH.
+		if l := fix2.DataLengthTag(gd.DelimTag); l != 0 {
 			s.Delim = l
 		}
 		added := make(map[int]bool, len(gd.Fields))
@@ -241,7 +248,7 @@ func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 			}
 		}
 		for _, fr := range gd.Fields {
-			if l := fix2.DataLengthTag(fr.Tag); l != 0 && d.Fields[l] != nil {
+			if l := fix2.DataLengthTag(fr.Tag); l != 0 {
 				add(l)
 			}
 			add(fr.Tag)
