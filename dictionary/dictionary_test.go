@@ -996,28 +996,42 @@ func TestResolver_ChargesBeforeRecording(t *testing.T) {
 }
 
 func TestLoad_LongNames(t *testing.T) {
-	long := strings.Repeat("N", maxNameLen+1)
-	dict := func(fieldDef, compDef, ref string) string {
+	// dict defines field F (tag 1), group counter G (tag 2) and component C,
+	// with the names overridable to exercise definitions and references.
+	type names struct{ fieldDef, fieldRef, groupDef, groupRef, compDef, compRef string }
+	dict := func(n names) string {
 		return fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
   <header/><trailer/>
   <messages><message name="M" msgtype="M" msgcat="app"><component name="%s" required="N"/></message></messages>
-  <components><component name="%s"><field name="F" required="N"/></component></components>
-  <fields><field number="1" name="%s" type="STRING"/></fields>
-</fix>`, ref, compDef, fieldDef)
+  <components><component name="%s"><field name="%s" required="N"/><group name="%s" required="N"><field name="%s" required="N"/></group></component></components>
+  <fields><field number="1" name="%s" type="STRING"/><field number="2" name="%s" type="NUMINGROUP"/></fields>
+</fix>`, n.compRef, n.compDef, n.fieldRef, n.groupRef, n.fieldRef, n.fieldDef, n.groupDef)
 	}
-	for name, xml := range map[string]string{
-		"field definition":     dict(long, "C", "C"),
-		"component definition": dict("F", long, long),
-		"component reference":  dict("F", "C", long),
+	ok := names{"F", "F", "G", "G", "C", "C"}
+	long := strings.Repeat("N", maxNameLen+1)
+	// Distinct names of exactly maxNameLen bytes.
+	atLimit := func(prefix string) string { return prefix + strings.Repeat("x", maxNameLen-len(prefix)) }
+	f, g, c := atLimit("F"), atLimit("G"), atLimit("C")
+
+	for name, n := range map[string]names{
+		"field definition":     {long, "F", "G", "G", "C", "C"},
+		"field reference":      {"F", long, "G", "G", "C", "C"},
+		"group reference":      {"F", "F", "G", long, "C", "C"},
+		"component definition": {"F", "F", "G", "G", long, long},
+		"component reference":  {"F", "F", "G", "G", "C", long},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "exceeds 256") {
+			if err := loadWithin(t, dict(n)); err == nil || !strings.Contains(err.Error(), "exceeds 256") {
 				t.Fatalf("expected name length error, got %v", err)
 			}
 		})
 	}
-	if err := loadWithin(t, dict("F", "C", "C")); err != nil {
+	if err := loadWithin(t, dict(ok)); err != nil {
 		t.Fatalf("short names: %v", err)
+	}
+	// Exactly maxNameLen bytes is accepted everywhere.
+	if err := loadWithin(t, dict(names{f, f, g, g, c, c})); err != nil {
+		t.Fatalf("names of exactly %d bytes: %v", maxNameLen, err)
 	}
 }
 
