@@ -17,7 +17,11 @@ func (e *NoPartySubIDsEntry) PartySubIDType() (PartySubIDType, bool) {
 	return PartySubIDType(v), v != nil
 }
 
-var noPartySubIDsChildTags = []int{TagPartySubID, TagPartySubIDType}
+var noPartySubIDsSpec = &fix2.GroupSpec{
+	Counter: TagNoPartySubIDs,
+	Delim:   TagPartySubID,
+	Tags:    []int{TagPartySubID, TagPartySubIDType},
+}
 
 type NoPartySubIDsEntryBuilder struct {
 	fields []fix2.Field

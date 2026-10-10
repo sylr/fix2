@@ -17,7 +17,11 @@ func (e *NoUnderlyingStipsEntry) UnderlyingStipValue() (string, bool) {
 	return string(v), v != nil
 }
 
-var noUnderlyingStipsChildTags = []int{TagUnderlyingStipType, TagUnderlyingStipValue}
+var noUnderlyingStipsSpec = &fix2.GroupSpec{
+	Counter: TagNoUnderlyingStips,
+	Delim:   TagUnderlyingStipType,
+	Tags:    []int{TagUnderlyingStipType, TagUnderlyingStipValue},
+}
 
 type NoUnderlyingStipsEntryBuilder struct {
 	fields []fix2.Field

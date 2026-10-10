@@ -453,7 +453,7 @@ func (e *NoLegsEntry) NoLegAllocs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegAllocsEntries() []NoLegAllocsEntry {
-	groups := e.grp.Groups(TagNoLegAllocs, noLegAllocsChildTags)
+	groups := e.grp.GroupsOf(noLegAllocsSpec)
 	entries := make([]NoLegAllocsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegAllocsEntry{grp: groups[i]}
@@ -469,7 +469,7 @@ func (e *NoLegsEntry) NoLegSecurityAltID() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegSecurityAltIDEntries() []NoLegSecurityAltIDEntry {
-	groups := e.grp.Groups(TagNoLegSecurityAltID, noLegSecurityAltIDChildTags)
+	groups := e.grp.GroupsOf(noLegSecurityAltIDSpec)
 	entries := make([]NoLegSecurityAltIDEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegSecurityAltIDEntry{grp: groups[i]}
@@ -485,7 +485,7 @@ func (e *NoLegsEntry) NoLegStipulations() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegStipulationsEntries() []NoLegStipulationsEntry {
-	groups := e.grp.Groups(TagNoLegStipulations, noLegStipulationsChildTags)
+	groups := e.grp.GroupsOf(noLegStipulationsSpec)
 	entries := make([]NoLegStipulationsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegStipulationsEntry{grp: groups[i]}
@@ -501,7 +501,7 @@ func (e *NoLegsEntry) NoNested3PartyIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
-	groups := e.grp.Groups(TagNoNested3PartyIDs, noNested3PartyIDsChildTags)
+	groups := e.grp.GroupsOf(noNested3PartyIDsSpec)
 	entries := make([]NoNested3PartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNested3PartyIDsEntry{grp: groups[i]}
@@ -509,7 +509,12 @@ func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
 	return entries
 }
 
-var noLegsChildTags = []int{TagLegSymbol, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegRedemptionDate, TagLegCreditRating, TagLegCurrency, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegPrice, TagLegSettlType, TagLegSettlDate, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegInstrRegistry, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegStrikePrice, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegLastPx, TagLegRefID, TagLegSettlCurrency, TagLegOrderQty, TagLegQty, TagLegSwapType, TagLegDatedDate, TagLegPool, TagLegSecuritySubType, TagLegStrikeCurrency, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagLegMaturityTime, TagLegUnitOfMeasureQty, TagLegPutOrCall, TagLegAllocID, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty, TagLegExerciseStyle, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType, TagNoLegAllocs, TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency, TagNoNested2PartyIDs, TagNested2PartyID, TagNested2PartyIDSource, TagNested2PartyRole, TagNoNested2PartySubIDs, TagNested2PartySubID, TagNested2PartySubIDType, TagNoLegSecurityAltID, TagLegSecurityAltID, TagLegSecurityAltIDSource, TagNoLegStipulations, TagLegStipulationType, TagLegStipulationValue, TagNoNested3PartyIDs, TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs, TagNested3PartySubID, TagNested3PartySubIDType}
+var noLegsSpec = &fix2.GroupSpec{
+	Counter: TagNoLegs,
+	Delim:   TagLegSymbol,
+	Nested:  []*fix2.GroupSpec{noLegAllocsSpec, noLegSecurityAltIDSpec, noLegStipulationsSpec, noNested3PartyIDsSpec},
+	Tags:    []int{TagLegSymbol, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegRedemptionDate, TagLegCreditRating, TagLegCurrency, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegPrice, TagLegSettlType, TagLegSettlDate, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegInstrRegistry, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegStrikePrice, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegLastPx, TagLegRefID, TagLegSettlCurrency, TagLegOrderQty, TagLegQty, TagLegSwapType, TagLegDatedDate, TagLegPool, TagLegSecuritySubType, TagLegStrikeCurrency, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagLegMaturityTime, TagLegUnitOfMeasureQty, TagLegPutOrCall, TagLegAllocID, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty, TagLegExerciseStyle, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType},
+}
 
 type NoLegsEntryBuilder struct {
 	fields                  []fix2.Field

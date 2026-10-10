@@ -1,6 +1,11 @@
 package fix2
 
-import "testing"
+import (
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+)
 
 func TestGroupsBasic(t *testing.T) {
 	// Build a message with two NoAllocs group entries:
@@ -169,5 +174,113 @@ func TestGroupsNilChildTags(t *testing.T) {
 	groups := msg.Groups(78, nil)
 	if groups != nil {
 		t.Fatalf("expected nil groups, got %v", groups)
+	}
+}
+
+// fieldsMsg builds a Message from "tag=value" pairs without parsing.
+func fieldsMsg(t *testing.T, pairs ...string) *Message {
+	t.Helper()
+	var m Message
+	m.init()
+	for _, p := range pairs {
+		tag, val, ok := strings.Cut(p, "=")
+		if !ok {
+			t.Fatalf("bad pair %q", p)
+		}
+		n, err := strconv.Atoi(tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.append(Field{Tag: n, Value: []byte(val)})
+	}
+	return &m
+}
+
+// entryTags returns the tags of each entry.
+func entryTags(groups []Group) [][]int {
+	var out [][]int
+	for _, g := range groups {
+		var tags []int
+		for _, f := range g.Fields() {
+			tags = append(tags, f.Tag)
+		}
+		out = append(out, tags)
+	}
+	return out
+}
+
+func TestGroupsOfNestedSharesParentDelimiter(t *testing.T) {
+	// The nested group uses the parent's delimiter (100): a flat tag list
+	// cannot tell the levels apart, but counting the nested entries can.
+	nested := &GroupSpec{Counter: 200, Delim: 100, Tags: []int{100, 101}}
+	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}, Nested: []*GroupSpec{nested}}
+	m := fieldsMsg(t, "900=2", "100=P1", "200=1", "100=C1", "101=x", "100=P2", "200=0", "55=after")
+
+	entries := m.GroupsOf(parent)
+	if got, want := entryTags(entries), [][]int{{100, 200, 100, 101}, {100, 200}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("parent entries = %v, want %v", got, want)
+	}
+	if got, want := entryTags(entries[0].GroupsOf(nested)), [][]int{{100, 101}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("nested entries = %v, want %v", got, want)
+	}
+	if got := entries[1].GroupsOf(nested); len(got) != 0 {
+		t.Errorf("empty nested group = %v", entryTags(got))
+	}
+}
+
+func TestGroupsOfDelimiterIsNestedCounter(t *testing.T) {
+	// Like FIX 5.0 SP2 NoAsgnReqs, whose entries start with the Parties
+	// component: the delimiter is the nested NoPartyIDs counter.
+	parties := &GroupSpec{Counter: 453, Delim: 448, Tags: []int{448, 447, 452}}
+	reqs := &GroupSpec{Counter: 1499, Delim: 453, Tags: []int{453, 1500}, Nested: []*GroupSpec{parties}}
+	m := fieldsMsg(t, "1499=2",
+		"453=1", "448=A", "447=D", "452=1", "1500=x",
+		"453=2", "448=B", "448=C", "1500=y")
+
+	entries := m.GroupsOf(reqs)
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries %v, want 2", len(entries), entryTags(entries))
+	}
+	for i, want := range []int{1, 2} {
+		if got := len(entries[i].GroupsOf(parties)); got != want {
+			t.Errorf("entry %d: %d parties, want %d", i, got, want)
+		}
+	}
+	if got := string(entries[1].Get(1500)); got != "y" {
+		t.Errorf("entry 1 tag 1500 = %q", got)
+	}
+}
+
+func TestGroupsOfBoundaries(t *testing.T) {
+	spec := &GroupSpec{Counter: 78, Delim: 79, Tags: []int{79, 80}}
+	for _, tc := range []struct {
+		name  string
+		pairs []string
+		want  [][]int
+	}{
+		{"stops at a foreign tag", []string{"78=2", "79=a", "80=1", "58=t", "79=b"}, [][]int{{79, 80}}},
+		{"stops at the count", []string{"78=1", "79=a", "79=b"}, [][]int{{79}}},
+		{"entry must start with the delimiter", []string{"78=1", "80=1", "79=a"}, nil},
+		{"no counter", []string{"79=a"}, nil},
+		{"invalid count", []string{"78=x", "79=a"}, nil},
+		{"negative count", []string{"78=-1", "79=a"}, nil},
+	} {
+		if got := entryTags(fieldsMsg(t, tc.pairs...).GroupsOf(spec)); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestGroupsOfZeroCopy(t *testing.T) {
+	spec := &GroupSpec{Counter: 78, Delim: 79, Tags: []int{79, 80}}
+	m := fieldsMsg(t, "78=1", "79=a", "80=1")
+	entries := m.GroupsOf(spec)
+	if len(entries) != 1 || &entries[0].Fields()[0] != &m.Fields()[1] {
+		t.Error("entry fields should be a sub-slice of the message fields")
+	}
+	// Appending to an entry must not overwrite the message's next field.
+	_ = append(entries[0].Fields(), Field{Tag: 1})
+	if m.Fields()[2].Tag != 80 {
+		t.Error("appending to an entry overwrote message fields")
 	}
 }

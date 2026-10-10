@@ -17,7 +17,11 @@ func (e *NoLegStipulationsEntry) LegStipulationValue() (string, bool) {
 	return string(v), v != nil
 }
 
-var noLegStipulationsChildTags = []int{TagLegStipulationType, TagLegStipulationValue}
+var noLegStipulationsSpec = &fix2.GroupSpec{
+	Counter: TagNoLegStipulations,
+	Delim:   TagLegStipulationType,
+	Tags:    []int{TagLegStipulationType, TagLegStipulationValue},
+}
 
 type NoLegStipulationsEntryBuilder struct {
 	fields []fix2.Field

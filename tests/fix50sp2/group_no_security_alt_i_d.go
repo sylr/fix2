@@ -17,7 +17,11 @@ func (e *NoSecurityAltIDEntry) SecurityAltIDSource() (string, bool) {
 	return string(v), v != nil
 }
 
-var noSecurityAltIDChildTags = []int{TagSecurityAltID, TagSecurityAltIDSource}
+var noSecurityAltIDSpec = &fix2.GroupSpec{
+	Counter: TagNoSecurityAltID,
+	Delim:   TagSecurityAltID,
+	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
+}
 
 type NoSecurityAltIDEntryBuilder struct {
 	fields []fix2.Field

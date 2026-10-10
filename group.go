@@ -65,3 +65,90 @@ func (g *Group) Groups(counterTag int, childTags []int) []Group {
 	}
 	return groups
 }
+
+// GroupSpec describes a repeating group for GroupsOf: its counter, the
+// delimiter every entry starts with, the tags an entry holds directly and the
+// groups it can contain. Generated code declares one per group.
+type GroupSpec struct {
+	Counter int          // NUMINGROUP tag
+	Delim   int          // first tag of every entry
+	Tags    []int        // tags an entry holds directly, Delim included
+	Nested  []*GroupSpec // groups an entry can contain
+}
+
+// GroupsOf extracts the entries of the group described by spec. Unlike
+// Groups, it knows the group hierarchy: a nested group is consumed as a block
+// of exactly as many entries as its counter says, so tags it shares with the
+// enclosing group cannot end an entry early. Entries are sub-slices of the
+// message's fields.
+func (m *Message) GroupsOf(spec *GroupSpec) []Group {
+	return groupsOf(m.fields, spec)
+}
+
+// GroupsOf extracts the entries of a group nested in this entry; see
+// Message.GroupsOf.
+func (g *Group) GroupsOf(spec *GroupSpec) []Group {
+	return groupsOf(g.fields, spec)
+}
+
+func groupsOf(fields []Field, spec *GroupSpec) []Group {
+	for i := range fields {
+		if fields[i].Tag != spec.Counter {
+			continue
+		}
+		count, err := ParseInt(fields[i].Value)
+		if err != nil || count <= 0 {
+			return nil
+		}
+		groups, _ := spec.entries(fields, i+1, count)
+		return groups
+	}
+	return nil
+}
+
+// entries reads up to count entries starting at fields[i] and returns them
+// with the index just past the block.
+func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
+	var groups []Group
+	for len(groups) < count && i < len(fields) && fields[i].Tag == s.Delim {
+		start := i
+		i = s.entry(fields, i)
+		// Cap the capacity so appending to an entry cannot overwrite the
+		// fields that follow it.
+		groups = append(groups, Group{fields: fields[start:i:i]})
+	}
+	return groups, i
+}
+
+// entry consumes the entry whose delimiter is at fields[i] and returns the
+// index just past it.
+func (s *GroupSpec) entry(fields []Field, i int) int {
+	for first := true; i < len(fields); first = false {
+		tag := fields[i].Tag
+		if tag == s.Delim && !first {
+			break // the next entry starts
+		}
+		if n := s.nested(tag); n != nil {
+			// A nested counter, possibly the delimiter itself: consume its
+			// entries by count.
+			count, _ := ParseInt(fields[i].Value)
+			_, i = n.entries(fields, i+1, count)
+			continue
+		}
+		if !first && !slices.Contains(s.Tags, tag) {
+			break // not part of this group
+		}
+		i++
+	}
+	return i
+}
+
+// nested returns the spec of the nested group whose counter is tag, or nil.
+func (s *GroupSpec) nested(tag int) *GroupSpec {
+	for _, n := range s.Nested {
+		if n.Counter == tag {
+			return n
+		}
+	}
+	return nil
+}

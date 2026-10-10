@@ -24,7 +24,11 @@ func (e *NoNestedPartySubIDsEntry) NestedPartySubIDType() (int, bool, error) {
 	return n, true, err
 }
 
-var noNestedPartySubIDsChildTags = []int{TagNestedPartySubID, TagNestedPartySubIDType}
+var noNestedPartySubIDsSpec = &fix2.GroupSpec{
+	Counter: TagNoNestedPartySubIDs,
+	Delim:   TagNestedPartySubID,
+	Tags:    []int{TagNestedPartySubID, TagNestedPartySubIDType},
+}
 
 type NoNestedPartySubIDsEntryBuilder struct {
 	fields []fix2.Field

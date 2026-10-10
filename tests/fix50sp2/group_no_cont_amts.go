@@ -28,7 +28,11 @@ func (e *NoContAmtsEntry) ContAmtCurr() (string, bool) {
 	return string(v), v != nil
 }
 
-var noContAmtsChildTags = []int{TagContAmtType, TagContAmtValue, TagContAmtCurr}
+var noContAmtsSpec = &fix2.GroupSpec{
+	Counter: TagNoContAmts,
+	Delim:   TagContAmtType,
+	Tags:    []int{TagContAmtType, TagContAmtValue, TagContAmtCurr},
+}
 
 type NoContAmtsEntryBuilder struct {
 	fields []fix2.Field

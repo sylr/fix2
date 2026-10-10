@@ -441,7 +441,7 @@ func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltID() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltIDEntries() []NoUnderlyingSecurityAltIDEntry {
-	groups := e.grp.Groups(TagNoUnderlyingSecurityAltID, noUnderlyingSecurityAltIDChildTags)
+	groups := e.grp.GroupsOf(noUnderlyingSecurityAltIDSpec)
 	entries := make([]NoUnderlyingSecurityAltIDEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUnderlyingSecurityAltIDEntry{grp: groups[i]}
@@ -457,7 +457,7 @@ func (e *NoUnderlyingsEntry) NoUnderlyingStips() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingStipsEntries() []NoUnderlyingStipsEntry {
-	groups := e.grp.Groups(TagNoUnderlyingStips, noUnderlyingStipsChildTags)
+	groups := e.grp.GroupsOf(noUnderlyingStipsSpec)
 	entries := make([]NoUnderlyingStipsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUnderlyingStipsEntry{grp: groups[i]}
@@ -473,7 +473,7 @@ func (e *NoUnderlyingsEntry) NoUndlyInstrumentParties() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrumentPartiesEntry {
-	groups := e.grp.Groups(TagNoUndlyInstrumentParties, noUndlyInstrumentPartiesChildTags)
+	groups := e.grp.GroupsOf(noUndlyInstrumentPartiesSpec)
 	entries := make([]NoUndlyInstrumentPartiesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUndlyInstrumentPartiesEntry{grp: groups[i]}
@@ -481,7 +481,12 @@ func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrume
 	return entries
 }
 
-var noUnderlyingsChildTags = []int{TagUnderlyingSymbol, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingRedemptionDate, TagUnderlyingCreditRating, TagUnderlyingSecurityIDSource, TagUnderlyingIssuer, TagUnderlyingSecurityDesc, TagUnderlyingSecurityExchange, TagUnderlyingSecurityID, TagUnderlyingSecurityType, TagUnderlyingSymbolSfx, TagUnderlyingMaturityMonthYear, TagUnderlyingPutOrCall, TagUnderlyingStrikePrice, TagUnderlyingOptAttribute, TagUnderlyingCurrency, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCouponRate, TagUnderlyingContractMultiplier, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingMaturityDate, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingInstrRegistry, TagUnderlyingSecuritySubType, TagUnderlyingPx, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingQty, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingStrikeCurrency, TagUnderlyingAllocationPercent, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingSettlementType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint, TagNoUnderlyingSecurityAltID, TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource, TagNoUnderlyingStips, TagUnderlyingStipType, TagUnderlyingStipValue, TagNoUndlyInstrumentParties, TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs, TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType}
+var noUnderlyingsSpec = &fix2.GroupSpec{
+	Counter: TagNoUnderlyings,
+	Delim:   TagUnderlyingSymbol,
+	Nested:  []*fix2.GroupSpec{noUnderlyingSecurityAltIDSpec, noUnderlyingStipsSpec, noUndlyInstrumentPartiesSpec},
+	Tags:    []int{TagUnderlyingSymbol, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingRedemptionDate, TagUnderlyingCreditRating, TagUnderlyingSecurityIDSource, TagUnderlyingIssuer, TagUnderlyingSecurityDesc, TagUnderlyingSecurityExchange, TagUnderlyingSecurityID, TagUnderlyingSecurityType, TagUnderlyingSymbolSfx, TagUnderlyingMaturityMonthYear, TagUnderlyingPutOrCall, TagUnderlyingStrikePrice, TagUnderlyingOptAttribute, TagUnderlyingCurrency, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCouponRate, TagUnderlyingContractMultiplier, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingMaturityDate, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingInstrRegistry, TagUnderlyingSecuritySubType, TagUnderlyingPx, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingQty, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingStrikeCurrency, TagUnderlyingAllocationPercent, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingSettlementType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
+}
 
 type NoUnderlyingsEntryBuilder struct {
 	fields                         []fix2.Field

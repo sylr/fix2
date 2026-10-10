@@ -25,7 +25,11 @@ func (e *NoMsgTypesEntry) RefCstmApplVerID() (string, bool) {
 	return string(v), v != nil
 }
 
-var noMsgTypesChildTags = []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}
+var noMsgTypesSpec = &fix2.GroupSpec{
+	Counter: TagNoMsgTypes,
+	Delim:   TagRefMsgType,
+	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID},
+}
 
 type NoMsgTypesEntryBuilder struct {
 	fields []fix2.Field

@@ -17,7 +17,11 @@ func (e *NoTradingSessionsEntry) TradingSessionSubID() (TradingSessionSubID, boo
 	return TradingSessionSubID(v), v != nil
 }
 
-var noTradingSessionsChildTags = []int{TagTradingSessionID, TagTradingSessionSubID}
+var noTradingSessionsSpec = &fix2.GroupSpec{
+	Counter: TagNoTradingSessions,
+	Delim:   TagTradingSessionID,
+	Tags:    []int{TagTradingSessionID, TagTradingSessionSubID},
+}
 
 type NoTradingSessionsEntryBuilder struct {
 	fields []fix2.Field

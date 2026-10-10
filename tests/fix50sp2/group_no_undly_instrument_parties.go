@@ -36,7 +36,7 @@ func (e *NoUndlyInstrumentPartiesEntry) NoUndlyInstrumentPartySubIDs() (int, boo
 	return n, true, err
 }
 func (e *NoUndlyInstrumentPartiesEntry) NoUndlyInstrumentPartySubIDsEntries() []NoUndlyInstrumentPartySubIDsEntry {
-	groups := e.grp.Groups(TagNoUndlyInstrumentPartySubIDs, noUndlyInstrumentPartySubIDsChildTags)
+	groups := e.grp.GroupsOf(noUndlyInstrumentPartySubIDsSpec)
 	entries := make([]NoUndlyInstrumentPartySubIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUndlyInstrumentPartySubIDsEntry{grp: groups[i]}
@@ -44,7 +44,12 @@ func (e *NoUndlyInstrumentPartiesEntry) NoUndlyInstrumentPartySubIDsEntries() []
 	return entries
 }
 
-var noUndlyInstrumentPartiesChildTags = []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs, TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType}
+var noUndlyInstrumentPartiesSpec = &fix2.GroupSpec{
+	Counter: TagNoUndlyInstrumentParties,
+	Delim:   TagUnderlyingInstrumentPartyID,
+	Nested:  []*fix2.GroupSpec{noUndlyInstrumentPartySubIDsSpec},
+	Tags:    []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole},
+}
 
 type NoUndlyInstrumentPartiesEntryBuilder struct {
 	fields                            []fix2.Field

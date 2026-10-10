@@ -517,3 +517,41 @@ func TestTimeValue(t *testing.T) {
 		}
 	}
 }
+
+func TestGeneratedGroupSpecs(t *testing.T) {
+	dict, err := dictionary.LoadFile("testdata/FIX44.xml")
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	outDir := t.TempDir()
+	if err := generate(dict, "fix44", outDir); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	read := func(name string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(outDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	// Each group declares its spec; NoAllocs nests NoDlvyInst by reference.
+	allocs := read("group_no_allocs.go")
+	for _, want := range []string{
+		"var noAllocsSpec = &fix2.GroupSpec{",
+		"Counter: TagNoAllocs,",
+		"Delim:   TagAllocAccount,",
+		"Nested:  []*fix2.GroupSpec{noDlvyInstSpec},",
+		"e.grp.GroupsOf(noDlvyInstSpec)",
+	} {
+		if !strings.Contains(allocs, want) {
+			t.Errorf("group_no_allocs.go missing %q", want)
+		}
+	}
+	if !strings.Contains(read("group_no_dlvy_inst.go"), "var noDlvyInstSpec = &fix2.GroupSpec{") {
+		t.Error("group_no_dlvy_inst.go missing noDlvyInstSpec")
+	}
+	if !strings.Contains(read("msg_new_order_single.go"), "m.msg.GroupsOf(noAllocsSpec)") {
+		t.Error("NewOrderSingle does not read NoAllocs with GroupsOf")
+	}
+}

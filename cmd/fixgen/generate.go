@@ -227,14 +227,23 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 		DelimTag:   defs[0].DelimTag,
 	}
 
-	// Union child fields: delimiter first, then remaining sorted by tag.
+	// Union child fields: delimiter first, then remaining sorted by tag. When
+	// entries start with a nested group (e.g. FIX 5.0 SP2 NoAsgnReqs starting
+	// with Parties), the delimiter is that group's counter: it belongs to the
+	// nested group, not to the entry's own fields.
 	fieldSet := map[int]bool{}
+	nestedCounter := map[int]bool{}
 	for _, d := range defs {
 		for _, fr := range d.Fields {
 			fieldSet[fr.Tag] = true
 		}
+		for _, g := range d.Groups {
+			nestedCounter[g.CounterTag] = true
+		}
 	}
-	mg.Fields = append(mg.Fields, dictionary.FieldRef{Tag: mg.DelimTag})
+	if !nestedCounter[mg.DelimTag] {
+		mg.Fields = append(mg.Fields, dictionary.FieldRef{Tag: mg.DelimTag})
+	}
 	delete(fieldSet, mg.DelimTag)
 	var rest []int
 	for tag := range fieldSet {
@@ -297,8 +306,8 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		writeIterationMethod(f, dict, entryName, "e", "grp", globalNested, allMerged)
 	}
 
-	// --- Child tags var ---
-	writeChildTagsVar(f, dict, mg, allMerged)
+	// --- Group spec var ---
+	writeSpecVar(f, dict, mg)
 
 	// --- Entry builder struct ---
 	entryBuilderName := mg.Name + "EntryBuilder"
@@ -481,42 +490,42 @@ func unexport(s string) string {
 // child tags var + iteration method (split from former writeGroupIterator)
 // ---------------------------------------------------------------------------
 
-// writeChildTagsVar generates: var noAllocsChildTags = []int{...}
-func writeChildTagsVar(f *jen.File, dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map[string]dictionary.GroupDef) {
-	varName := unexport(mg.Name) + "ChildTags"
-
-	var tagLits []jen.Code
+// writeSpecVar generates the group's fix2.GroupSpec, e.g.
+//
+//	var noAllocsSpec = &fix2.GroupSpec{Counter: TagNoAllocs, Delim: TagAllocAccount, Tags: []int{...}, Nested: []*fix2.GroupSpec{noDlvyInstSpec}}
+//
+// Nested groups refer to their own spec variables, declared in their files.
+func writeSpecVar(f *jen.File, dict *dictionary.Dict, mg dictionary.GroupDef) {
+	var tags []jen.Code
 	for _, fr := range mg.Fields {
-		tagLits = append(tagLits, tagID(dict.Fields[fr.Tag].Name))
+		tags = append(tags, tagID(dict.Fields[fr.Tag].Name))
 	}
-	tagLits = appendNestedChildTagsMerged(dict, mg.Groups, allMerged, tagLits)
-	f.Var().Id(varName).Op("=").Index().Int().Values(tagLits...)
+	var nested []jen.Code
+	for _, gd := range mg.Groups {
+		nested = append(nested, jen.Id(specVar(gd.Name)))
+	}
+	values := jen.Dict{
+		jen.Id("Counter"): tagID(mg.Name),
+		jen.Id("Delim"):   tagID(dict.Fields[mg.DelimTag].Name),
+		jen.Id("Tags"):    jen.Index().Int().Values(tags...),
+	}
+	if len(nested) > 0 {
+		values[jen.Id("Nested")] = jen.Index().Op("*").Qual(fix2Pkg, "GroupSpec").Values(nested...)
+	}
+	f.Var().Id(specVar(mg.Name)).Op("=").Op("&").Qual(fix2Pkg, "GroupSpec").Values(values)
 }
 
-func appendNestedChildTagsMerged(dict *dictionary.Dict, groups []dictionary.GroupDef, allMerged map[string]dictionary.GroupDef, tagLits []jen.Code) []jen.Code {
-	for _, gd := range groups {
-		globalMg := allMerged[gd.Name]
-		tagLits = append(tagLits, tagID(gd.Name))
-		for _, fr := range globalMg.Fields {
-			tagLits = append(tagLits, tagID(dict.Fields[fr.Tag].Name))
-		}
-		tagLits = appendNestedChildTagsMerged(dict, globalMg.Groups, allMerged, tagLits)
-	}
-	return tagLits
-}
+// specVar names the GroupSpec variable of a group, e.g. noAllocsSpec.
+func specVar(groupName string) string { return unexport(groupName) + "Spec" }
 
 // writeIterationMethod generates the *Entries() method on a reader type.
 func writeIterationMethod(f *jen.File, dict *dictionary.Dict, ownerName, ownerRecv, ownerField string, mg dictionary.GroupDef, allMerged map[string]dictionary.GroupDef) {
 	entryName := mg.Name + "Entry"
-	varName := unexport(mg.Name) + "ChildTags"
 
 	f.Func().Params(
 		jen.Id(ownerRecv).Op("*").Id(ownerName),
 	).Id(mg.Name+"Entries").Params().Index().Id(entryName).Block(
-		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("Groups").Call(
-			tagID(mg.Name),
-			jen.Id(varName),
-		),
+		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("GroupsOf").Call(jen.Id(specVar(mg.Name))),
 		jen.Id("entries").Op(":=").Make(jen.Index().Id(entryName), jen.Len(jen.Id("groups"))),
 		jen.For(jen.Id("i").Op(":=").Range().Id("groups")).Block(
 			jen.Id("entries").Index(jen.Id("i")).Op("=").Id(entryName).Values(jen.Dict{

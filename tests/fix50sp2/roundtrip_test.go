@@ -90,7 +90,7 @@ func TestNoLegsRoundTrip(t *testing.T) {
 func TestLocalMktDate(t *testing.T) {
 	plus2 := time.FixedZone("UTC+2", 2*3600)
 	minus5 := time.FixedZone("UTC-5", -5*3600)
-	settle := time.Date(2026, 10, 10, 0, 0, 0, 0, plus2)     // 2026-10-09 22:00 UTC
+	settle := time.Date(2026, 10, 10, 0, 0, 0, 0, plus2)      // 2026-10-09 22:00 UTC
 	legSettle := time.Date(2026, 10, 10, 23, 0, 0, 0, minus5) // 2026-10-11 04:00 UTC
 
 	raw := BuildExecutionReport("FIXT.1.1").

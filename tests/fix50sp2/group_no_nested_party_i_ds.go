@@ -36,7 +36,7 @@ func (e *NoNestedPartyIDsEntry) NoNestedPartySubIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoNestedPartyIDsEntry) NoNestedPartySubIDsEntries() []NoNestedPartySubIDsEntry {
-	groups := e.grp.Groups(TagNoNestedPartySubIDs, noNestedPartySubIDsChildTags)
+	groups := e.grp.GroupsOf(noNestedPartySubIDsSpec)
 	entries := make([]NoNestedPartySubIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNestedPartySubIDsEntry{grp: groups[i]}
@@ -44,7 +44,12 @@ func (e *NoNestedPartyIDsEntry) NoNestedPartySubIDsEntries() []NoNestedPartySubI
 	return entries
 }
 
-var noNestedPartyIDsChildTags = []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartySubIDs, TagNestedPartySubID, TagNestedPartySubIDType}
+var noNestedPartyIDsSpec = &fix2.GroupSpec{
+	Counter: TagNoNestedPartyIDs,
+	Delim:   TagNestedPartyID,
+	Nested:  []*fix2.GroupSpec{noNestedPartySubIDsSpec},
+	Tags:    []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole},
+}
 
 type NoNestedPartyIDsEntryBuilder struct {
 	fields                   []fix2.Field

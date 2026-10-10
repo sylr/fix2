@@ -235,7 +235,7 @@ func (m *Logon) NoMsgTypes() (int, bool, error) {
 	return n, true, err
 }
 func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
-	groups := m.msg.Groups(TagNoMsgTypes, noMsgTypesChildTags)
+	groups := m.msg.GroupsOf(noMsgTypesSpec)
 	entries := make([]NoMsgTypesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoMsgTypesEntry{grp: groups[i]}

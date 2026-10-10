@@ -45,7 +45,11 @@ func (e *NoEventsEntry) EventTime() (time.Time, bool, error) {
 	return t, true, err
 }
 
-var noEventsChildTags = []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime}
+var noEventsSpec = &fix2.GroupSpec{
+	Counter: TagNoEvents,
+	Delim:   TagEventType,
+	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
+}
 
 type NoEventsEntryBuilder struct {
 	fields []fix2.Field

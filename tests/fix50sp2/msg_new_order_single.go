@@ -1347,7 +1347,7 @@ func (m *NewOrderSingle) ExDestinationIDSource() (ExDestinationIDSource, bool) {
 	return ExDestinationIDSource(v), v != nil
 }
 func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
-	groups := m.msg.Groups(TagNoPartyIDs, noPartyIDsChildTags)
+	groups := m.msg.GroupsOf(noPartyIDsSpec)
 	entries := make([]NoPartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoPartyIDsEntry{grp: groups[i]}
@@ -1355,7 +1355,7 @@ func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
-	groups := m.msg.Groups(TagNoAllocs, noAllocsChildTags)
+	groups := m.msg.GroupsOf(noAllocsSpec)
 	entries := make([]NoAllocsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoAllocsEntry{grp: groups[i]}
@@ -1363,7 +1363,7 @@ func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
-	groups := m.msg.Groups(TagNoTradingSessions, noTradingSessionsChildTags)
+	groups := m.msg.GroupsOf(noTradingSessionsSpec)
 	entries := make([]NoTradingSessionsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoTradingSessionsEntry{grp: groups[i]}
@@ -1371,7 +1371,7 @@ func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
-	groups := m.msg.Groups(TagNoSecurityAltID, noSecurityAltIDChildTags)
+	groups := m.msg.GroupsOf(noSecurityAltIDSpec)
 	entries := make([]NoSecurityAltIDEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoSecurityAltIDEntry{grp: groups[i]}
@@ -1379,7 +1379,7 @@ func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
-	groups := m.msg.Groups(TagNoEvents, noEventsChildTags)
+	groups := m.msg.GroupsOf(noEventsSpec)
 	entries := make([]NoEventsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoEventsEntry{grp: groups[i]}
@@ -1387,7 +1387,7 @@ func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
-	groups := m.msg.Groups(TagNoInstrumentParties, noInstrumentPartiesChildTags)
+	groups := m.msg.GroupsOf(noInstrumentPartiesSpec)
 	entries := make([]NoInstrumentPartiesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoInstrumentPartiesEntry{grp: groups[i]}
@@ -1395,7 +1395,7 @@ func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry
 	return entries
 }
 func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
-	groups := m.msg.Groups(TagNoComplexEvents, noComplexEventsChildTags)
+	groups := m.msg.GroupsOf(noComplexEventsSpec)
 	entries := make([]NoComplexEventsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoComplexEventsEntry{grp: groups[i]}
@@ -1403,7 +1403,7 @@ func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
-	groups := m.msg.Groups(TagNoUnderlyings, noUnderlyingsChildTags)
+	groups := m.msg.GroupsOf(noUnderlyingsSpec)
 	entries := make([]NoUnderlyingsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUnderlyingsEntry{grp: groups[i]}
@@ -1411,7 +1411,7 @@ func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
-	groups := m.msg.Groups(TagNoStipulations, noStipulationsChildTags)
+	groups := m.msg.GroupsOf(noStipulationsSpec)
 	entries := make([]NoStipulationsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoStipulationsEntry{grp: groups[i]}
@@ -1419,7 +1419,7 @@ func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
 	return entries
 }
 func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEntry {
-	groups := m.msg.Groups(TagNoStrategyParameters, noStrategyParametersChildTags)
+	groups := m.msg.GroupsOf(noStrategyParametersSpec)
 	entries := make([]NoStrategyParametersEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoStrategyParametersEntry{grp: groups[i]}
@@ -1427,7 +1427,7 @@ func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEnt
 	return entries
 }
 func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
-	groups := m.msg.Groups(TagNoTrdRegTimestamps, noTrdRegTimestampsChildTags)
+	groups := m.msg.GroupsOf(noTrdRegTimestampsSpec)
 	entries := make([]NoTrdRegTimestampsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoTrdRegTimestampsEntry{grp: groups[i]}

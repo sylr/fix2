@@ -40,7 +40,11 @@ func (e *NoTrdRegTimestampsEntry) DeskOrderHandlingInst() (DeskOrderHandlingInst
 	return DeskOrderHandlingInst(v), v != nil
 }
 
-var noTrdRegTimestampsChildTags = []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}
+var noTrdRegTimestampsSpec = &fix2.GroupSpec{
+	Counter: TagNoTrdRegTimestamps,
+	Delim:   TagTrdRegTimestamp,
+	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
+}
 
 type NoTrdRegTimestampsEntryBuilder struct {
 	fields []fix2.Field

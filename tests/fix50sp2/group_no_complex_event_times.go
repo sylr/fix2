@@ -28,7 +28,11 @@ func (e *NoComplexEventTimesEntry) ComplexEventEndTime() (time.Time, bool, error
 	return t, true, err
 }
 
-var noComplexEventTimesChildTags = []int{TagComplexEventStartTime, TagComplexEventEndTime}
+var noComplexEventTimesSpec = &fix2.GroupSpec{
+	Counter: TagNoComplexEventTimes,
+	Delim:   TagComplexEventStartTime,
+	Tags:    []int{TagComplexEventStartTime, TagComplexEventEndTime},
+}
 
 type NoComplexEventTimesEntryBuilder struct {
 	fields []fix2.Field

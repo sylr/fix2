@@ -41,7 +41,11 @@ func (e *NoContraBrokersEntry) ContraLegRefID() (string, bool) {
 	return string(v), v != nil
 }
 
-var noContraBrokersChildTags = []int{TagContraBroker, TagContraTrader, TagContraTradeQty, TagContraTradeTime, TagContraLegRefID}
+var noContraBrokersSpec = &fix2.GroupSpec{
+	Counter: TagNoContraBrokers,
+	Delim:   TagContraBroker,
+	Tags:    []int{TagContraBroker, TagContraTrader, TagContraTradeQty, TagContraTradeTime, TagContraLegRefID},
+}
 
 type NoContraBrokersEntryBuilder struct {
 	fields []fix2.Field

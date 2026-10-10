@@ -60,7 +60,7 @@ func (e *NoComplexEventsEntry) NoComplexEventDates() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoComplexEventsEntry) NoComplexEventDatesEntries() []NoComplexEventDatesEntry {
-	groups := e.grp.Groups(TagNoComplexEventDates, noComplexEventDatesChildTags)
+	groups := e.grp.GroupsOf(noComplexEventDatesSpec)
 	entries := make([]NoComplexEventDatesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoComplexEventDatesEntry{grp: groups[i]}
@@ -68,7 +68,12 @@ func (e *NoComplexEventsEntry) NoComplexEventDatesEntries() []NoComplexEventDate
 	return entries
 }
 
-var noComplexEventsChildTags = []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition, TagNoComplexEventDates, TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes, TagComplexEventStartTime, TagComplexEventEndTime}
+var noComplexEventsSpec = &fix2.GroupSpec{
+	Counter: TagNoComplexEvents,
+	Delim:   TagComplexEventType,
+	Nested:  []*fix2.GroupSpec{noComplexEventDatesSpec},
+	Tags:    []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition},
+}
 
 type NoComplexEventsEntryBuilder struct {
 	fields                   []fix2.Field

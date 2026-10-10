@@ -24,7 +24,11 @@ func (e *NoUndlyInstrumentPartySubIDsEntry) UnderlyingInstrumentPartySubIDType()
 	return n, true, err
 }
 
-var noUndlyInstrumentPartySubIDsChildTags = []int{TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType}
+var noUndlyInstrumentPartySubIDsSpec = &fix2.GroupSpec{
+	Counter: TagNoUndlyInstrumentPartySubIDs,
+	Delim:   TagUnderlyingInstrumentPartySubID,
+	Tags:    []int{TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType},
+}
 
 type NoUndlyInstrumentPartySubIDsEntryBuilder struct {
 	fields []fix2.Field

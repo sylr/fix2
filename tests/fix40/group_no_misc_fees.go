@@ -28,7 +28,11 @@ func (e *NoMiscFeesEntry) MiscFeeType() (MiscFeeType, bool) {
 	return MiscFeeType(v), v != nil
 }
 
-var noMiscFeesChildTags = []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType}
+var noMiscFeesSpec = &fix2.GroupSpec{
+	Counter: TagNoMiscFees,
+	Delim:   TagMiscFeeAmt,
+	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType},
+}
 
 type NoMiscFeesEntryBuilder struct {
 	fields []fix2.Field

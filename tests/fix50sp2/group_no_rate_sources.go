@@ -21,7 +21,11 @@ func (e *NoRateSourcesEntry) ReferencePage() (string, bool) {
 	return string(v), v != nil
 }
 
-var noRateSourcesChildTags = []int{TagRateSource, TagRateSourceType, TagReferencePage}
+var noRateSourcesSpec = &fix2.GroupSpec{
+	Counter: TagNoRateSources,
+	Delim:   TagRateSource,
+	Tags:    []int{TagRateSource, TagRateSourceType, TagReferencePage},
+}
 
 type NoRateSourcesEntryBuilder struct {
 	fields []fix2.Field

@@ -44,7 +44,7 @@ func (e *NoLegAllocsEntry) NoNested2PartyIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegAllocsEntry) NoNested2PartyIDsEntries() []NoNested2PartyIDsEntry {
-	groups := e.grp.Groups(TagNoNested2PartyIDs, noNested2PartyIDsChildTags)
+	groups := e.grp.GroupsOf(noNested2PartyIDsSpec)
 	entries := make([]NoNested2PartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNested2PartyIDsEntry{grp: groups[i]}
@@ -52,7 +52,12 @@ func (e *NoLegAllocsEntry) NoNested2PartyIDsEntries() []NoNested2PartyIDsEntry {
 	return entries
 }
 
-var noLegAllocsChildTags = []int{TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency, TagNoNested2PartyIDs, TagNested2PartyID, TagNested2PartyIDSource, TagNested2PartyRole, TagNoNested2PartySubIDs, TagNested2PartySubID, TagNested2PartySubIDType}
+var noLegAllocsSpec = &fix2.GroupSpec{
+	Counter: TagNoLegAllocs,
+	Delim:   TagLegAllocAccount,
+	Nested:  []*fix2.GroupSpec{noNested2PartyIDsSpec},
+	Tags:    []int{TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency},
+}
 
 type NoLegAllocsEntryBuilder struct {
 	fields                 []fix2.Field

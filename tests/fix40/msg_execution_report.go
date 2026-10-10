@@ -339,7 +339,7 @@ func (m *ExecutionReport) Text() (string, bool) {
 	return string(v), v != nil
 }
 func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
-	groups := m.msg.Groups(TagNoMiscFees, noMiscFeesChildTags)
+	groups := m.msg.GroupsOf(noMiscFeesSpec)
 	entries := make([]NoMiscFeesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoMiscFeesEntry{grp: groups[i]}

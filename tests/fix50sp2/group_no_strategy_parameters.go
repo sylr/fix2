@@ -21,7 +21,11 @@ func (e *NoStrategyParametersEntry) StrategyParameterValue() (string, bool) {
 	return string(v), v != nil
 }
 
-var noStrategyParametersChildTags = []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue}
+var noStrategyParametersSpec = &fix2.GroupSpec{
+	Counter: TagNoStrategyParameters,
+	Delim:   TagStrategyParameterName,
+	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
+}
 
 type NoStrategyParametersEntryBuilder struct {
 	fields []fix2.Field
