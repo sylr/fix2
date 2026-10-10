@@ -344,3 +344,34 @@ func TestGroupsOfRepeatedTagEndsEntry(t *testing.T) {
 		t.Errorf("GetTopLevel(629) = %q, want direct", got)
 	}
 }
+
+func TestGroupsOfRepeatedNestedCounterEndsEntry(t *testing.T) {
+	child := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201}}
+	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}, Nested: []*GroupSpec{child}}
+	// The second 200 is the message's own field after the parent group.
+	m := fieldsMsg(t, "900=1", "100=p", "200=1", "201=c", "200=0")
+	if got := entryTags(m.GroupsOf(parent)); !reflect.DeepEqual(got, [][]int{{100, 200, 201}}) {
+		t.Errorf("entries = %v", got)
+	}
+	if got := string(m.GetTopLevel(200, parent)); got != "0" {
+		t.Errorf("GetTopLevel(200) = %q, want 0", got)
+	}
+}
+
+func TestGroupsOfLargeSpec(t *testing.T) {
+	// Specs above 256 tags use a heap bitset; repetition is still detected
+	// for tags beyond index 255.
+	for _, n := range []int{256, 257, 300} {
+		tags := make([]int, n)
+		for i := range tags {
+			tags[i] = 1000 + i
+		}
+		spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
+		last := fmt.Sprintf("%d=x", 1000+n-1)
+		m := fieldsMsg(t, "1=1", "1000=d", last, last)
+		got := m.GroupsOf(spec)
+		if len(got) != 1 || len(got[0].Fields()) != 2 {
+			t.Errorf("%d tags: entries = %v, want one entry ending before the repeated tag", n, entryTags(got))
+		}
+	}
+}

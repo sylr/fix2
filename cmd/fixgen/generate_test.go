@@ -1188,6 +1188,14 @@ func TestOnce(t *testing.T) {
 	if n := bytes.Count(raw, []byte("\x0191=")); n != 1 {
 		t.Fatalf("%q: SecureData written %d times", raw, n)
 	}
+	if n := bytes.Count(raw, []byte("\x0190=")); n != 1 {
+		t.Fatalf("%q: SecureDataLen written %d times", raw, n)
+	}
+	// Adjacent, in the header (before the body's TestReqID).
+	pair, body := bytes.Index(raw, []byte("\x0190=1\x0191=s\x01")), bytes.Index(raw, []byte("\x01112="))
+	if pair < 0 || pair > body {
+		t.Fatalf("%q: SecureDataLen/SecureData not adjacent before the body", raw)
+	}
 	if _, err := fix2.Parse(raw); err != nil {
 		t.Fatalf("Parse(%q): %v", raw, err)
 	}

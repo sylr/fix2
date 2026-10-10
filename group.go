@@ -134,16 +134,23 @@ func (s *GroupSpec) entry(fields []Field, i int) int {
 	if n := (len(s.Tags) + 63) / 64; n > len(small) {
 		seen = make([]uint64, n)
 	}
+	var nestedSeen uint64 // nested counters seen, by index in s.Nested (first 64)
 	for first := true; i < len(fields); first = false {
 		tag := fields[i].Tag
 		if tag == s.Delim && !first {
 			break // the next entry starts
 		}
-		if n := s.Child(tag); n != nil {
-			// A nested counter, possibly the delimiter itself: skip its
-			// entries by count.
+		if c := s.childIndex(tag); c >= 0 {
+			// A nested counter, possibly the delimiter itself: it cannot
+			// repeat within the entry either, then skip its entries by count.
+			if c < 64 {
+				if nestedSeen&(1<<c) != 0 {
+					return i
+				}
+				nestedSeen |= 1 << c
+			}
 			count, _ := ParseInt(fields[i].Value)
-			i = n.skip(fields, i+1, count)
+			i = s.Nested[c].skip(fields, i+1, count)
 			continue
 		}
 		k := slices.Index(s.Tags, tag)
@@ -168,6 +175,17 @@ func (s *GroupSpec) skip(fields []Field, i, count int) int {
 		i = s.entry(fields, i)
 	}
 	return i
+}
+
+// childIndex returns the index in s.Nested of the group whose counter is tag,
+// or -1.
+func (s *GroupSpec) childIndex(tag int) int {
+	for i, n := range s.Nested {
+		if n.Counter == tag {
+			return i
+		}
+	}
+	return -1
 }
 
 // Child returns the spec of the nested group whose counter is tag, or nil if
