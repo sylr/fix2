@@ -551,11 +551,20 @@ func TestValidate_MultipleValueEnum(t *testing.T) {
 }
 
 func TestLoad_ExponentialExpansion(t *testing.T) {
-	// C0 holds one field; each Cn references C(n-1) twice, so M expands to
-	// 2^30 fields although the dictionary is tiny and acyclic.
+	for name, c0 := range map[string]string{
+		"leaf field": `<component name="C0"><field name="F" required="N"/></component>`,
+		"empty leaf": `<component name="C0"/>`,
+	} {
+		t.Run(name, func(t *testing.T) { testExponentialExpansion(t, c0) })
+	}
+}
+
+func testExponentialExpansion(t *testing.T, c0 string) {
+	// Each Cn references C(n-1) twice, so M expands to 2^30 copies of C0
+	// although the dictionary is tiny and acyclic.
 	const depth = 30
 	var comps strings.Builder
-	comps.WriteString(`<component name="C0"><field name="F" required="N"/></component>`)
+	comps.WriteString(c0)
 	for i := 1; i <= depth; i++ {
 		fmt.Fprintf(&comps, `<component name="C%d"><component name="C%d" required="N"/><component name="C%d" required="N"/></component>`, i, i-1, i-1)
 	}
