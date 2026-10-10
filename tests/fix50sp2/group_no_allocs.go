@@ -64,74 +64,49 @@ var noAllocsSpec = &fix2.GroupSpec{
 }
 
 type NoAllocsEntryBuilder struct {
-	fields                []fix2.Field
-	noNestedPartyIDsCount int
+	fields           []fix2.Field
+	noNestedPartyIDs []*NoNestedPartyIDsEntryBuilder
 }
 
 func NewNoAllocsEntry() *NoAllocsEntryBuilder {
 	return &NoAllocsEntryBuilder{}
 }
 func (e *NoAllocsEntryBuilder) SetAllocAccount(v string) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagAllocAccount,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagAllocAccount, []byte(v))
 	return e
 }
 func (e *NoAllocsEntryBuilder) SetAllocQty(v float64) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagAllocQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagAllocQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoAllocsEntryBuilder) SetIndividualAllocID(v string) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagIndividualAllocID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagIndividualAllocID, []byte(v))
 	return e
 }
 func (e *NoAllocsEntryBuilder) SetAllocAcctIDSource(v int) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagAllocAcctIDSource,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagAllocAcctIDSource, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoAllocsEntryBuilder) SetAllocSettlCurrency(v string) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagAllocSettlCurrency,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagAllocSettlCurrency, []byte(v))
 	return e
 }
+
+// AddNoNestedPartyIDsEntry adds an entry to the nested NoNestedPartyIDs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoAllocsEntryBuilder) AddNoNestedPartyIDsEntry(ne *NoNestedPartyIDsEntryBuilder) *NoAllocsEntryBuilder {
-	e.noNestedPartyIDsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noNestedPartyIDsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoNestedPartyIDs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoNestedPartyIDs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagNestedPartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noNestedPartyIDs = append(e.noNestedPartyIDs, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoAllocsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagAllocAccount)
+	if len(e.noNestedPartyIDs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoNestedPartyIDs, len(e.noNestedPartyIDs))
+		for _, entry := range e.noNestedPartyIDs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

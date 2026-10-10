@@ -54,51 +54,36 @@ func NewNoTrdRegTimestampsEntry() *NoTrdRegTimestampsEntryBuilder {
 	return &NoTrdRegTimestampsEntryBuilder{}
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetTrdRegTimestamp(v time.Time) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagTrdRegTimestamp,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimestamp)),
-	})
+	e.fields = fix2.SetField(e.fields, TagTrdRegTimestamp, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
 	return e
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetTrdRegTimestampWithFormat(v time.Time, f fix2.TimeFormat) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagTrdRegTimestamp,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagTrdRegTimestamp, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetTrdRegTimestampType(v TrdRegTimestampType) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagTrdRegTimestampType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagTrdRegTimestampType, []byte(string(v)))
 	return e
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetTrdRegTimestampOrigin(v string) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagTrdRegTimestampOrigin,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagTrdRegTimestampOrigin, []byte(v))
 	return e
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetDeskType(v DeskType) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagDeskType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagDeskType, []byte(string(v)))
 	return e
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetDeskTypeSource(v DeskTypeSource) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagDeskTypeSource,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagDeskTypeSource, []byte(string(v)))
 	return e
 }
 func (e *NoTrdRegTimestampsEntryBuilder) SetDeskOrderHandlingInst(v DeskOrderHandlingInst) *NoTrdRegTimestampsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagDeskOrderHandlingInst,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagDeskOrderHandlingInst, []byte(string(v)))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoTrdRegTimestampsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagTrdRegTimestamp)
+	return dst
 }

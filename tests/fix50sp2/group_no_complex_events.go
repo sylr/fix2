@@ -76,88 +76,57 @@ var noComplexEventsSpec = &fix2.GroupSpec{
 }
 
 type NoComplexEventsEntryBuilder struct {
-	fields                   []fix2.Field
-	noComplexEventDatesCount int
+	fields              []fix2.Field
+	noComplexEventDates []*NoComplexEventDatesEntryBuilder
 }
 
 func NewNoComplexEventsEntry() *NoComplexEventsEntryBuilder {
 	return &NoComplexEventsEntryBuilder{}
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventType(v ComplexEventType) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventType, []byte(string(v)))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexOptPayoutAmount(v float64) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexOptPayoutAmount,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexOptPayoutAmount, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPrice(v float64) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventPrice,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceBoundaryMethod(v ComplexEventPriceBoundaryMethod) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventPriceBoundaryMethod,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventPriceBoundaryMethod, []byte(string(v)))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceBoundaryPrecision(v float64) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventPriceBoundaryPrecision,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventPriceBoundaryPrecision, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceTimeType(v ComplexEventPriceTimeType) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventPriceTimeType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventPriceTimeType, []byte(string(v)))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventCondition(v ComplexEventCondition) *NoComplexEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventCondition,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventCondition, []byte(string(v)))
 	return e
 }
+
+// AddNoComplexEventDatesEntry adds an entry to the nested NoComplexEventDates group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoComplexEventsEntryBuilder) AddNoComplexEventDatesEntry(ne *NoComplexEventDatesEntryBuilder) *NoComplexEventsEntryBuilder {
-	e.noComplexEventDatesCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noComplexEventDatesCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoComplexEventDates {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoComplexEventDates,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagComplexEventStartDate {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noComplexEventDates = append(e.noComplexEventDates, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoComplexEventsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagComplexEventType)
+	if len(e.noComplexEventDates) > 0 {
+		dst = fix2.AppendCount(dst, TagNoComplexEventDates, len(e.noComplexEventDates))
+		for _, entry := range e.noComplexEventDates {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

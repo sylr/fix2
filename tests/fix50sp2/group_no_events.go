@@ -59,51 +59,36 @@ func NewNoEventsEntry() *NoEventsEntryBuilder {
 	return &NoEventsEntryBuilder{}
 }
 func (e *NoEventsEntryBuilder) SetEventType(v EventType) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventType, []byte(string(v)))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventDate(v time.Time) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventDateWithFormat(v time.Time, f fix2.TimeFormat) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventPx(v float64) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventPx,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventPx, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventText(v string) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventText,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventText, []byte(v))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventTime(v time.Time) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventTime,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimestamp)),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventTime, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoEventsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEventTime,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagEventTime, []byte(v.UTC().Format(f)))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoEventsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagEventType)
+	return dst
 }

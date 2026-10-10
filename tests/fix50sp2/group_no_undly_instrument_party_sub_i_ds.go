@@ -38,16 +38,16 @@ func NewNoUndlyInstrumentPartySubIDsEntry() *NoUndlyInstrumentPartySubIDsEntryBu
 	return &NoUndlyInstrumentPartySubIDsEntryBuilder{}
 }
 func (e *NoUndlyInstrumentPartySubIDsEntryBuilder) SetUnderlyingInstrumentPartySubID(v string) *NoUndlyInstrumentPartySubIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartySubID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingInstrumentPartySubID, []byte(v))
 	return e
 }
 func (e *NoUndlyInstrumentPartySubIDsEntryBuilder) SetUnderlyingInstrumentPartySubIDType(v int) *NoUndlyInstrumentPartySubIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingInstrumentPartySubIDType, strconv.AppendInt(nil, int64(v), 10))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoUndlyInstrumentPartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingInstrumentPartySubID)
+	return dst
 }

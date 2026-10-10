@@ -52,60 +52,41 @@ var noUndlyInstrumentPartiesSpec = &fix2.GroupSpec{
 }
 
 type NoUndlyInstrumentPartiesEntryBuilder struct {
-	fields                            []fix2.Field
-	noUndlyInstrumentPartySubIDsCount int
+	fields                       []fix2.Field
+	noUndlyInstrumentPartySubIDs []*NoUndlyInstrumentPartySubIDsEntryBuilder
 }
 
 func NewNoUndlyInstrumentPartiesEntry() *NoUndlyInstrumentPartiesEntryBuilder {
 	return &NoUndlyInstrumentPartiesEntryBuilder{}
 }
 func (e *NoUndlyInstrumentPartiesEntryBuilder) SetUnderlyingInstrumentPartyID(v string) *NoUndlyInstrumentPartiesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartyID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingInstrumentPartyID, []byte(v))
 	return e
 }
 func (e *NoUndlyInstrumentPartiesEntryBuilder) SetUnderlyingInstrumentPartyIDSource(v string) *NoUndlyInstrumentPartiesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartyIDSource,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingInstrumentPartyIDSource, []byte(v))
 	return e
 }
 func (e *NoUndlyInstrumentPartiesEntryBuilder) SetUnderlyingInstrumentPartyRole(v int) *NoUndlyInstrumentPartiesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingInstrumentPartyRole, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
+
+// AddNoUndlyInstrumentPartySubIDsEntry adds an entry to the nested NoUndlyInstrumentPartySubIDs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoUndlyInstrumentPartiesEntryBuilder) AddNoUndlyInstrumentPartySubIDsEntry(ne *NoUndlyInstrumentPartySubIDsEntryBuilder) *NoUndlyInstrumentPartiesEntryBuilder {
-	e.noUndlyInstrumentPartySubIDsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noUndlyInstrumentPartySubIDsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoUndlyInstrumentPartySubIDs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoUndlyInstrumentPartySubIDs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagUnderlyingInstrumentPartySubID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noUndlyInstrumentPartySubIDs = append(e.noUndlyInstrumentPartySubIDs, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoUndlyInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingInstrumentPartyID)
+	if len(e.noUndlyInstrumentPartySubIDs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoUndlyInstrumentPartySubIDs, len(e.noUndlyInstrumentPartySubIDs))
+		for _, entry := range e.noUndlyInstrumentPartySubIDs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

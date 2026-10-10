@@ -35,23 +35,20 @@ func NewNoStrategyParametersEntry() *NoStrategyParametersEntryBuilder {
 	return &NoStrategyParametersEntryBuilder{}
 }
 func (e *NoStrategyParametersEntryBuilder) SetStrategyParameterName(v string) *NoStrategyParametersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagStrategyParameterName,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagStrategyParameterName, []byte(v))
 	return e
 }
 func (e *NoStrategyParametersEntryBuilder) SetStrategyParameterType(v StrategyParameterType) *NoStrategyParametersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagStrategyParameterType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagStrategyParameterType, []byte(string(v)))
 	return e
 }
 func (e *NoStrategyParametersEntryBuilder) SetStrategyParameterValue(v string) *NoStrategyParametersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagStrategyParameterValue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagStrategyParameterValue, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoStrategyParametersEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagStrategyParameterName)
+	return dst
 }

@@ -349,7 +349,7 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 
 type ExecutionReportBuilder struct {
 	*fix2.Builder
-	noMiscFeesCount int
+	noMiscFees []*NoMiscFeesEntryBuilder
 }
 
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
@@ -615,20 +615,22 @@ func (b *ExecutionReportBuilder) SetText(v string) *ExecutionReportBuilder {
 	b.SetString(TagText, v)
 	return b
 }
+
+// AddNoMiscFeesEntry adds an entry to the NoMiscFees group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
-	b.noMiscFeesCount++
-	b.SetInt(TagNoMiscFees, b.noMiscFeesCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagMiscFeeAmt {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
+	b.noMiscFees = append(b.noMiscFees, e)
+	return b
+}
+
+// Build serializes the message, with its repeating groups after the other fields.
+func (b *ExecutionReportBuilder) Build() []byte {
+	var groups []fix2.Field
+	if len(b.noMiscFees) > 0 {
+		groups = fix2.AppendCount(groups, TagNoMiscFees, len(b.noMiscFees))
+		for _, entry := range b.noMiscFees {
+			groups = entry.appendTo(groups)
 		}
 	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
-	return b
+	return b.Builder.BuildWith(groups)
 }

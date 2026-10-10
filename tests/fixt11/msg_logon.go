@@ -245,7 +245,7 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 
 type LogonBuilder struct {
 	*fix2.Builder
-	noMsgTypesCount int
+	noMsgTypes []*NoMsgTypesEntryBuilder
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
@@ -423,20 +423,22 @@ func (b *LogonBuilder) SetDefaultApplVerID(v string) *LogonBuilder {
 	b.SetString(TagDefaultApplVerID, v)
 	return b
 }
+
+// AddNoMsgTypesEntry adds an entry to the NoMsgTypes group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuilder {
-	b.noMsgTypesCount++
-	b.SetInt(TagNoMsgTypes, b.noMsgTypesCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagRefMsgType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
+	b.noMsgTypes = append(b.noMsgTypes, e)
+	return b
+}
+
+// Build serializes the message, with its repeating groups after the other fields.
+func (b *LogonBuilder) Build() []byte {
+	var groups []fix2.Field
+	if len(b.noMsgTypes) > 0 {
+		groups = fix2.AppendCount(groups, TagNoMsgTypes, len(b.noMsgTypes))
+		for _, entry := range b.noMsgTypes {
+			groups = entry.appendTo(groups)
 		}
 	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
-	return b
+	return b.Builder.BuildWith(groups)
 }

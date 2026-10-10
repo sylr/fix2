@@ -105,3 +105,87 @@ func TestLocalMktDate(t *testing.T) {
 		}
 	}
 }
+
+// TestGroupBuilderOrder covers group builder call orders that used to
+// produce unreadable messages.
+func TestGroupBuilderOrder(t *testing.T) {
+	parse := func(t *testing.T, raw []byte) *ExecutionReport {
+		t.Helper()
+		msg, err := fix2.Parse(raw)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", raw, err)
+		}
+		return WrapExecutionReport(&msg)
+	}
+
+	t.Run("nested group added before the delimiter", func(t *testing.T) {
+		raw := BuildExecutionReport("FIXT.1.1").
+			AddNoLegsEntry(NewNoLegsEntry().
+				AddNoNested3PartyIDsEntry(NewNoNested3PartyIDsEntry().SetNested3PartyID("P")).
+				SetLegSymbol("L")).
+			Build()
+		legs := parse(t, raw).NoLegsEntries()
+		if len(legs) != 1 {
+			t.Fatalf("%q: %d legs, want 1", raw, len(legs))
+		}
+		parties := legs[0].NoNested3PartyIDsEntries()
+		if len(parties) != 1 {
+			t.Fatalf("%q: %d parties, want 1", raw, len(parties))
+		}
+		if id, _ := parties[0].Nested3PartyID(); id != "P" {
+			t.Errorf("party ID = %q", id)
+		}
+	})
+
+	t.Run("setter between two Add calls", func(t *testing.T) {
+		raw := BuildExecutionReport("FIXT.1.1").
+			AddNoLegsEntry(NewNoLegsEntry().SetLegSymbol("A")).
+			SetText("x").
+			AddNoLegsEntry(NewNoLegsEntry().SetLegSymbol("B")).
+			Build()
+		er := parse(t, raw)
+		legs := er.NoLegsEntries()
+		if len(legs) != 2 {
+			t.Fatalf("%q: %d legs, want 2", raw, len(legs))
+		}
+		for i, want := range []string{"A", "B"} {
+			if got, _ := legs[i].LegSymbol(); got != want {
+				t.Errorf("leg %d = %q, want %q", i, got, want)
+			}
+		}
+		if text, _ := er.Text(); text != "x" {
+			t.Errorf("Text = %q", text)
+		}
+	})
+
+	t.Run("setter called twice", func(t *testing.T) {
+		raw := BuildExecutionReport("FIXT.1.1").
+			AddNoLegsEntry(NewNoLegsEntry().
+				SetLegSymbol("A").SetLegSymbol("B").
+				SetLegQty(1).SetLegQty(2)).
+			Build()
+		if n := bytes.Count(raw, []byte("\x01600=")); n != 1 {
+			t.Errorf("%q: LegSymbol appears %d times, want 1", raw, n)
+		}
+		legs := parse(t, raw).NoLegsEntries()
+		if len(legs) != 1 {
+			t.Fatalf("%q: %d legs, want 1", raw, len(legs))
+		}
+		if sym, _ := legs[0].LegSymbol(); sym != "B" {
+			t.Errorf("LegSymbol = %q, want B", sym)
+		}
+		if qty, _, _ := legs[0].LegQty(); qty != 2 {
+			t.Errorf("LegQty = %v, want 2", qty)
+		}
+	})
+
+	t.Run("entry changed after Add is built as changed", func(t *testing.T) {
+		leg := NewNoLegsEntry().SetLegSymbol("A")
+		b := BuildExecutionReport("FIXT.1.1").AddNoLegsEntry(leg)
+		leg.SetLegQty(3)
+		legs := parse(t, b.Build()).NoLegsEntries()
+		if qty, ok, _ := legs[0].LegQty(); !ok || qty != 3 {
+			t.Errorf("LegQty = %v (%v), want 3", qty, ok)
+		}
+	})
+}

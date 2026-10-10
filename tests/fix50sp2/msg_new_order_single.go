@@ -1437,17 +1437,17 @@ func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
 
 type NewOrderSingleBuilder struct {
 	*fix2.Builder
-	noPartyIDsCount           int
-	noAllocsCount             int
-	noTradingSessionsCount    int
-	noSecurityAltIDCount      int
-	noEventsCount             int
-	noInstrumentPartiesCount  int
-	noComplexEventsCount      int
-	noUnderlyingsCount        int
-	noStipulationsCount       int
-	noStrategyParametersCount int
-	noTrdRegTimestampsCount   int
+	noPartyIDs           []*NoPartyIDsEntryBuilder
+	noAllocs             []*NoAllocsEntryBuilder
+	noTradingSessions    []*NoTradingSessionsEntryBuilder
+	noSecurityAltID      []*NoSecurityAltIDEntryBuilder
+	noEvents             []*NoEventsEntryBuilder
+	noInstrumentParties  []*NoInstrumentPartiesEntryBuilder
+	noComplexEvents      []*NoComplexEventsEntryBuilder
+	noUnderlyings        []*NoUnderlyingsEntryBuilder
+	noStipulations       []*NoStipulationsEntryBuilder
+	noStrategyParameters []*NoStrategyParametersEntryBuilder
+	noTrdRegTimestamps   []*NoTrdRegTimestampsEntryBuilder
 }
 
 func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
@@ -2457,190 +2457,152 @@ func (b *NewOrderSingleBuilder) SetExDestinationIDSource(v ExDestinationIDSource
 	b.SetString(TagExDestinationIDSource, string(v))
 	return b
 }
+
+// AddNoPartyIDsEntry adds an entry to the NoPartyIDs group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoPartyIDsEntry(e *NoPartyIDsEntryBuilder) *NewOrderSingleBuilder {
-	b.noPartyIDsCount++
-	b.SetInt(TagNoPartyIDs, b.noPartyIDsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagPartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noPartyIDs = append(b.noPartyIDs, e)
 	return b
 }
+
+// AddNoAllocsEntry adds an entry to the NoAllocs group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoAllocsEntry(e *NoAllocsEntryBuilder) *NewOrderSingleBuilder {
-	b.noAllocsCount++
-	b.SetInt(TagNoAllocs, b.noAllocsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagAllocAccount {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noAllocs = append(b.noAllocs, e)
 	return b
 }
+
+// AddNoTradingSessionsEntry adds an entry to the NoTradingSessions group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoTradingSessionsEntry(e *NoTradingSessionsEntryBuilder) *NewOrderSingleBuilder {
-	b.noTradingSessionsCount++
-	b.SetInt(TagNoTradingSessions, b.noTradingSessionsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagTradingSessionID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noTradingSessions = append(b.noTradingSessions, e)
 	return b
 }
+
+// AddNoSecurityAltIDEntry adds an entry to the NoSecurityAltID group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *NewOrderSingleBuilder {
-	b.noSecurityAltIDCount++
-	b.SetInt(TagNoSecurityAltID, b.noSecurityAltIDCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagSecurityAltID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noSecurityAltID = append(b.noSecurityAltID, e)
 	return b
 }
+
+// AddNoEventsEntry adds an entry to the NoEvents group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *NewOrderSingleBuilder {
-	b.noEventsCount++
-	b.SetInt(TagNoEvents, b.noEventsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagEventType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noEvents = append(b.noEvents, e)
 	return b
 }
+
+// AddNoInstrumentPartiesEntry adds an entry to the NoInstrumentParties group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *NewOrderSingleBuilder {
-	b.noInstrumentPartiesCount++
-	b.SetInt(TagNoInstrumentParties, b.noInstrumentPartiesCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagInstrumentPartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noInstrumentParties = append(b.noInstrumentParties, e)
 	return b
 }
+
+// AddNoComplexEventsEntry adds an entry to the NoComplexEvents group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *NewOrderSingleBuilder {
-	b.noComplexEventsCount++
-	b.SetInt(TagNoComplexEvents, b.noComplexEventsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagComplexEventType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noComplexEvents = append(b.noComplexEvents, e)
 	return b
 }
+
+// AddNoUnderlyingsEntry adds an entry to the NoUnderlyings group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoUnderlyingsEntry(e *NoUnderlyingsEntryBuilder) *NewOrderSingleBuilder {
-	b.noUnderlyingsCount++
-	b.SetInt(TagNoUnderlyings, b.noUnderlyingsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagUnderlyingSymbol {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noUnderlyings = append(b.noUnderlyings, e)
 	return b
 }
+
+// AddNoStipulationsEntry adds an entry to the NoStipulations group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoStipulationsEntry(e *NoStipulationsEntryBuilder) *NewOrderSingleBuilder {
-	b.noStipulationsCount++
-	b.SetInt(TagNoStipulations, b.noStipulationsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagStipulationType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noStipulations = append(b.noStipulations, e)
 	return b
 }
+
+// AddNoStrategyParametersEntry adds an entry to the NoStrategyParameters group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoStrategyParametersEntry(e *NoStrategyParametersEntryBuilder) *NewOrderSingleBuilder {
-	b.noStrategyParametersCount++
-	b.SetInt(TagNoStrategyParameters, b.noStrategyParametersCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagStrategyParameterName {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noStrategyParameters = append(b.noStrategyParameters, e)
 	return b
 }
+
+// AddNoTrdRegTimestampsEntry adds an entry to the NoTrdRegTimestamps group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestampsEntryBuilder) *NewOrderSingleBuilder {
-	b.noTrdRegTimestampsCount++
-	b.SetInt(TagNoTrdRegTimestamps, b.noTrdRegTimestampsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagTrdRegTimestamp {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
+	b.noTrdRegTimestamps = append(b.noTrdRegTimestamps, e)
+	return b
+}
+
+// Build serializes the message, with its repeating groups after the other fields.
+func (b *NewOrderSingleBuilder) Build() []byte {
+	var groups []fix2.Field
+	if len(b.noPartyIDs) > 0 {
+		groups = fix2.AppendCount(groups, TagNoPartyIDs, len(b.noPartyIDs))
+		for _, entry := range b.noPartyIDs {
+			groups = entry.appendTo(groups)
 		}
 	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
+	if len(b.noAllocs) > 0 {
+		groups = fix2.AppendCount(groups, TagNoAllocs, len(b.noAllocs))
+		for _, entry := range b.noAllocs {
+			groups = entry.appendTo(groups)
+		}
 	}
-	return b
+	if len(b.noTradingSessions) > 0 {
+		groups = fix2.AppendCount(groups, TagNoTradingSessions, len(b.noTradingSessions))
+		for _, entry := range b.noTradingSessions {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noSecurityAltID) > 0 {
+		groups = fix2.AppendCount(groups, TagNoSecurityAltID, len(b.noSecurityAltID))
+		for _, entry := range b.noSecurityAltID {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noEvents) > 0 {
+		groups = fix2.AppendCount(groups, TagNoEvents, len(b.noEvents))
+		for _, entry := range b.noEvents {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noInstrumentParties) > 0 {
+		groups = fix2.AppendCount(groups, TagNoInstrumentParties, len(b.noInstrumentParties))
+		for _, entry := range b.noInstrumentParties {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noComplexEvents) > 0 {
+		groups = fix2.AppendCount(groups, TagNoComplexEvents, len(b.noComplexEvents))
+		for _, entry := range b.noComplexEvents {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noUnderlyings) > 0 {
+		groups = fix2.AppendCount(groups, TagNoUnderlyings, len(b.noUnderlyings))
+		for _, entry := range b.noUnderlyings {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noStipulations) > 0 {
+		groups = fix2.AppendCount(groups, TagNoStipulations, len(b.noStipulations))
+		for _, entry := range b.noStipulations {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noStrategyParameters) > 0 {
+		groups = fix2.AppendCount(groups, TagNoStrategyParameters, len(b.noStrategyParameters))
+		for _, entry := range b.noStrategyParameters {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noTrdRegTimestamps) > 0 {
+		groups = fix2.AppendCount(groups, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
+		for _, entry := range b.noTrdRegTimestamps {
+			groups = entry.appendTo(groups)
+		}
+	}
+	return b.Builder.BuildWith(groups)
 }

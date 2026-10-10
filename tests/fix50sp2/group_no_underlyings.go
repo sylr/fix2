@@ -489,610 +489,349 @@ var noUnderlyingsSpec = &fix2.GroupSpec{
 }
 
 type NoUnderlyingsEntryBuilder struct {
-	fields                         []fix2.Field
-	noUnderlyingSecurityAltIDCount int
-	noUnderlyingStipsCount         int
-	noUndlyInstrumentPartiesCount  int
+	fields                    []fix2.Field
+	noUnderlyingSecurityAltID []*NoUnderlyingSecurityAltIDEntryBuilder
+	noUnderlyingStips         []*NoUnderlyingStipsEntryBuilder
+	noUndlyInstrumentParties  []*NoUndlyInstrumentPartiesEntryBuilder
 }
 
 func NewNoUnderlyingsEntry() *NoUnderlyingsEntryBuilder {
 	return &NoUnderlyingsEntryBuilder{}
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSymbol(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSymbol,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSymbol, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponPaymentDate(v time.Time) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCouponPaymentDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCouponPaymentDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCouponPaymentDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCouponPaymentDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingIssueDate(v time.Time) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingIssueDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingIssueDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingIssueDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingIssueDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRepoCollateralSecurityType(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingRepoCollateralSecurityType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRepoCollateralSecurityType, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRepurchaseTerm(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingRepurchaseTerm,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRepurchaseTerm, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRepurchaseRate(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingRepurchaseRate,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRepurchaseRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFactor(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingFactor,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingFactor, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRedemptionDate(v time.Time) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingRedemptionDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRedemptionDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingRedemptionDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRedemptionDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCreditRating(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCreditRating,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCreditRating, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityIDSource(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityIDSource,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityIDSource, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingIssuer(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingIssuer,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingIssuer, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityDesc(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityDesc,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityDesc, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityExchange(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityExchange,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityExchange, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityID(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityID, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityType(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityType, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSymbolSfx(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSymbolSfx,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSymbolSfx, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingMaturityMonthYear(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingMaturityMonthYear,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingMaturityMonthYear, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPutOrCall(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingPutOrCall,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingPutOrCall, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStrikePrice(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStrikePrice,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStrikePrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingOptAttribute(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingOptAttribute,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingOptAttribute, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCurrency(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCurrency,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCurrency, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingIssuerLen(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedUnderlyingIssuerLen,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuerLen, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingIssuer(v []byte) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedUnderlyingIssuer,
-		Value: v,
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuer, v)
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDescLen(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedUnderlyingSecurityDescLen,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDescLen, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDesc(v []byte) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedUnderlyingSecurityDesc,
-		Value: v,
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDesc, v)
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponRate(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCouponRate,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCouponRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingContractMultiplier(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingContractMultiplier,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingContractMultiplier, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingProduct(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingProduct,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingProduct, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCFICode(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCFICode,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCFICode, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingMaturityDate(v time.Time) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingMaturityDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingMaturityDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingMaturityDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingMaturityDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCountryOfIssue(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCountryOfIssue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCountryOfIssue, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStateOrProvinceOfIssue(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStateOrProvinceOfIssue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStateOrProvinceOfIssue, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingLocaleOfIssue(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingLocaleOfIssue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingLocaleOfIssue, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingInstrRegistry(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrRegistry,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingInstrRegistry, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecuritySubType(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecuritySubType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecuritySubType, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPx(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingPx,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingPx, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCPProgram(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCPProgram,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCPProgram, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCPRegType(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCPRegType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCPRegType, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingQty(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingDirtyPrice(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingDirtyPrice,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingDirtyPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingEndPrice(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingEndPrice,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingEndPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStartValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStartValue,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStartValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCurrentValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCurrentValue,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCurrentValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingEndValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingEndValue,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingEndValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStrikeCurrency(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStrikeCurrency,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStrikeCurrency, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingAllocationPercent(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingAllocationPercent,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingAllocationPercent, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCashAmount(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCashAmount,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCashAmount, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCashType(v UnderlyingCashType) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCashType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCashType, []byte(string(v)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSettlementType(v UnderlyingSettlementType) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSettlementType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSettlementType, []byte(string(v)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingUnitOfMeasure(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingUnitOfMeasure,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingUnitOfMeasure, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingTimeUnit(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingTimeUnit,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingTimeUnit, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCapValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingCapValue,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCapValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSettlMethod(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSettlMethod,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSettlMethod, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingAdjustedQuantity(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingAdjustedQuantity,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingAdjustedQuantity, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFXRate(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingFXRate,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingFXRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFXRateCalc(v UnderlyingFXRateCalc) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingFXRateCalc,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingFXRateCalc, []byte(string(v)))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingMaturityTime(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingMaturityTime,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingMaturityTime, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingExerciseStyle(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingExerciseStyle,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingExerciseStyle, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingUnitOfMeasureQty(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingUnitOfMeasureQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPriceUnitOfMeasure(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingPriceUnitOfMeasure,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingPriceUnitOfMeasure, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPriceUnitOfMeasureQty(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingPriceUnitOfMeasureQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingPriceUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingContractMultiplierUnit(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingContractMultiplierUnit,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingContractMultiplierUnit, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFlowScheduleType(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingFlowScheduleType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingFlowScheduleType, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRestructuringType(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingRestructuringType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRestructuringType, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSeniority(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSeniority,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSeniority, []byte(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingNotionalPercentageOutstanding(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingNotionalPercentageOutstanding,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingNotionalPercentageOutstanding, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingOriginalNotionalPercentageOutstanding(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingOriginalNotionalPercentageOutstanding,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingOriginalNotionalPercentageOutstanding, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingAttachmentPoint(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingAttachmentPoint,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingAttachmentPoint, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingDetachmentPoint(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingDetachmentPoint,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingDetachmentPoint, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
+
+// AddNoUnderlyingSecurityAltIDEntry adds an entry to the nested NoUnderlyingSecurityAltID group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoUnderlyingsEntryBuilder) AddNoUnderlyingSecurityAltIDEntry(ne *NoUnderlyingSecurityAltIDEntryBuilder) *NoUnderlyingsEntryBuilder {
-	e.noUnderlyingSecurityAltIDCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noUnderlyingSecurityAltIDCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoUnderlyingSecurityAltID {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoUnderlyingSecurityAltID,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagUnderlyingSecurityAltID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noUnderlyingSecurityAltID = append(e.noUnderlyingSecurityAltID, ne)
 	return e
 }
+
+// AddNoUnderlyingStipsEntry adds an entry to the nested NoUnderlyingStips group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoUnderlyingsEntryBuilder) AddNoUnderlyingStipsEntry(ne *NoUnderlyingStipsEntryBuilder) *NoUnderlyingsEntryBuilder {
-	e.noUnderlyingStipsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noUnderlyingStipsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoUnderlyingStips {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoUnderlyingStips,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagUnderlyingStipType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noUnderlyingStips = append(e.noUnderlyingStips, ne)
 	return e
 }
+
+// AddNoUndlyInstrumentPartiesEntry adds an entry to the nested NoUndlyInstrumentParties group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoUnderlyingsEntryBuilder) AddNoUndlyInstrumentPartiesEntry(ne *NoUndlyInstrumentPartiesEntryBuilder) *NoUnderlyingsEntryBuilder {
-	e.noUndlyInstrumentPartiesCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noUndlyInstrumentPartiesCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoUndlyInstrumentParties {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoUndlyInstrumentParties,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagUnderlyingInstrumentPartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noUndlyInstrumentParties = append(e.noUndlyInstrumentParties, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoUnderlyingsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingSymbol)
+	if len(e.noUnderlyingSecurityAltID) > 0 {
+		dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltID))
+		for _, entry := range e.noUnderlyingSecurityAltID {
+			dst = entry.appendTo(dst)
+		}
+	}
+	if len(e.noUnderlyingStips) > 0 {
+		dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStips))
+		for _, entry := range e.noUnderlyingStips {
+			dst = entry.appendTo(dst)
+		}
+	}
+	if len(e.noUndlyInstrumentParties) > 0 {
+		dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentParties))
+		for _, entry := range e.noUndlyInstrumentParties {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

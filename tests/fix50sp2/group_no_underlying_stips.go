@@ -31,16 +31,16 @@ func NewNoUnderlyingStipsEntry() *NoUnderlyingStipsEntryBuilder {
 	return &NoUnderlyingStipsEntryBuilder{}
 }
 func (e *NoUnderlyingStipsEntryBuilder) SetUnderlyingStipType(v string) *NoUnderlyingStipsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStipType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStipType, []byte(v))
 	return e
 }
 func (e *NoUnderlyingStipsEntryBuilder) SetUnderlyingStipValue(v string) *NoUnderlyingStipsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStipValue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStipValue, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoUnderlyingStipsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingStipType)
+	return dst
 }

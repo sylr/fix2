@@ -31,16 +31,16 @@ func NewNoUnderlyingSecurityAltIDEntry() *NoUnderlyingSecurityAltIDEntryBuilder 
 	return &NoUnderlyingSecurityAltIDEntryBuilder{}
 }
 func (e *NoUnderlyingSecurityAltIDEntryBuilder) SetUnderlyingSecurityAltID(v string) *NoUnderlyingSecurityAltIDEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityAltID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityAltID, []byte(v))
 	return e
 }
 func (e *NoUnderlyingSecurityAltIDEntryBuilder) SetUnderlyingSecurityAltIDSource(v string) *NoUnderlyingSecurityAltIDEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityAltIDSource,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagUnderlyingSecurityAltIDSource, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoUnderlyingSecurityAltIDEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingSecurityAltID)
+	return dst
 }

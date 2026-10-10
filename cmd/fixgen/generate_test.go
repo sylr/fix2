@@ -555,3 +555,113 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 		t.Error("NewOrderSingle does not read NoAllocs with GroupsOf")
 	}
 }
+
+// runGenerated generates package pkg from dictionary xml in a temporary
+// module, adds testCode as a test file and runs go test there.
+func runGenerated(t *testing.T, xml, pkg, testCode string) {
+	t.Helper()
+	dict, err := dictionary.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	outDir := t.TempDir()
+	if err := generate(dict, pkg, outDir); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	modRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goMod := "module testgen\ngo 1.26\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
+	if err := os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(goMod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "gen_test.go"), []byte(testCode), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "test", "./...")
+	cmd.Dir = outDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go test failed:\n%s\n%v", out, err)
+	}
+}
+
+// TestGenerateDelimiterIsNestedCounter covers a group whose entries start
+// with a nested group, as FIX 5.0 SP2 NoAsgnReqs starts with Parties: the
+// delimiter is the nested NoPartyIDs counter.
+func TestGenerateDelimiterIsNestedCounter(t *testing.T) {
+	const xml = `<fix type="FIX" major="5" minor="0" servicepack="2">
+  <header/><trailer/>
+  <messages>
+    <message name="StreamAssignmentRequest" msgtype="CC" msgcat="app">
+      <field name="StreamAsgnReqID" required="Y"/>
+      <group name="NoAsgnReqs" required="Y">
+        <component name="Parties" required="N"/>
+        <field name="MDReqID" required="N"/>
+      </group>
+    </message>
+  </messages>
+  <components>
+    <component name="Parties">
+      <group name="NoPartyIDs" required="N">
+        <field name="PartyID" required="N"/>
+        <field name="PartyRole" required="N"/>
+      </group>
+    </component>
+  </components>
+  <fields>
+    <field number="1497" name="StreamAsgnReqID" type="STRING"/>
+    <field number="1499" name="NoAsgnReqs" type="NUMINGROUP"/>
+    <field number="453" name="NoPartyIDs" type="NUMINGROUP"/>
+    <field number="448" name="PartyID" type="STRING"/>
+    <field number="452" name="PartyRole" type="INT"/>
+    <field number="262" name="MDReqID" type="STRING"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "sar", `package sar
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestRoundTrip(t *testing.T) {
+	raw := BuildStreamAssignmentRequest("FIXT.1.1").
+		SetStreamAsgnReqID("R").
+		AddNoAsgnReqsEntry(NewNoAsgnReqsEntry().
+			SetMDReqID("A").
+			AddNoPartyIDsEntry(NewNoPartyIDsEntry().SetPartyID("P1").SetPartyRole(1))).
+		AddNoAsgnReqsEntry(NewNoAsgnReqsEntry().
+			AddNoPartyIDsEntry(NewNoPartyIDsEntry().SetPartyID("P2")).
+			AddNoPartyIDsEntry(NewNoPartyIDsEntry().SetPartyID("P3")).
+			SetMDReqID("B")).
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	reqs := WrapStreamAssignmentRequest(&msg).NoAsgnReqsEntries()
+	if len(reqs) != 2 {
+		t.Fatalf("%q: %d entries, want 2", raw, len(reqs))
+	}
+	for i, want := range []struct {
+		md      string
+		parties []string
+	}{{"A", []string{"P1"}}, {"B", []string{"P2", "P3"}}} {
+		if md, _ := reqs[i].MDReqID(); md != want.md {
+			t.Errorf("entry %d MDReqID = %q, want %q", i, md, want.md)
+		}
+		parties := reqs[i].NoPartyIDsEntries()
+		if len(parties) != len(want.parties) {
+			t.Fatalf("%q: entry %d has %d parties, want %d", raw, i, len(parties), len(want.parties))
+		}
+		for j, id := range want.parties {
+			if got, _ := parties[j].PartyID(); got != id {
+				t.Errorf("entry %d party %d = %q, want %q", i, j, got, id)
+			}
+		}
+	}
+}
+`)
+}

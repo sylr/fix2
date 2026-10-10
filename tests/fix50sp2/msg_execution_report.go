@@ -2001,22 +2001,22 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 
 type ExecutionReportBuilder struct {
 	*fix2.Builder
-	noPartyIDsCount           int
-	noContraBrokersCount      int
-	noSecurityAltIDCount      int
-	noEventsCount             int
-	noInstrumentPartiesCount  int
-	noComplexEventsCount      int
-	noUnderlyingsCount        int
-	noStipulationsCount       int
-	noContAmtsCount           int
-	noLegsCount               int
-	noMiscFeesCount           int
-	noStrategyParametersCount int
-	noTrdRegTimestampsCount   int
-	noAllocsCount             int
-	noFillsCount              int
-	noRateSourcesCount        int
+	noPartyIDs           []*NoPartyIDsEntryBuilder
+	noContraBrokers      []*NoContraBrokersEntryBuilder
+	noSecurityAltID      []*NoSecurityAltIDEntryBuilder
+	noEvents             []*NoEventsEntryBuilder
+	noInstrumentParties  []*NoInstrumentPartiesEntryBuilder
+	noComplexEvents      []*NoComplexEventsEntryBuilder
+	noUnderlyings        []*NoUnderlyingsEntryBuilder
+	noStipulations       []*NoStipulationsEntryBuilder
+	noContAmts           []*NoContAmtsEntryBuilder
+	noLegs               []*NoLegsEntryBuilder
+	noMiscFees           []*NoMiscFeesEntryBuilder
+	noStrategyParameters []*NoStrategyParametersEntryBuilder
+	noTrdRegTimestamps   []*NoTrdRegTimestampsEntryBuilder
+	noAllocs             []*NoAllocsEntryBuilder
+	noFills              []*NoFillsEntryBuilder
+	noRateSources        []*NoRateSourcesEntryBuilder
 }
 
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
@@ -3354,275 +3354,217 @@ func (b *ExecutionReportBuilder) SetApplResendFlag(v bool) *ExecutionReportBuild
 	b.SetBool(TagApplResendFlag, v)
 	return b
 }
+
+// AddNoPartyIDsEntry adds an entry to the NoPartyIDs group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoPartyIDsEntry(e *NoPartyIDsEntryBuilder) *ExecutionReportBuilder {
-	b.noPartyIDsCount++
-	b.SetInt(TagNoPartyIDs, b.noPartyIDsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagPartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noPartyIDs = append(b.noPartyIDs, e)
 	return b
 }
+
+// AddNoContraBrokersEntry adds an entry to the NoContraBrokers group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoContraBrokersEntry(e *NoContraBrokersEntryBuilder) *ExecutionReportBuilder {
-	b.noContraBrokersCount++
-	b.SetInt(TagNoContraBrokers, b.noContraBrokersCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagContraBroker {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noContraBrokers = append(b.noContraBrokers, e)
 	return b
 }
+
+// AddNoSecurityAltIDEntry adds an entry to the NoSecurityAltID group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *ExecutionReportBuilder {
-	b.noSecurityAltIDCount++
-	b.SetInt(TagNoSecurityAltID, b.noSecurityAltIDCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagSecurityAltID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noSecurityAltID = append(b.noSecurityAltID, e)
 	return b
 }
+
+// AddNoEventsEntry adds an entry to the NoEvents group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *ExecutionReportBuilder {
-	b.noEventsCount++
-	b.SetInt(TagNoEvents, b.noEventsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagEventType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noEvents = append(b.noEvents, e)
 	return b
 }
+
+// AddNoInstrumentPartiesEntry adds an entry to the NoInstrumentParties group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *ExecutionReportBuilder {
-	b.noInstrumentPartiesCount++
-	b.SetInt(TagNoInstrumentParties, b.noInstrumentPartiesCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagInstrumentPartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noInstrumentParties = append(b.noInstrumentParties, e)
 	return b
 }
+
+// AddNoComplexEventsEntry adds an entry to the NoComplexEvents group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *ExecutionReportBuilder {
-	b.noComplexEventsCount++
-	b.SetInt(TagNoComplexEvents, b.noComplexEventsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagComplexEventType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noComplexEvents = append(b.noComplexEvents, e)
 	return b
 }
+
+// AddNoUnderlyingsEntry adds an entry to the NoUnderlyings group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoUnderlyingsEntry(e *NoUnderlyingsEntryBuilder) *ExecutionReportBuilder {
-	b.noUnderlyingsCount++
-	b.SetInt(TagNoUnderlyings, b.noUnderlyingsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagUnderlyingSymbol {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noUnderlyings = append(b.noUnderlyings, e)
 	return b
 }
+
+// AddNoStipulationsEntry adds an entry to the NoStipulations group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoStipulationsEntry(e *NoStipulationsEntryBuilder) *ExecutionReportBuilder {
-	b.noStipulationsCount++
-	b.SetInt(TagNoStipulations, b.noStipulationsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagStipulationType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noStipulations = append(b.noStipulations, e)
 	return b
 }
+
+// AddNoContAmtsEntry adds an entry to the NoContAmts group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoContAmtsEntry(e *NoContAmtsEntryBuilder) *ExecutionReportBuilder {
-	b.noContAmtsCount++
-	b.SetInt(TagNoContAmts, b.noContAmtsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagContAmtType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noContAmts = append(b.noContAmts, e)
 	return b
 }
+
+// AddNoLegsEntry adds an entry to the NoLegs group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoLegsEntry(e *NoLegsEntryBuilder) *ExecutionReportBuilder {
-	b.noLegsCount++
-	b.SetInt(TagNoLegs, b.noLegsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagLegSymbol {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noLegs = append(b.noLegs, e)
 	return b
 }
+
+// AddNoMiscFeesEntry adds an entry to the NoMiscFees group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
-	b.noMiscFeesCount++
-	b.SetInt(TagNoMiscFees, b.noMiscFeesCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagMiscFeeAmt {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noMiscFees = append(b.noMiscFees, e)
 	return b
 }
+
+// AddNoStrategyParametersEntry adds an entry to the NoStrategyParameters group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoStrategyParametersEntry(e *NoStrategyParametersEntryBuilder) *ExecutionReportBuilder {
-	b.noStrategyParametersCount++
-	b.SetInt(TagNoStrategyParameters, b.noStrategyParametersCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagStrategyParameterName {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noStrategyParameters = append(b.noStrategyParameters, e)
 	return b
 }
+
+// AddNoTrdRegTimestampsEntry adds an entry to the NoTrdRegTimestamps group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestampsEntryBuilder) *ExecutionReportBuilder {
-	b.noTrdRegTimestampsCount++
-	b.SetInt(TagNoTrdRegTimestamps, b.noTrdRegTimestampsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagTrdRegTimestamp {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noTrdRegTimestamps = append(b.noTrdRegTimestamps, e)
 	return b
 }
+
+// AddNoAllocsEntry adds an entry to the NoAllocs group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoAllocsEntry(e *NoAllocsEntryBuilder) *ExecutionReportBuilder {
-	b.noAllocsCount++
-	b.SetInt(TagNoAllocs, b.noAllocsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagAllocAccount {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noAllocs = append(b.noAllocs, e)
 	return b
 }
+
+// AddNoFillsEntry adds an entry to the NoFills group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoFillsEntry(e *NoFillsEntryBuilder) *ExecutionReportBuilder {
-	b.noFillsCount++
-	b.SetInt(TagNoFills, b.noFillsCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagFillExecID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
-	}
+	b.noFills = append(b.noFills, e)
 	return b
 }
+
+// AddNoRateSourcesEntry adds an entry to the NoRateSources group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuilder) *ExecutionReportBuilder {
-	b.noRateSourcesCount++
-	b.SetInt(TagNoRateSources, b.noRateSourcesCount)
-	fields := e.fields
-	for i, f := range fields {
-		if f.Tag == TagRateSource {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
+	b.noRateSources = append(b.noRateSources, e)
+	return b
+}
+
+// Build serializes the message, with its repeating groups after the other fields.
+func (b *ExecutionReportBuilder) Build() []byte {
+	var groups []fix2.Field
+	if len(b.noPartyIDs) > 0 {
+		groups = fix2.AppendCount(groups, TagNoPartyIDs, len(b.noPartyIDs))
+		for _, entry := range b.noPartyIDs {
+			groups = entry.appendTo(groups)
 		}
 	}
-	for _, f := range fields {
-		b.Append(f.Tag, f.Value)
+	if len(b.noContraBrokers) > 0 {
+		groups = fix2.AppendCount(groups, TagNoContraBrokers, len(b.noContraBrokers))
+		for _, entry := range b.noContraBrokers {
+			groups = entry.appendTo(groups)
+		}
 	}
-	return b
+	if len(b.noSecurityAltID) > 0 {
+		groups = fix2.AppendCount(groups, TagNoSecurityAltID, len(b.noSecurityAltID))
+		for _, entry := range b.noSecurityAltID {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noEvents) > 0 {
+		groups = fix2.AppendCount(groups, TagNoEvents, len(b.noEvents))
+		for _, entry := range b.noEvents {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noInstrumentParties) > 0 {
+		groups = fix2.AppendCount(groups, TagNoInstrumentParties, len(b.noInstrumentParties))
+		for _, entry := range b.noInstrumentParties {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noComplexEvents) > 0 {
+		groups = fix2.AppendCount(groups, TagNoComplexEvents, len(b.noComplexEvents))
+		for _, entry := range b.noComplexEvents {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noUnderlyings) > 0 {
+		groups = fix2.AppendCount(groups, TagNoUnderlyings, len(b.noUnderlyings))
+		for _, entry := range b.noUnderlyings {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noStipulations) > 0 {
+		groups = fix2.AppendCount(groups, TagNoStipulations, len(b.noStipulations))
+		for _, entry := range b.noStipulations {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noContAmts) > 0 {
+		groups = fix2.AppendCount(groups, TagNoContAmts, len(b.noContAmts))
+		for _, entry := range b.noContAmts {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noLegs) > 0 {
+		groups = fix2.AppendCount(groups, TagNoLegs, len(b.noLegs))
+		for _, entry := range b.noLegs {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noMiscFees) > 0 {
+		groups = fix2.AppendCount(groups, TagNoMiscFees, len(b.noMiscFees))
+		for _, entry := range b.noMiscFees {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noStrategyParameters) > 0 {
+		groups = fix2.AppendCount(groups, TagNoStrategyParameters, len(b.noStrategyParameters))
+		for _, entry := range b.noStrategyParameters {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noTrdRegTimestamps) > 0 {
+		groups = fix2.AppendCount(groups, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
+		for _, entry := range b.noTrdRegTimestamps {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noAllocs) > 0 {
+		groups = fix2.AppendCount(groups, TagNoAllocs, len(b.noAllocs))
+		for _, entry := range b.noAllocs {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noFills) > 0 {
+		groups = fix2.AppendCount(groups, TagNoFills, len(b.noFills))
+		for _, entry := range b.noFills {
+			groups = entry.appendTo(groups)
+		}
+	}
+	if len(b.noRateSources) > 0 {
+		groups = fix2.AppendCount(groups, TagNoRateSources, len(b.noRateSources))
+		for _, entry := range b.noRateSources {
+			groups = entry.appendTo(groups)
+		}
+	}
+	return b.Builder.BuildWith(groups)
 }

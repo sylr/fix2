@@ -316,7 +316,7 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 	}
 	for _, nestedMg := range mg.Groups {
 		structFields = append(structFields,
-			jen.Id(unexport(nestedMg.Name)+"Count").Int(),
+			jen.Id(unexport(nestedMg.Name)).Index().Op("*").Id(nestedMg.Name+"EntryBuilder"),
 		)
 	}
 	f.Type().Id(entryBuilderName).Struct(structFields...)
@@ -342,6 +342,8 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		globalNested := allMerged[nestedMg.Name]
 		writeEntryGroupAddMethod(f, dict, entryBuilderName, globalNested)
 	}
+
+	writeEntryAppendTo(f, dict, entryBuilderName, mg)
 
 	return f.Save(filepath.Join(outDir, groupFileName(mg.Name)))
 }
@@ -431,7 +433,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	}
 	for _, gd := range md.Groups {
 		builderFields = append(builderFields,
-			jen.Id(unexport(gd.Name)+"Count").Int(),
+			jen.Id(unexport(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"),
 		)
 	}
 	f.Type().Id(builderName).Struct(builderFields...)
@@ -457,6 +459,18 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	for _, gd := range md.Groups {
 		mg := mergedGroups[gd.Name]
 		writeGroupAddMethod(f, dict, builderName, mg)
+	}
+
+	// --- Build: serialize the groups after the other fields ---
+	if len(md.Groups) > 0 {
+		body := []jen.Code{jen.Var().Id("groups").Index().Qual(fix2Pkg, "Field")}
+		for _, gd := range md.Groups {
+			name := gd.Name
+			body = append(body, groupBlock("groups", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
+		}
+		body = append(body, jen.Return(jen.Id("b").Dot("Builder").Dot("BuildWith").Call(jen.Id("groups"))))
+		f.Comment("Build serializes the message, with its repeating groups after the other fields.")
+		f.Func().Params(jen.Id("b").Op("*").Id(builderName)).Id("Build").Params().Index().Byte().Block(body...)
 	}
 
 	return f.Save(filepath.Join(outDir, msgFileName(name)))
@@ -610,13 +624,10 @@ func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType s
 func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
 	recv := jen.Id("e").Op("*").Id(entryBuilderName)
 	tid := tagID(fieldName)
+	// Setting a field twice keeps one value, like Builder.Set.
 	appendField := func(valExpr jen.Code) jen.Code {
-		return jen.Id("e").Dot("fields").Op("=").Append(
-			jen.Id("e").Dot("fields"),
-			jen.Qual(fix2Pkg, "Field").Values(jen.Dict{
-				jen.Id("Tag"):   tid,
-				jen.Id("Value"): valExpr,
-			}),
+		return jen.Id("e").Dot("fields").Op("=").Qual(fix2Pkg, "SetField").Call(
+			jen.Id("e").Dot("fields"), tid, valExpr,
 		)
 	}
 
@@ -698,75 +709,75 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 
 // writeGroupAddMethod generates the Add method on a message builder.
 func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string, gd dictionary.GroupDef) {
-	entryBuilderName := gd.Name + "EntryBuilder"
-	countFieldName := unexport(gd.Name) + "Count"
-	delimName := dict.Fields[gd.DelimTag].Name
-
+	f.Comment("Add" + gd.Name + "Entry adds an entry to the " + gd.Name + " group. Entries are serialized")
+	f.Comment("by Build, after the other fields, so later changes to e are included.")
 	f.Func().Params(
 		jen.Id("b").Op("*").Id(builderName),
 	).Id("Add"+gd.Name+"Entry").Params(
-		jen.Id("e").Op("*").Id(entryBuilderName),
+		jen.Id("e").Op("*").Id(gd.Name+"EntryBuilder"),
 	).Op("*").Id(builderName).Block(
-		jen.Id("b").Dot(countFieldName).Op("++"),
-		jen.Id("b").Dot("SetInt").Call(tagID(gd.Name), jen.Id("b").Dot(countFieldName)),
-		jen.Id("fields").Op(":=").Id("e").Dot("fields"),
-		jen.For(jen.List(jen.Id("i"), jen.Id("f")).Op(":=").Range().Id("fields")).Block(
-			jen.If(jen.Id("f").Dot("Tag").Op("==").Id("Tag"+delimName)).Block(
-				jen.If(jen.Id("i").Op("!=").Lit(0)).Block(
-					jen.List(jen.Id("fields").Index(jen.Lit(0)), jen.Id("fields").Index(jen.Id("i"))).Op("=").List(jen.Id("fields").Index(jen.Id("i")), jen.Id("fields").Index(jen.Lit(0))),
-				),
-				jen.Break(),
-			),
-		),
-		jen.For(jen.List(jen.Id("_"), jen.Id("f")).Op(":=").Range().Id("fields")).Block(
-			jen.Id("b").Dot("Append").Call(jen.Id("f").Dot("Tag"), jen.Id("f").Dot("Value")),
-		),
+		jen.Id("b").Dot(unexport(gd.Name)).Op("=").Append(jen.Id("b").Dot(unexport(gd.Name)), jen.Id("e")),
 		jen.Return(jen.Id("b")),
 	)
 }
 
+// groupBlock returns the code appending a group's counter and entries to dst
+// when owner (an expression yielding the entry slice) is not empty.
+func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef) jen.Code {
+	return jen.If(jen.Len(owner()).Op(">").Lit(0)).Block(
+		jen.Id(dst).Op("=").Qual(fix2Pkg, "AppendCount").Call(jen.Id(dst), tagID(gd.Name), jen.Len(owner())),
+		jen.For(jen.List(jen.Id("_"), jen.Id("entry")).Op(":=").Range().Add(owner())).Block(
+			jen.Id(dst).Op("=").Id("entry").Dot("appendTo").Call(jen.Id(dst)),
+		),
+	)
+}
+
+// writeEntryAppendTo generates appendTo, which serializes an entry: its own
+// fields with the delimiter first, then each nested group. When the delimiter
+// is a nested group's counter, that group comes first instead.
+func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName string, mg dictionary.GroupDef) {
+	var body []jen.Code
+	var delim jen.Code
+	delimGroup := -1
+	for i, gd := range mg.Groups {
+		if gd.CounterTag == mg.DelimTag {
+			delimGroup = i
+		}
+	}
+	nestedOwner := func(name string) func() *jen.Statement {
+		return func() *jen.Statement { return jen.Id("e").Dot(unexport(name)) }
+	}
+	if delimGroup >= 0 {
+		gd := mg.Groups[delimGroup]
+		body = append(body, groupBlock("dst", nestedOwner(gd.Name), gd))
+		delim = jen.Lit(0) // the entry's own fields hold no delimiter
+	} else {
+		delim = tagID(dict.Fields[mg.DelimTag].Name)
+	}
+	body = append(body, jen.Id("dst").Op("=").Qual(fix2Pkg, "AppendEntry").Call(jen.Id("dst"), jen.Id("e").Dot("fields"), delim))
+	for i, gd := range mg.Groups {
+		if i != delimGroup {
+			body = append(body, groupBlock("dst", nestedOwner(gd.Name), gd))
+		}
+	}
+	body = append(body, jen.Return(jen.Id("dst")))
+	f.Comment("appendTo appends the entry's fields to dst in wire order.")
+	f.Func().Params(jen.Id("e").Op("*").Id(entryBuilderName)).Id("appendTo").Params(
+		jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
+	).Index().Qual(fix2Pkg, "Field").Block(body...)
+
+}
+
 // writeEntryGroupAddMethod generates an Add method for nested groups on an entry builder.
 func writeEntryGroupAddMethod(f *jen.File, dict *dictionary.Dict, parentBuilderName string, gd dictionary.GroupDef) {
-	entryBuilderName := gd.Name + "EntryBuilder"
-	countFieldName := unexport(gd.Name) + "Count"
-	delimName := dict.Fields[gd.DelimTag].Name
-
+	f.Comment("Add" + gd.Name + "Entry adds an entry to the nested " + gd.Name + " group. Entries are")
+	f.Comment("serialized when the message is built, so later changes to e are included.")
 	f.Func().Params(
 		jen.Id("e").Op("*").Id(parentBuilderName),
 	).Id("Add"+gd.Name+"Entry").Params(
-		jen.Id("ne").Op("*").Id(entryBuilderName),
+		jen.Id("ne").Op("*").Id(gd.Name+"EntryBuilder"),
 	).Op("*").Id(parentBuilderName).Block(
-		jen.Id("e").Dot(countFieldName).Op("++"),
-		jen.Id("counterVal").Op(":=").Qual("strconv", "AppendInt").Call(
-			jen.Nil(), jen.Int64().Call(jen.Id("e").Dot(countFieldName)), jen.Lit(10),
-		),
-		jen.Id("updated").Op(":=").False(),
-		jen.For(jen.Id("i").Op(":=").Range().Id("e").Dot("fields")).Block(
-			jen.If(jen.Id("e").Dot("fields").Index(jen.Id("i")).Dot("Tag").Op("==").Add(tagID(gd.Name))).Block(
-				jen.Id("e").Dot("fields").Index(jen.Id("i")).Dot("Value").Op("=").Id("counterVal"),
-				jen.Id("updated").Op("=").True(),
-				jen.Break(),
-			),
-		),
-		jen.If(jen.Op("!").Id("updated")).Block(
-			jen.Id("e").Dot("fields").Op("=").Append(
-				jen.Id("e").Dot("fields"),
-				jen.Qual(fix2Pkg, "Field").Values(jen.Dict{
-					jen.Id("Tag"):   tagID(gd.Name),
-					jen.Id("Value"): jen.Id("counterVal"),
-				}),
-			),
-		),
-		jen.Id("fields").Op(":=").Id("ne").Dot("fields"),
-		jen.For(jen.List(jen.Id("i"), jen.Id("f")).Op(":=").Range().Id("fields")).Block(
-			jen.If(jen.Id("f").Dot("Tag").Op("==").Id("Tag"+delimName)).Block(
-				jen.If(jen.Id("i").Op("!=").Lit(0)).Block(
-					jen.List(jen.Id("fields").Index(jen.Lit(0)), jen.Id("fields").Index(jen.Id("i"))).Op("=").List(jen.Id("fields").Index(jen.Id("i")), jen.Id("fields").Index(jen.Lit(0))),
-				),
-				jen.Break(),
-			),
-		),
-		jen.Id("e").Dot("fields").Op("=").Append(jen.Id("e").Dot("fields"), jen.Id("fields").Op("...")),
+		jen.Id("e").Dot(unexport(gd.Name)).Op("=").Append(jen.Id("e").Dot(unexport(gd.Name)), jen.Id("ne")),
 		jen.Return(jen.Id("e")),
 	)
 }

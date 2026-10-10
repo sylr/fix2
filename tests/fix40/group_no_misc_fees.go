@@ -42,23 +42,20 @@ func NewNoMiscFeesEntry() *NoMiscFeesEntryBuilder {
 	return &NoMiscFeesEntryBuilder{}
 }
 func (e *NoMiscFeesEntryBuilder) SetMiscFeeAmt(v float64) *NoMiscFeesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagMiscFeeAmt,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagMiscFeeAmt, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoMiscFeesEntryBuilder) SetMiscFeeCurr(v string) *NoMiscFeesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagMiscFeeCurr,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagMiscFeeCurr, []byte(v))
 	return e
 }
 func (e *NoMiscFeesEntryBuilder) SetMiscFeeType(v MiscFeeType) *NoMiscFeesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagMiscFeeType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagMiscFeeType, []byte(string(v)))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoMiscFeesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagMiscFeeAmt)
+	return dst
 }

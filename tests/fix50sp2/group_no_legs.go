@@ -517,682 +517,387 @@ var noLegsSpec = &fix2.GroupSpec{
 }
 
 type NoLegsEntryBuilder struct {
-	fields                  []fix2.Field
-	noLegAllocsCount        int
-	noLegSecurityAltIDCount int
-	noLegStipulationsCount  int
-	noNested3PartyIDsCount  int
+	fields             []fix2.Field
+	noLegAllocs        []*NoLegAllocsEntryBuilder
+	noLegSecurityAltID []*NoLegSecurityAltIDEntryBuilder
+	noLegStipulations  []*NoLegStipulationsEntryBuilder
+	noNested3PartyIDs  []*NoNested3PartyIDsEntryBuilder
 }
 
 func NewNoLegsEntry() *NoLegsEntryBuilder {
 	return &NoLegsEntryBuilder{}
 }
 func (e *NoLegsEntryBuilder) SetLegSymbol(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSymbol,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSymbol, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCouponPaymentDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCouponPaymentDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCouponPaymentDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCouponPaymentDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCouponPaymentDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegIssueDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegIssueDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegIssueDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegIssueDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegIssueDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRepoCollateralSecurityType(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRepoCollateralSecurityType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRepoCollateralSecurityType, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRepurchaseTerm(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRepurchaseTerm,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRepurchaseTerm, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRepurchaseRate(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRepurchaseRate,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRepurchaseRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegFactor(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegFactor,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegFactor, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRedemptionDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRedemptionDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRedemptionDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRedemptionDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRedemptionDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCreditRating(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCreditRating,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCreditRating, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCurrency(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCurrency,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCurrency, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPositionEffect(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegPositionEffect,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegPositionEffect, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCoveredOrUncovered(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCoveredOrUncovered,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCoveredOrUncovered, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPrice(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegPrice,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSettlType(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSettlType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSettlType, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSettlDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSettlDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSettlDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSettlDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSettlDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSettlDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCountryOfIssue(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCountryOfIssue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCountryOfIssue, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegStateOrProvinceOfIssue(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStateOrProvinceOfIssue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegStateOrProvinceOfIssue, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLocaleOfIssue(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegLocaleOfIssue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegLocaleOfIssue, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegInstrRegistry(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegInstrRegistry,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegInstrRegistry, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSymbolSfx(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSymbolSfx,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSymbolSfx, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSecurityID, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityIDSource(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityIDSource,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSecurityIDSource, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegProduct(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegProduct,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegProduct, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCFICode(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCFICode,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCFICode, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityType(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSecurityType, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegMaturityMonthYear(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegMaturityMonthYear,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegMaturityMonthYear, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegMaturityDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegMaturityDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegMaturityDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegMaturityDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegMaturityDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegStrikePrice(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStrikePrice,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegStrikePrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegOptAttribute(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegOptAttribute,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegOptAttribute, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegContractMultiplier(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegContractMultiplier,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegContractMultiplier, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCouponRate(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCouponRate,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCouponRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityExchange(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityExchange,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSecurityExchange, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegIssuer(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegIssuer,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegIssuer, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetEncodedLegIssuerLen(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedLegIssuerLen,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuerLen, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetEncodedLegIssuer(v []byte) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedLegIssuer,
-		Value: v,
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuer, v)
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityDesc(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityDesc,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSecurityDesc, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDescLen(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedLegSecurityDescLen,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDescLen, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDesc(v []byte) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagEncodedLegSecurityDesc,
-		Value: v,
-	})
+	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDesc, v)
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRatioQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRatioQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRatioQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSide(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSide,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSide, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLastPx(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegLastPx,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegLastPx, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRefID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegRefID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegRefID, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSettlCurrency(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSettlCurrency,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSettlCurrency, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegOrderQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegOrderQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegOrderQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSwapType(v LegSwapType) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSwapType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSwapType, []byte(string(v)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegDatedDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegDatedDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegDatedDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegDatedDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegDatedDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegDatedDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPool(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegPool,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegPool, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecuritySubType(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecuritySubType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegSecuritySubType, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegStrikeCurrency(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStrikeCurrency,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegStrikeCurrency, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegContractSettlMonth(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegContractSettlMonth,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegContractSettlMonth, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegInterestAccrualDate(v time.Time) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegInterestAccrualDate,
-		Value: []byte(v.Format(fix2.TimeFormatDate)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegInterestAccrualDate, []byte(v.Format(fix2.TimeFormatDate)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegInterestAccrualDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegInterestAccrualDate,
-		Value: []byte(v.Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegInterestAccrualDate, []byte(v.Format(f)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegUnitOfMeasure(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegUnitOfMeasure,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegUnitOfMeasure, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegTimeUnit(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegTimeUnit,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegTimeUnit, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegOptionRatio(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegOptionRatio,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegOptionRatio, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLastForwardPoints(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegLastForwardPoints,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegLastForwardPoints, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCalculatedCcyLastQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCalculatedCcyLastQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCalculatedCcyLastQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegGrossTradeAmt(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegGrossTradeAmt,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegGrossTradeAmt, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegMaturityTime(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegMaturityTime,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegMaturityTime, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegUnitOfMeasureQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegUnitOfMeasureQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPutOrCall(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegPutOrCall,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegPutOrCall, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegAllocID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegAllocID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegAllocID, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegVolatility(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegVolatility,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegVolatility, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegDividendYield(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegDividendYield,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegDividendYield, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCurrencyRatio(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegCurrencyRatio,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegCurrencyRatio, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegExecInst(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegExecInst,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegExecInst, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLastQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegLastQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegLastQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegExerciseStyle(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegExerciseStyle,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegExerciseStyle, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPriceUnitOfMeasure(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegPriceUnitOfMeasure,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegPriceUnitOfMeasure, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPriceUnitOfMeasureQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegPriceUnitOfMeasureQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegPriceUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegContractMultiplierUnit(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegContractMultiplierUnit,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegContractMultiplierUnit, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegFlowScheduleType(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegFlowScheduleType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegFlowScheduleType, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
+
+// AddNoLegAllocsEntry adds an entry to the nested NoLegAllocs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoLegAllocsEntry(ne *NoLegAllocsEntryBuilder) *NoLegsEntryBuilder {
-	e.noLegAllocsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noLegAllocsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoLegAllocs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoLegAllocs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagLegAllocAccount {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noLegAllocs = append(e.noLegAllocs, ne)
 	return e
 }
+
+// AddNoLegSecurityAltIDEntry adds an entry to the nested NoLegSecurityAltID group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoLegSecurityAltIDEntry(ne *NoLegSecurityAltIDEntryBuilder) *NoLegsEntryBuilder {
-	e.noLegSecurityAltIDCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noLegSecurityAltIDCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoLegSecurityAltID {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoLegSecurityAltID,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagLegSecurityAltID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noLegSecurityAltID = append(e.noLegSecurityAltID, ne)
 	return e
 }
+
+// AddNoLegStipulationsEntry adds an entry to the nested NoLegStipulations group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoLegStipulationsEntry(ne *NoLegStipulationsEntryBuilder) *NoLegsEntryBuilder {
-	e.noLegStipulationsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noLegStipulationsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoLegStipulations {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoLegStipulations,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagLegStipulationType {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noLegStipulations = append(e.noLegStipulations, ne)
 	return e
 }
+
+// AddNoNested3PartyIDsEntry adds an entry to the nested NoNested3PartyIDs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoNested3PartyIDsEntry(ne *NoNested3PartyIDsEntryBuilder) *NoLegsEntryBuilder {
-	e.noNested3PartyIDsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noNested3PartyIDsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoNested3PartyIDs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoNested3PartyIDs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagNested3PartyID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noNested3PartyIDs = append(e.noNested3PartyIDs, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoLegsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagLegSymbol)
+	if len(e.noLegAllocs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocs))
+		for _, entry := range e.noLegAllocs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	if len(e.noLegSecurityAltID) > 0 {
+		dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltID))
+		for _, entry := range e.noLegSecurityAltID {
+			dst = entry.appendTo(dst)
+		}
+	}
+	if len(e.noLegStipulations) > 0 {
+		dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulations))
+		for _, entry := range e.noLegStipulations {
+			dst = entry.appendTo(dst)
+		}
+	}
+	if len(e.noNested3PartyIDs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDs))
+		for _, entry := range e.noNested3PartyIDs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

@@ -2,10 +2,7 @@
 
 package fix50sp2
 
-import (
-	fix2 "github.com/sylr/fix2"
-	"strconv"
-)
+import fix2 "github.com/sylr/fix2"
 
 type NoPartyIDsEntry struct {
 	grp fix2.Group
@@ -48,60 +45,41 @@ var noPartyIDsSpec = &fix2.GroupSpec{
 }
 
 type NoPartyIDsEntryBuilder struct {
-	fields             []fix2.Field
-	noPartySubIDsCount int
+	fields        []fix2.Field
+	noPartySubIDs []*NoPartySubIDsEntryBuilder
 }
 
 func NewNoPartyIDsEntry() *NoPartyIDsEntryBuilder {
 	return &NoPartyIDsEntryBuilder{}
 }
 func (e *NoPartyIDsEntryBuilder) SetPartyID(v string) *NoPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagPartyID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagPartyID, []byte(v))
 	return e
 }
 func (e *NoPartyIDsEntryBuilder) SetPartyIDSource(v PartyIDSource) *NoPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagPartyIDSource,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagPartyIDSource, []byte(string(v)))
 	return e
 }
 func (e *NoPartyIDsEntryBuilder) SetPartyRole(v PartyRole) *NoPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagPartyRole,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagPartyRole, []byte(string(v)))
 	return e
 }
+
+// AddNoPartySubIDsEntry adds an entry to the nested NoPartySubIDs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoPartyIDsEntryBuilder) AddNoPartySubIDsEntry(ne *NoPartySubIDsEntryBuilder) *NoPartyIDsEntryBuilder {
-	e.noPartySubIDsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noPartySubIDsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoPartySubIDs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoPartySubIDs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagPartySubID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noPartySubIDs = append(e.noPartySubIDs, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoPartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagPartyID)
+	if len(e.noPartySubIDs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoPartySubIDs, len(e.noPartySubIDs))
+		for _, entry := range e.noPartySubIDs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

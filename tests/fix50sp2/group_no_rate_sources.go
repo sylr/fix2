@@ -35,23 +35,20 @@ func NewNoRateSourcesEntry() *NoRateSourcesEntryBuilder {
 	return &NoRateSourcesEntryBuilder{}
 }
 func (e *NoRateSourcesEntryBuilder) SetRateSource(v RateSource) *NoRateSourcesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagRateSource,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagRateSource, []byte(string(v)))
 	return e
 }
 func (e *NoRateSourcesEntryBuilder) SetRateSourceType(v RateSourceType) *NoRateSourcesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagRateSourceType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagRateSourceType, []byte(string(v)))
 	return e
 }
 func (e *NoRateSourcesEntryBuilder) SetReferencePage(v string) *NoRateSourcesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagReferencePage,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagReferencePage, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoRateSourcesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagRateSource)
+	return dst
 }

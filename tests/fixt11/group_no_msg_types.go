@@ -39,30 +39,24 @@ func NewNoMsgTypesEntry() *NoMsgTypesEntryBuilder {
 	return &NoMsgTypesEntryBuilder{}
 }
 func (e *NoMsgTypesEntryBuilder) SetRefMsgType(v string) *NoMsgTypesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagRefMsgType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagRefMsgType, []byte(v))
 	return e
 }
 func (e *NoMsgTypesEntryBuilder) SetMsgDirection(v MsgDirection) *NoMsgTypesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagMsgDirection,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagMsgDirection, []byte(string(v)))
 	return e
 }
 func (e *NoMsgTypesEntryBuilder) SetRefApplVerID(v string) *NoMsgTypesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagRefApplVerID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagRefApplVerID, []byte(v))
 	return e
 }
 func (e *NoMsgTypesEntryBuilder) SetRefCstmApplVerID(v string) *NoMsgTypesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagRefCstmApplVerID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagRefCstmApplVerID, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagRefMsgType)
+	return dst
 }

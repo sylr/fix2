@@ -42,30 +42,24 @@ func NewNoComplexEventTimesEntry() *NoComplexEventTimesEntryBuilder {
 	return &NoComplexEventTimesEntryBuilder{}
 }
 func (e *NoComplexEventTimesEntryBuilder) SetComplexEventStartTime(v time.Time) *NoComplexEventTimesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventStartTime,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimeOnly)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventStartTime, []byte(v.UTC().Format(fix2.TimeFormatTimeOnly)))
 	return e
 }
 func (e *NoComplexEventTimesEntryBuilder) SetComplexEventStartTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoComplexEventTimesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventStartTime,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventStartTime, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoComplexEventTimesEntryBuilder) SetComplexEventEndTime(v time.Time) *NoComplexEventTimesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventEndTime,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimeOnly)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventEndTime, []byte(v.UTC().Format(fix2.TimeFormatTimeOnly)))
 	return e
 }
 func (e *NoComplexEventTimesEntryBuilder) SetComplexEventEndTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoComplexEventTimesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventEndTime,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventEndTime, []byte(v.UTC().Format(f)))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoComplexEventTimesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagComplexEventStartTime)
+	return dst
 }

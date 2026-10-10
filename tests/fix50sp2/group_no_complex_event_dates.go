@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"strconv"
 	"time"
 )
 
@@ -53,67 +52,45 @@ var noComplexEventDatesSpec = &fix2.GroupSpec{
 }
 
 type NoComplexEventDatesEntryBuilder struct {
-	fields                   []fix2.Field
-	noComplexEventTimesCount int
+	fields              []fix2.Field
+	noComplexEventTimes []*NoComplexEventTimesEntryBuilder
 }
 
 func NewNoComplexEventDatesEntry() *NoComplexEventDatesEntryBuilder {
 	return &NoComplexEventDatesEntryBuilder{}
 }
 func (e *NoComplexEventDatesEntryBuilder) SetComplexEventStartDate(v time.Time) *NoComplexEventDatesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventStartDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimestamp)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventStartDate, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
 	return e
 }
 func (e *NoComplexEventDatesEntryBuilder) SetComplexEventStartDateWithFormat(v time.Time, f fix2.TimeFormat) *NoComplexEventDatesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventStartDate,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventStartDate, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoComplexEventDatesEntryBuilder) SetComplexEventEndDate(v time.Time) *NoComplexEventDatesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventEndDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimestamp)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventEndDate, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
 	return e
 }
 func (e *NoComplexEventDatesEntryBuilder) SetComplexEventEndDateWithFormat(v time.Time, f fix2.TimeFormat) *NoComplexEventDatesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagComplexEventEndDate,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagComplexEventEndDate, []byte(v.UTC().Format(f)))
 	return e
 }
+
+// AddNoComplexEventTimesEntry adds an entry to the nested NoComplexEventTimes group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoComplexEventDatesEntryBuilder) AddNoComplexEventTimesEntry(ne *NoComplexEventTimesEntryBuilder) *NoComplexEventDatesEntryBuilder {
-	e.noComplexEventTimesCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noComplexEventTimesCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoComplexEventTimes {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoComplexEventTimes,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagComplexEventStartTime {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noComplexEventTimes = append(e.noComplexEventTimes, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoComplexEventDatesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagComplexEventStartDate)
+	if len(e.noComplexEventTimes) > 0 {
+		dst = fix2.AppendCount(dst, TagNoComplexEventTimes, len(e.noComplexEventTimes))
+		for _, entry := range e.noComplexEventTimes {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

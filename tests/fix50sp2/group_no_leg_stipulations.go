@@ -31,16 +31,16 @@ func NewNoLegStipulationsEntry() *NoLegStipulationsEntryBuilder {
 	return &NoLegStipulationsEntryBuilder{}
 }
 func (e *NoLegStipulationsEntryBuilder) SetLegStipulationType(v string) *NoLegStipulationsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStipulationType,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegStipulationType, []byte(v))
 	return e
 }
 func (e *NoLegStipulationsEntryBuilder) SetLegStipulationValue(v string) *NoLegStipulationsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStipulationValue,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagLegStipulationValue, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoLegStipulationsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagLegStipulationType)
+	return dst
 }

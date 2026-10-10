@@ -120,12 +120,25 @@ func (b *Builder) setManaged(tag int, value []byte) bool {
 //
 //	8=<beginString>\x01 9=<bodyLen>\x01 35=<msgType>\x01 <fields>\x01 10=<checksum>\x01
 func (b *Builder) Build() []byte {
+	return b.BuildWith(nil)
+}
+
+// BuildWith is Build with extra fields serialized after the builder's own,
+// without adding them to the builder. Generated builders use it to write
+// their repeating groups.
+func (b *Builder) BuildWith(extra []Field) []byte {
 	// Build body: 35=<msgType>\x01 + all user fields.
 	var body []byte
 	body = append(body, "35="...)
 	body = append(body, b.msgType...)
 	body = append(body, soh)
 	for _, f := range b.fields {
+		body = strconv.AppendInt(body, int64(f.Tag), 10)
+		body = append(body, '=')
+		body = append(body, f.Value...)
+		body = append(body, soh)
+	}
+	for _, f := range extra {
 		body = strconv.AppendInt(body, int64(f.Tag), 10)
 		body = append(body, '=')
 		body = append(body, f.Value...)
@@ -149,4 +162,42 @@ func (b *Builder) Build() []byte {
 	}
 	msg = fmt.Appendf(msg, "10=%03d\x01", csum%256)
 	return msg
+}
+
+// SetField sets tag to value in fields: an existing field with that tag is
+// replaced in place, otherwise one is appended. value is stored as is.
+// Generated group entry builders use it so that setting a field twice keeps
+// a single value.
+func SetField(fields []Field, tag int, value []byte) []Field {
+	for i := range fields {
+		if fields[i].Tag == tag {
+			fields[i].Value = value
+			return fields
+		}
+	}
+	return append(fields, Field{Tag: tag, Value: value})
+}
+
+// AppendEntry appends a repeating group entry's own fields to dst: the field
+// with tag delim first, as FIX requires, then the others in their original
+// order.
+func AppendEntry(dst, fields []Field, delim int) []Field {
+	for _, f := range fields {
+		if f.Tag == delim {
+			dst = append(dst, f)
+			break
+		}
+	}
+	for _, f := range fields {
+		if f.Tag != delim {
+			dst = append(dst, f)
+		}
+	}
+	return dst
+}
+
+// AppendCount appends the counter (NUMINGROUP) field of a repeating group
+// with n entries.
+func AppendCount(dst []Field, counter, n int) []Field {
+	return append(dst, Field{Tag: counter, Value: strconv.AppendInt(nil, int64(n), 10)})
 }

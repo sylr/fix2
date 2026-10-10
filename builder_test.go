@@ -1,6 +1,10 @@
 package fix2
 
-import "testing"
+import (
+	"bytes"
+	"slices"
+	"testing"
+)
 
 func TestBuilderRoundTrip(t *testing.T) {
 	raw := NewBuilder("FIX.4.4", "D").
@@ -179,5 +183,49 @@ func TestBuilderManagedTags(t *testing.T) {
 			}()
 			tc.call(NewBuilder("FIX.4.4", "D"))
 		})
+	}
+}
+
+func TestSetField(t *testing.T) {
+	var fields []Field
+	fields = SetField(fields, 1, []byte("a"))
+	fields = SetField(fields, 2, []byte("b"))
+	fields = SetField(fields, 1, []byte("c")) // replaced in place
+	if len(fields) != 2 || fields[0].Tag != 1 || string(fields[0].Value) != "c" || fields[1].Tag != 2 {
+		t.Errorf("SetField = %v", fields)
+	}
+}
+
+func TestAppendEntry(t *testing.T) {
+	own := []Field{{Tag: 2, Value: []byte("b")}, {Tag: 3, Value: []byte("c")}, {Tag: 1, Value: []byte("a")}, {Tag: 4, Value: []byte("d")}}
+	got := AppendEntry([]Field{{Tag: 9}}, own, 1)
+	var tags []int
+	for _, f := range got {
+		tags = append(tags, f.Tag)
+	}
+	// Delimiter first, the others keep their relative order.
+	if want := []int{9, 1, 2, 3, 4}; !slices.Equal(tags, want) {
+		t.Errorf("AppendEntry tags = %v, want %v", tags, want)
+	}
+	if own[0].Tag != 2 {
+		t.Error("AppendEntry modified its input")
+	}
+}
+
+func TestBuildWith(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D").SetString(11, "ORD")
+	extra := AppendCount(nil, 78, 1)
+	extra = append(extra, Field{Tag: 79, Value: []byte("ACC")})
+	raw := b.BuildWith(extra)
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	if got := string(msg.Get(78)); got != "1" {
+		t.Errorf("78 = %q", got)
+	}
+	// BuildWith does not change the builder.
+	if bytes.Contains(b.Build(), []byte("\x0179=")) {
+		t.Error("BuildWith leaked extra fields into the builder")
 	}
 }

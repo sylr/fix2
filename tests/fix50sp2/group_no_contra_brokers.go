@@ -55,44 +55,32 @@ func NewNoContraBrokersEntry() *NoContraBrokersEntryBuilder {
 	return &NoContraBrokersEntryBuilder{}
 }
 func (e *NoContraBrokersEntryBuilder) SetContraBroker(v string) *NoContraBrokersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContraBroker,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagContraBroker, []byte(v))
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraTrader(v string) *NoContraBrokersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContraTrader,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagContraTrader, []byte(v))
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraTradeQty(v float64) *NoContraBrokersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContraTradeQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagContraTradeQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraTradeTime(v time.Time) *NoContraBrokersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContraTradeTime,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatTimestamp)),
-	})
+	e.fields = fix2.SetField(e.fields, TagContraTradeTime, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraTradeTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoContraBrokersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContraTradeTime,
-		Value: []byte(v.UTC().Format(f)),
-	})
+	e.fields = fix2.SetField(e.fields, TagContraTradeTime, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraLegRefID(v string) *NoContraBrokersEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContraLegRefID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagContraLegRefID, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoContraBrokersEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagContraBroker)
+	return dst
 }

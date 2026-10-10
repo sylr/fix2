@@ -52,60 +52,41 @@ var noInstrumentPartiesSpec = &fix2.GroupSpec{
 }
 
 type NoInstrumentPartiesEntryBuilder struct {
-	fields                       []fix2.Field
-	noInstrumentPartySubIDsCount int
+	fields                  []fix2.Field
+	noInstrumentPartySubIDs []*NoInstrumentPartySubIDsEntryBuilder
 }
 
 func NewNoInstrumentPartiesEntry() *NoInstrumentPartiesEntryBuilder {
 	return &NoInstrumentPartiesEntryBuilder{}
 }
 func (e *NoInstrumentPartiesEntryBuilder) SetInstrumentPartyID(v string) *NoInstrumentPartiesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagInstrumentPartyID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagInstrumentPartyID, []byte(v))
 	return e
 }
 func (e *NoInstrumentPartiesEntryBuilder) SetInstrumentPartyIDSource(v string) *NoInstrumentPartiesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagInstrumentPartyIDSource,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagInstrumentPartyIDSource, []byte(v))
 	return e
 }
 func (e *NoInstrumentPartiesEntryBuilder) SetInstrumentPartyRole(v int) *NoInstrumentPartiesEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagInstrumentPartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagInstrumentPartyRole, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
+
+// AddNoInstrumentPartySubIDsEntry adds an entry to the nested NoInstrumentPartySubIDs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoInstrumentPartiesEntryBuilder) AddNoInstrumentPartySubIDsEntry(ne *NoInstrumentPartySubIDsEntryBuilder) *NoInstrumentPartiesEntryBuilder {
-	e.noInstrumentPartySubIDsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noInstrumentPartySubIDsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoInstrumentPartySubIDs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoInstrumentPartySubIDs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagInstrumentPartySubID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noInstrumentPartySubIDs = append(e.noInstrumentPartySubIDs, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagInstrumentPartyID)
+	if len(e.noInstrumentPartySubIDs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoInstrumentPartySubIDs, len(e.noInstrumentPartySubIDs))
+		for _, entry := range e.noInstrumentPartySubIDs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

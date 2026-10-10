@@ -52,60 +52,41 @@ var noNestedPartyIDsSpec = &fix2.GroupSpec{
 }
 
 type NoNestedPartyIDsEntryBuilder struct {
-	fields                   []fix2.Field
-	noNestedPartySubIDsCount int
+	fields              []fix2.Field
+	noNestedPartySubIDs []*NoNestedPartySubIDsEntryBuilder
 }
 
 func NewNoNestedPartyIDsEntry() *NoNestedPartyIDsEntryBuilder {
 	return &NoNestedPartyIDsEntryBuilder{}
 }
 func (e *NoNestedPartyIDsEntryBuilder) SetNestedPartyID(v string) *NoNestedPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartyID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagNestedPartyID, []byte(v))
 	return e
 }
 func (e *NoNestedPartyIDsEntryBuilder) SetNestedPartyIDSource(v string) *NoNestedPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartyIDSource,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagNestedPartyIDSource, []byte(v))
 	return e
 }
 func (e *NoNestedPartyIDsEntryBuilder) SetNestedPartyRole(v int) *NoNestedPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagNestedPartyRole, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
+
+// AddNoNestedPartySubIDsEntry adds an entry to the nested NoNestedPartySubIDs group. Entries are
+// serialized when the message is built, so later changes to e are included.
 func (e *NoNestedPartyIDsEntryBuilder) AddNoNestedPartySubIDsEntry(ne *NoNestedPartySubIDsEntryBuilder) *NoNestedPartyIDsEntryBuilder {
-	e.noNestedPartySubIDsCount++
-	counterVal := strconv.AppendInt(nil, int64(e.noNestedPartySubIDsCount), 10)
-	updated := false
-	for i := range e.fields {
-		if e.fields[i].Tag == TagNoNestedPartySubIDs {
-			e.fields[i].Value = counterVal
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		e.fields = append(e.fields, fix2.Field{
-			Tag:   TagNoNestedPartySubIDs,
-			Value: counterVal,
-		})
-	}
-	fields := ne.fields
-	for i, f := range fields {
-		if f.Tag == TagNestedPartySubID {
-			if i != 0 {
-				fields[0], fields[i] = fields[i], fields[0]
-			}
-			break
-		}
-	}
-	e.fields = append(e.fields, fields...)
+	e.noNestedPartySubIDs = append(e.noNestedPartySubIDs, ne)
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoNestedPartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagNestedPartyID)
+	if len(e.noNestedPartySubIDs) > 0 {
+		dst = fix2.AppendCount(dst, TagNoNestedPartySubIDs, len(e.noNestedPartySubIDs))
+		for _, entry := range e.noNestedPartySubIDs {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

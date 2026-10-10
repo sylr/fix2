@@ -38,16 +38,16 @@ func NewNoNested2PartySubIDsEntry() *NoNested2PartySubIDsEntryBuilder {
 	return &NoNested2PartySubIDsEntryBuilder{}
 }
 func (e *NoNested2PartySubIDsEntryBuilder) SetNested2PartySubID(v string) *NoNested2PartySubIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartySubID,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagNested2PartySubID, []byte(v))
 	return e
 }
 func (e *NoNested2PartySubIDsEntryBuilder) SetNested2PartySubIDType(v int) *NoNested2PartySubIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+	e.fields = fix2.SetField(e.fields, TagNested2PartySubIDType, strconv.AppendInt(nil, int64(v), 10))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoNested2PartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagNested2PartySubID)
+	return dst
 }

@@ -31,16 +31,16 @@ func NewNoTradingSessionsEntry() *NoTradingSessionsEntryBuilder {
 	return &NoTradingSessionsEntryBuilder{}
 }
 func (e *NoTradingSessionsEntryBuilder) SetTradingSessionID(v TradingSessionID) *NoTradingSessionsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagTradingSessionID,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagTradingSessionID, []byte(string(v)))
 	return e
 }
 func (e *NoTradingSessionsEntryBuilder) SetTradingSessionSubID(v TradingSessionSubID) *NoTradingSessionsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagTradingSessionSubID,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagTradingSessionSubID, []byte(string(v)))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoTradingSessionsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagTradingSessionID)
+	return dst
 }

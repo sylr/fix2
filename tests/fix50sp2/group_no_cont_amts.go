@@ -42,23 +42,20 @@ func NewNoContAmtsEntry() *NoContAmtsEntryBuilder {
 	return &NoContAmtsEntryBuilder{}
 }
 func (e *NoContAmtsEntryBuilder) SetContAmtType(v ContAmtType) *NoContAmtsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContAmtType,
-		Value: []byte(string(v)),
-	})
+	e.fields = fix2.SetField(e.fields, TagContAmtType, []byte(string(v)))
 	return e
 }
 func (e *NoContAmtsEntryBuilder) SetContAmtValue(v float64) *NoContAmtsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContAmtValue,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
+	e.fields = fix2.SetField(e.fields, TagContAmtValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
 	return e
 }
 func (e *NoContAmtsEntryBuilder) SetContAmtCurr(v string) *NoContAmtsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagContAmtCurr,
-		Value: []byte(v),
-	})
+	e.fields = fix2.SetField(e.fields, TagContAmtCurr, []byte(v))
 	return e
+}
+
+// appendTo appends the entry's fields to dst in wire order.
+func (e *NoContAmtsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
+	dst = fix2.AppendEntry(dst, e.fields, TagContAmtType)
+	return dst
 }
