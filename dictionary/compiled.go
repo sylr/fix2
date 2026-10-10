@@ -131,9 +131,8 @@ func (s *slots) track(tag int) int32 {
 // Validate joins them per call instead. Dictionaries have at most one.
 const maxSharedSpecs = 4
 
-// compile builds the tables Validate uses. It runs once Load has resolved
-// the dictionary.
-func (d *Dict) compile(headerConds, trailerConds []condition, bodyConds map[*MessageDef][]condition) {
+// compile builds the tables Validate uses from d's exported fields.
+func (d *Dict) compile() {
 	// Enum checks, by tag.
 	enumIdx := map[int]tagEntry{}
 	for _, tag := range slices.Sorted(maps.Keys(d.Fields)) {
@@ -163,8 +162,8 @@ func (d *Dict) compile(headerConds, trailerConds []condition, bodyConds map[*Mes
 	env := slots{of: map[int]int32{}}
 	d.headerReq = requiredOf(d.Header, &env)
 	d.trailerReq = requiredOf(d.Trailer, &env)
-	d.headerConds = compileConds(headerConds, &env)
-	d.trailerConds = compileConds(trailerConds, &env)
+	d.headerConds = compileConds(d.HeaderConditions, &env)
+	d.trailerConds = compileConds(d.TrailerConditions, &env)
 	d.envSlots = env.n
 
 	envCounters := map[int]bool{}
@@ -206,12 +205,12 @@ func (d *Dict) compile(headerConds, trailerConds []condition, bodyConds map[*Mes
 				m.requiredTags = append(m.requiredTags, tracked{tag: ref.Tag, slot: shared(ref.Tag)})
 			}
 		}
-		for _, c := range bodyConds[m] {
-			cc := compiledCond{component: c.component}
-			for _, tag := range c.activation {
+		for _, c := range m.Conditions {
+			cc := compiledCond{component: c.Component}
+			for _, tag := range c.Activation {
 				cc.activation = append(cc.activation, shared(tag))
 			}
-			for _, tag := range c.required {
+			for _, tag := range c.Required {
 				cc.required = append(cc.required, tracked{tag: tag, slot: shared(tag)})
 			}
 			m.conds = append(m.conds, cc)
@@ -247,14 +246,14 @@ func requiredOf(refs []FieldRef, s *slots) []tracked {
 }
 
 // compileConds resolves the tags of conds to slots.
-func compileConds(conds []condition, s *slots) []compiledCond {
+func compileConds(conds []Condition, s *slots) []compiledCond {
 	var out []compiledCond
 	for _, c := range conds {
-		cc := compiledCond{component: c.component}
-		for _, tag := range c.activation {
+		cc := compiledCond{component: c.Component}
+		for _, tag := range c.Activation {
 			cc.activation = append(cc.activation, s.track(tag))
 		}
-		for _, tag := range c.required {
+		for _, tag := range c.Required {
 			cc.required = append(cc.required, tracked{tag: tag, slot: s.track(tag)})
 		}
 		out = append(out, cc)

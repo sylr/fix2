@@ -1698,3 +1698,15 @@ func TestValidate_ManyEnvelopeGroupsDoNotAllocate(t *testing.T) {
 		t.Errorf("Validate allocated %v times", allocs)
 	}
 }
+
+func TestLoad_DuplicateFields(t *testing.T) {
+	for name, fields := range map[string]string{
+		"number": `<field number="1" name="A" type="STRING"/><field number="1" name="B" type="STRING"/>`,
+		"name":   `<field number="1" name="A" type="STRING"/><field number="2" name="A" type="STRING"/>`,
+	} {
+		_, err := Load(strings.NewReader(`<fix major="4" minor="4"><header/><trailer/><messages/><components/><fields>` + fields + `</fields></fix>`))
+		if err == nil || !strings.Contains(err.Error(), "the same "+name) {
+			t.Errorf("duplicate %s: got %v", name, err)
+		}
+	}
+}
