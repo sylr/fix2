@@ -804,3 +804,21 @@ func TestGenerateDeterministic(t *testing.T) {
 		t.Error("two generations of the same dictionary differ")
 	}
 }
+
+func TestPairDataLengths(t *testing.T) {
+	dict, err := dictionary.LoadFile("testdata/FIX50SP2.xml")
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	// EncodedLegIssuerLen (618) / EncodedLegIssuer (619), with another field
+	// (600) between them or the length missing entirely.
+	for _, tc := range []struct{ in, want []int }{
+		{[]int{1, 618, 600, 619}, []int{1, 600, 618, 619}},
+		{[]int{1, 619, 600}, []int{1, 618, 619, 600}},
+		{[]int{1, 618, 619}, []int{1, 618, 619}},
+	} {
+		if got := pairDataLengths(dict, tc.in); !slices.Equal(got, tc.want) {
+			t.Errorf("pairDataLengths(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

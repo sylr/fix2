@@ -296,3 +296,16 @@ func TestDataTag(t *testing.T) {
 		}
 	}
 }
+
+func TestBuilderSetDataManagedTags(t *testing.T) {
+	for _, tags := range [][2]int{{9, 96}, {95, 35}, {8, 96}, {95, 10}} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("SetData(%d, %d) did not panic", tags[0], tags[1])
+				}
+			}()
+			NewBuilder("FIX.4.4", "A").SetData(tags[0], tags[1], []byte("x"))
+		}()
+	}
+}

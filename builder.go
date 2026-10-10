@@ -62,6 +62,12 @@ func (b *Builder) Set(tag int, value []byte) *Builder {
 // requires: any earlier value of either is removed and both are appended.
 // value is copied.
 func (b *Builder) SetData(lengthTag, dataTag int, value []byte) *Builder {
+	for _, tag := range []int{lengthTag, dataTag} {
+		switch tag {
+		case tagBeginStr, tagBodyLen, tagMsgType, tagCheckSum:
+			panic(fmt.Sprintf("fix2: Builder: tag %d is managed by Build and cannot be a DATA field", tag))
+		}
+	}
 	b.fields = slices.DeleteFunc(b.fields, func(f Field) bool {
 		return f.Tag == lengthTag || f.Tag == dataTag
 	})

@@ -846,7 +846,7 @@ func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef)
 func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName string, mg dictionary.GroupDef) {
 	layoutVar := unexport(mg.Name) + "Layout"
 	var tags []jen.Code
-	for _, tag := range mg.Layout {
+	for _, tag := range pairDataLengths(dict, mg.Layout) {
 		tags = append(tags, tagID(dict.Fields[tag].Name))
 	}
 	f.Comment(layoutVar + " lists the tags of a " + mg.Name + " entry in dictionary order.")
@@ -874,6 +874,24 @@ func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName str
 		),
 		jen.Return(jen.Id("dst")),
 	)
+}
+
+// pairDataLengths returns layout with the LENGTH tag of every DATA tag the
+// parser reads by length placed right before it, as the parser requires,
+// whatever order the dictionary or the layout merge produced.
+func pairDataLengths(dict *dictionary.Dict, layout []int) []int {
+	out := slices.Clone(layout)
+	for _, tag := range layout {
+		l := fix2.DataLengthTag(tag)
+		if l == 0 || dict.Fields[l] == nil {
+			continue
+		}
+		if i := slices.Index(out, l); i >= 0 {
+			out = slices.Delete(out, i, i+1)
+		}
+		out = slices.Insert(out, slices.Index(out, tag), l)
+	}
+	return out
 }
 
 // groupEntries returns the code appending a group's counter, even zero, and
