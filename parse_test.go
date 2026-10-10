@@ -442,6 +442,57 @@ func TestParseErrorConsistency(t *testing.T) {
 	}
 }
 
+// TestParseErrorMessages pins the error text: a single "fix2:" prefix, the
+// sentinel chain, then the detail.
+func TestParseErrorMessages(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{
+			name: "wrong tag at begin",
+			raw:  []byte("9=123\x018=FIX.4.4\x0135=A\x0110=000\x01"),
+			want: `fix2: invalid BeginString (tag 8): invalid tag number: expected "8=" got "9="`,
+		},
+		{
+			name: "invalid begin string prefix",
+			raw:  []byte("8=NOTFIX\x019=5\x0135=A\x0110=000\x01XXXXXX"),
+			want: `fix2: invalid BeginString (tag 8): invalid tag number: expected "FIX." or "FIXT." got "NOTFIX"`,
+		},
+		{
+			name: "invalid body length separator",
+			raw:  []byte("8=FIX.4.4\x019X5\x0135=A\x0110=000\x01"),
+			want: "fix2: invalid BodyLength (tag 9): field separator not found where expected",
+		},
+		{
+			name: "missing MsgType",
+			raw:  buildMsg("FIX.4.4", "49=S\x0156=T\x01"),
+			want: "fix2: MsgType (tag 35) is not the third field",
+		},
+		{
+			name: "wrong tag at checksum",
+			raw:  []byte("8=FIX.4.4\x019=5\x0135=A\x0111=000\x01XXXXXXXX"),
+			want: `fix2: invalid CheckSum (tag 10): invalid tag number: expected "10=" got "11="`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.raw)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if got := err.Error(); got != tt.want {
+				t.Errorf("Parse error:\n  got:  %s\n  want: %s", got, tt.want)
+			}
+			if !errors.Is(err, ErrFix2) {
+				t.Errorf("errors.Is(err, ErrFix2) = false")
+			}
+		})
+	}
+}
+
 // TestParseTruncated checks that input ending mid-field returns an error
 // instead of reading past the end of the buffer.
 func TestParseTruncated(t *testing.T) {

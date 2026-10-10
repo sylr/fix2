@@ -1,24 +1,32 @@
 package fix2
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 var (
-	ErrFix2                   = fmt.Errorf("fix2")
-	ErrMessageTooShort        = fmt.Errorf("%w: message too short", ErrFix2)
-	ErrInvalidBeginTag        = fmt.Errorf("%w: invalid BeginString (tag 8)", ErrFix2)
-	ErrInvalidBodyLen         = fmt.Errorf("%w: invalid BodyLength (tag 9)", ErrFix2)
-	ErrMissingMsgType         = fmt.Errorf("%w: MsgType (tag 35) is not the third field", ErrFix2)
-	ErrInvalidCheckSum        = fmt.Errorf("%w: invalid CheckSum (tag 10)", ErrFix2)
-	ErrChecksumMismatch       = fmt.Errorf("%w: checksum mismatch", ErrFix2)
-	ErrBodyLenMismatch        = fmt.Errorf("%w: body length mismatch", ErrFix2)
-	ErrMalformedField         = fmt.Errorf("%w: malformed field", ErrFix2)
-	ErrInvalidTag             = fmt.Errorf("%w: invalid tag number", ErrFix2)
-	ErrInvalidField           = fmt.Errorf("%w: invalid field", ErrFix2)
-	ErrFieldSeparatorNotFound = fmt.Errorf("%w: field separator not found where expected", ErrFix2)
+	ErrFix2                   = errors.New("fix2")
+	ErrMessageTooShort        = newError("message too short")
+	ErrInvalidBeginTag        = newError("invalid BeginString (tag 8)")
+	ErrInvalidBodyLen         = newError("invalid BodyLength (tag 9)")
+	ErrMissingMsgType         = newError("MsgType (tag 35) is not the third field")
+	ErrInvalidCheckSum        = newError("invalid CheckSum (tag 10)")
+	ErrChecksumMismatch       = newError("checksum mismatch")
+	ErrBodyLenMismatch        = newError("body length mismatch")
+	ErrMalformedField         = newError("malformed field")
+	ErrInvalidTag             = newError("invalid tag number")
+	ErrInvalidField           = newError("invalid field")
+	ErrFieldSeparatorNotFound = newError("field separator not found where expected")
 )
+
+// fix2Error is a sentinel that unwraps to ErrFix2. Its message has no "fix2: "
+// prefix so sentinels can be chained without repeating it; ParseError adds the
+// prefix once.
+type fix2Error struct{ msg string }
+
+func newError(msg string) error { return &fix2Error{msg: msg} }
+
+func (e *fix2Error) Error() string { return e.msg }
+
+func (e *fix2Error) Unwrap() error { return ErrFix2 }
 
 // ParseError wraps a sentinel error with additional context.
 type ParseError struct {
@@ -27,7 +35,7 @@ type ParseError struct {
 }
 
 func (e *ParseError) Error() string {
-	return e.Err.Error()
+	return ErrFix2.Error() + ": " + e.Err.Error()
 }
 
 func (e *ParseError) Unwrap() error {

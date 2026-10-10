@@ -13,6 +13,10 @@ const (
 	tagBodyLen  = 9
 	tagMsgType  = 35
 	tagCheckSum = 10
+
+	// String forms of the tags read with parseNextExpectedTag.
+	tagBodyLenStr  = "9"
+	tagCheckSumStr = "10"
 )
 
 // Parse parses a FIX message from data. All field values are zero-copy slices
@@ -34,7 +38,7 @@ func Parse(data []byte) (Message, error) {
 
 	// --- Tag 8: BeginString ---
 	if data[0] != '8' || data[1] != '=' {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected '8=' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, data[:2]), Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got %q", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr, data[:2]), Offset: 0}
 	}
 	sohPos := findByte(data, 2, soh)
 	if sohPos < 0 {
@@ -42,7 +46,7 @@ func Parse(data []byte) (Message, error) {
 	}
 	beginVal := data[2:sohPos]
 	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 'FIX.' or 'FIXT.' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\" got %q", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 	cursor = sohPos + 1
@@ -50,12 +54,12 @@ func Parse(data []byte) (Message, error) {
 	csumPos = cursor
 
 	// --- Tag 9: BodyLength ---
-	tag, eqPos, err := parseNextExpectedTag(data, cursor, []byte("9"))
+	tag, eqPos, err := parseNextExpectedTag(data, cursor, tagBodyLenStr)
 	if err != nil {
 		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidBodyLen, err), Offset: cursor}
 	}
 	if tag != tagBodyLen {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 9, got %d", ErrInvalidBodyLen, ErrInvalidTag, tag), Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidBodyLen, ErrInvalidTag, tagBodyLen, tag), Offset: cursor}
 	}
 	sohPos = findByte(data, eqPos+1, soh)
 	if sohPos < 0 {
@@ -100,12 +104,12 @@ func Parse(data []byte) (Message, error) {
 	}
 
 	// --- Tag 10: CheckSum (trailer) ---
-	tag, eqPos, err = parseNextExpectedTag(data, cursor, []byte("10"))
+	tag, eqPos, err = parseNextExpectedTag(data, cursor, tagCheckSumStr)
 	if err != nil {
 		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidCheckSum, err), Offset: cursor}
 	}
 	if tag != tagCheckSum {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 10, got %d", ErrInvalidCheckSum, ErrInvalidTag, tag), Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidCheckSum, ErrInvalidTag, tagCheckSum, tag), Offset: cursor}
 	}
 	sohPos = findByte(data, eqPos+1, soh)
 	if sohPos < 0 {
@@ -165,7 +169,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 
 	// --- Tag 8: BeginString (from header) ---
 	if len(header) < 4 || header[0] != '8' || header[1] != '=' {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected '8=' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, header[:2]), Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got %q", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr, header[:2]), Offset: 0}
 	}
 	firstSOH := findByte(header, 2, soh)
 	if firstSOH < 0 {
@@ -173,7 +177,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	}
 	beginVal := header[2:firstSOH]
 	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 'FIX.' or 'FIXT.' got '%q'", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\" got %q", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 
@@ -182,12 +186,12 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	if len(header) < cursor+4 { // need at least "9=X\x01"
 		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
 	}
-	tag, eqPos, err := parseNextExpectedTag(header, cursor, []byte("9"))
+	tag, eqPos, err := parseNextExpectedTag(header, cursor, tagBodyLenStr)
 	if err != nil {
 		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidBodyLen, err), Offset: cursor}
 	}
 	if tag != tagBodyLen {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 9, got %d", ErrInvalidBodyLen, ErrInvalidTag, tag), Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidBodyLen, ErrInvalidTag, tagBodyLen, tag), Offset: cursor}
 	}
 	sohPos := findByte(header, eqPos+1, soh)
 	if sohPos < 0 {
@@ -233,12 +237,12 @@ func ParseFromReader(r io.Reader) (Message, error) {
 
 	// --- Tag 10: CheckSum (trailer from rest[bodyLen:]) ---
 	cursor = bodyLen
-	tag, eqPos, err = parseNextExpectedTag(rest, cursor, []byte("10"))
+	tag, eqPos, err = parseNextExpectedTag(rest, cursor, tagCheckSumStr)
 	if err != nil {
 		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidCheckSum, err), Offset: len(header) + cursor}
 	}
 	if tag != tagCheckSum {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 10, got %d", ErrInvalidCheckSum, ErrInvalidTag, tag), Offset: len(header) + cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidCheckSum, ErrInvalidTag, tagCheckSum, tag), Offset: len(header) + cursor}
 	}
 	sohPos = findByte(rest, eqPos+1, soh)
 	if sohPos < 0 {
@@ -292,15 +296,16 @@ func parseNextTag(data []byte, cursor int) (int, int, error) {
 }
 
 // parseNextExpectedTag parses a tag of len(expectedTag) digits at data[cursor:]
-// followed by '='. Returns the tag number and the index of '=' in data.
-func parseNextExpectedTag(data []byte, cursor int, expectedTag []byte) (int, int, error) {
+// followed by '='. Returns the tag number and the index of '=' in data. Errors
+// are bare sentinels; callers wrap them in a ParseError with their own context.
+func parseNextExpectedTag(data []byte, cursor int, expectedTag string) (int, int, error) {
 	eqPos := cursor + len(expectedTag)
 	if eqPos >= len(data) || data[eqPos] != '=' {
-		return 0, 0, &ParseError{Err: ErrFieldSeparatorNotFound, Offset: cursor}
+		return 0, 0, ErrFieldSeparatorNotFound
 	}
 	tag, ok := parseUint(data[cursor:eqPos])
 	if !ok {
-		return 0, 0, &ParseError{Err: ErrInvalidTag, Offset: cursor}
+		return 0, 0, ErrInvalidTag
 	}
 	return tag, eqPos, nil
 }
