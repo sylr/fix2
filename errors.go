@@ -11,6 +11,7 @@ var (
 	ErrInvalidCheckSum        = newError("invalid CheckSum (tag 10)")
 	ErrChecksumMismatch       = newError("checksum mismatch")
 	ErrBodyLenMismatch        = newError("body length mismatch")
+	ErrMessageTooLarge        = newError("message too large")
 	ErrMalformedField         = newError("malformed field")
 	ErrInvalidTag             = newError("invalid tag number")
 	ErrInvalidField           = newError("invalid field")

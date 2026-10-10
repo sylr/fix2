@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -566,4 +568,72 @@ func FuzzParse(f *testing.F) {
 			t.Error("MsgType is nil on successful parse")
 		}
 	})
+}
+
+// TestParseHugeBodyLength checks that BodyLength values that overflow, or are
+// too large to allocate, are rejected without panicking.
+func TestParseHugeBodyLength(t *testing.T) {
+	withChecksum := func(s string) []byte {
+		var sum int
+		for i := range len(s) {
+			sum += int(s[i])
+		}
+		return fmt.Appendf(nil, "%s10=%03d\x01", s, sum%256)
+	}
+	maxInt := strconv.Itoa(math.MaxInt)
+
+	tests := []struct {
+		name       string
+		raw        []byte
+		parse      error // expected from Parse
+		fromReader error // expected from ParseFromReader
+	}{
+		{
+			name:       "wraps past 2^64",
+			raw:        withChecksum("8=FIX.4.4\x019=18446744073709551621\x0135=0\x01"),
+			parse:      ErrInvalidBodyLen,
+			fromReader: ErrInvalidBodyLen,
+		},
+		{
+			name:       "MaxInt",
+			raw:        withChecksum("8=FIX.4.4\x019=" + maxInt + "\x0135=0\x01"),
+			parse:      ErrBodyLenMismatch,
+			fromReader: ErrMessageTooLarge,
+		},
+		{
+			name:       "MaxBodyLength+1",
+			raw:        withChecksum("8=FIX.4.4\x019=" + strconv.Itoa(MaxBodyLength+1) + "\x0135=0\x01"),
+			parse:      ErrBodyLenMismatch,
+			fromReader: ErrMessageTooLarge,
+		},
+		{
+			name:       "MaxBodyLength, stream too short",
+			raw:        withChecksum("8=FIX.4.4\x019=" + strconv.Itoa(MaxBodyLength) + "\x0135=0\x01"),
+			parse:      ErrBodyLenMismatch,
+			fromReader: ErrBodyLenMismatch,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Parse(tt.raw); !errors.Is(err, tt.parse) {
+				t.Errorf("Parse: got %v, want %v", err, tt.parse)
+			}
+			if _, err := ParseFromReader(bytes.NewReader(tt.raw)); !errors.Is(err, tt.fromReader) {
+				t.Errorf("ParseFromReader: got %v, want %v", err, tt.fromReader)
+			}
+		})
+	}
+}
+
+// TestParseFromReaderHeaderLimit checks that a stream that never completes
+// BeginString and BodyLength stops being read after maxHeaderLen bytes.
+func TestParseFromReaderHeaderLimit(t *testing.T) {
+	r := bytes.NewReader(bytes.Repeat([]byte("8"), 1<<20))
+	_, err := ParseFromReader(r)
+	if !errors.Is(err, ErrMessageTooLarge) {
+		t.Fatalf("got %v, want ErrMessageTooLarge", err)
+	}
+	if read := int(r.Size()) - r.Len(); read > maxHeaderLen {
+		t.Errorf("read %d bytes, want at most %d", read, maxHeaderLen)
+	}
 }

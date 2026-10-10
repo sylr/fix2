@@ -18,7 +18,17 @@ const (
 	// String forms of the tags read with parseNextExpectedTag.
 	tagBodyLenStr  = "9"
 	tagCheckSumStr = "10"
+
+	// maxHeaderLen bounds the "8=...|9=...|" prefix ParseFromReader reads
+	// byte by byte before it knows the BodyLength.
+	maxHeaderLen = 64
 )
+
+// MaxBodyLength is the largest BodyLength (tag 9) ParseFromReader accepts.
+// It bounds the buffer allocated for the body before any of it is read, so a
+// peer cannot make the reader allocate arbitrary memory. Parse is not limited:
+// its input is already in memory.
+const MaxBodyLength = 1 << 20
 
 // Parse parses a FIX message from data. All field values are zero-copy slices
 // into data. The caller must not modify data while the returned Message is in use.
@@ -76,12 +86,13 @@ func Parse(data []byte) (Message, error) {
 	csum += checksumRange(data, csumPos, cursor)
 	csumPos = cursor
 
-	// Compute body region.
+	// Compute body region. Compare by subtraction: bodyStart+bodyLen can
+	// overflow for a BodyLength close to MaxInt.
 	bodyStart := cursor
-	bodyEnd := bodyStart + bodyLen
-	if bodyEnd > len(data) {
+	if bodyLen > len(data)-bodyStart {
 		return msg, &ParseError{Err: ErrBodyLenMismatch, Offset: cursor}
 	}
+	bodyEnd := bodyStart + bodyLen
 
 	// --- Parse body fields ---
 	for cursor < bodyEnd {
@@ -156,6 +167,9 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	var b [1]byte
 	sohCount := 0
 	for sohCount < 2 {
+		if len(header) == maxHeaderLen {
+			return Message{}, &ParseError{Err: fmt.Errorf("%w: no BeginString and BodyLength in the first %d bytes", ErrMessageTooLarge, maxHeaderLen), Offset: len(header)}
+		}
 		if _, err := io.ReadFull(r, b[:]); err != nil {
 			return Message{}, &ParseError{Err: fmt.Errorf("%w: %w", ErrMessageTooShort, err), Offset: len(header)}
 		}
@@ -202,6 +216,9 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	bodyLen, ok := parseUint(bodyLenVal)
 	if !ok {
 		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
+	}
+	if bodyLen > MaxBodyLength {
+		return msg, &ParseError{Err: fmt.Errorf("%w: BodyLength %d exceeds %d", ErrMessageTooLarge, bodyLen, MaxBodyLength), Offset: cursor}
 	}
 	msg.append(Field{Tag: tagBodyLen, Value: bodyLenVal})
 
