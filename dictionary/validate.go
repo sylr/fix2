@@ -55,6 +55,9 @@ var structuralTags = map[int]bool{
 //     cannot be told apart this way are not enforced)
 //  5. Every tag is allowed (header + trailer + message fields + structural)
 //  6. Enum values are valid for fields that define enums
+//
+// Required tags (2-4) must be present outside group entries: a tag a group
+// entry holds does not stand for the message's own.
 func (d *Dict) Validate(msg *fix2.Message) error {
 	msgType := string(msg.MsgType())
 
@@ -67,15 +70,22 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		}
 	}
 
-	// Collect present tags for required-field checks.
+	// Required tags must be present at the top level: a group entry's field
+	// does not stand for a message's own. Any occurrence, though, shows an
+	// optional component is present, its unique tags possibly being in one
+	// of its groups.
 	present := make(map[int]bool, msg.Count())
 	for _, f := range msg.Fields() {
 		present[f.Tag] = true
 	}
+	top := make(map[int]bool, msg.Count())
+	for f := range msg.TopLevelFields(mdef.specs...) {
+		top[f.Tag] = true
+	}
 
 	// 2. Required header tags.
 	for tag := range d.headerReq {
-		if !present[tag] {
+		if !top[tag] {
 			return &ValidationError{
 				Err: ErrRequiredTag,
 				Tag: tag,
@@ -86,7 +96,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 
 	// 3. Required trailer tags.
 	for tag := range d.trailerReq {
-		if !present[tag] {
+		if !top[tag] {
 			return &ValidationError{
 				Err: ErrRequiredTag,
 				Tag: tag,
@@ -97,7 +107,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 
 	// 4. Required message-body tags.
 	for tag := range mdef.required {
-		if !present[tag] {
+		if !top[tag] {
 			return &ValidationError{
 				Err: ErrRequiredTag,
 				Tag: tag,
@@ -115,7 +125,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		{d.trailerConds, "trailer"},
 		{mdef.conditions, "message " + mdef.Name},
 	} {
-		if err := checkConditions(cc.conds, present, cc.where); err != nil {
+		if err := checkConditions(cc.conds, present, top, cc.where); err != nil {
 			return err
 		}
 	}
@@ -180,8 +190,9 @@ func isMultipleValue(fixType string) bool {
 }
 
 // checkConditions returns an error if an optional component is present (any
-// of its activation tags is) but one of its required tags is missing.
-func checkConditions(conds []condition, present map[int]bool, where string) error {
+// of its activation tags is, anywhere) but one of its required tags is
+// missing from the top level.
+func checkConditions(conds []condition, present, top map[int]bool, where string) error {
 	for _, c := range conds {
 		active := false
 		for _, tag := range c.activation {
@@ -194,7 +205,7 @@ func checkConditions(conds []condition, present map[int]bool, where string) erro
 			continue
 		}
 		for _, tag := range c.required {
-			if !present[tag] {
+			if !top[tag] {
 				return &ValidationError{
 					Err: ErrRequiredTag,
 					Tag: tag,
@@ -204,4 +215,30 @@ func checkConditions(conds []condition, present map[int]bool, where string) erro
 		}
 	}
 	return nil
+}
+
+// groupSpecs returns the specs of groups, built as fixgen builds them: an
+// entry may also hold the LENGTH field of its DATA fields, which generated
+// builders write even when the group does not declare it.
+func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
+	specs := make([]*fix2.GroupSpec, 0, len(groups))
+	for _, gd := range groups {
+		s := &fix2.GroupSpec{Counter: gd.CounterTag, Delim: gd.DelimTag}
+		added := make(map[int]bool, len(gd.Fields))
+		add := func(tag int) {
+			if !added[tag] {
+				added[tag] = true
+				s.Tags = append(s.Tags, tag)
+			}
+		}
+		for _, fr := range gd.Fields {
+			if l := fix2.DataLengthTag(fr.Tag); l != 0 && d.Fields[l] != nil {
+				add(l)
+			}
+			add(fr.Tag)
+		}
+		s.Nested = d.groupSpecs(gd.Groups)
+		specs = append(specs, s)
+	}
+	return specs
 }

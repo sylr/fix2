@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"slices"
+
+	fix2 "github.com/sylr/fix2"
 )
 
 // ---------------------------------------------------------------------------
@@ -119,8 +121,9 @@ type MessageDef struct {
 	Groups  []GroupDef // top-level groups in this message
 
 	fieldSet   map[int]bool
-	required   map[int]bool // tags required unconditionally
-	conditions []condition  // tags required only when an optional component is present
+	required   map[int]bool      // tags required unconditionally
+	conditions []condition       // tags required only when an optional component is present
+	specs      []*fix2.GroupSpec // header, body and trailer groups, to skip their entries
 }
 
 // condition records the required fields of an optional component: they must
@@ -304,6 +307,11 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	// in any message body cannot tell their components apart.
 	d.headerConds = header.conditions(envelope, nil, inMessages)
 	d.trailerConds = trailer.conditions(envelope, nil, inMessages)
+
+	headerSpecs, trailerSpecs := d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups)
+	for _, m := range d.Messages {
+		m.specs = slices.Concat(headerSpecs, d.groupSpecs(m.Groups), trailerSpecs)
+	}
 
 	return d, nil
 }

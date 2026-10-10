@@ -1,6 +1,9 @@
 package fix2
 
-import "slices"
+import (
+	"iter"
+	"slices"
+)
 
 // Group represents a single instance within a FIX repeating group.
 type Group struct {
@@ -206,20 +209,33 @@ func (s *GroupSpec) Child(counter int) *GroupSpec {
 // that a message holds both directly and inside a repeating group: Get would
 // return whichever occurrence comes first.
 func (m *Message) GetTopLevel(tag int, specs ...*GroupSpec) []byte {
-	fields := m.fields
-	for i := 0; i < len(fields); {
-		f := fields[i]
-		if spec := groupSpecFor(specs, f.Tag); spec != nil {
-			count, _ := ParseInt(f.Value)
-			i = spec.skip(fields, i+1, count)
-			continue
-		}
+	for f := range m.TopLevelFields(specs...) {
 		if f.Tag == tag {
 			return f.Value
 		}
-		i++
 	}
 	return nil
+}
+
+// TopLevelFields returns an iterator over the message's fields that are not
+// inside one of the groups described by specs. Group counters are top level;
+// the entries they announce are skipped as blocks, as GroupsOf reads them.
+func (m *Message) TopLevelFields(specs ...*GroupSpec) iter.Seq[Field] {
+	return func(yield func(Field) bool) {
+		fields := m.fields
+		for i := 0; i < len(fields); {
+			f := fields[i]
+			if !yield(f) {
+				return
+			}
+			if spec := groupSpecFor(specs, f.Tag); spec != nil {
+				count, _ := ParseInt(f.Value)
+				i = spec.skip(fields, i+1, count)
+				continue
+			}
+			i++
+		}
+	}
 }
 
 // groupSpecFor returns the spec whose counter is tag, or nil.

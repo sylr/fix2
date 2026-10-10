@@ -1161,3 +1161,73 @@ func TestLoad_MalformedXML(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_RequiredTagOnlyInGroup(t *testing.T) {
+	// F is required directly and optional in NoG entries; Hops' HopID is
+	// required in the header and optional in the NoHops header group; Opt's
+	// required R must be direct even when Opt is present through its group.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header>
+    <field name="MsgType" required="Y"/>
+    <field name="HopID" required="Y"/>
+    <group name="NoHops" required="N"><field name="HopRef" required="N"/><field name="HopID" required="N"/></group>
+  </header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="F" required="Y"/>
+      <group name="NoG" required="N"><field name="D" required="N"/><field name="F" required="N"/></group>
+      <component name="Opt" required="N"/>
+    </message>
+  </messages>
+  <components>
+    <component name="Opt">
+      <field name="R" required="Y"/>
+      <group name="NoO" required="N"><field name="OD" required="N"/><field name="R" required="N"/></group>
+    </component>
+  </components>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="100" name="F" type="STRING"/>
+    <field number="101" name="NoG" type="NUMINGROUP"/>
+    <field number="102" name="D" type="STRING"/>
+    <field number="110" name="HopID" type="STRING"/>
+    <field number="111" name="NoHops" type="NUMINGROUP"/>
+    <field number="112" name="HopRef" type="STRING"/>
+    <field number="120" name="R" type="STRING"/>
+    <field number="121" name="NoO" type="NUMINGROUP"/>
+    <field number="122" name="OD" type="STRING"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	tests := []struct {
+		name    string
+		body    string
+		missing int // 0 when valid
+	}{
+		{"F only inside NoG", "35=M\x01110=h\x01101=1\x01102=d\x01100=inside\x01", 100},
+		{"F direct after NoG", "35=M\x01110=h\x01101=1\x01102=d\x01100=inside\x01100=direct\x01", 0},
+		{"F direct before NoG", "35=M\x01110=h\x01100=direct\x01101=1\x01102=d\x01100=inside\x01", 0},
+		{"HopID only inside NoHops", "35=M\x01111=1\x01112=r\x01110=inside\x01100=f\x01", 110},
+		{"HopID direct", "35=M\x01111=1\x01112=r\x01110=inside\x01110=direct\x01100=f\x01", 0},
+		{"Opt present through NoO, R only inside", "35=M\x01110=h\x01100=f\x01121=1\x01122=o\x01120=inside\x01", 120},
+		{"Opt present through NoO, R direct", "35=M\x01110=h\x01100=f\x01120=r\x01121=1\x01122=o\x01120=inside\x01", 0},
+	}
+	for _, tt := range tests {
+		msg := parseMsg(t, buildFIXMsg(tt.body))
+		err := d.Validate(&msg)
+		if tt.missing == 0 {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tt.name, err)
+			}
+			continue
+		}
+		var ve *ValidationError
+		if !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != tt.missing {
+			t.Errorf("%s: got %v, want required tag %d missing", tt.name, err, tt.missing)
+		}
+	}
+}

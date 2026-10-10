@@ -434,3 +434,27 @@ func TestGroupsOfLargeSpec(t *testing.T) {
 		}
 	}
 }
+
+func TestTopLevelFields(t *testing.T) {
+	child := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201, 202}}
+	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100, 101}, Nested: []*GroupSpec{child}}
+	m := fieldsMsg(t, "35=M", "900=2", "100=a", "200=1", "201=c", "202=c", "100=b", "101=b", "101=direct", "200=0")
+	var tags []int
+	for f := range m.TopLevelFields(parent) {
+		tags = append(tags, f.Tag)
+	}
+	if want := []int{35, 900, 101, 200}; !reflect.DeepEqual(tags, want) {
+		t.Errorf("TopLevelFields = %v, want %v", tags, want)
+	}
+	// The counter itself is top level.
+	if got := string(m.GetTopLevel(900, parent)); got != "2" {
+		t.Errorf("GetTopLevel(900) = %q, want 2", got)
+	}
+	// Stopping early.
+	for f := range m.TopLevelFields(parent) {
+		if f.Tag != 35 {
+			t.Errorf("first field = %d", f.Tag)
+		}
+		break
+	}
+}
