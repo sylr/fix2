@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -115,8 +116,11 @@ func TestParseFloat(t *testing.T) {
 		{"0.001", 0.001},
 		{"123456.789", 123456.789},
 		{"-0", 0},
-		{"1e2", 100},
 		{"-3.14", -3.14},
+		{".5", 0.5},
+		{"5.", 5},
+		{"007.50", 7.5},
+		{"123456789012345", 123456789012345},
 	}
 	for _, tt := range tests {
 		got, err := ParseFloat([]byte(tt.in))
@@ -136,6 +140,22 @@ func TestParseFloatErrors(t *testing.T) {
 		"abc",
 		"12.34.56",
 		"--1",
+		"-",
+		".",
+		"-.",
+		"1e2",
+		"1E2",
+		"+1",
+		"NaN",
+		"nan",
+		"Inf",
+		"-Infinity",
+		"0x1p3",
+		"1_000",
+		" 1",
+		"1 ",
+		"1,",
+		"1" + strings.Repeat("0", 400), // beyond float64
 	}
 	for _, in := range tests {
 		_, err := ParseFloat([]byte(in))
@@ -158,8 +178,8 @@ func FuzzParseFloat(f *testing.F) {
 		if err != nil {
 			return
 		}
-		if math.IsNaN(got) || math.IsInf(got, 0) {
-			return
+		if math.IsNaN(got) || math.IsInf(got, 0) || !isFIXFloat(v) {
+			t.Fatalf("ParseFloat(%q) = %v, accepted", v, got)
 		}
 		// Round-trip: format back and re-parse.
 		s := strconv.FormatFloat(got, 'f', -1, 64)
@@ -228,4 +248,22 @@ func plainDecimal(v []byte) bool {
 		}
 	}
 	return true
+}
+
+func TestAppendFloat(t *testing.T) {
+	for v, want := range map[float64]string{0: "0", -1.5: "-1.5", 1e21: "1000000000000000000000", 1e-7: "0.0000001", 150.25: "150.25"} {
+		if got := string(AppendFloat(nil, v)); got != want {
+			t.Errorf("AppendFloat(%v) = %q, want %q", v, got, want)
+		}
+	}
+	for _, v := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("AppendFloat(%v) did not panic", v)
+				}
+			}()
+			AppendFloat(nil, v)
+		}()
+	}
 }

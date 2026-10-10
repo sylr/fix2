@@ -2,10 +2,7 @@
 
 package fix50sp2
 
-import (
-	fix2 "github.com/sylr/fix2"
-	"strconv"
-)
+import fix2 "github.com/sylr/fix2"
 
 type NoContAmtsEntry struct {
 	grp  fix2.Group
@@ -41,7 +38,7 @@ func (e *NoContAmtsEntryBuilder) SetContAmtType(v ContAmtType) *NoContAmtsEntryB
 	return e
 }
 func (e *NoContAmtsEntryBuilder) SetContAmtValue(v float64) *NoContAmtsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagContAmtValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagContAmtValue, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoContAmtsEntryBuilder) SetContAmtCurr(v string) *NoContAmtsEntryBuilder {

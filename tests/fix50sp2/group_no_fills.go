@@ -85,11 +85,11 @@ func (e *NoFillsEntryBuilder) SetFillExecID(v string) *NoFillsEntryBuilder {
 	return e
 }
 func (e *NoFillsEntryBuilder) SetFillPx(v float64) *NoFillsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagFillPx, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagFillPx, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoFillsEntryBuilder) SetFillQty(v float64) *NoFillsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagFillQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagFillQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoFillsEntryBuilder) SetFillLiquidityInd(v int) *NoFillsEntryBuilder {

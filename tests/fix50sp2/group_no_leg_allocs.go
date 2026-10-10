@@ -2,10 +2,7 @@
 
 package fix50sp2
 
-import (
-	fix2 "github.com/sylr/fix2"
-	"strconv"
-)
+import fix2 "github.com/sylr/fix2"
 
 type NoLegAllocsEntry struct {
 	grp  fix2.Group
@@ -85,7 +82,7 @@ func (e *NoLegAllocsEntryBuilder) SetLegIndividualAllocID(v string) *NoLegAllocs
 	return e
 }
 func (e *NoLegAllocsEntryBuilder) SetLegAllocQty(v float64) *NoLegAllocsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegAllocQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegAllocQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegAllocsEntryBuilder) SetLegAllocAcctIDSource(v string) *NoLegAllocsEntryBuilder {

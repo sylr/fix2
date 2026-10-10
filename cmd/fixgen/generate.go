@@ -1063,7 +1063,7 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Float64(),
 		).Op("*").Id(entryBuilderName).Block(
-			appendField(jen.Qual("strconv", "AppendFloat").Call(jen.Nil(), jen.Id("v"), jen.LitRune('f'), jen.Lit(-1), jen.Lit(64))),
+			appendField(jen.Qual(fix2Pkg, "AppendFloat").Call(jen.Nil(), jen.Id("v"))),
 			jen.Return(jen.Id("e")),
 		)
 

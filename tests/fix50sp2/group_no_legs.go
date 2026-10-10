@@ -587,11 +587,11 @@ func (e *NoLegsEntryBuilder) SetLegRepurchaseTerm(v int) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRepurchaseRate(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegRepurchaseRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegRepurchaseRate, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegFactor(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegFactor, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegFactor, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRedemptionDate(v time.Time) *NoLegsEntryBuilder {
@@ -619,7 +619,7 @@ func (e *NoLegsEntryBuilder) SetLegCoveredOrUncovered(v int) *NoLegsEntryBuilder
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPrice(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegPrice, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSettlType(v string) *NoLegsEntryBuilder {
@@ -687,7 +687,7 @@ func (e *NoLegsEntryBuilder) SetLegMaturityDateWithFormat(v time.Time, f fix2.Ti
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegStrikePrice(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegStrikePrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegStrikePrice, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegOptAttribute(v string) *NoLegsEntryBuilder {
@@ -695,11 +695,11 @@ func (e *NoLegsEntryBuilder) SetLegOptAttribute(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegContractMultiplier(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegContractMultiplier, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegContractMultiplier, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCouponRate(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegCouponRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegCouponRate, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityExchange(v string) *NoLegsEntryBuilder {
@@ -729,7 +729,7 @@ func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDesc(v []byte) *NoLegsEntryBui
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRatioQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegRatioQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegRatioQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSide(v string) *NoLegsEntryBuilder {
@@ -737,7 +737,7 @@ func (e *NoLegsEntryBuilder) SetLegSide(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLastPx(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegLastPx, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegLastPx, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRefID(v string) *NoLegsEntryBuilder {
@@ -749,11 +749,11 @@ func (e *NoLegsEntryBuilder) SetLegSettlCurrency(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegOrderQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegOrderQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegOrderQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSwapType(v LegSwapType) *NoLegsEntryBuilder {
@@ -801,7 +801,7 @@ func (e *NoLegsEntryBuilder) SetLegTimeUnit(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegOptionRatio(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegOptionRatio, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegOptionRatio, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLastForwardPoints(v string) *NoLegsEntryBuilder {
@@ -809,11 +809,11 @@ func (e *NoLegsEntryBuilder) SetLegLastForwardPoints(v string) *NoLegsEntryBuild
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCalculatedCcyLastQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegCalculatedCcyLastQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegCalculatedCcyLastQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegGrossTradeAmt(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegGrossTradeAmt, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegGrossTradeAmt, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegMaturityTime(v string) *NoLegsEntryBuilder {
@@ -821,7 +821,7 @@ func (e *NoLegsEntryBuilder) SetLegMaturityTime(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegUnitOfMeasureQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegUnitOfMeasureQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPutOrCall(v int) *NoLegsEntryBuilder {
@@ -833,15 +833,15 @@ func (e *NoLegsEntryBuilder) SetLegAllocID(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegVolatility(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegVolatility, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegVolatility, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegDividendYield(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegDividendYield, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegDividendYield, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCurrencyRatio(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegCurrencyRatio, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegCurrencyRatio, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegExecInst(v string) *NoLegsEntryBuilder {
@@ -849,7 +849,7 @@ func (e *NoLegsEntryBuilder) SetLegExecInst(v string) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegLastQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegLastQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegLastQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegExerciseStyle(v int) *NoLegsEntryBuilder {
@@ -861,7 +861,7 @@ func (e *NoLegsEntryBuilder) SetLegPriceUnitOfMeasure(v string) *NoLegsEntryBuil
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegPriceUnitOfMeasureQty(v float64) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegPriceUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagLegPriceUnitOfMeasureQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegContractMultiplierUnit(v int) *NoLegsEntryBuilder {

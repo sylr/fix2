@@ -551,11 +551,11 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRepurchaseTerm(v int) *NoUnderl
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRepurchaseRate(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingRepurchaseRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingRepurchaseRate, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFactor(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingFactor, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingFactor, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRedemptionDate(v time.Time) *NoUnderlyingsEntryBuilder {
@@ -607,7 +607,7 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPutOrCall(v int) *NoUnderlyings
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStrikePrice(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingStrikePrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStrikePrice, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingOptAttribute(v string) *NoUnderlyingsEntryBuilder {
@@ -633,11 +633,11 @@ func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDesc(v []byte) *
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponRate(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingCouponRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCouponRate, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingContractMultiplier(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingContractMultiplier, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingContractMultiplier, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingProduct(v int) *NoUnderlyingsEntryBuilder {
@@ -677,7 +677,7 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecuritySubType(v string) *NoUn
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPx(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingPx, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingPx, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCPProgram(v string) *NoUnderlyingsEntryBuilder {
@@ -689,27 +689,27 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCPRegType(v string) *NoUnderlyi
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingQty(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingDirtyPrice(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingDirtyPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingDirtyPrice, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingEndPrice(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingEndPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingEndPrice, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStartValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingStartValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingStartValue, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCurrentValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingCurrentValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCurrentValue, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingEndValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingEndValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingEndValue, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStrikeCurrency(v string) *NoUnderlyingsEntryBuilder {
@@ -717,11 +717,11 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStrikeCurrency(v string) *NoUnd
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingAllocationPercent(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingAllocationPercent, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingAllocationPercent, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCashAmount(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingCashAmount, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCashAmount, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCashType(v UnderlyingCashType) *NoUnderlyingsEntryBuilder {
@@ -741,7 +741,7 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingTimeUnit(v string) *NoUnderlyin
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCapValue(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingCapValue, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingCapValue, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSettlMethod(v string) *NoUnderlyingsEntryBuilder {
@@ -749,11 +749,11 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSettlMethod(v string) *NoUnderl
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingAdjustedQuantity(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingAdjustedQuantity, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingAdjustedQuantity, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFXRate(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingFXRate, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingFXRate, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFXRateCalc(v UnderlyingFXRateCalc) *NoUnderlyingsEntryBuilder {
@@ -769,7 +769,7 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingExerciseStyle(v int) *NoUnderly
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingUnitOfMeasureQty(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingUnitOfMeasureQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPriceUnitOfMeasure(v string) *NoUnderlyingsEntryBuilder {
@@ -777,7 +777,7 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPriceUnitOfMeasure(v string) *N
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingPriceUnitOfMeasureQty(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingPriceUnitOfMeasureQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingPriceUnitOfMeasureQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingContractMultiplierUnit(v int) *NoUnderlyingsEntryBuilder {
@@ -797,19 +797,19 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSeniority(v string) *NoUnderlyi
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingNotionalPercentageOutstanding(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingNotionalPercentageOutstanding, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingNotionalPercentageOutstanding, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingOriginalNotionalPercentageOutstanding(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingOriginalNotionalPercentageOutstanding, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingOriginalNotionalPercentageOutstanding, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingAttachmentPoint(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingAttachmentPoint, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingAttachmentPoint, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingDetachmentPoint(v float64) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingDetachmentPoint, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagUnderlyingDetachmentPoint, fix2.AppendFloat(nil, v))
 	return e
 }
 

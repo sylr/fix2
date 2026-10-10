@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"strconv"
 	"time"
 )
 
@@ -58,7 +57,7 @@ func (e *NoContraBrokersEntryBuilder) SetContraTrader(v string) *NoContraBrokers
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraTradeQty(v float64) *NoContraBrokersEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagContraTradeQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagContraTradeQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoContraBrokersEntryBuilder) SetContraTradeTime(v time.Time) *NoContraBrokersEntryBuilder {

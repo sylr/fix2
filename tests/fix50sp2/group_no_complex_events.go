@@ -2,10 +2,7 @@
 
 package fix50sp2
 
-import (
-	fix2 "github.com/sylr/fix2"
-	"strconv"
-)
+import fix2 "github.com/sylr/fix2"
 
 type NoComplexEventsEntry struct {
 	grp  fix2.Group
@@ -97,11 +94,11 @@ func (e *NoComplexEventsEntryBuilder) SetComplexEventType(v ComplexEventType) *N
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexOptPayoutAmount(v float64) *NoComplexEventsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagComplexOptPayoutAmount, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagComplexOptPayoutAmount, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPrice(v float64) *NoComplexEventsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagComplexEventPrice, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagComplexEventPrice, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceBoundaryMethod(v ComplexEventPriceBoundaryMethod) *NoComplexEventsEntryBuilder {
@@ -109,7 +106,7 @@ func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceBoundaryMethod(v Compl
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceBoundaryPrecision(v float64) *NoComplexEventsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagComplexEventPriceBoundaryPrecision, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagComplexEventPriceBoundaryPrecision, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoComplexEventsEntryBuilder) SetComplexEventPriceTimeType(v ComplexEventPriceTimeType) *NoComplexEventsEntryBuilder {

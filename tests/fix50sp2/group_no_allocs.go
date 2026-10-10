@@ -85,7 +85,7 @@ func (e *NoAllocsEntryBuilder) SetAllocAccount(v string) *NoAllocsEntryBuilder {
 	return e
 }
 func (e *NoAllocsEntryBuilder) SetAllocQty(v float64) *NoAllocsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagAllocQty, strconv.AppendFloat(nil, v, 'f', -1, 64))
+	e.fields = fix2.SetField(e.fields, TagAllocQty, fix2.AppendFloat(nil, v))
 	return e
 }
 func (e *NoAllocsEntryBuilder) SetIndividualAllocID(v string) *NoAllocsEntryBuilder {

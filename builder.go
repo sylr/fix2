@@ -105,10 +105,11 @@ func (b *Builder) SetInt(tag int, value int) *Builder {
 	return b.Set(tag, strconv.AppendInt(nil, int64(value), 10))
 }
 
-// SetFloat sets a field to a float64 value.
-// The value is formatted with up to 10 significant digits and no trailing zeros.
+// SetFloat sets a field to a float64 value, in FIX float syntax: the shortest
+// decimal that reads back as value, without exponent. It panics if value is
+// NaN or infinite (see AppendFloat).
 func (b *Builder) SetFloat(tag int, value float64) *Builder {
-	return b.Set(tag, strconv.AppendFloat(nil, value, 'f', -1, 64))
+	return b.Set(tag, AppendFloat(nil, value))
 }
 
 // SetBool sets a field to a FIX boolean value ("Y" or "N").
