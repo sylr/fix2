@@ -523,39 +523,47 @@ func TestScopedReadsDoNotAllocate(t *testing.T) {
 	}
 }
 
-// scaling returns how much longer f(4n) takes than f(n), the best of five
-// runs each: about 4 for linear work, 16 for quadratic.
-func scaling(n int, f func(n int)) float64 {
+// slowdown returns how much longer the work setup(big) prepares takes than
+// that of setup(small), the best of five runs each, setup itself untimed.
+// Tests keep the work the same and vary only what must not matter, such as
+// a spec's width, so the ratio stays near 1 instead of following noise.
+func slowdown(small, big int, setup func(int) func()) float64 {
 	best := func(n int) time.Duration {
+		run := setup(n)
 		d := time.Duration(math.MaxInt64)
 		for range 5 {
 			start := time.Now()
-			f(n)
+			run()
 			d = min(d, time.Since(start))
 		}
 		return d
 	}
-	return float64(best(4*n)) / float64(best(n))
+	return float64(best(big)) / float64(best(small))
 }
 
 func TestWideGroupEntryIsLinear(t *testing.T) {
-	// One entry holding every tag of a wide group: each tag is looked up
-	// in the spec once.
-	run := func(n int) {
-		tags := make([]int, n)
-		pairs := []string{"1=1"}
+	// One entry of 2,000 fields, read with a spec of 2,000 tags or 64,000:
+	// each field is looked up in the spec, not scanned for in its tags.
+	const fields = 2000
+	setup := func(width int) func() {
+		tags := make([]int, width)
 		for i := range tags {
 			tags[i] = 1000 + i
-			pairs = append(pairs, fmt.Sprintf("%d=x", 1000+i))
+		}
+		pairs := []string{"1=1"}
+		for i := range fields {
+			pairs = append(pairs, fmt.Sprintf("%d=x", 1000+i*(width/fields)))
 		}
 		spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
 		m := fieldsMsg(t, pairs...)
-		if got := m.GroupsOf(spec); len(got) != 1 || len(got[0].Fields()) != n {
-			t.Fatalf("%d tags: entries = %d", n, len(got))
+		return func() {
+			if got := m.GroupsOf(spec); len(got) != 1 || len(got[0].Fields()) != fields {
+				t.Fatalf("width %d: entries = %v", width, len(got))
+			}
 		}
 	}
-	if r := scaling(4000, run); r > 10 {
-		t.Errorf("4x the tags took %.1fx longer, want about 4x", r)
+	if r := slowdown(fields, 32*fields, setup); r > 8 {
+		t.Errorf("a 32x wider spec took %.1fx longer for the same entry", r)
 	}
 }
 
@@ -601,24 +609,66 @@ func TestSpecIndexConcurrentFirstUse(t *testing.T) {
 }
 
 func TestWideGroupSmallEntriesIsLinear(t *testing.T) {
-	// n entries holding only the delimiter of a group n tags wide: each
-	// entry costs its own fields, not the group's width.
-	run := func(n int) {
-		tags := make([]int, n)
+	// 4,000 entries holding only the delimiter, read with a spec of 300
+	// tags or 32,000: an entry costs its own fields, not the spec's width.
+	const entries = 4000
+	setup := func(width int) func() {
+		tags := make([]int, width)
 		for i := range tags {
 			tags[i] = 1000 + i
 		}
 		spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
-		pairs := []string{fmt.Sprintf("1=%d", n)}
-		for range n {
+		pairs := []string{fmt.Sprintf("1=%d", entries)}
+		for range entries {
 			pairs = append(pairs, "1000=x")
 		}
 		m := fieldsMsg(t, pairs...)
-		if got := m.GroupsOf(spec); len(got) != n {
-			t.Fatalf("%d entries, want %d", len(got), n)
+		return func() {
+			if got := m.GroupsOf(spec); len(got) != entries {
+				t.Fatalf("%d entries, want %d", len(got), entries)
+			}
 		}
 	}
-	if r := scaling(8000, run); r > 10 {
-		t.Errorf("4x the entries and tags took %.1fx longer, want about 4x", r)
+	if r := slowdown(300, 32000, setup); r > 8 {
+		t.Errorf("a 100x wider spec took %.1fx longer for the same entries", r)
+	}
+}
+
+func TestWideSpecDoesNotAllocate(t *testing.T) {
+	// Beyond 256 tags, entries share a pooled scratch: once warm, reading
+	// allocates only the result.
+	if raceEnabled {
+		t.Skip("the race detector makes sync.Pool drop items")
+	}
+	tags := make([]int, 1000)
+	pairs := []string{"1=3"}
+	for i := range tags {
+		tags[i] = 1000 + i
+	}
+	for e := range 3 {
+		for i := range 20 {
+			pairs = append(pairs, fmt.Sprintf("%d=%d", 1000+i*50, e))
+		}
+	}
+	spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
+	m := fieldsMsg(t, pairs...)
+	if got := m.GroupsOf(spec); len(got) != 3 {
+		t.Fatalf("%d entries", len(got))
+	}
+	// As many allocations as a narrow spec reading the same entries: the
+	// result's.
+	narrow := &GroupSpec{Counter: 1, Delim: 1000}
+	for i := range 20 {
+		narrow.Tags = append(narrow.Tags, 1000+i*50)
+	}
+	if got := m.GroupsOf(narrow); len(got) != 3 {
+		t.Fatalf("narrow: %d entries", len(got))
+	}
+	want := testing.AllocsPerRun(100, func() { m.GroupsOf(narrow) })
+	if allocs := testing.AllocsPerRun(100, func() { m.GroupsOf(spec) }); allocs > want {
+		t.Errorf("GroupsOf allocated %v times, want %v as with a narrow spec", allocs, want)
+	}
+	if allocs := testing.AllocsPerRun(100, func() { m.GetTopLevel(5, spec) }); allocs != 0 {
+		t.Errorf("GetTopLevel allocated %v times", allocs)
 	}
 }

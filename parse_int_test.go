@@ -288,10 +288,31 @@ func TestFloatEdges(t *testing.T) {
 	if _, err := ParseFloat([]byte("1" + strings.Repeat("0", 400))); !errors.Is(err, strconv.ErrRange) {
 		t.Errorf("overflow: err = %v, want strconv.ErrRange", err)
 	}
-	defer func() {
-		if recover() == nil {
-			t.Error("Builder.AppendFloat(NaN) did not panic")
+	for _, v := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		for name, set := range map[string]func(*Builder){
+			"SetFloat":    func(b *Builder) { b.SetFloat(44, v) },
+			"AppendFloat": func(b *Builder) { b.AppendFloat(44, v) },
+		} {
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Errorf("Builder.%s(%v) did not panic", name, v)
+					}
+				}()
+				set(NewBuilder("FIX.4.4", "D"))
+			}()
 		}
-	}()
-	NewBuilder("FIX.4.4", "D").AppendFloat(44, math.NaN())
+	}
+	// Finite values round-trip through the builder.
+	raw := NewBuilder("FIX.4.4", "D").SetFloat(44, 150.25).AppendFloat(6, -0.5).Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if px, err := ParseFloat(msg.Get(44)); err != nil || px != 150.25 {
+		t.Errorf("44 = %v, %v", px, err)
+	}
+	if avg, err := ParseFloat(msg.Get(6)); err != nil || avg != -0.5 {
+		t.Errorf("6 = %v, %v", avg, err)
+	}
 }

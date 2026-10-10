@@ -172,8 +172,8 @@ func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
 // with the index just past the block.
 func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
 	var groups []Group
-	wide := s.wideSeen()
-	defer releaseSeen(wide)
+	wide := s.wideScratch()
+	defer releaseScratch(wide)
 	for len(groups) < count && i < len(fields) && fields[i].Tag == s.Delim {
 		start := i
 		i = s.entry(fields, i, wide)
@@ -189,9 +189,9 @@ func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
 // repeated tag ends it: the field belongs to the next entry or to the
 // enclosing message.
 //
-// wide is the zeroed bitset of a spec of more than 256 tags and groups (see
-// wideSeen), or nil; entry leaves it zeroed.
-func (s *GroupSpec) entry(fields []Field, i int, wide []uint64) int {
+// wide is the scratch of a spec of more than 256 tags and groups (see
+// wideScratch), or nil; entry leaves its bitset zeroed.
+func (s *GroupSpec) entry(fields []Field, i int, wide *scratch) int {
 	// Tags seen in this entry, as bits indexed by position in s.Tags, then
 	// nested counters by position in s.Nested: on the stack for groups of up
 	// to 256 of them. A wider spec's bitset is shared by its entries, and
@@ -199,10 +199,9 @@ func (s *GroupSpec) entry(fields []Field, i int, wide []uint64) int {
 	// do not cost the spec's width each.
 	var small [4]uint64
 	seen := small[:]
-	var touchedBuf [16]int
-	touched := touchedBuf[:0]
 	if wide != nil {
-		seen = wide
+		seen = wide.seen
+		wide.touched = wide.touched[:0]
 	}
 	end := len(fields)
 	for first := true; i < len(fields); first = false {
@@ -229,7 +228,7 @@ func (s *GroupSpec) entry(fields []Field, i int, wide []uint64) int {
 				break
 			}
 			if wide != nil && seen[k/64] == 0 {
-				touched = append(touched, k/64)
+				wide.touched = append(wide.touched, k/64)
 			}
 			seen[k/64] |= 1 << (k % 64)
 		}
@@ -243,8 +242,10 @@ func (s *GroupSpec) entry(fields []Field, i int, wide []uint64) int {
 	if i < end {
 		end = i
 	}
-	for _, w := range touched {
-		seen[w] = 0
+	if wide != nil {
+		for _, w := range wide.touched {
+			seen[w] = 0
+		}
 	}
 	return end
 }
@@ -252,36 +253,47 @@ func (s *GroupSpec) entry(fields []Field, i int, wide []uint64) int {
 // skip returns the index just past up to count entries starting at
 // fields[i], like entries without building them.
 func (s *GroupSpec) skip(fields []Field, i, count int) int {
-	wide := s.wideSeen()
-	defer releaseSeen(wide)
+	wide := s.wideScratch()
+	defer releaseScratch(wide)
 	for n := 0; n < count && i < len(fields) && fields[i].Tag == s.Delim; n++ {
 		i = s.entry(fields, i, wide)
 	}
 	return i
 }
 
-// seenPool holds the zeroed bitsets of wide specs between uses.
-var seenPool sync.Pool
+// scratch is the state entries of a spec of more than 256 tags and nested
+// groups share: their bitset, kept zeroed between entries, and the words of
+// it the current entry set.
+type scratch struct {
+	seen    []uint64
+	touched []int
+}
 
-// wideSeen returns a zeroed bitset for the entries of a spec of more than 256
-// tags and nested groups, or nil for a narrower one; releaseSeen returns it,
-// zeroed, to seenPool.
-func (s *GroupSpec) wideSeen() []uint64 {
+// scratchPool holds scratches between uses.
+var scratchPool sync.Pool
+
+// wideScratch returns a scratch for the entries of a wide spec, or nil for
+// a spec of at most 256 tags and nested groups, whose entries use a bitset
+// on the stack. releaseScratch returns it to scratchPool.
+func (s *GroupSpec) wideScratch() *scratch {
 	n := (len(s.Tags) + len(s.Nested) + 63) / 64
 	if n <= 4 {
 		return nil
 	}
-	if p, ok := seenPool.Get().(*[]uint64); ok && cap(*p) >= n {
-		return (*p)[:n]
+	sc, _ := scratchPool.Get().(*scratch)
+	if sc == nil {
+		sc = new(scratch)
 	}
-	return make([]uint64, n)
+	if cap(sc.seen) < n {
+		sc.seen = make([]uint64, n)
+	}
+	sc.seen = sc.seen[:n]
+	return sc
 }
 
-func releaseSeen(seen []uint64) {
-	if seen != nil {
-		p := new([]uint64)
-		*p = seen
-		seenPool.Put(p)
+func releaseScratch(sc *scratch) {
+	if sc != nil {
+		scratchPool.Put(sc)
 	}
 }
 

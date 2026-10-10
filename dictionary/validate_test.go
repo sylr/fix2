@@ -1117,9 +1117,10 @@ func TestValidate_EnvelopeActivationPerMessage(t *testing.T) {
 }
 
 func TestValidate_ManyGroupsIsLinear(t *testing.T) {
-	// n optional groups and a message repeating an allowed field n times
-	// before one of the counters: each field's counter lookup is one table
-	// lookup, not a scan of the n group specs.
+	// The same message, 8,000 repetitions of an allowed field before a
+	// group counter, validated against a message with 500 optional groups
+	// or 16,000: each field's counter lookup is one table lookup, not a
+	// scan of the group specs.
 	load := func(n int) *dictionary.Dict {
 		var groups, fields strings.Builder
 		fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="100" name="F" type="STRING"/>`)
@@ -1134,28 +1135,20 @@ func TestValidate_ManyGroupsIsLinear(t *testing.T) {
 		}
 		return d
 	}
-	type tc struct {
-		d   *dictionary.Dict
-		msg fix2.Message
-	}
-	cases := map[int]tc{}
-	for _, n := range []int{2000, 8000} {
-		body := "35=M\x01" + strings.Repeat("100=f\x01", n) + "1000=0\x01"
-		cases[n] = tc{load(n), parseMsg(t, buildFIXMsg(body))}
-	}
-	best := func(n int) time.Duration {
-		c := cases[n]
-		d := time.Duration(math.MaxInt64)
+	msg := parseMsg(t, buildFIXMsg("35=M\x01"+strings.Repeat("100=f\x01", 8000)+"1000=0\x01"))
+	best := func(groups int) time.Duration {
+		d := load(groups)
+		best := time.Duration(math.MaxInt64)
 		for range 5 {
 			start := time.Now()
-			if err := c.d.Validate(&c.msg); err != nil {
+			if err := d.Validate(&msg); err != nil {
 				t.Fatal(err)
 			}
-			d = min(d, time.Since(start))
+			best = min(best, time.Since(start))
 		}
-		return d
+		return best
 	}
-	if r := float64(best(8000)) / float64(best(2000)); r > 10 {
-		t.Errorf("4x the groups and fields took %.1fx longer, want about 4x", r)
+	if r := float64(best(16000)) / float64(best(500)); r > 8 {
+		t.Errorf("32x the groups took %.1fx longer for the same message", r)
 	}
 }
