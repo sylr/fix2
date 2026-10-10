@@ -1063,3 +1063,49 @@ func TestCompiledBodyTable(t *testing.T) {
 		t.Error("compiled table holds tag 999")
 	}
 }
+
+func TestValidate_EnvelopeActivationPerMessage(t *testing.T) {
+	// The header's optional component H requires A(101) and has B(102). X
+	// declares B in its body, Y does not: only X's B can be its own.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/><component name="H" required="N"/></header>
+  <trailer><component name="T" required="N"/></trailer>
+  <messages>
+    <message name="X" msgtype="X" msgcat="app"><field name="B" required="N"/><field name="D" required="N"/></message>
+    <message name="Y" msgtype="Y" msgcat="app"/>
+  </messages>
+  <components>
+    <component name="H"><field name="A" required="Y"/><field name="B" required="N"/></component>
+    <component name="T"><field name="C" required="Y"/><field name="D" required="N"/></component>
+  </components>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="101" name="A" type="STRING"/>
+    <field number="102" name="B" type="STRING"/>
+    <field number="103" name="C" type="STRING"/>
+    <field number="104" name="D" type="STRING"/>
+  </fields>
+</fix>`
+	d, err := xmldict.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		body    string
+		missing int // 0 when valid
+	}{
+		{"35=Y\x01102=b\x01", 101},        // B can only be H's
+		{"35=Y\x01102=b\x01101=a\x01", 0}, // H complete
+		{"35=X\x01102=b\x01", 0},          // B may be X's own
+		{"35=Y\x01104=d\x01", 103},        // the trailer's T, the same way
+		{"35=X\x01104=d\x01", 0},          // D may be X's own
+		{"35=Y\x01", 0},                   // no component present
+	} {
+		msg := parseMsg(t, buildFIXMsg(tc.body))
+		err := d.Validate(&msg)
+		var ve *dictionary.ValidationError
+		if tc.missing == 0 && err != nil || tc.missing != 0 && (!errors.As(err, &ve) || ve.Tag != tc.missing) {
+			t.Errorf("%q: got %v, want missing %d", tc.body, err, tc.missing)
+		}
+	}
+}

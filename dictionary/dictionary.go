@@ -65,7 +65,9 @@ type MessageDef struct {
 }
 
 // Condition records the required fields of an optional component: they must
-// be present only when the component is.
+// be present only when the component is. For the header and trailer, which
+// every message carries, activation tags are unique within them, and a
+// message that also declares one in its body does not count it.
 type Condition struct {
 	Component  string // name of the optional component
 	Activation []int  // tags found only in this component: any present means it is

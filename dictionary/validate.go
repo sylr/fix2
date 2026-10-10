@@ -128,10 +128,22 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 
 	// 4b. Required fields of optional components that are present: any of
 	// their activation tags is, anywhere, since a component can show its
-	// presence through one of its groups.
+	// presence through one of its groups. A header or trailer activation tag
+	// the message also declares in its body could be the body's.
 	for i, conds := range [...][]compiledCond{d.headerConds, d.trailerConds, mdef.conds} {
+		envelope := i < 2
 		for _, c := range conds {
-			if !slices.ContainsFunc(c.activation, func(slot int32) bool { return has(present, slot) }) {
+			if !slices.ContainsFunc(c.activation, func(t tracked) bool {
+				if !has(present, t.slot) {
+					return false
+				}
+				if envelope {
+					if e := mdef.body.get(t.tag); e != nil && e.declared {
+						return false
+					}
+				}
+				return true
+			}) {
 				continue
 			}
 			for _, t := range c.required {

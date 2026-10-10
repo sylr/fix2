@@ -38,6 +38,7 @@ type tagEntry struct {
 	slot       int32 // presence slot, or -1 when the tag's presence is not tracked
 	counter    bool  // counter of a group of the message, header or trailer
 	structural bool  // BeginString, BodyLength or CheckSum, never enum-checked
+	declared   bool  // declared by the scope, not only a DATA/LENGTH partner
 	used       bool
 }
 
@@ -84,7 +85,7 @@ type tracked struct {
 // compiledCond is a condition with its tags resolved to presence slots.
 type compiledCond struct {
 	component  string
-	activation []int32 // slots of the tags showing the component is present
+	activation []tracked // tags showing the component is present
 	required   []tracked
 }
 
@@ -213,7 +214,7 @@ func (d *Dict) compile() {
 		for _, c := range m.Conditions {
 			cc := compiledCond{component: c.Component}
 			for _, tag := range c.Activation {
-				cc.activation = append(cc.activation, shared(tag))
+				cc.activation = append(cc.activation, tracked{tag: tag, slot: shared(tag)})
 			}
 			for _, tag := range c.Required {
 				cc.required = append(cc.required, tracked{tag: tag, slot: shared(tag)})
@@ -256,7 +257,7 @@ func compileConds(conds []Condition, s *slots) []compiledCond {
 	for _, c := range conds {
 		cc := compiledCond{component: c.Component}
 		for _, tag := range c.Activation {
-			cc.activation = append(cc.activation, s.track(tag))
+			cc.activation = append(cc.activation, tracked{tag: tag, slot: s.track(tag)})
 		}
 		for _, tag := range c.Required {
 			cc.required = append(cc.required, tracked{tag: tag, slot: s.track(tag)})
@@ -286,6 +287,9 @@ func addAllowed(entries map[int]tagEntry, refs []FieldRef, own, shared map[int]i
 	}
 	for _, ref := range refs {
 		add(ref.Tag)
+		e := entries[ref.Tag]
+		e.declared = true
+		entries[ref.Tag] = e
 	}
 	// Partners after declared tags, so a declared tag keeps its own entry.
 	for _, ref := range refs {
