@@ -42,8 +42,16 @@ func (e *NoRateSourcesEntryBuilder) SetReferencePage(v string) *NoRateSourcesEnt
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noRateSourcesLayout lists the tags of a NoRateSources entry in dictionary order.
+var noRateSourcesLayout = []int{TagRateSource, TagRateSourceType, TagReferencePage}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoRateSourcesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagRateSource)
+	for _, tag := range noRateSourcesLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

@@ -318,6 +318,11 @@ func TestResolve_NestedGroupsAndChildOrder(t *testing.T) {
 	if nested := legs.Groups[0]; nested.Name != "NoNestedPartyIDs" || nested.CounterTag != 539 || nested.DelimTag != 524 {
 		t.Errorf("nested group = %s counter %d delim %d, want NoNestedPartyIDs counter 539 delim 524", nested.Name, nested.CounterTag, nested.DelimTag)
 	}
+
+	// Layout keeps fields and the nested group counter in XML order.
+	if got, want := legs.Layout, []int{600, 624, 687, 539}; !slices.Equal(got, want) {
+		t.Errorf("NoLegs Layout = %v, want %v", got, want)
+	}
 }
 
 func TestLoad_ComponentCycle(t *testing.T) {

@@ -3,6 +3,7 @@
 package fix50sp2
 
 import (
+	"bytes"
 	fix2 "github.com/sylr/fix2"
 	"strconv"
 	"time"
@@ -614,7 +615,7 @@ func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingIssuerLen(v int) *NoUnde
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingIssuer(v []byte) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuer, v)
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuer, bytes.Clone(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDescLen(v int) *NoUnderlyingsEntryBuilder {
@@ -622,7 +623,7 @@ func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDescLen(v int) *
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDesc(v []byte) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDesc, v)
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDesc, bytes.Clone(v))
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponRate(v float64) *NoUnderlyingsEntryBuilder {
@@ -827,25 +828,36 @@ func (e *NoUnderlyingsEntryBuilder) AddNoUndlyInstrumentPartiesEntry(ne *NoUndly
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noUnderlyingsLayout lists the tags of a NoUnderlyings entry in dictionary order.
+var noUnderlyingsLayout = []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagNoUnderlyingSecurityAltID, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagNoUnderlyingStips, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagNoUndlyInstrumentParties, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoUnderlyingsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingSymbol)
-	if len(e.noUnderlyingSecurityAltID) > 0 {
-		dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltID))
-		for _, entry := range e.noUnderlyingSecurityAltID {
-			dst = entry.appendTo(dst)
-		}
-	}
-	if len(e.noUnderlyingStips) > 0 {
-		dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStips))
-		for _, entry := range e.noUnderlyingStips {
-			dst = entry.appendTo(dst)
-		}
-	}
-	if len(e.noUndlyInstrumentParties) > 0 {
-		dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentParties))
-		for _, entry := range e.noUndlyInstrumentParties {
-			dst = entry.appendTo(dst)
+	for _, tag := range noUnderlyingsLayout {
+		switch tag {
+		case TagNoUnderlyingSecurityAltID:
+			if len(e.noUnderlyingSecurityAltID) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltID))
+				for _, entry := range e.noUnderlyingSecurityAltID {
+					dst = entry.appendTo(dst)
+				}
+			}
+		case TagNoUnderlyingStips:
+			if len(e.noUnderlyingStips) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStips))
+				for _, entry := range e.noUnderlyingStips {
+					dst = entry.appendTo(dst)
+				}
+			}
+		case TagNoUndlyInstrumentParties:
+			if len(e.noUndlyInstrumentParties) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentParties))
+				for _, entry := range e.noUndlyInstrumentParties {
+					dst = entry.appendTo(dst)
+				}
+			}
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

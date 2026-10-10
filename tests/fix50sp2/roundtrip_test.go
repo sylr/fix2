@@ -189,3 +189,82 @@ func TestGroupBuilderOrder(t *testing.T) {
 		}
 	})
 }
+
+// TestGroupBuilderReview covers the issues found in review of the
+// structural group builders.
+func TestGroupBuilderReview(t *testing.T) {
+	parse := func(t *testing.T, raw []byte) *ExecutionReport {
+		t.Helper()
+		msg, err := fix2.Parse(raw)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", raw, err)
+		}
+		return WrapExecutionReport(&msg)
+	}
+
+	t.Run("embedded setter ends the chain", func(t *testing.T) {
+		// SetString is the embedded *fix2.Builder's: its Build must still
+		// serialize the groups.
+		raw := BuildExecutionReport("FIXT.1.1").
+			AddNoLegsEntry(NewNoLegsEntry().SetLegSymbol("A")).
+			SetString(TagText, "S").
+			Build()
+		if n := len(parse(t, raw).NoLegsEntries()); n != 1 {
+			t.Errorf("%q: %d legs, want 1", raw, n)
+		}
+	})
+
+	t.Run("nested group in dictionary position", func(t *testing.T) {
+		raw := BuildExecutionReport("FIXT.1.1").
+			AddNoLegsEntry(NewNoLegsEntry().
+				SetLegSymbol("L").
+				SetLegQty(1).
+				AddNoLegStipulationsEntry(NewNoLegStipulationsEntry().SetLegStipulationType("T")).
+				SetLegPositionEffect("O")).
+			Build()
+		// The dictionary puts the LegStipulations component before
+		// LegPositionEffect.
+		stip, effect := bytes.Index(raw, []byte("\x01683=")), bytes.Index(raw, []byte("\x01564="))
+		if stip < 0 || effect < 0 || stip > effect {
+			t.Errorf("%q: NoLegStipulations at %d, LegPositionEffect at %d", raw, stip, effect)
+		}
+		legs := parse(t, raw).NoLegsEntries()
+		if len(legs) != 1 || len(legs[0].NoLegStipulationsEntries()) != 1 {
+			t.Fatalf("%q: legs/stipulations not read back", raw)
+		}
+		if pe, _ := legs[0].LegPositionEffect(); pe != "O" {
+			t.Errorf("LegPositionEffect = %q", pe)
+		}
+	})
+
+	t.Run("raw counter and typed entries", func(t *testing.T) {
+		b := BuildExecutionReport("FIXT.1.1")
+		b.SetInt(TagNoLegs, 0)
+		b.AddNoLegsEntry(NewNoLegsEntry().SetLegSymbol("A"))
+		raw := b.Build()
+		if n := bytes.Count(raw, []byte("\x01555=")); n != 1 {
+			t.Errorf("%q: %d NoLegs counters, want 1", raw, n)
+		}
+		if n := len(parse(t, raw).NoLegsEntries()); n != 1 {
+			t.Errorf("%q: %d legs, want 1", raw, n)
+		}
+	})
+
+	t.Run("DATA value copied at Set", func(t *testing.T) {
+		buf := []byte("abc")
+		leg := NewNoLegsEntry().SetLegSymbol("L").SetEncodedLegIssuerLen(len(buf)).SetEncodedLegIssuer(buf)
+		b := BuildExecutionReport("FIXT.1.1").AddNoLegsEntry(leg)
+		copy(buf, "xyz")
+		legs := parse(t, b.Build()).NoLegsEntries()
+		if got, _ := legs[0].EncodedLegIssuer(); string(got) != "abc" {
+			t.Errorf("EncodedLegIssuer = %q, want abc", got)
+		}
+	})
+
+	t.Run("repeated Build", func(t *testing.T) {
+		b := BuildExecutionReport("FIXT.1.1").AddNoLegsEntry(NewNoLegsEntry().SetLegSymbol("A"))
+		if first, second := b.Build(), b.Build(); !bytes.Equal(first, second) {
+			t.Errorf("Build is not repeatable:\n%q\n%q", first, second)
+		}
+	})
+}

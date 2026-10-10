@@ -367,7 +367,9 @@ type ExecutionReportBuilder struct {
 }
 
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
-	return &ExecutionReportBuilder{Builder: fix2.NewBuilder(beginString, "8")}
+	b := &ExecutionReportBuilder{Builder: fix2.NewBuilder(beginString, "8")}
+	b.SetGroups(b.appendGroups, TagNoMiscFees)
+	return b
 }
 func (b *ExecutionReportBuilder) SetSenderCompID(v string) *ExecutionReportBuilder {
 	b.SetString(TagSenderCompID, v)
@@ -637,14 +639,13 @@ func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *
 	return b
 }
 
-// Build serializes the message, with its repeating groups after the other fields.
-func (b *ExecutionReportBuilder) Build() []byte {
-	var groups []fix2.Field
+// appendGroups appends the message's repeating groups to dst.
+func (b *ExecutionReportBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
 	if len(b.noMiscFees) > 0 {
-		groups = fix2.AppendCount(groups, TagNoMiscFees, len(b.noMiscFees))
+		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFees))
 		for _, entry := range b.noMiscFees {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
-	return b.Builder.BuildWith(groups)
+	return dst
 }

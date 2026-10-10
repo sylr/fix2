@@ -1653,7 +1653,9 @@ type NewOrderSingleBuilder struct {
 }
 
 func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
-	return &NewOrderSingleBuilder{Builder: fix2.NewBuilder(beginString, "D")}
+	b := &NewOrderSingleBuilder{Builder: fix2.NewBuilder(beginString, "D")}
+	b.SetGroups(b.appendGroups, TagNoPartyIDs, TagNoAllocs, TagNoTradingSessions, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoStrategyParameters, TagNoTrdRegTimestamps)
+	return b
 }
 func (b *NewOrderSingleBuilder) SetClOrdID(v string) *NewOrderSingleBuilder {
 	b.SetString(TagClOrdID, v)
@@ -2737,74 +2739,73 @@ func (b *NewOrderSingleBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestamps
 	return b
 }
 
-// Build serializes the message, with its repeating groups after the other fields.
-func (b *NewOrderSingleBuilder) Build() []byte {
-	var groups []fix2.Field
+// appendGroups appends the message's repeating groups to dst.
+func (b *NewOrderSingleBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDs) > 0 {
-		groups = fix2.AppendCount(groups, TagNoPartyIDs, len(b.noPartyIDs))
+		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))
 		for _, entry := range b.noPartyIDs {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noAllocs) > 0 {
-		groups = fix2.AppendCount(groups, TagNoAllocs, len(b.noAllocs))
+		dst = fix2.AppendCount(dst, TagNoAllocs, len(b.noAllocs))
 		for _, entry := range b.noAllocs {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noTradingSessions) > 0 {
-		groups = fix2.AppendCount(groups, TagNoTradingSessions, len(b.noTradingSessions))
+		dst = fix2.AppendCount(dst, TagNoTradingSessions, len(b.noTradingSessions))
 		for _, entry := range b.noTradingSessions {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noSecurityAltID) > 0 {
-		groups = fix2.AppendCount(groups, TagNoSecurityAltID, len(b.noSecurityAltID))
+		dst = fix2.AppendCount(dst, TagNoSecurityAltID, len(b.noSecurityAltID))
 		for _, entry := range b.noSecurityAltID {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noEvents) > 0 {
-		groups = fix2.AppendCount(groups, TagNoEvents, len(b.noEvents))
+		dst = fix2.AppendCount(dst, TagNoEvents, len(b.noEvents))
 		for _, entry := range b.noEvents {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noInstrumentParties) > 0 {
-		groups = fix2.AppendCount(groups, TagNoInstrumentParties, len(b.noInstrumentParties))
+		dst = fix2.AppendCount(dst, TagNoInstrumentParties, len(b.noInstrumentParties))
 		for _, entry := range b.noInstrumentParties {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noComplexEvents) > 0 {
-		groups = fix2.AppendCount(groups, TagNoComplexEvents, len(b.noComplexEvents))
+		dst = fix2.AppendCount(dst, TagNoComplexEvents, len(b.noComplexEvents))
 		for _, entry := range b.noComplexEvents {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noUnderlyings) > 0 {
-		groups = fix2.AppendCount(groups, TagNoUnderlyings, len(b.noUnderlyings))
+		dst = fix2.AppendCount(dst, TagNoUnderlyings, len(b.noUnderlyings))
 		for _, entry := range b.noUnderlyings {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noStipulations) > 0 {
-		groups = fix2.AppendCount(groups, TagNoStipulations, len(b.noStipulations))
+		dst = fix2.AppendCount(dst, TagNoStipulations, len(b.noStipulations))
 		for _, entry := range b.noStipulations {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noStrategyParameters) > 0 {
-		groups = fix2.AppendCount(groups, TagNoStrategyParameters, len(b.noStrategyParameters))
+		dst = fix2.AppendCount(dst, TagNoStrategyParameters, len(b.noStrategyParameters))
 		for _, entry := range b.noStrategyParameters {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noTrdRegTimestamps) > 0 {
-		groups = fix2.AppendCount(groups, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
+		dst = fix2.AppendCount(dst, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
 		for _, entry := range b.noTrdRegTimestamps {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
-	return b.Builder.BuildWith(groups)
+	return dst
 }

@@ -34,8 +34,16 @@ func (e *NoUnderlyingSecurityAltIDEntryBuilder) SetUnderlyingSecurityAltIDSource
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noUnderlyingSecurityAltIDLayout lists the tags of a NoUnderlyingSecurityAltID entry in dictionary order.
+var noUnderlyingSecurityAltIDLayout = []int{TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoUnderlyingSecurityAltIDEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingSecurityAltID)
+	for _, tag := range noUnderlyingSecurityAltIDLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

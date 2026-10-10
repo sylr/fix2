@@ -254,6 +254,17 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 		mg.Fields = append(mg.Fields, dictionary.FieldRef{Tag: tag})
 	}
 
+	// Layout: the first definition's order, then tags only others have.
+	inLayout := map[int]bool{}
+	for _, d := range defs {
+		for _, tag := range d.Layout {
+			if !inLayout[tag] {
+				inLayout[tag] = true
+				mg.Layout = append(mg.Layout, tag)
+			}
+		}
+	}
+
 	// Union nested groups (recursively merge by name).
 	nestedByName := map[string][]dictionary.GroupDef{}
 	for _, d := range defs {
@@ -442,13 +453,24 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	f.Type().Id(builderName).Struct(builderFields...)
 
 	// Build constructor
+	ctor := []jen.Code{
+		jen.Id("b").Op(":=").Op("&").Id(builderName).Values(jen.Dict{
+			jen.Id("Builder"): jen.Qual(fix2Pkg, "NewBuilder").Call(jen.Id("beginString"), jen.Lit(md.MsgType)),
+		}),
+	}
+	if len(md.Groups) > 0 {
+		// Every Build call, including the embedded Builder's at the end of
+		// a fluent chain, serializes the groups.
+		args := []jen.Code{jen.Id("b").Dot("appendGroups")}
+		for _, gd := range md.Groups {
+			args = append(args, tagID(gd.Name))
+		}
+		ctor = append(ctor, jen.Id("b").Dot("SetGroups").Call(args...))
+	}
+	ctor = append(ctor, jen.Return(jen.Id("b")))
 	f.Func().Id("Build" + name).Params(
 		jen.Id("beginString").String(),
-	).Op("*").Id(builderName).Block(
-		jen.Return(jen.Op("&").Id(builderName).Values(jen.Dict{
-			jen.Id("Builder"): jen.Qual(fix2Pkg, "NewBuilder").Call(jen.Id("beginString"), jen.Lit(md.MsgType)),
-		})),
-	)
+	).Op("*").Id(builderName).Block(ctor...)
 
 	// Setters — skip group child tags and counter tags (for builder)
 	for _, fi := range allFields {
@@ -464,16 +486,18 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		writeGroupAddMethod(f, dict, builderName, mg)
 	}
 
-	// --- Build: serialize the groups after the other fields ---
+	// --- appendGroups: registered with SetGroups by the constructor ---
 	if len(md.Groups) > 0 {
-		body := []jen.Code{jen.Var().Id("groups").Index().Qual(fix2Pkg, "Field")}
+		var body []jen.Code
 		for _, gd := range md.Groups {
 			name := gd.Name
-			body = append(body, groupBlock("groups", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
+			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
 		}
-		body = append(body, jen.Return(jen.Id("b").Dot("Builder").Dot("BuildWith").Call(jen.Id("groups"))))
-		f.Comment("Build serializes the message, with its repeating groups after the other fields.")
-		f.Func().Params(jen.Id("b").Op("*").Id(builderName)).Id("Build").Params().Index().Byte().Block(body...)
+		body = append(body, jen.Return(jen.Id("dst")))
+		f.Comment("appendGroups appends the message's repeating groups to dst.")
+		f.Func().Params(jen.Id("b").Op("*").Id(builderName)).Id("appendGroups").Params(
+			jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
+		).Index().Qual(fix2Pkg, "Field").Block(body...)
 	}
 
 	return f.Save(filepath.Join(outDir, msgFileName(name)))
@@ -698,7 +722,9 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Index().Byte(),
 		).Op("*").Id(entryBuilderName).Block(
-			appendField(jen.Id("v")),
+			// Copy: entries are serialized at Build time, after the caller
+			// may have reused v.
+			appendField(jen.Qual("bytes", "Clone").Call(jen.Id("v"))),
 			jen.Return(jen.Id("e")),
 		)
 	}
@@ -733,40 +759,53 @@ func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef)
 	)
 }
 
-// writeEntryAppendTo generates appendTo, which serializes an entry: its own
-// fields with the delimiter first, then each nested group. When the delimiter
-// is a nested group's counter, that group comes first instead.
+// writeEntryAppendTo generates the entry's layout variable and appendTo,
+// which serializes an entry in dictionary order: each layout tag is either
+// one of the entry's fields, written if set, or a nested group's counter,
+// written with the group's entries. The delimiter comes first; when it is a
+// nested group's counter, it is written even with no entries.
 func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName string, mg dictionary.GroupDef) {
-	var body []jen.Code
-	var delim jen.Code
-	delimGroup := -1
-	for i, gd := range mg.Groups {
+	layoutVar := unexport(mg.Name) + "Layout"
+	var tags []jen.Code
+	for _, tag := range mg.Layout {
+		tags = append(tags, tagID(dict.Fields[tag].Name))
+	}
+	f.Comment(layoutVar + " lists the tags of a " + mg.Name + " entry in dictionary order.")
+	f.Var().Id(layoutVar).Op("=").Index().Int().Values(tags...)
+
+	var cases []jen.Code
+	for _, gd := range mg.Groups {
+		name := gd.Name
+		owner := func() *jen.Statement { return jen.Id("e").Dot(unexport(name)) }
+		block := groupBlock("dst", owner, gd)
 		if gd.CounterTag == mg.DelimTag {
-			delimGroup = i
+			block = groupEntries("dst", owner, gd)
 		}
+		cases = append(cases, jen.Case(tagID(gd.Name)).Block(block))
 	}
-	nestedOwner := func(name string) func() *jen.Statement {
-		return func() *jen.Statement { return jen.Id("e").Dot(unexport(name)) }
-	}
-	if delimGroup >= 0 {
-		gd := mg.Groups[delimGroup]
-		body = append(body, groupBlock("dst", nestedOwner(gd.Name), gd))
-		delim = jen.Lit(0) // the entry's own fields hold no delimiter
-	} else {
-		delim = tagID(dict.Fields[mg.DelimTag].Name)
-	}
-	body = append(body, jen.Id("dst").Op("=").Qual(fix2Pkg, "AppendEntry").Call(jen.Id("dst"), jen.Id("e").Dot("fields"), delim))
-	for i, gd := range mg.Groups {
-		if i != delimGroup {
-			body = append(body, groupBlock("dst", nestedOwner(gd.Name), gd))
-		}
-	}
-	body = append(body, jen.Return(jen.Id("dst")))
-	f.Comment("appendTo appends the entry's fields to dst in wire order.")
+	cases = append(cases, jen.Default().Block(
+		jen.Id("dst").Op("=").Qual(fix2Pkg, "AppendField").Call(jen.Id("dst"), jen.Id("e").Dot("fields"), jen.Id("tag")),
+	))
+	f.Comment("appendTo appends the entry's fields to dst in dictionary order.")
 	f.Func().Params(jen.Id("e").Op("*").Id(entryBuilderName)).Id("appendTo").Params(
 		jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
-	).Index().Qual(fix2Pkg, "Field").Block(body...)
+	).Index().Qual(fix2Pkg, "Field").Block(
+		jen.For(jen.List(jen.Id("_"), jen.Id("tag")).Op(":=").Range().Id(layoutVar)).Block(
+			jen.Switch(jen.Id("tag")).Block(cases...),
+		),
+		jen.Return(jen.Id("dst")),
+	)
+}
 
+// groupEntries returns the code appending a group's counter, even zero, and
+// its entries to dst.
+func groupEntries(dst string, owner func() *jen.Statement, gd dictionary.GroupDef) jen.Code {
+	return jen.Block(
+		jen.Id(dst).Op("=").Qual(fix2Pkg, "AppendCount").Call(jen.Id(dst), tagID(gd.Name), jen.Len(owner())),
+		jen.For(jen.List(jen.Id("_"), jen.Id("entry")).Op(":=").Range().Add(owner())).Block(
+			jen.Id(dst).Op("=").Id("entry").Dot("appendTo").Call(jen.Id(dst)),
+		),
+	)
 }
 
 // writeEntryGroupAddMethod generates an Add method for nested groups on an entry builder.

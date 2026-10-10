@@ -49,8 +49,16 @@ func (e *NoContAmtsEntryBuilder) SetContAmtCurr(v string) *NoContAmtsEntryBuilde
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noContAmtsLayout lists the tags of a NoContAmts entry in dictionary order.
+var noContAmtsLayout = []int{TagContAmtType, TagContAmtValue, TagContAmtCurr}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoContAmtsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagContAmtType)
+	for _, tag := range noContAmtsLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

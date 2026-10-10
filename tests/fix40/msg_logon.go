@@ -120,7 +120,8 @@ type LogonBuilder struct {
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
-	return &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
+	b := &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
+	return b
 }
 func (b *LogonBuilder) SetSenderCompID(v string) *LogonBuilder {
 	b.SetString(TagSenderCompID, v)

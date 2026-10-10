@@ -2,6 +2,7 @@ package fix2
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 )
 
@@ -13,6 +14,20 @@ type Builder struct {
 	beginString string
 	msgType     string
 	fields      []Field // body fields (owned []byte, not zero-copy)
+
+	groups   func(dst []Field) []Field // appends repeating groups, see SetGroups
+	counters []int                     // counter tags groups manages
+}
+
+// SetGroups registers write, which appends the message's repeating groups to
+// dst, and the counter tags it manages. Every Build and BuildWith call
+// serializes the groups after the builder's own fields, so they are not lost
+// whichever Build method a fluent chain ends on. A raw field whose tag is one
+// of counters is left out when write emits that counter. Generated message
+// builders call it once, from their constructor.
+func (b *Builder) SetGroups(write func(dst []Field) []Field, counters ...int) {
+	b.groups = write
+	b.counters = counters
 }
 
 // NewBuilder creates a Builder for the given BeginString and MsgType.
@@ -123,22 +138,29 @@ func (b *Builder) Build() []byte {
 	return b.BuildWith(nil)
 }
 
-// BuildWith is Build with extra fields serialized after the builder's own,
-// without adding them to the builder. Generated builders use it to write
-// their repeating groups.
+// BuildWith is Build with extra fields serialized after the builder's own
+// fields and groups, without adding them to the builder.
 func (b *Builder) BuildWith(extra []Field) []byte {
+	var groups []Field
+	if b.groups != nil {
+		groups = b.groups(nil)
+	}
+
 	// Build body: 35=<msgType>\x01 + all user fields.
 	var body []byte
 	body = append(body, "35="...)
 	body = append(body, b.msgType...)
 	body = append(body, soh)
 	for _, f := range b.fields {
+		if b.managedCounter(f.Tag, groups) {
+			continue // the groups carry their own counter
+		}
 		body = strconv.AppendInt(body, int64(f.Tag), 10)
 		body = append(body, '=')
 		body = append(body, f.Value...)
 		body = append(body, soh)
 	}
-	for _, f := range extra {
+	for _, f := range append(groups, extra...) {
 		body = strconv.AppendInt(body, int64(f.Tag), 10)
 		body = append(body, '=')
 		body = append(body, f.Value...)
@@ -178,19 +200,27 @@ func SetField(fields []Field, tag int, value []byte) []Field {
 	return append(fields, Field{Tag: tag, Value: value})
 }
 
-// AppendEntry appends a repeating group entry's own fields to dst: the field
-// with tag delim first, as FIX requires, then the others in their original
-// order.
-func AppendEntry(dst, fields []Field, delim int) []Field {
-	for _, f := range fields {
-		if f.Tag == delim {
-			dst = append(dst, f)
-			break
+// managedCounter reports whether tag is a counter registered with SetGroups
+// that groups, the serialized groups, contains.
+func (b *Builder) managedCounter(tag int, groups []Field) bool {
+	if !slices.Contains(b.counters, tag) {
+		return false
+	}
+	for _, f := range groups {
+		if f.Tag == tag {
+			return true
 		}
 	}
+	return false
+}
+
+// AppendField appends the field of fields with the given tag to dst, if
+// there is one. Generated group entries call it for each tag of their
+// layout, so fields are written in dictionary order.
+func AppendField(dst, fields []Field, tag int) []Field {
 	for _, f := range fields {
-		if f.Tag != delim {
-			dst = append(dst, f)
+		if f.Tag == tag {
+			return append(dst, f)
 		}
 	}
 	return dst

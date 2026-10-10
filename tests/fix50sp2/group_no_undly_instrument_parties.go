@@ -80,13 +80,22 @@ func (e *NoUndlyInstrumentPartiesEntryBuilder) AddNoUndlyInstrumentPartySubIDsEn
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noUndlyInstrumentPartiesLayout lists the tags of a NoUndlyInstrumentParties entry in dictionary order.
+var noUndlyInstrumentPartiesLayout = []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoUndlyInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingInstrumentPartyID)
-	if len(e.noUndlyInstrumentPartySubIDs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoUndlyInstrumentPartySubIDs, len(e.noUndlyInstrumentPartySubIDs))
-		for _, entry := range e.noUndlyInstrumentPartySubIDs {
-			dst = entry.appendTo(dst)
+	for _, tag := range noUndlyInstrumentPartiesLayout {
+		switch tag {
+		case TagNoUndlyInstrumentPartySubIDs:
+			if len(e.noUndlyInstrumentPartySubIDs) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentPartySubIDs, len(e.noUndlyInstrumentPartySubIDs))
+				for _, entry := range e.noUndlyInstrumentPartySubIDs {
+					dst = entry.appendTo(dst)
+				}
+			}
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

@@ -100,7 +100,8 @@ type HeartbeatBuilder struct {
 }
 
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
-	return &HeartbeatBuilder{Builder: fix2.NewBuilder(beginString, "0")}
+	b := &HeartbeatBuilder{Builder: fix2.NewBuilder(beginString, "0")}
+	return b
 }
 func (b *HeartbeatBuilder) SetSenderCompID(v string) *HeartbeatBuilder {
 	b.SetString(TagSenderCompID, v)

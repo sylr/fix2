@@ -108,7 +108,8 @@ type SequenceResetBuilder struct {
 }
 
 func BuildSequenceReset(beginString string) *SequenceResetBuilder {
-	return &SequenceResetBuilder{Builder: fix2.NewBuilder(beginString, "4")}
+	b := &SequenceResetBuilder{Builder: fix2.NewBuilder(beginString, "4")}
+	return b
 }
 func (b *SequenceResetBuilder) SetSenderCompID(v string) *SequenceResetBuilder {
 	b.SetString(TagSenderCompID, v)

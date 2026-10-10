@@ -41,8 +41,16 @@ func (e *NoNested3PartySubIDsEntryBuilder) SetNested3PartySubIDType(v int) *NoNe
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noNested3PartySubIDsLayout lists the tags of a NoNested3PartySubIDs entry in dictionary order.
+var noNested3PartySubIDsLayout = []int{TagNested3PartySubID, TagNested3PartySubIDType}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoNested3PartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagNested3PartySubID)
+	for _, tag := range noNested3PartySubIDsLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

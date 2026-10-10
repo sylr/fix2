@@ -280,7 +280,8 @@ type NewOrderSingleBuilder struct {
 }
 
 func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
-	return &NewOrderSingleBuilder{Builder: fix2.NewBuilder(beginString, "D")}
+	b := &NewOrderSingleBuilder{Builder: fix2.NewBuilder(beginString, "D")}
+	return b
 }
 func (b *NewOrderSingleBuilder) SetSenderCompID(v string) *NewOrderSingleBuilder {
 	b.SetString(TagSenderCompID, v)

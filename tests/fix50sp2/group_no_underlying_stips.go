@@ -34,8 +34,16 @@ func (e *NoUnderlyingStipsEntryBuilder) SetUnderlyingStipValue(v string) *NoUnde
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noUnderlyingStipsLayout lists the tags of a NoUnderlyingStips entry in dictionary order.
+var noUnderlyingStipsLayout = []int{TagUnderlyingStipType, TagUnderlyingStipValue}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoUnderlyingStipsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagUnderlyingStipType)
+	for _, tag := range noUnderlyingStipsLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

@@ -666,6 +666,26 @@ func TestRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestEntryWithoutParties(t *testing.T) {
+	// The NoPartyIDs counter is the delimiter: it is written as 0 rather
+	// than left out, or the entry could not be read back.
+	raw := BuildStreamAssignmentRequest("FIXT.1.1").
+		SetStreamAsgnReqID("R").
+		AddNoAsgnReqsEntry(NewNoAsgnReqsEntry().SetMDReqID("C")).
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	reqs := WrapStreamAssignmentRequest(&msg).NoAsgnReqsEntries()
+	if len(reqs) != 1 {
+		t.Fatalf("%q: %d entries, want 1", raw, len(reqs))
+	}
+	if md, _ := reqs[0].MDReqID(); md != "C" {
+		t.Errorf("MDReqID = %q, want C", md)
+	}
+}
 `)
 }
 

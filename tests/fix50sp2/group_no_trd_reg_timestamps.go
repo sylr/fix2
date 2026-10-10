@@ -77,8 +77,16 @@ func (e *NoTrdRegTimestampsEntryBuilder) SetDeskOrderHandlingInst(v DeskOrderHan
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noTrdRegTimestampsLayout lists the tags of a NoTrdRegTimestamps entry in dictionary order.
+var noTrdRegTimestampsLayout = []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoTrdRegTimestampsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagTrdRegTimestamp)
+	for _, tag := range noTrdRegTimestampsLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

@@ -112,7 +112,8 @@ type ResendRequestBuilder struct {
 }
 
 func BuildResendRequest(beginString string) *ResendRequestBuilder {
-	return &ResendRequestBuilder{Builder: fix2.NewBuilder(beginString, "2")}
+	b := &ResendRequestBuilder{Builder: fix2.NewBuilder(beginString, "2")}
+	return b
 }
 func (b *ResendRequestBuilder) SetSenderCompID(v string) *ResendRequestBuilder {
 	b.SetString(TagSenderCompID, v)

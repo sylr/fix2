@@ -2,7 +2,6 @@ package fix2
 
 import (
 	"bytes"
-	"slices"
 	"testing"
 )
 
@@ -196,19 +195,50 @@ func TestSetField(t *testing.T) {
 	}
 }
 
-func TestAppendEntry(t *testing.T) {
-	own := []Field{{Tag: 2, Value: []byte("b")}, {Tag: 3, Value: []byte("c")}, {Tag: 1, Value: []byte("a")}, {Tag: 4, Value: []byte("d")}}
-	got := AppendEntry([]Field{{Tag: 9}}, own, 1)
-	var tags []int
-	for _, f := range got {
-		tags = append(tags, f.Tag)
+func TestAppendField(t *testing.T) {
+	fields := []Field{{Tag: 2, Value: []byte("b")}, {Tag: 1, Value: []byte("a")}}
+	dst := AppendField(nil, fields, 1)
+	dst = AppendField(dst, fields, 3) // absent: nothing appended
+	dst = AppendField(dst, fields, 2)
+	if len(dst) != 2 || dst[0].Tag != 1 || dst[1].Tag != 2 {
+		t.Errorf("AppendField = %v", dst)
 	}
-	// Delimiter first, the others keep their relative order.
-	if want := []int{9, 1, 2, 3, 4}; !slices.Equal(tags, want) {
-		t.Errorf("AppendEntry tags = %v, want %v", tags, want)
+}
+
+func TestSetGroups(t *testing.T) {
+	var entries []string
+	b := NewBuilder("FIX.4.4", "D")
+	b.SetGroups(func(dst []Field) []Field {
+		if len(entries) == 0 {
+			return dst
+		}
+		dst = AppendCount(dst, 78, len(entries))
+		for _, e := range entries {
+			dst = append(dst, Field{Tag: 79, Value: []byte(e)})
+		}
+		return dst
+	}, 78)
+
+	// A raw counter is dropped when the groups write their own.
+	b.SetInt(78, 0)
+	entries = []string{"A", "B"}
+	// Groups are serialized whichever Build a fluent chain ends on.
+	raw := b.SetString(11, "ORD").Build()
+	if n := bytes.Count(raw, []byte("\x0178=")); n != 1 {
+		t.Errorf("%q: %d counters, want 1", raw, n)
 	}
-	if own[0].Tag != 2 {
-		t.Error("AppendEntry modified its input")
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	if got := len(msg.Groups(78, []int{79})); got != 2 {
+		t.Errorf("%q: %d entries, want 2", raw, got)
+	}
+
+	// Without group entries the raw counter is kept.
+	entries = nil
+	if !bytes.Contains(b.Build(), []byte("\x0178=0\x01")) {
+		t.Error("raw counter dropped although the groups did not write it")
 	}
 }
 

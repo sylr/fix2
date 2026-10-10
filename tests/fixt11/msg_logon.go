@@ -263,7 +263,9 @@ type LogonBuilder struct {
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
-	return &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
+	b := &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
+	b.SetGroups(b.appendGroups, TagNoMsgTypes)
+	return b
 }
 func (b *LogonBuilder) SetSenderCompID(v string) *LogonBuilder {
 	b.SetString(TagSenderCompID, v)
@@ -445,14 +447,13 @@ func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuild
 	return b
 }
 
-// Build serializes the message, with its repeating groups after the other fields.
-func (b *LogonBuilder) Build() []byte {
-	var groups []fix2.Field
+// appendGroups appends the message's repeating groups to dst.
+func (b *LogonBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
 	if len(b.noMsgTypes) > 0 {
-		groups = fix2.AppendCount(groups, TagNoMsgTypes, len(b.noMsgTypes))
+		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypes))
 		for _, entry := range b.noMsgTypes {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
-	return b.Builder.BuildWith(groups)
+	return dst
 }

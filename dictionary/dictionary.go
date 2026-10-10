@@ -104,6 +104,10 @@ type GroupDef struct {
 	DelimTag   int        // first child tag in XML order — instance delimiter (e.g. 79)
 	Fields     []FieldRef // child fields in XML order, components expanded, nested groups excluded
 	Groups     []GroupDef // nested sub-groups
+	// Layout lists an entry's tags in XML order, components expanded: its
+	// fields and, where nested groups sit, their counter tags. FIX requires
+	// entry fields in this order; Layout[0] is DelimTag.
+	Layout []int
 }
 
 // MessageDef describes a single FIX message type.
@@ -366,6 +370,7 @@ type resolvedBody struct {
 	direct []FieldRef // fields outside any group, components expanded
 	groups []GroupDef // groups at this level, components expanded
 	first  int        // first tag in XML order (field or group counter); 0 if none
+	layout []int      // fields and group counters at this level, in XML order
 	conds  []rawCondition
 }
 
@@ -463,6 +468,7 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			ref := b.addField(ctx, fd.Tag, it.Required == "Y")
 			b.all = append(b.all, ref)
 			b.direct = append(b.direct, ref)
+			b.layout = append(b.layout, fd.Tag)
 			b.setFirst(fd.Tag)
 
 		case "component":
@@ -533,7 +539,9 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 				DelimTag:   inner.first,
 				Fields:     inner.direct,
 				Groups:     inner.groups,
+				Layout:     inner.layout,
 			})
+			b.layout = append(b.layout, fd.Tag)
 			b.setFirst(fd.Tag)
 
 		default:

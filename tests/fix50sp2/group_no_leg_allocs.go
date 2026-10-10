@@ -96,13 +96,22 @@ func (e *NoLegAllocsEntryBuilder) AddNoNested2PartyIDsEntry(ne *NoNested2PartyID
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noLegAllocsLayout lists the tags of a NoLegAllocs entry in dictionary order.
+var noLegAllocsLayout = []int{TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency, TagNoNested2PartyIDs}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoLegAllocsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagLegAllocAccount)
-	if len(e.noNested2PartyIDs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoNested2PartyIDs, len(e.noNested2PartyIDs))
-		for _, entry := range e.noNested2PartyIDs {
-			dst = entry.appendTo(dst)
+	for _, tag := range noLegAllocsLayout {
+		switch tag {
+		case TagNoNested2PartyIDs:
+			if len(e.noNested2PartyIDs) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested2PartyIDs, len(e.noNested2PartyIDs))
+				for _, entry := range e.noNested2PartyIDs {
+					dst = entry.appendTo(dst)
+				}
+			}
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

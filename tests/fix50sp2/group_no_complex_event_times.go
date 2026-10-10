@@ -53,8 +53,16 @@ func (e *NoComplexEventTimesEntryBuilder) SetComplexEventEndTimeWithFormat(v tim
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noComplexEventTimesLayout lists the tags of a NoComplexEventTimes entry in dictionary order.
+var noComplexEventTimesLayout = []int{TagComplexEventStartTime, TagComplexEventEndTime}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoComplexEventTimesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagComplexEventStartTime)
+	for _, tag := range noComplexEventTimesLayout {
+		switch tag {
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
 	return dst
 }

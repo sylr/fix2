@@ -176,7 +176,8 @@ type TestRequestBuilder struct {
 }
 
 func BuildTestRequest(beginString string) *TestRequestBuilder {
-	return &TestRequestBuilder{Builder: fix2.NewBuilder(beginString, "1")}
+	b := &TestRequestBuilder{Builder: fix2.NewBuilder(beginString, "1")}
+	return b
 }
 func (b *TestRequestBuilder) SetSenderCompID(v string) *TestRequestBuilder {
 	b.SetString(TagSenderCompID, v)

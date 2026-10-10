@@ -2334,7 +2334,9 @@ type ExecutionReportBuilder struct {
 }
 
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
-	return &ExecutionReportBuilder{Builder: fix2.NewBuilder(beginString, "8")}
+	b := &ExecutionReportBuilder{Builder: fix2.NewBuilder(beginString, "8")}
+	b.SetGroups(b.appendGroups, TagNoPartyIDs, TagNoContraBrokers, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoContAmts, TagNoLegs, TagNoMiscFees, TagNoStrategyParameters, TagNoTrdRegTimestamps, TagNoAllocs, TagNoFills, TagNoRateSources)
+	return b
 }
 func (b *ExecutionReportBuilder) SetOrderID(v string) *ExecutionReportBuilder {
 	b.SetString(TagOrderID, v)
@@ -3781,104 +3783,103 @@ func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuil
 	return b
 }
 
-// Build serializes the message, with its repeating groups after the other fields.
-func (b *ExecutionReportBuilder) Build() []byte {
-	var groups []fix2.Field
+// appendGroups appends the message's repeating groups to dst.
+func (b *ExecutionReportBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDs) > 0 {
-		groups = fix2.AppendCount(groups, TagNoPartyIDs, len(b.noPartyIDs))
+		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))
 		for _, entry := range b.noPartyIDs {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noContraBrokers) > 0 {
-		groups = fix2.AppendCount(groups, TagNoContraBrokers, len(b.noContraBrokers))
+		dst = fix2.AppendCount(dst, TagNoContraBrokers, len(b.noContraBrokers))
 		for _, entry := range b.noContraBrokers {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noSecurityAltID) > 0 {
-		groups = fix2.AppendCount(groups, TagNoSecurityAltID, len(b.noSecurityAltID))
+		dst = fix2.AppendCount(dst, TagNoSecurityAltID, len(b.noSecurityAltID))
 		for _, entry := range b.noSecurityAltID {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noEvents) > 0 {
-		groups = fix2.AppendCount(groups, TagNoEvents, len(b.noEvents))
+		dst = fix2.AppendCount(dst, TagNoEvents, len(b.noEvents))
 		for _, entry := range b.noEvents {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noInstrumentParties) > 0 {
-		groups = fix2.AppendCount(groups, TagNoInstrumentParties, len(b.noInstrumentParties))
+		dst = fix2.AppendCount(dst, TagNoInstrumentParties, len(b.noInstrumentParties))
 		for _, entry := range b.noInstrumentParties {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noComplexEvents) > 0 {
-		groups = fix2.AppendCount(groups, TagNoComplexEvents, len(b.noComplexEvents))
+		dst = fix2.AppendCount(dst, TagNoComplexEvents, len(b.noComplexEvents))
 		for _, entry := range b.noComplexEvents {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noUnderlyings) > 0 {
-		groups = fix2.AppendCount(groups, TagNoUnderlyings, len(b.noUnderlyings))
+		dst = fix2.AppendCount(dst, TagNoUnderlyings, len(b.noUnderlyings))
 		for _, entry := range b.noUnderlyings {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noStipulations) > 0 {
-		groups = fix2.AppendCount(groups, TagNoStipulations, len(b.noStipulations))
+		dst = fix2.AppendCount(dst, TagNoStipulations, len(b.noStipulations))
 		for _, entry := range b.noStipulations {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noContAmts) > 0 {
-		groups = fix2.AppendCount(groups, TagNoContAmts, len(b.noContAmts))
+		dst = fix2.AppendCount(dst, TagNoContAmts, len(b.noContAmts))
 		for _, entry := range b.noContAmts {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noLegs) > 0 {
-		groups = fix2.AppendCount(groups, TagNoLegs, len(b.noLegs))
+		dst = fix2.AppendCount(dst, TagNoLegs, len(b.noLegs))
 		for _, entry := range b.noLegs {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noMiscFees) > 0 {
-		groups = fix2.AppendCount(groups, TagNoMiscFees, len(b.noMiscFees))
+		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFees))
 		for _, entry := range b.noMiscFees {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noStrategyParameters) > 0 {
-		groups = fix2.AppendCount(groups, TagNoStrategyParameters, len(b.noStrategyParameters))
+		dst = fix2.AppendCount(dst, TagNoStrategyParameters, len(b.noStrategyParameters))
 		for _, entry := range b.noStrategyParameters {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noTrdRegTimestamps) > 0 {
-		groups = fix2.AppendCount(groups, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
+		dst = fix2.AppendCount(dst, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
 		for _, entry := range b.noTrdRegTimestamps {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noAllocs) > 0 {
-		groups = fix2.AppendCount(groups, TagNoAllocs, len(b.noAllocs))
+		dst = fix2.AppendCount(dst, TagNoAllocs, len(b.noAllocs))
 		for _, entry := range b.noAllocs {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noFills) > 0 {
-		groups = fix2.AppendCount(groups, TagNoFills, len(b.noFills))
+		dst = fix2.AppendCount(dst, TagNoFills, len(b.noFills))
 		for _, entry := range b.noFills {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
 	if len(b.noRateSources) > 0 {
-		groups = fix2.AppendCount(groups, TagNoRateSources, len(b.noRateSources))
+		dst = fix2.AppendCount(dst, TagNoRateSources, len(b.noRateSources))
 		for _, entry := range b.noRateSources {
-			groups = entry.appendTo(groups)
+			dst = entry.appendTo(dst)
 		}
 	}
-	return b.Builder.BuildWith(groups)
+	return dst
 }

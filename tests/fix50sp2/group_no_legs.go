@@ -3,6 +3,7 @@
 package fix50sp2
 
 import (
+	"bytes"
 	fix2 "github.com/sylr/fix2"
 	"strconv"
 	"time"
@@ -706,7 +707,7 @@ func (e *NoLegsEntryBuilder) SetEncodedLegIssuerLen(v int) *NoLegsEntryBuilder {
 	return e
 }
 func (e *NoLegsEntryBuilder) SetEncodedLegIssuer(v []byte) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuer, v)
+	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuer, bytes.Clone(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityDesc(v string) *NoLegsEntryBuilder {
@@ -718,7 +719,7 @@ func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDescLen(v int) *NoLegsEntryBui
 	return e
 }
 func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDesc(v []byte) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDesc, v)
+	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDesc, bytes.Clone(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRatioQty(v float64) *NoLegsEntryBuilder {
@@ -894,31 +895,43 @@ func (e *NoLegsEntryBuilder) AddNoNested3PartyIDsEntry(ne *NoNested3PartyIDsEntr
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noLegsLayout lists the tags of a NoLegs entry in dictionary order.
+var noLegsLayout = []int{TagLegSymbol, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagNoLegSecurityAltID, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegSecuritySubType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegCreditRating, TagLegInstrRegistry, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegRedemptionDate, TagLegStrikePrice, TagLegStrikeCurrency, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegCurrency, TagLegPool, TagLegDatedDate, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegPrice, TagLegMaturityTime, TagLegPutOrCall, TagLegExerciseStyle, TagLegUnitOfMeasureQty, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType, TagLegQty, TagLegSwapType, TagNoLegStipulations, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegRefID, TagLegSettlType, TagLegSettlDate, TagLegLastPx, TagLegOrderQty, TagLegSettlCurrency, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagNoNested3PartyIDs, TagLegAllocID, TagNoLegAllocs, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoLegsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagLegSymbol)
-	if len(e.noLegAllocs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocs))
-		for _, entry := range e.noLegAllocs {
-			dst = entry.appendTo(dst)
-		}
-	}
-	if len(e.noLegSecurityAltID) > 0 {
-		dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltID))
-		for _, entry := range e.noLegSecurityAltID {
-			dst = entry.appendTo(dst)
-		}
-	}
-	if len(e.noLegStipulations) > 0 {
-		dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulations))
-		for _, entry := range e.noLegStipulations {
-			dst = entry.appendTo(dst)
-		}
-	}
-	if len(e.noNested3PartyIDs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDs))
-		for _, entry := range e.noNested3PartyIDs {
-			dst = entry.appendTo(dst)
+	for _, tag := range noLegsLayout {
+		switch tag {
+		case TagNoLegAllocs:
+			if len(e.noLegAllocs) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocs))
+				for _, entry := range e.noLegAllocs {
+					dst = entry.appendTo(dst)
+				}
+			}
+		case TagNoLegSecurityAltID:
+			if len(e.noLegSecurityAltID) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltID))
+				for _, entry := range e.noLegSecurityAltID {
+					dst = entry.appendTo(dst)
+				}
+			}
+		case TagNoLegStipulations:
+			if len(e.noLegStipulations) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulations))
+				for _, entry := range e.noLegStipulations {
+					dst = entry.appendTo(dst)
+				}
+			}
+		case TagNoNested3PartyIDs:
+			if len(e.noNested3PartyIDs) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDs))
+				for _, entry := range e.noNested3PartyIDs {
+					dst = entry.appendTo(dst)
+				}
+			}
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

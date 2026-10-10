@@ -84,13 +84,22 @@ func (e *NoComplexEventDatesEntryBuilder) AddNoComplexEventTimesEntry(ne *NoComp
 	return e
 }
 
-// appendTo appends the entry's fields to dst in wire order.
+// noComplexEventDatesLayout lists the tags of a NoComplexEventDates entry in dictionary order.
+var noComplexEventDatesLayout = []int{TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes}
+
+// appendTo appends the entry's fields to dst in dictionary order.
 func (e *NoComplexEventDatesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	dst = fix2.AppendEntry(dst, e.fields, TagComplexEventStartDate)
-	if len(e.noComplexEventTimes) > 0 {
-		dst = fix2.AppendCount(dst, TagNoComplexEventTimes, len(e.noComplexEventTimes))
-		for _, entry := range e.noComplexEventTimes {
-			dst = entry.appendTo(dst)
+	for _, tag := range noComplexEventDatesLayout {
+		switch tag {
+		case TagNoComplexEventTimes:
+			if len(e.noComplexEventTimes) > 0 {
+				dst = fix2.AppendCount(dst, TagNoComplexEventTimes, len(e.noComplexEventTimes))
+				for _, entry := range e.noComplexEventTimes {
+					dst = entry.appendTo(dst)
+				}
+			}
+		default:
+			dst = fix2.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

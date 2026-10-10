@@ -212,7 +212,8 @@ type RejectBuilder struct {
 }
 
 func BuildReject(beginString string) *RejectBuilder {
-	return &RejectBuilder{Builder: fix2.NewBuilder(beginString, "3")}
+	b := &RejectBuilder{Builder: fix2.NewBuilder(beginString, "3")}
+	return b
 }
 func (b *RejectBuilder) SetSenderCompID(v string) *RejectBuilder {
 	b.SetString(TagSenderCompID, v)
