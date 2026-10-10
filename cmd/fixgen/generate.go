@@ -661,7 +661,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		}
 	}
 
-	// Collect fields for this message: header fields + message fields, skip structural.
+	// Collect fields for this message: header, message and trailer fields, skip structural.
 	type fieldInfo struct {
 		tag      int
 		name     string
@@ -693,6 +693,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	}
 	addFields(dict.Header)
 	addFields(md.Fields)
+	addFields(dict.Trailer)
 
 	// --- Reader struct ---
 	f.Type().Id(name).Struct(

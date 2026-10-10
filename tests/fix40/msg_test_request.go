@@ -94,6 +94,18 @@ func (m *TestRequest) TestReqID() (string, bool) {
 	v := m.msg.Get(TagTestReqID)
 	return string(v), v != nil
 }
+func (m *TestRequest) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *TestRequest) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // TestRequestBuilder builds a TestRequest message. A copy shares its fields and
 // groups with the original.
@@ -174,5 +186,11 @@ func (b *TestRequestBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.Ti
 }
 func (b *TestRequestBuilder) SetTestReqID(v string) *TestRequestBuilder {
 	b.SetString(TagTestReqID, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *TestRequestBuilder) SetSignature(v []byte) *TestRequestBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

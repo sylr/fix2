@@ -106,6 +106,18 @@ func (m *ResendRequest) EndSeqNo() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *ResendRequest) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ResendRequest) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // ResendRequestBuilder builds a ResendRequest message. A copy shares its fields and
 // groups with the original.
@@ -190,5 +202,11 @@ func (b *ResendRequestBuilder) SetBeginSeqNo(v int) *ResendRequestBuilder {
 }
 func (b *ResendRequestBuilder) SetEndSeqNo(v int) *ResendRequestBuilder {
 	b.SetInt(TagEndSeqNo, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *ResendRequestBuilder) SetSignature(v []byte) *ResendRequestBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

@@ -94,6 +94,18 @@ func (m *Heartbeat) TestReqID() (string, bool) {
 	v := m.msg.Get(TagTestReqID)
 	return string(v), v != nil
 }
+func (m *Heartbeat) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *Heartbeat) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // HeartbeatBuilder builds a Heartbeat message. A copy shares its fields and
 // groups with the original.
@@ -174,5 +186,11 @@ func (b *HeartbeatBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.Time
 }
 func (b *HeartbeatBuilder) SetTestReqID(v string) *HeartbeatBuilder {
 	b.SetString(TagTestReqID, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *HeartbeatBuilder) SetSignature(v []byte) *HeartbeatBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

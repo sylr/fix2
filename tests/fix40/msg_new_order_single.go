@@ -274,6 +274,18 @@ func (m *NewOrderSingle) Text() (string, bool) {
 	v := m.msg.Get(TagText)
 	return string(v), v != nil
 }
+func (m *NewOrderSingle) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *NewOrderSingle) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // NewOrderSingleBuilder builds a NewOrderSingle message. A copy shares its fields and
 // groups with the original.
@@ -502,5 +514,11 @@ func (b *NewOrderSingleBuilder) SetSettlCurrency(v string) *NewOrderSingleBuilde
 }
 func (b *NewOrderSingleBuilder) SetText(v string) *NewOrderSingleBuilder {
 	b.SetString(TagText, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *NewOrderSingleBuilder) SetSignature(v []byte) *NewOrderSingleBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

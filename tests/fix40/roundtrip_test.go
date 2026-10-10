@@ -97,3 +97,27 @@ func TestTimeZones(t *testing.T) {
 		})
 	}
 }
+
+// TestTrailerSignature sets the trailer's Signature through the typed
+// builder: it is written last, with its SignatureLength, and read back.
+func TestTrailerSignature(t *testing.T) {
+	sig := []byte("s\x01g")
+	raw := BuildHeartbeat("FIX.4.0").
+		SetSenderCompID("S").SetTargetCompID("T").SetMsgSeqNum(1).
+		SetSendingTime(time.Date(2023, 10, 1, 12, 0, 0, 0, time.UTC)).
+		SetSignature(sig).
+		Build()
+	if !bytes.Contains(raw, []byte("\x0193=3\x0189=s\x01g\x0110=")) {
+		t.Fatalf("Signature not last: %q", raw)
+	}
+	msg, err := fix2.ParseAndValidate(raw, Dictionary())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := WrapHeartbeat(&msg).Signature(); !ok || !bytes.Equal(v, sig) {
+		t.Errorf("Signature = %q, %v", v, ok)
+	}
+	if n, ok, err := WrapHeartbeat(&msg).SignatureLength(); !ok || err != nil || n != len(sig) {
+		t.Errorf("SignatureLength = %d, %v, %v", n, ok, err)
+	}
+}

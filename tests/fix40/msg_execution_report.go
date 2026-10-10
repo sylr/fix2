@@ -341,6 +341,18 @@ func (m *ExecutionReport) Text() (string, bool) {
 	v := m.msg.Get(TagText)
 	return string(v), v != nil
 }
+func (m *ExecutionReport) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 var executionReport_NoMiscFees_spec = &fix2.GroupSpec{
 	Counter: TagNoMiscFees,
@@ -641,6 +653,12 @@ func (b *ExecutionReportBuilder) SetSettlCurrency(v string) *ExecutionReportBuil
 }
 func (b *ExecutionReportBuilder) SetText(v string) *ExecutionReportBuilder {
 	b.SetString(TagText, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *ExecutionReportBuilder) SetSignature(v []byte) *ExecutionReportBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }
 

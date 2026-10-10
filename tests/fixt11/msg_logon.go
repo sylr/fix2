@@ -217,6 +217,18 @@ func (m *Logon) NoMsgTypes() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *Logon) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *Logon) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 var logon_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
@@ -429,6 +441,12 @@ func (b *LogonBuilder) SetPassword(v string) *LogonBuilder {
 }
 func (b *LogonBuilder) SetDefaultApplVerID(v string) *LogonBuilder {
 	b.SetString(TagDefaultApplVerID, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *LogonBuilder) SetSignature(v []byte) *LogonBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }
 

@@ -102,6 +102,18 @@ func (m *Reject) Text() (string, bool) {
 	v := m.msg.Get(TagText)
 	return string(v), v != nil
 }
+func (m *Reject) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *Reject) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // RejectBuilder builds a Reject message. A copy shares its fields and
 // groups with the original.
@@ -186,5 +198,11 @@ func (b *RejectBuilder) SetRefSeqNum(v int) *RejectBuilder {
 }
 func (b *RejectBuilder) SetText(v string) *RejectBuilder {
 	b.SetString(TagText, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *RejectBuilder) SetSignature(v []byte) *RejectBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

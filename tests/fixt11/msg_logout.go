@@ -165,6 +165,18 @@ func (m *Logout) EncodedText() ([]byte, bool) {
 	v := m.msg.Get(TagEncodedText)
 	return v, v != nil
 }
+func (m *Logout) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *Logout) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 var logout_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
@@ -321,6 +333,12 @@ func (b *LogoutBuilder) SetText(v string) *LogoutBuilder {
 // SetEncodedText sets EncodedText and its length, EncodedTextLen.
 func (b *LogoutBuilder) SetEncodedText(v []byte) *LogoutBuilder {
 	b.SetData(TagEncodedTextLen, TagEncodedText, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *LogoutBuilder) SetSignature(v []byte) *LogoutBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }
 

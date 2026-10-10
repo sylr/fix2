@@ -114,6 +114,18 @@ func (m *Logon) RawData() ([]byte, bool) {
 	v := m.msg.Get(TagRawData)
 	return v, v != nil
 }
+func (m *Logon) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *Logon) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // LogonBuilder builds a Logon message. A copy shares its fields and
 // groups with the original.
@@ -204,5 +216,11 @@ func (b *LogonBuilder) SetHeartBtInt(v int) *LogonBuilder {
 // SetRawData sets RawData and its length, RawDataLength.
 func (b *LogonBuilder) SetRawData(v []byte) *LogonBuilder {
 	b.SetData(TagRawDataLength, TagRawData, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *LogonBuilder) SetSignature(v []byte) *LogonBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

@@ -102,6 +102,18 @@ func (m *SequenceReset) NewSeqNo() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *SequenceReset) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *SequenceReset) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 // SequenceResetBuilder builds a SequenceReset message. A copy shares its fields and
 // groups with the original.
@@ -186,5 +198,11 @@ func (b *SequenceResetBuilder) SetGapFillFlag(v GapFillFlag) *SequenceResetBuild
 }
 func (b *SequenceResetBuilder) SetNewSeqNo(v int) *SequenceResetBuilder {
 	b.SetInt(TagNewSeqNo, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *SequenceResetBuilder) SetSignature(v []byte) *SequenceResetBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }

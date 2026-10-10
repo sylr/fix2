@@ -189,6 +189,18 @@ func (m *Reject) EncodedText() ([]byte, bool) {
 	v := m.msg.Get(TagEncodedText)
 	return v, v != nil
 }
+func (m *Reject) SignatureLength() (int, bool, error) {
+	v := m.msg.Get(TagSignatureLength)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *Reject) Signature() ([]byte, bool) {
+	v := m.msg.Get(TagSignature)
+	return v, v != nil
+}
 
 var reject_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
@@ -361,6 +373,12 @@ func (b *RejectBuilder) SetText(v string) *RejectBuilder {
 // SetEncodedText sets EncodedText and its length, EncodedTextLen.
 func (b *RejectBuilder) SetEncodedText(v []byte) *RejectBuilder {
 	b.SetData(TagEncodedTextLen, TagEncodedText, v)
+	return b
+}
+
+// SetSignature sets Signature and its length, SignatureLength.
+func (b *RejectBuilder) SetSignature(v []byte) *RejectBuilder {
+	b.SetData(TagSignatureLength, TagSignature, v)
 	return b
 }
 
