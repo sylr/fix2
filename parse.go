@@ -265,16 +265,20 @@ func ParseFromReader(r io.Reader) (Message, error) {
 // parseNextTag parses a tag number at data[cursor:] up to '='.
 // Returns the tag number and the index of '=' in data.
 func parseNextTag(data []byte, cursor int) (int, int, error) {
+	// Fast path for tags of 1-4 digits, only when all four probes are in bounds.
 	var eqPos int
-	if data[cursor+1] == '=' {
+	switch {
+	case cursor+4 >= len(data):
+		eqPos = findByte(data, cursor, '=')
+	case data[cursor+1] == '=':
 		eqPos = cursor + 1
-	} else if data[cursor+2] == '=' {
+	case data[cursor+2] == '=':
 		eqPos = cursor + 2
-	} else if data[cursor+3] == '=' {
+	case data[cursor+3] == '=':
 		eqPos = cursor + 3
-	} else if data[cursor+4] == '=' {
+	case data[cursor+4] == '=':
 		eqPos = cursor + 4
-	} else {
+	default:
 		eqPos = findByte(data, cursor, '=')
 	}
 	if eqPos < 0 || eqPos == cursor {
@@ -287,17 +291,18 @@ func parseNextTag(data []byte, cursor int) (int, int, error) {
 	return tag, eqPos, nil
 }
 
-// parseNextTagWithTag parses a tag number at data[cursor:] up to '='.
-// Returns the tag number and the index of '=' in data.
+// parseNextExpectedTag parses a tag of len(expectedTag) digits at data[cursor:]
+// followed by '='. Returns the tag number and the index of '=' in data.
 func parseNextExpectedTag(data []byte, cursor int, expectedTag []byte) (int, int, error) {
-	if data[cursor+len(expectedTag)] != '=' {
+	eqPos := cursor + len(expectedTag)
+	if eqPos >= len(data) || data[eqPos] != '=' {
 		return 0, 0, &ParseError{Err: ErrFieldSeparatorNotFound, Offset: cursor}
 	}
-	tag, ok := parseUint(data[cursor : cursor+len(expectedTag)])
+	tag, ok := parseUint(data[cursor:eqPos])
 	if !ok {
 		return 0, 0, &ParseError{Err: ErrInvalidTag, Offset: cursor}
 	}
-	return tag, cursor + len(expectedTag), nil
+	return tag, eqPos, nil
 }
 
 // parseUint parses an ASCII decimal integer from b without allocating.

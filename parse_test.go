@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"strings"
 	"testing"
 	"testing/iotest"
 )
@@ -436,6 +437,53 @@ func TestParseErrorConsistency(t *testing.T) {
 
 			if errParse.Error() != errReader.Error() {
 				t.Errorf("error messages differ:\n  Parse:           %q\n  ParseFromReader: %q", errParse.Error(), errReader.Error())
+			}
+		})
+	}
+}
+
+// TestParseTruncated checks that input ending mid-field returns an error
+// instead of reading past the end of the buffer.
+func TestParseTruncated(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		sentinel error
+	}{
+		{
+			name:     "truncated body tag",
+			raw:      "8=FIX.\x019=25\x0100=00000000000000000000\x010",
+			sentinel: ErrInvalidTag,
+		},
+		{
+			name:     "truncated body length tag",
+			raw:      "8=FIX.4.4XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x019",
+			sentinel: ErrInvalidBodyLen,
+		},
+		{
+			name:     "missing body length",
+			raw:      "8=FIX.4.4XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\x01",
+			sentinel: ErrInvalidBodyLen,
+		},
+		{
+			name:     "missing trailer",
+			raw:      "8=FIX.4.4\x019=21\x0135=0\x0149=XXXXXXXXXXXXX\x01",
+			sentinel: ErrInvalidCheckSum,
+		},
+		{
+			name:     "truncated trailer tag",
+			raw:      "8=FIX.4.4\x019=21\x0135=0\x0149=XXXXXXXXXXXXX\x0110",
+			sentinel: ErrInvalidCheckSum,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Parse([]byte(tt.raw)); !errors.Is(err, tt.sentinel) {
+				t.Errorf("Parse: expected %v, got %v", tt.sentinel, err)
+			}
+			if _, err := ParseFromReader(strings.NewReader(tt.raw)); err == nil {
+				t.Error("ParseFromReader: expected error")
 			}
 		})
 	}
