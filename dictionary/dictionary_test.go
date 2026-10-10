@@ -2,6 +2,7 @@ package dictionary
 
 import (
 	"bytes"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -968,5 +969,27 @@ func TestLoad_GroupConditionTrackingCharged(t *testing.T) {
 
 	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
 		t.Fatalf("expected expansion error, got %v", err)
+	}
+}
+
+func TestResolver_ChargesBeforeRecording(t *testing.T) {
+	field := func(name string) xmlItem { return xmlItem{XMLName: xml.Name{Local: "field"}, Name: name} }
+	group := xmlItem{XMLName: xml.Name{Local: "group"}, Name: "NoG", xmlBody: xmlBody{Items: []xmlItem{field("X"), field("Y")}}}
+	r := &resolver{
+		byName:   map[string]*FieldDef{"NoG": {Tag: 100}, "X": {Tag: 101}, "Y": {Tag: 102}},
+		compMap:  map[string]*xmlComponent{},
+		visiting: map[string]bool{},
+	}
+	// Inside one optional component, the group costs 1 visit + 2 field visits
+	// + 2 copied refs, then 1 x (1 counter + 2 children) condition updates.
+	// Leave budget for everything but the condition updates.
+	r.visits = maxVisits - 5
+	b := &resolvedBody{conds: []rawCondition{{component: "C", parent: -1, counts: map[int]int{}}}}
+
+	if err := r.walk([]xmlItem{group}, b, 0); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+		t.Fatalf("expected expansion error, got %v", err)
+	}
+	if len(b.conds[0].counts) != 0 || len(b.all) != 0 {
+		t.Errorf("work done before being charged: counts=%v all=%v", b.conds[0].counts, b.all)
 	}
 }

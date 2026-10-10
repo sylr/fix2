@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"slices"
 )
@@ -264,8 +263,11 @@ func resolve(xd *xmlDict) (*Dict, error) {
 		if err != nil {
 			return nil, fmt.Errorf("dictionary: message %s: %w", xm.Name, err)
 		}
-		total := maps.Clone(envelope)
-		countTags(total, body.all)
+		// Count the body on its own: cloning the envelope counts for every
+		// message would be uncharged work proportional to header size times
+		// message count.
+		inBody := map[int]int{}
+		countTags(inBody, body.all)
 		for _, ref := range body.all {
 			inMessages[ref.Tag] = true
 		}
@@ -278,14 +280,14 @@ func resolve(xd *xmlDict) (*Dict, error) {
 			Groups:     body.groups,
 			fieldSet:   fs,
 			required:   req,
-			conditions: body.conditions(total, nil),
+			conditions: body.conditions(envelope, inBody, nil),
 		}
 	}
 
 	// Header and trailer conditions apply to every message, so a tag also used
 	// in any message body cannot tell their components apart.
-	d.headerConds = header.conditions(envelope, inMessages)
-	d.trailerConds = trailer.conditions(envelope, inMessages)
+	d.headerConds = header.conditions(envelope, nil, inMessages)
+	d.trailerConds = trailer.conditions(envelope, nil, inMessages)
 
 	return d, nil
 }
@@ -381,11 +383,11 @@ func (b *resolvedBody) addField(ctx, tag int, required bool) FieldRef {
 
 // conditions turns the optional components that have required fields into
 // conditions. A tag activates a component only if every occurrence of it,
-// counted in total (envelope and message), lies inside the component and it is
-// not in exclude; otherwise its presence could come from elsewhere. A
-// component left without activation tags is dropped: its presence cannot be
-// told apart, and enforcing it could reject valid messages.
-func (b *resolvedBody) conditions(total map[int]int, exclude map[int]bool) []condition {
+// counted in the envelope (header and trailer) plus body, lies inside the
+// component and it is not in exclude; otherwise its presence could come from
+// elsewhere. A component left without activation tags is dropped: its
+// presence cannot be told apart, and enforcing it could reject valid messages.
+func (b *resolvedBody) conditions(envelope, body map[int]int, exclude map[int]bool) []condition {
 	var out []condition
 	for _, c := range b.conds {
 		if len(c.required) == 0 {
@@ -393,7 +395,7 @@ func (b *resolvedBody) conditions(total map[int]int, exclude map[int]bool) []con
 		}
 		var activation []int
 		for tag, n := range c.counts {
-			if n == total[tag] && !exclude[tag] {
+			if n == envelope[tag]+body[tag] && !exclude[tag] {
 				activation = append(activation, tag)
 			}
 		}
