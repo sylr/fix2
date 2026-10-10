@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoStrategyParametersEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoStrategyParametersEntry) StrategyParameterName() (string, bool) {
@@ -19,12 +20,6 @@ func (e *NoStrategyParametersEntry) StrategyParameterType() (StrategyParameterTy
 func (e *NoStrategyParametersEntry) StrategyParameterValue() (string, bool) {
 	v := e.grp.Get(TagStrategyParameterValue)
 	return string(v), v != nil
-}
-
-var noStrategyParametersSpec = &fix2.GroupSpec{
-	Counter: TagNoStrategyParameters,
-	Delim:   TagStrategyParameterName,
-	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
 }
 
 type NoStrategyParametersEntryBuilder struct {

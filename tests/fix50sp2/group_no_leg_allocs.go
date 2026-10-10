@@ -8,7 +8,8 @@ import (
 )
 
 type NoLegAllocsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoLegAllocsEntry) LegAllocAccount() (string, bool) {
@@ -44,19 +45,19 @@ func (e *NoLegAllocsEntry) NoNested2PartyIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegAllocsEntry) NoNested2PartyIDsEntries() []NoNested2PartyIDsEntry {
-	groups := e.grp.GroupsOf(noNested2PartyIDsSpec)
+	spec := e.spec.Child(TagNoNested2PartyIDs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoNested2PartyIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoNested2PartyIDsEntry{grp: groups[i]}
+		entries[i] = NoNested2PartyIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noLegAllocsSpec = &fix2.GroupSpec{
-	Counter: TagNoLegAllocs,
-	Delim:   TagLegAllocAccount,
-	Nested:  []*fix2.GroupSpec{noNested2PartyIDsSpec},
-	Tags:    []int{TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency},
 }
 
 type NoLegAllocsEntryBuilder struct {

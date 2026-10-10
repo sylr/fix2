@@ -68,7 +68,9 @@ func (g *Group) Groups(counterTag int, childTags []int) []Group {
 
 // GroupSpec describes a repeating group for GroupsOf: its counter, the
 // delimiter every entry starts with, the tags an entry holds directly and the
-// groups it can contain. Generated code declares one per group.
+// groups it can contain. A group's fields can differ between messages, so
+// generated code declares a spec tree per message group, from that message's
+// own definition.
 type GroupSpec struct {
 	Counter int          // NUMINGROUP tag
 	Delim   int          // first tag of every entry
@@ -128,11 +130,11 @@ func (s *GroupSpec) entry(fields []Field, i int) int {
 		if tag == s.Delim && !first {
 			break // the next entry starts
 		}
-		if n := s.nested(tag); n != nil {
-			// A nested counter, possibly the delimiter itself: consume its
+		if n := s.Child(tag); n != nil {
+			// A nested counter, possibly the delimiter itself: skip its
 			// entries by count.
 			count, _ := ParseInt(fields[i].Value)
-			_, i = n.entries(fields, i+1, count)
+			i = n.skip(fields, i+1, count)
 			continue
 		}
 		if !first && !slices.Contains(s.Tags, tag) {
@@ -143,10 +145,23 @@ func (s *GroupSpec) entry(fields []Field, i int) int {
 	return i
 }
 
-// nested returns the spec of the nested group whose counter is tag, or nil.
-func (s *GroupSpec) nested(tag int) *GroupSpec {
+// skip returns the index just past up to count entries starting at
+// fields[i], like entries without building them.
+func (s *GroupSpec) skip(fields []Field, i, count int) int {
+	for n := 0; n < count && i < len(fields) && fields[i].Tag == s.Delim; n++ {
+		i = s.entry(fields, i)
+	}
+	return i
+}
+
+// Child returns the spec of the nested group whose counter is tag, or nil if
+// there is none (including when s is nil).
+func (s *GroupSpec) Child(counter int) *GroupSpec {
+	if s == nil {
+		return nil
+	}
 	for _, n := range s.Nested {
-		if n.Counter == tag {
+		if n.Counter == counter {
 			return n
 		}
 	}

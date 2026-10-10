@@ -284,8 +284,11 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 	entryName := mg.Name + "Entry"
 
 	// --- Entry struct ---
+	// spec is the entry's group spec in the message it was read from, so
+	// nested groups are extracted with that message's definitions.
 	f.Type().Id(entryName).Struct(
 		jen.Id("grp").Qual(fix2Pkg, "Group"),
+		jen.Id("spec").Op("*").Qual(fix2Pkg, "GroupSpec"),
 	)
 
 	// --- Getters for child fields ---
@@ -303,11 +306,8 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 	for _, nestedMg := range mg.Groups {
 		globalNested := allMerged[nestedMg.Name]
 		addEntryGetter(f, entryName, globalNested.CounterTag, globalNested.Name, "NUMINGROUP", lookupType("NUMINGROUP"), false)
-		writeIterationMethod(f, dict, entryName, "e", "grp", globalNested, allMerged)
+		writeIterationMethod(f, entryName, "e", "grp", globalNested.Name, jen.Id("e").Dot("spec").Dot("Child").Call(tagID(globalNested.Name)))
 	}
-
-	// --- Group spec var ---
-	writeSpecVar(f, dict, mg)
 
 	// --- Entry builder struct ---
 	entryBuilderName := mg.Name + "EntryBuilder"
@@ -421,9 +421,12 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	}
 
 	// --- Group iteration methods on message reader ---
+	// Specs come from this message's own group definitions: the same group
+	// can hold different fields in other messages.
 	for _, gd := range md.Groups {
-		mg := mergedGroups[gd.Name]
-		writeIterationMethod(f, dict, name, "m", "msg", mg, mergedGroups)
+		v := unexport(name) + gd.Name + "Spec"
+		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd))
+		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v))
 	}
 
 	// --- Builder struct with counter fields ---
@@ -504,46 +507,44 @@ func unexport(s string) string {
 // child tags var + iteration method (split from former writeGroupIterator)
 // ---------------------------------------------------------------------------
 
-// writeSpecVar generates the group's fix2.GroupSpec, e.g.
-//
-//	var noAllocsSpec = &fix2.GroupSpec{Counter: TagNoAllocs, Delim: TagAllocAccount, Tags: []int{...}, Nested: []*fix2.GroupSpec{noDlvyInstSpec}}
-//
-// Nested groups refer to their own spec variables, declared in their files.
-func writeSpecVar(f *jen.File, dict *dictionary.Dict, mg dictionary.GroupDef) {
+// specLiteral returns a &fix2.GroupSpec literal for gd and, recursively,
+// its nested groups.
+func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
 	var tags []jen.Code
-	for _, fr := range mg.Fields {
+	for _, fr := range gd.Fields {
 		tags = append(tags, tagID(dict.Fields[fr.Tag].Name))
 	}
-	var nested []jen.Code
-	for _, gd := range mg.Groups {
-		nested = append(nested, jen.Id(specVar(gd.Name)))
-	}
 	values := jen.Dict{
-		jen.Id("Counter"): tagID(mg.Name),
-		jen.Id("Delim"):   tagID(dict.Fields[mg.DelimTag].Name),
+		jen.Id("Counter"): tagID(gd.Name),
+		jen.Id("Delim"):   tagID(dict.Fields[gd.DelimTag].Name),
 		jen.Id("Tags"):    jen.Index().Int().Values(tags...),
 	}
-	if len(nested) > 0 {
+	if len(gd.Groups) > 0 {
+		var nested []jen.Code
+		for _, child := range gd.Groups {
+			nested = append(nested, specLiteral(dict, child))
+		}
 		values[jen.Id("Nested")] = jen.Index().Op("*").Qual(fix2Pkg, "GroupSpec").Values(nested...)
 	}
-	f.Var().Id(specVar(mg.Name)).Op("=").Op("&").Qual(fix2Pkg, "GroupSpec").Values(values)
+	return jen.Op("&").Qual(fix2Pkg, "GroupSpec").Values(values)
 }
 
-// specVar names the GroupSpec variable of a group, e.g. noAllocsSpec.
-func specVar(groupName string) string { return unexport(groupName) + "Spec" }
-
-// writeIterationMethod generates the *Entries() method on a reader type.
-func writeIterationMethod(f *jen.File, dict *dictionary.Dict, ownerName, ownerRecv, ownerField string, mg dictionary.GroupDef, allMerged map[string]dictionary.GroupDef) {
-	entryName := mg.Name + "Entry"
-
+// writeIterationMethod generates <groupName>Entries on an owner (a message
+// reader or a group entry). spec is the expression of the group's spec in
+// that owner's context; entries keep it for their own nested groups.
+func writeIterationMethod(f *jen.File, ownerName, ownerRecv, ownerField, groupName string, spec jen.Code) {
+	entryName := groupName + "Entry"
 	f.Func().Params(
 		jen.Id(ownerRecv).Op("*").Id(ownerName),
-	).Id(mg.Name+"Entries").Params().Index().Id(entryName).Block(
-		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("GroupsOf").Call(jen.Id(specVar(mg.Name))),
+	).Id(groupName+"Entries").Params().Index().Id(entryName).Block(
+		jen.Id("spec").Op(":=").Add(spec),
+		jen.If(jen.Id("spec").Op("==").Nil()).Block(jen.Return(jen.Nil())),
+		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("GroupsOf").Call(jen.Id("spec")),
 		jen.Id("entries").Op(":=").Make(jen.Index().Id(entryName), jen.Len(jen.Id("groups"))),
 		jen.For(jen.Id("i").Op(":=").Range().Id("groups")).Block(
 			jen.Id("entries").Index(jen.Id("i")).Op("=").Id(entryName).Values(jen.Dict{
-				jen.Id("grp"): jen.Id("groups").Index(jen.Id("i")),
+				jen.Id("grp"):  jen.Id("groups").Index(jen.Id("i")),
+				jen.Id("spec"): jen.Id("spec"),
 			}),
 		),
 		jen.Return(jen.Id("entries")),

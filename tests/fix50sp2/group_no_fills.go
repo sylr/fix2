@@ -8,7 +8,8 @@ import (
 )
 
 type NoFillsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoFillsEntry) FillExecID() (string, bool) {
@@ -48,19 +49,19 @@ func (e *NoFillsEntry) NoNested4PartyIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoFillsEntry) NoNested4PartyIDsEntries() []NoNested4PartyIDsEntry {
-	groups := e.grp.GroupsOf(noNested4PartyIDsSpec)
+	spec := e.spec.Child(TagNoNested4PartyIDs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoNested4PartyIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoNested4PartyIDsEntry{grp: groups[i]}
+		entries[i] = NoNested4PartyIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noFillsSpec = &fix2.GroupSpec{
-	Counter: TagNoFills,
-	Delim:   TagFillExecID,
-	Nested:  []*fix2.GroupSpec{noNested4PartyIDsSpec},
-	Tags:    []int{TagFillExecID, TagFillPx, TagFillQty, TagFillLiquidityInd},
 }
 
 type NoFillsEntryBuilder struct {

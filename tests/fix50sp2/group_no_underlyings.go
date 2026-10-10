@@ -9,7 +9,8 @@ import (
 )
 
 type NoUnderlyingsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoUnderlyingsEntry) UnderlyingSymbol() (string, bool) {
@@ -441,10 +442,17 @@ func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltID() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltIDEntries() []NoUnderlyingSecurityAltIDEntry {
-	groups := e.grp.GroupsOf(noUnderlyingSecurityAltIDSpec)
+	spec := e.spec.Child(TagNoUnderlyingSecurityAltID)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoUnderlyingSecurityAltIDEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoUnderlyingSecurityAltIDEntry{grp: groups[i]}
+		entries[i] = NoUnderlyingSecurityAltIDEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
@@ -457,10 +465,17 @@ func (e *NoUnderlyingsEntry) NoUnderlyingStips() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingStipsEntries() []NoUnderlyingStipsEntry {
-	groups := e.grp.GroupsOf(noUnderlyingStipsSpec)
+	spec := e.spec.Child(TagNoUnderlyingStips)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoUnderlyingStipsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoUnderlyingStipsEntry{grp: groups[i]}
+		entries[i] = NoUnderlyingStipsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
@@ -473,19 +488,19 @@ func (e *NoUnderlyingsEntry) NoUndlyInstrumentParties() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrumentPartiesEntry {
-	groups := e.grp.GroupsOf(noUndlyInstrumentPartiesSpec)
+	spec := e.spec.Child(TagNoUndlyInstrumentParties)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoUndlyInstrumentPartiesEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoUndlyInstrumentPartiesEntry{grp: groups[i]}
+		entries[i] = NoUndlyInstrumentPartiesEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noUnderlyingsSpec = &fix2.GroupSpec{
-	Counter: TagNoUnderlyings,
-	Delim:   TagUnderlyingSymbol,
-	Nested:  []*fix2.GroupSpec{noUnderlyingSecurityAltIDSpec, noUnderlyingStipsSpec, noUndlyInstrumentPartiesSpec},
-	Tags:    []int{TagUnderlyingSymbol, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingRedemptionDate, TagUnderlyingCreditRating, TagUnderlyingSecurityIDSource, TagUnderlyingIssuer, TagUnderlyingSecurityDesc, TagUnderlyingSecurityExchange, TagUnderlyingSecurityID, TagUnderlyingSecurityType, TagUnderlyingSymbolSfx, TagUnderlyingMaturityMonthYear, TagUnderlyingPutOrCall, TagUnderlyingStrikePrice, TagUnderlyingOptAttribute, TagUnderlyingCurrency, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCouponRate, TagUnderlyingContractMultiplier, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingMaturityDate, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingInstrRegistry, TagUnderlyingSecuritySubType, TagUnderlyingPx, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingQty, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingStrikeCurrency, TagUnderlyingAllocationPercent, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingSettlementType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
 }
 
 type NoUnderlyingsEntryBuilder struct {

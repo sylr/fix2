@@ -1,6 +1,7 @@
 package fix2
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -282,5 +283,36 @@ func TestGroupsOfZeroCopy(t *testing.T) {
 	_ = append(entries[0].Fields(), Field{Tag: 1})
 	if m.Fields()[2].Tag != 80 {
 		t.Error("appending to an entry overwrote message fields")
+	}
+}
+
+func TestGroupsOfNestedDoesNotAllocate(t *testing.T) {
+	// One parent entry holding 32 one-entry nested groups: skipping nested
+	// blocks must not build their entries.
+	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}}
+	pairs := []string{"900=1", "100=p"}
+	for i := range 32 {
+		counter, delim := 1000+2*i, 1001+2*i
+		parent.Nested = append(parent.Nested, &GroupSpec{Counter: counter, Delim: delim, Tags: []int{delim}})
+		pairs = append(pairs, fmt.Sprintf("%d=1", counter), fmt.Sprintf("%d=x", delim))
+	}
+	m := fieldsMsg(t, pairs...)
+	if got := len(m.GroupsOf(parent)); got != 1 {
+		t.Fatalf("got %d entries, want 1", got)
+	}
+	if allocs := testing.AllocsPerRun(100, func() { m.GroupsOf(parent) }); allocs > 1 {
+		t.Errorf("GroupsOf allocated %v times, want at most 1 (the result)", allocs)
+	}
+}
+
+func TestGroupSpecChild(t *testing.T) {
+	child := &GroupSpec{Counter: 2}
+	s := &GroupSpec{Counter: 1, Nested: []*GroupSpec{child}}
+	if s.Child(2) != child || s.Child(3) != nil {
+		t.Error("Child lookup")
+	}
+	var none *GroupSpec
+	if none.Child(2) != nil {
+		t.Error("Child on a nil spec must return nil")
 	}
 }

@@ -8,7 +8,8 @@ import (
 )
 
 type NoContAmtsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoContAmtsEntry) ContAmtType() (ContAmtType, bool) {
@@ -26,12 +27,6 @@ func (e *NoContAmtsEntry) ContAmtValue() (float64, bool, error) {
 func (e *NoContAmtsEntry) ContAmtCurr() (string, bool) {
 	v := e.grp.Get(TagContAmtCurr)
 	return string(v), v != nil
-}
-
-var noContAmtsSpec = &fix2.GroupSpec{
-	Counter: TagNoContAmts,
-	Delim:   TagContAmtType,
-	Tags:    []int{TagContAmtType, TagContAmtValue, TagContAmtCurr},
 }
 
 type NoContAmtsEntryBuilder struct {

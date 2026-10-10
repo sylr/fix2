@@ -535,24 +535,27 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 		}
 		return string(b)
 	}
-	// Each group declares its spec; NoAllocs nests NoDlvyInst by reference.
-	allocs := read("group_no_allocs.go")
+	// The message declares the spec tree of its own NoAllocs group, nesting
+	// NoDlvyInst inline; entries look nested specs up in their context.
+	nos := read("msg_new_order_single.go")
 	for _, want := range []string{
-		"var noAllocsSpec = &fix2.GroupSpec{",
+		"var newOrderSingleNoAllocsSpec = &fix2.GroupSpec{",
 		"Counter: TagNoAllocs,",
 		"Delim:   TagAllocAccount,",
-		"Nested:  []*fix2.GroupSpec{noDlvyInstSpec},",
-		"e.grp.GroupsOf(noDlvyInstSpec)",
+		"Counter: TagNoDlvyInst,",
+		"spec := newOrderSingleNoAllocsSpec",
+		"m.msg.GroupsOf(spec)",
 	} {
-		if !strings.Contains(allocs, want) {
-			t.Errorf("group_no_allocs.go missing %q", want)
+		if !strings.Contains(nos, want) {
+			t.Errorf("msg_new_order_single.go missing %q", want)
 		}
 	}
-	if !strings.Contains(read("group_no_dlvy_inst.go"), "var noDlvyInstSpec = &fix2.GroupSpec{") {
-		t.Error("group_no_dlvy_inst.go missing noDlvyInstSpec")
+	allocs := read("group_no_allocs.go")
+	if !strings.Contains(allocs, "spec := e.spec.Child(TagNoDlvyInst)") {
+		t.Error("NoAllocsEntry does not look up NoDlvyInst in its own spec")
 	}
-	if !strings.Contains(read("msg_new_order_single.go"), "m.msg.GroupsOf(noAllocsSpec)") {
-		t.Error("NewOrderSingle does not read NoAllocs with GroupsOf")
+	if strings.Contains(allocs, "GroupSpec{") {
+		t.Error("group files should not declare shared specs")
 	}
 }
 
@@ -661,6 +664,66 @@ func TestRoundTrip(t *testing.T) {
 				t.Errorf("entry %d party %d = %q, want %q", i, j, got, id)
 			}
 		}
+	}
+}
+`)
+}
+
+// TestGenerateGroupDefinedDifferentlyPerMessage covers a group whose fields
+// differ between messages: message B's Child group also holds tag 100, which
+// in message A is the delimiter of Parent, the group around Child. A's
+// entries must be split with A's own definitions.
+func TestGenerateGroupDefinedDifferentlyPerMessage(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="A" msgtype="U1" msgcat="app">
+      <group name="NoParent" required="N">
+        <field name="P" required="N"/>
+        <group name="NoChild" required="N"><field name="C" required="N"/></group>
+      </group>
+    </message>
+    <message name="B" msgtype="U2" msgcat="app">
+      <group name="NoChild" required="N"><field name="C" required="N"/><field name="P" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="900" name="NoParent" type="NUMINGROUP"/>
+    <field number="100" name="P" type="STRING"/>
+    <field number="200" name="NoChild" type="NUMINGROUP"/>
+    <field number="201" name="C" type="STRING"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "perctx", `package perctx
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestPerMessageSpec(t *testing.T) {
+	// 900=2|100=P1|200=1|201=C|100=P2|: in A, 100 starts the second parent
+	// entry; the merged NoChild (which allows 100) must not swallow it.
+	raw := fix2.NewBuilder("FIX.4.4", "U1").
+		SetInt(900, 2).
+		AppendString(100, "P1").AppendInt(200, 1).AppendString(201, "C").
+		AppendString(100, "P2").
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	parents := WrapA(&msg).NoParentEntries()
+	if len(parents) != 2 {
+		t.Fatalf("%q: %d parent entries, want 2", raw, len(parents))
+	}
+	if p, _ := parents[1].P(); p != "P2" {
+		t.Errorf("second parent P = %q, want P2", p)
+	}
+	if n := len(parents[0].NoChildEntries()); n != 1 {
+		t.Errorf("first parent has %d children, want 1", n)
 	}
 }
 `)

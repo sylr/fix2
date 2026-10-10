@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoRateSourcesEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoRateSourcesEntry) RateSource() (RateSource, bool) {
@@ -19,12 +20,6 @@ func (e *NoRateSourcesEntry) RateSourceType() (RateSourceType, bool) {
 func (e *NoRateSourcesEntry) ReferencePage() (string, bool) {
 	v := e.grp.Get(TagReferencePage)
 	return string(v), v != nil
-}
-
-var noRateSourcesSpec = &fix2.GroupSpec{
-	Counter: TagNoRateSources,
-	Delim:   TagRateSource,
-	Tags:    []int{TagRateSource, TagRateSourceType, TagReferencePage},
 }
 
 type NoRateSourcesEntryBuilder struct {

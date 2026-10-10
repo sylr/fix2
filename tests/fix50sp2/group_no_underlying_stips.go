@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoUnderlyingStipsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoUnderlyingStipsEntry) UnderlyingStipType() (string, bool) {
@@ -15,12 +16,6 @@ func (e *NoUnderlyingStipsEntry) UnderlyingStipType() (string, bool) {
 func (e *NoUnderlyingStipsEntry) UnderlyingStipValue() (string, bool) {
 	v := e.grp.Get(TagUnderlyingStipValue)
 	return string(v), v != nil
-}
-
-var noUnderlyingStipsSpec = &fix2.GroupSpec{
-	Counter: TagNoUnderlyingStips,
-	Delim:   TagUnderlyingStipType,
-	Tags:    []int{TagUnderlyingStipType, TagUnderlyingStipValue},
 }
 
 type NoUnderlyingStipsEntryBuilder struct {

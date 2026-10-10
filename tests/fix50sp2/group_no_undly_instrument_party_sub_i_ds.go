@@ -8,7 +8,8 @@ import (
 )
 
 type NoUndlyInstrumentPartySubIDsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoUndlyInstrumentPartySubIDsEntry) UnderlyingInstrumentPartySubID() (string, bool) {
@@ -22,12 +23,6 @@ func (e *NoUndlyInstrumentPartySubIDsEntry) UnderlyingInstrumentPartySubIDType()
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
-}
-
-var noUndlyInstrumentPartySubIDsSpec = &fix2.GroupSpec{
-	Counter: TagNoUndlyInstrumentPartySubIDs,
-	Delim:   TagUnderlyingInstrumentPartySubID,
-	Tags:    []int{TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType},
 }
 
 type NoUndlyInstrumentPartySubIDsEntryBuilder struct {

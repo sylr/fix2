@@ -338,11 +338,25 @@ func (m *ExecutionReport) Text() (string, bool) {
 	v := m.msg.Get(TagText)
 	return string(v), v != nil
 }
+
+var executionReportNoMiscFeesSpec = &fix2.GroupSpec{
+	Counter: TagNoMiscFees,
+	Delim:   TagMiscFeeAmt,
+	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType},
+}
+
 func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
-	groups := m.msg.GroupsOf(noMiscFeesSpec)
+	spec := executionReportNoMiscFeesSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoMiscFeesEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoMiscFeesEntry{grp: groups[i]}
+		entries[i] = NoMiscFeesEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }

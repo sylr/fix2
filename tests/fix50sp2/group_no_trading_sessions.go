@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoTradingSessionsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoTradingSessionsEntry) TradingSessionID() (TradingSessionID, bool) {
@@ -15,12 +16,6 @@ func (e *NoTradingSessionsEntry) TradingSessionID() (TradingSessionID, bool) {
 func (e *NoTradingSessionsEntry) TradingSessionSubID() (TradingSessionSubID, bool) {
 	v := e.grp.Get(TagTradingSessionSubID)
 	return TradingSessionSubID(v), v != nil
-}
-
-var noTradingSessionsSpec = &fix2.GroupSpec{
-	Counter: TagNoTradingSessions,
-	Delim:   TagTradingSessionID,
-	Tags:    []int{TagTradingSessionID, TagTradingSessionSubID},
 }
 
 type NoTradingSessionsEntryBuilder struct {

@@ -8,7 +8,8 @@ import (
 )
 
 type NoNested4PartySubIDsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoNested4PartySubIDsEntry) Nested4PartySubID() (string, bool) {
@@ -22,12 +23,6 @@ func (e *NoNested4PartySubIDsEntry) Nested4PartySubIDType() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
-}
-
-var noNested4PartySubIDsSpec = &fix2.GroupSpec{
-	Counter: TagNoNested4PartySubIDs,
-	Delim:   TagNested4PartySubID,
-	Tags:    []int{TagNested4PartySubID, TagNested4PartySubIDType},
 }
 
 type NoNested4PartySubIDsEntryBuilder struct {

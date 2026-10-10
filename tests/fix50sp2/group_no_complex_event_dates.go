@@ -8,7 +8,8 @@ import (
 )
 
 type NoComplexEventDatesEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoComplexEventDatesEntry) ComplexEventStartDate() (time.Time, bool, error) {
@@ -36,19 +37,19 @@ func (e *NoComplexEventDatesEntry) NoComplexEventTimes() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoComplexEventDatesEntry) NoComplexEventTimesEntries() []NoComplexEventTimesEntry {
-	groups := e.grp.GroupsOf(noComplexEventTimesSpec)
+	spec := e.spec.Child(TagNoComplexEventTimes)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoComplexEventTimesEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoComplexEventTimesEntry{grp: groups[i]}
+		entries[i] = NoComplexEventTimesEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noComplexEventDatesSpec = &fix2.GroupSpec{
-	Counter: TagNoComplexEventDates,
-	Delim:   TagComplexEventStartDate,
-	Nested:  []*fix2.GroupSpec{noComplexEventTimesSpec},
-	Tags:    []int{TagComplexEventStartDate, TagComplexEventEndDate},
 }
 
 type NoComplexEventDatesEntryBuilder struct {

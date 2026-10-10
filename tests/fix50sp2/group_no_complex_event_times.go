@@ -8,7 +8,8 @@ import (
 )
 
 type NoComplexEventTimesEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoComplexEventTimesEntry) ComplexEventStartTime() (time.Time, bool, error) {
@@ -26,12 +27,6 @@ func (e *NoComplexEventTimesEntry) ComplexEventEndTime() (time.Time, bool, error
 	}
 	t, err := fix2.ParseUTCTimeOnly(v)
 	return t, true, err
-}
-
-var noComplexEventTimesSpec = &fix2.GroupSpec{
-	Counter: TagNoComplexEventTimes,
-	Delim:   TagComplexEventStartTime,
-	Tags:    []int{TagComplexEventStartTime, TagComplexEventEndTime},
 }
 
 type NoComplexEventTimesEntryBuilder struct {

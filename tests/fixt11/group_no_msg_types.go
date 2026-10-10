@@ -5,7 +5,8 @@ package fixt11
 import fix2 "github.com/sylr/fix2"
 
 type NoMsgTypesEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoMsgTypesEntry) RefMsgType() (string, bool) {
@@ -23,12 +24,6 @@ func (e *NoMsgTypesEntry) RefApplVerID() (string, bool) {
 func (e *NoMsgTypesEntry) RefCstmApplVerID() (string, bool) {
 	v := e.grp.Get(TagRefCstmApplVerID)
 	return string(v), v != nil
-}
-
-var noMsgTypesSpec = &fix2.GroupSpec{
-	Counter: TagNoMsgTypes,
-	Delim:   TagRefMsgType,
-	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID},
 }
 
 type NoMsgTypesEntryBuilder struct {

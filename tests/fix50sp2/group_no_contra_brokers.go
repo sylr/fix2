@@ -9,7 +9,8 @@ import (
 )
 
 type NoContraBrokersEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoContraBrokersEntry) ContraBroker() (string, bool) {
@@ -39,12 +40,6 @@ func (e *NoContraBrokersEntry) ContraTradeTime() (time.Time, bool, error) {
 func (e *NoContraBrokersEntry) ContraLegRefID() (string, bool) {
 	v := e.grp.Get(TagContraLegRefID)
 	return string(v), v != nil
-}
-
-var noContraBrokersSpec = &fix2.GroupSpec{
-	Counter: TagNoContraBrokers,
-	Delim:   TagContraBroker,
-	Tags:    []int{TagContraBroker, TagContraTrader, TagContraTradeQty, TagContraTradeTime, TagContraLegRefID},
 }
 
 type NoContraBrokersEntryBuilder struct {

@@ -8,7 +8,8 @@ import (
 )
 
 type NoInstrumentPartiesEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoInstrumentPartiesEntry) InstrumentPartyID() (string, bool) {
@@ -36,19 +37,19 @@ func (e *NoInstrumentPartiesEntry) NoInstrumentPartySubIDs() (int, bool, error) 
 	return n, true, err
 }
 func (e *NoInstrumentPartiesEntry) NoInstrumentPartySubIDsEntries() []NoInstrumentPartySubIDsEntry {
-	groups := e.grp.GroupsOf(noInstrumentPartySubIDsSpec)
+	spec := e.spec.Child(TagNoInstrumentPartySubIDs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoInstrumentPartySubIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoInstrumentPartySubIDsEntry{grp: groups[i]}
+		entries[i] = NoInstrumentPartySubIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noInstrumentPartiesSpec = &fix2.GroupSpec{
-	Counter: TagNoInstrumentParties,
-	Delim:   TagInstrumentPartyID,
-	Nested:  []*fix2.GroupSpec{noInstrumentPartySubIDsSpec},
-	Tags:    []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole},
 }
 
 type NoInstrumentPartiesEntryBuilder struct {

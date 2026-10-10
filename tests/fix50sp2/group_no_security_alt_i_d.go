@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoSecurityAltIDEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoSecurityAltIDEntry) SecurityAltID() (string, bool) {
@@ -15,12 +16,6 @@ func (e *NoSecurityAltIDEntry) SecurityAltID() (string, bool) {
 func (e *NoSecurityAltIDEntry) SecurityAltIDSource() (string, bool) {
 	v := e.grp.Get(TagSecurityAltIDSource)
 	return string(v), v != nil
-}
-
-var noSecurityAltIDSpec = &fix2.GroupSpec{
-	Counter: TagNoSecurityAltID,
-	Delim:   TagSecurityAltID,
-	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
 }
 
 type NoSecurityAltIDEntryBuilder struct {

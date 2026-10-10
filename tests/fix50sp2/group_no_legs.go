@@ -9,7 +9,8 @@ import (
 )
 
 type NoLegsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoLegsEntry) LegSymbol() (string, bool) {
@@ -453,10 +454,17 @@ func (e *NoLegsEntry) NoLegAllocs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegAllocsEntries() []NoLegAllocsEntry {
-	groups := e.grp.GroupsOf(noLegAllocsSpec)
+	spec := e.spec.Child(TagNoLegAllocs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoLegAllocsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoLegAllocsEntry{grp: groups[i]}
+		entries[i] = NoLegAllocsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
@@ -469,10 +477,17 @@ func (e *NoLegsEntry) NoLegSecurityAltID() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegSecurityAltIDEntries() []NoLegSecurityAltIDEntry {
-	groups := e.grp.GroupsOf(noLegSecurityAltIDSpec)
+	spec := e.spec.Child(TagNoLegSecurityAltID)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoLegSecurityAltIDEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoLegSecurityAltIDEntry{grp: groups[i]}
+		entries[i] = NoLegSecurityAltIDEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
@@ -485,10 +500,17 @@ func (e *NoLegsEntry) NoLegStipulations() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegStipulationsEntries() []NoLegStipulationsEntry {
-	groups := e.grp.GroupsOf(noLegStipulationsSpec)
+	spec := e.spec.Child(TagNoLegStipulations)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoLegStipulationsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoLegStipulationsEntry{grp: groups[i]}
+		entries[i] = NoLegStipulationsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
@@ -501,19 +523,19 @@ func (e *NoLegsEntry) NoNested3PartyIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
-	groups := e.grp.GroupsOf(noNested3PartyIDsSpec)
+	spec := e.spec.Child(TagNoNested3PartyIDs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoNested3PartyIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoNested3PartyIDsEntry{grp: groups[i]}
+		entries[i] = NoNested3PartyIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noLegsSpec = &fix2.GroupSpec{
-	Counter: TagNoLegs,
-	Delim:   TagLegSymbol,
-	Nested:  []*fix2.GroupSpec{noLegAllocsSpec, noLegSecurityAltIDSpec, noLegStipulationsSpec, noNested3PartyIDsSpec},
-	Tags:    []int{TagLegSymbol, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegRedemptionDate, TagLegCreditRating, TagLegCurrency, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegPrice, TagLegSettlType, TagLegSettlDate, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegInstrRegistry, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegStrikePrice, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegLastPx, TagLegRefID, TagLegSettlCurrency, TagLegOrderQty, TagLegQty, TagLegSwapType, TagLegDatedDate, TagLegPool, TagLegSecuritySubType, TagLegStrikeCurrency, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagLegMaturityTime, TagLegUnitOfMeasureQty, TagLegPutOrCall, TagLegAllocID, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty, TagLegExerciseStyle, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType},
 }
 
 type NoLegsEntryBuilder struct {

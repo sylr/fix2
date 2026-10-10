@@ -8,7 +8,8 @@ import (
 )
 
 type NoMiscFeesEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoMiscFeesEntry) MiscFeeAmt() (float64, bool, error) {
@@ -26,12 +27,6 @@ func (e *NoMiscFeesEntry) MiscFeeCurr() (string, bool) {
 func (e *NoMiscFeesEntry) MiscFeeType() (MiscFeeType, bool) {
 	v := e.grp.Get(TagMiscFeeType)
 	return MiscFeeType(v), v != nil
-}
-
-var noMiscFeesSpec = &fix2.GroupSpec{
-	Counter: TagNoMiscFees,
-	Delim:   TagMiscFeeAmt,
-	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType},
 }
 
 type NoMiscFeesEntryBuilder struct {

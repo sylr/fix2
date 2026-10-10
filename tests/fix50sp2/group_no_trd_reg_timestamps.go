@@ -8,7 +8,8 @@ import (
 )
 
 type NoTrdRegTimestampsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoTrdRegTimestampsEntry) TrdRegTimestamp() (time.Time, bool, error) {
@@ -38,12 +39,6 @@ func (e *NoTrdRegTimestampsEntry) DeskTypeSource() (DeskTypeSource, bool) {
 func (e *NoTrdRegTimestampsEntry) DeskOrderHandlingInst() (DeskOrderHandlingInst, bool) {
 	v := e.grp.Get(TagDeskOrderHandlingInst)
 	return DeskOrderHandlingInst(v), v != nil
-}
-
-var noTrdRegTimestampsSpec = &fix2.GroupSpec{
-	Counter: TagNoTrdRegTimestamps,
-	Delim:   TagTrdRegTimestamp,
-	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
 }
 
 type NoTrdRegTimestampsEntryBuilder struct {

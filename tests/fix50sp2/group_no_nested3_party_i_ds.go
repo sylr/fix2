@@ -8,7 +8,8 @@ import (
 )
 
 type NoNested3PartyIDsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoNested3PartyIDsEntry) Nested3PartyID() (string, bool) {
@@ -36,19 +37,19 @@ func (e *NoNested3PartyIDsEntry) NoNested3PartySubIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoNested3PartyIDsEntry) NoNested3PartySubIDsEntries() []NoNested3PartySubIDsEntry {
-	groups := e.grp.GroupsOf(noNested3PartySubIDsSpec)
+	spec := e.spec.Child(TagNoNested3PartySubIDs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoNested3PartySubIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoNested3PartySubIDsEntry{grp: groups[i]}
+		entries[i] = NoNested3PartySubIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noNested3PartyIDsSpec = &fix2.GroupSpec{
-	Counter: TagNoNested3PartyIDs,
-	Delim:   TagNested3PartyID,
-	Nested:  []*fix2.GroupSpec{noNested3PartySubIDsSpec},
-	Tags:    []int{TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole},
 }
 
 type NoNested3PartyIDsEntryBuilder struct {

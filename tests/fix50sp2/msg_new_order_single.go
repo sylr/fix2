@@ -1346,91 +1346,293 @@ func (m *NewOrderSingle) ExDestinationIDSource() (ExDestinationIDSource, bool) {
 	v := m.msg.Get(TagExDestinationIDSource)
 	return ExDestinationIDSource(v), v != nil
 }
+
+var newOrderSingleNoPartyIDsSpec = &fix2.GroupSpec{
+	Counter: TagNoPartyIDs,
+	Delim:   TagPartyID,
+	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+		Counter: TagNoPartySubIDs,
+		Delim:   TagPartySubID,
+		Tags:    []int{TagPartySubID, TagPartySubIDType},
+	}},
+	Tags: []int{TagPartyID, TagPartyIDSource, TagPartyRole},
+}
+
 func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
-	groups := m.msg.GroupsOf(noPartyIDsSpec)
+	spec := newOrderSingleNoPartyIDsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoPartyIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoPartyIDsEntry{grp: groups[i]}
+		entries[i] = NoPartyIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoAllocsSpec = &fix2.GroupSpec{
+	Counter: TagNoAllocs,
+	Delim:   TagAllocAccount,
+	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+		Counter: TagNoNestedPartyIDs,
+		Delim:   TagNestedPartyID,
+		Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+			Counter: TagNoNestedPartySubIDs,
+			Delim:   TagNestedPartySubID,
+			Tags:    []int{TagNestedPartySubID, TagNestedPartySubIDType},
+		}},
+		Tags: []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole},
+	}},
+	Tags: []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagAllocQty},
+}
+
 func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
-	groups := m.msg.GroupsOf(noAllocsSpec)
+	spec := newOrderSingleNoAllocsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoAllocsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoAllocsEntry{grp: groups[i]}
+		entries[i] = NoAllocsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoTradingSessionsSpec = &fix2.GroupSpec{
+	Counter: TagNoTradingSessions,
+	Delim:   TagTradingSessionID,
+	Tags:    []int{TagTradingSessionID, TagTradingSessionSubID},
+}
+
 func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
-	groups := m.msg.GroupsOf(noTradingSessionsSpec)
+	spec := newOrderSingleNoTradingSessionsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoTradingSessionsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoTradingSessionsEntry{grp: groups[i]}
+		entries[i] = NoTradingSessionsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoSecurityAltIDSpec = &fix2.GroupSpec{
+	Counter: TagNoSecurityAltID,
+	Delim:   TagSecurityAltID,
+	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
+}
+
 func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
-	groups := m.msg.GroupsOf(noSecurityAltIDSpec)
+	spec := newOrderSingleNoSecurityAltIDSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoSecurityAltIDEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoSecurityAltIDEntry{grp: groups[i]}
+		entries[i] = NoSecurityAltIDEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoEventsSpec = &fix2.GroupSpec{
+	Counter: TagNoEvents,
+	Delim:   TagEventType,
+	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
+}
+
 func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
-	groups := m.msg.GroupsOf(noEventsSpec)
+	spec := newOrderSingleNoEventsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoEventsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoEventsEntry{grp: groups[i]}
+		entries[i] = NoEventsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoInstrumentPartiesSpec = &fix2.GroupSpec{
+	Counter: TagNoInstrumentParties,
+	Delim:   TagInstrumentPartyID,
+	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+		Counter: TagNoInstrumentPartySubIDs,
+		Delim:   TagInstrumentPartySubID,
+		Tags:    []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType},
+	}},
+	Tags: []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole},
+}
+
 func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
-	groups := m.msg.GroupsOf(noInstrumentPartiesSpec)
+	spec := newOrderSingleNoInstrumentPartiesSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoInstrumentPartiesEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoInstrumentPartiesEntry{grp: groups[i]}
+		entries[i] = NoInstrumentPartiesEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoComplexEventsSpec = &fix2.GroupSpec{
+	Counter: TagNoComplexEvents,
+	Delim:   TagComplexEventType,
+	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+		Counter: TagNoComplexEventDates,
+		Delim:   TagComplexEventStartDate,
+		Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+			Counter: TagNoComplexEventTimes,
+			Delim:   TagComplexEventStartTime,
+			Tags:    []int{TagComplexEventStartTime, TagComplexEventEndTime},
+		}},
+		Tags: []int{TagComplexEventStartDate, TagComplexEventEndDate},
+	}},
+	Tags: []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition},
+}
+
 func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
-	groups := m.msg.GroupsOf(noComplexEventsSpec)
+	spec := newOrderSingleNoComplexEventsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoComplexEventsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoComplexEventsEntry{grp: groups[i]}
+		entries[i] = NoComplexEventsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoUnderlyingsSpec = &fix2.GroupSpec{
+	Counter: TagNoUnderlyings,
+	Delim:   TagUnderlyingSymbol,
+	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+		Counter: TagNoUnderlyingSecurityAltID,
+		Delim:   TagUnderlyingSecurityAltID,
+		Tags:    []int{TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource},
+	}, &fix2.GroupSpec{
+		Counter: TagNoUnderlyingStips,
+		Delim:   TagUnderlyingStipType,
+		Tags:    []int{TagUnderlyingStipType, TagUnderlyingStipValue},
+	}, &fix2.GroupSpec{
+		Counter: TagNoUndlyInstrumentParties,
+		Delim:   TagUnderlyingInstrumentPartyID,
+		Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+			Counter: TagNoUndlyInstrumentPartySubIDs,
+			Delim:   TagUnderlyingInstrumentPartySubID,
+			Tags:    []int{TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType},
+		}},
+		Tags: []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole},
+	}},
+	Tags: []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
+}
+
 func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
-	groups := m.msg.GroupsOf(noUnderlyingsSpec)
+	spec := newOrderSingleNoUnderlyingsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoUnderlyingsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoUnderlyingsEntry{grp: groups[i]}
+		entries[i] = NoUnderlyingsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoStipulationsSpec = &fix2.GroupSpec{
+	Counter: TagNoStipulations,
+	Delim:   TagStipulationType,
+	Tags:    []int{TagStipulationType, TagStipulationValue},
+}
+
 func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
-	groups := m.msg.GroupsOf(noStipulationsSpec)
+	spec := newOrderSingleNoStipulationsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoStipulationsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoStipulationsEntry{grp: groups[i]}
+		entries[i] = NoStipulationsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoStrategyParametersSpec = &fix2.GroupSpec{
+	Counter: TagNoStrategyParameters,
+	Delim:   TagStrategyParameterName,
+	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
+}
+
 func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEntry {
-	groups := m.msg.GroupsOf(noStrategyParametersSpec)
+	spec := newOrderSingleNoStrategyParametersSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoStrategyParametersEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoStrategyParametersEntry{grp: groups[i]}
+		entries[i] = NoStrategyParametersEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }
+
+var newOrderSingleNoTrdRegTimestampsSpec = &fix2.GroupSpec{
+	Counter: TagNoTrdRegTimestamps,
+	Delim:   TagTrdRegTimestamp,
+	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
+}
+
 func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
-	groups := m.msg.GroupsOf(noTrdRegTimestampsSpec)
+	spec := newOrderSingleNoTrdRegTimestampsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoTrdRegTimestampsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoTrdRegTimestampsEntry{grp: groups[i]}
+		entries[i] = NoTrdRegTimestampsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }

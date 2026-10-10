@@ -234,11 +234,25 @@ func (m *Logon) NoMsgTypes() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+
+var logonNoMsgTypesSpec = &fix2.GroupSpec{
+	Counter: TagNoMsgTypes,
+	Delim:   TagRefMsgType,
+	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID},
+}
+
 func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
-	groups := m.msg.GroupsOf(noMsgTypesSpec)
+	spec := logonNoMsgTypesSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
 	entries := make([]NoMsgTypesEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoMsgTypesEntry{grp: groups[i]}
+		entries[i] = NoMsgTypesEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
 }

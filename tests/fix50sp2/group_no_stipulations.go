@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoStipulationsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoStipulationsEntry) StipulationType() (StipulationType, bool) {
@@ -15,12 +16,6 @@ func (e *NoStipulationsEntry) StipulationType() (StipulationType, bool) {
 func (e *NoStipulationsEntry) StipulationValue() (string, bool) {
 	v := e.grp.Get(TagStipulationValue)
 	return string(v), v != nil
-}
-
-var noStipulationsSpec = &fix2.GroupSpec{
-	Counter: TagNoStipulations,
-	Delim:   TagStipulationType,
-	Tags:    []int{TagStipulationType, TagStipulationValue},
 }
 
 type NoStipulationsEntryBuilder struct {

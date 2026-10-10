@@ -9,7 +9,8 @@ import (
 )
 
 type NoEventsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoEventsEntry) EventType() (EventType, bool) {
@@ -43,12 +44,6 @@ func (e *NoEventsEntry) EventTime() (time.Time, bool, error) {
 	}
 	t, err := fix2.ParseUTCTimestamp(v)
 	return t, true, err
-}
-
-var noEventsSpec = &fix2.GroupSpec{
-	Counter: TagNoEvents,
-	Delim:   TagEventType,
-	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
 }
 
 type NoEventsEntryBuilder struct {

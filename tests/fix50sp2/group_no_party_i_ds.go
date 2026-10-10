@@ -5,7 +5,8 @@ package fix50sp2
 import fix2 "github.com/sylr/fix2"
 
 type NoPartyIDsEntry struct {
-	grp fix2.Group
+	grp  fix2.Group
+	spec *fix2.GroupSpec
 }
 
 func (e *NoPartyIDsEntry) PartyID() (string, bool) {
@@ -29,19 +30,19 @@ func (e *NoPartyIDsEntry) NoPartySubIDs() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoPartyIDsEntry) NoPartySubIDsEntries() []NoPartySubIDsEntry {
-	groups := e.grp.GroupsOf(noPartySubIDsSpec)
+	spec := e.spec.Child(TagNoPartySubIDs)
+	if spec == nil {
+		return nil
+	}
+	groups := e.grp.GroupsOf(spec)
 	entries := make([]NoPartySubIDsEntry, len(groups))
 	for i := range groups {
-		entries[i] = NoPartySubIDsEntry{grp: groups[i]}
+		entries[i] = NoPartySubIDsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
 	}
 	return entries
-}
-
-var noPartyIDsSpec = &fix2.GroupSpec{
-	Counter: TagNoPartyIDs,
-	Delim:   TagPartyID,
-	Nested:  []*fix2.GroupSpec{noPartySubIDsSpec},
-	Tags:    []int{TagPartyID, TagPartyIDSource, TagPartyRole},
 }
 
 type NoPartyIDsEntryBuilder struct {
