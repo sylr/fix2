@@ -3,6 +3,7 @@ package dictionary
 import (
 	"maps"
 	"math/bits"
+	"math/rand/v2"
 	"slices"
 
 	fix2 "github.com/sylr/fix2"
@@ -19,10 +20,14 @@ import (
 //   - Enum values are checked against a 256-bit set of single-byte values,
 //     falling back to the dictionary's map for longer ones.
 
-// tagTable maps tags to entries with open addressing and Fibonacci hashing.
+// tagTable maps tags to entries with open addressing. Tags are hashed by
+// multiply-shift with a random odd multiplier per table, a universal family:
+// a dictionary cannot be crafted to make its tags collide and building its
+// tables quadratic.
 type tagTable struct {
 	entries []tagEntry
 	shift   uint
+	mul     uint64
 }
 
 // tagEntry is what a scope (the envelope or a message body) knows of a tag.
@@ -40,7 +45,7 @@ func newTagTable(entries map[int]tagEntry) tagTable {
 	for size < 2*len(entries) {
 		size <<= 1
 	}
-	t := tagTable{entries: make([]tagEntry, size), shift: uint(64 - bits.TrailingZeros(uint(size)))}
+	t := tagTable{entries: make([]tagEntry, size), shift: uint(64 - bits.TrailingZeros(uint(size))), mul: rand.Uint64() | 1}
 	for tag, e := range entries {
 		e.tag, e.used = tag, true
 		i := t.index(tag)
@@ -52,8 +57,9 @@ func newTagTable(entries map[int]tagEntry) tagTable {
 	return t
 }
 
+// index returns the slot where looking tag up starts.
 func (t *tagTable) index(tag int) int {
-	return int(uint64(tag) * 0x9E3779B97F4A7C15 >> t.shift)
+	return int(uint64(tag) * t.mul >> t.shift)
 }
 
 // get returns the entry for tag, or nil.
@@ -143,7 +149,7 @@ func (d *Dict) compile(headerConds, trailerConds []condition, bodyConds map[*Mes
 			}
 		}
 		if long {
-			e.values = fd.Enums
+			e.values = maps.Clone(fd.Enums)
 		}
 		enumIdx[tag] = tagEntry{slot: int32(len(d.enumChecks))}
 		d.enumChecks = append(d.enumChecks, e)

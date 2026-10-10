@@ -163,8 +163,11 @@ func (d *Dict) lookup(mdef *MessageDef, tag int) *tagEntry {
 // top-level presence: the message's, and the header's and trailer's unless
 // they are already among them.
 func (d *Dict) specsOf(mdef *MessageDef) []*fix2.GroupSpec {
-	if len(d.envelopeSpecs) == 0 {
+	switch {
+	case len(d.envelopeSpecs) == 0:
 		return mdef.specs
+	case len(mdef.specs) == 0:
+		return d.envelopeSpecs
 	}
 	return slices.Concat(d.envelopeSpecs, mdef.specs)
 }

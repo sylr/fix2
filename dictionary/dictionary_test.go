@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1525,4 +1526,152 @@ func TestValidate_DoesNotAllocate(t *testing.T) {
 			t.Errorf("Validate allocated %v times for %q", allocs, body)
 		}
 	}
+}
+
+func TestTagTable(t *testing.T) {
+	entries := map[int]tagEntry{}
+	for _, tag := range []int{-7, 0, 1, 8, 1 << 40, -(1 << 40)} {
+		entries[tag] = tagEntry{slot: int32(tag & 0xff)}
+	}
+	// Tags sharing their low bits, as a crafted dictionary could choose.
+	for i := range 1000 {
+		entries[i<<20] = tagEntry{slot: int32(i)}
+	}
+	tt := newTagTable(entries)
+	for tag, want := range entries {
+		if e := tt.get(tag); e == nil || e.slot != want.slot || e.tag != tag {
+			t.Fatalf("get(%d) = %+v, want slot %d", tag, e, want.slot)
+		}
+	}
+	for _, tag := range []int{2, -1, 1<<40 + 1, 1001 << 20} {
+		if e := tt.get(tag); e != nil {
+			t.Errorf("get(%d) = %+v, want nil", tag, e)
+		}
+	}
+	if e := newTagTable(nil); e.get(1) != nil {
+		t.Error("empty table found a tag")
+	}
+}
+
+// slotsDict returns a dictionary whose message M requires n fields, tags 50000
+// to 50000+n-1, after a header requiring MsgType: n+1 presence slots.
+func slotsDict(t *testing.T, n int) *Dict {
+	t.Helper()
+	var refs, defs strings.Builder
+	for i := range n {
+		fmt.Fprintf(&refs, `<field name="F%d" required="Y"/>`, i)
+		fmt.Fprintf(&defs, `<field number="%d" name="F%d" type="STRING"/>`, 50000+i, i)
+	}
+	d, err := Load(strings.NewReader(`<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app">` + refs.String() + `</message></messages>
+  <components/><fields><field number="35" name="MsgType" type="STRING"/>` + defs.String() + `</fields></fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func TestValidate_SlotBoundaries(t *testing.T) {
+	for _, n := range []int{255, 256, 300} { // 256, 257 and 301 slots
+		d := slotsDict(t, n)
+		var body strings.Builder
+		body.WriteString("35=M\x01")
+		for i := range n {
+			fmt.Fprintf(&body, "%d=x\x01", 50000+i)
+		}
+		msg := parseMsg(t, buildFIXMsg(body.String()))
+		if err := d.Validate(&msg); err != nil {
+			t.Errorf("%d slots, all present: %v", n+1, err)
+		}
+		allocs := testing.AllocsPerRun(10, func() { _ = d.Validate(&msg) })
+		if n+1 <= 256 && allocs != 0 {
+			t.Errorf("%d slots: Validate allocated %v times", n+1, allocs)
+		}
+		// The last slot missing.
+		short := strings.Replace(body.String(), fmt.Sprintf("%d=x\x01", 50000+n-1), "", 1)
+		msg = parseMsg(t, buildFIXMsg(short))
+		var ve *ValidationError
+		if err := d.Validate(&msg); !errors.As(err, &ve) || ve.Tag != 50000+n-1 {
+			t.Errorf("%d slots, last missing: got %v", n+1, err)
+		}
+	}
+}
+
+func TestValidate_CompiledEdgeCases(t *testing.T) {
+	// BeginString declared in the body with enums is still never checked;
+	// SenderCompID is required in the header and in the body (one slot);
+	// Code has a long and a single-byte value.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/></header><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app">
+    <field name="BeginString" required="N"/><field name="SenderCompID" required="Y"/><field name="Code" required="N"/>
+  </message></messages>
+  <components/>
+  <fields>
+    <field number="8" name="BeginString" type="STRING"><value enum="X" description="X"/></field>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="49" name="SenderCompID" type="STRING"/>
+    <field number="100" name="Code" type="STRING"><value enum="LONG" description="L"/><value enum="S" description="S"/></field>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, tc := range []struct {
+		body string
+		err  error
+		tag  int
+	}{
+		{"35=M\x0149=s\x01", nil, 0},
+		{"35=M\x01", ErrRequiredTag, 49}, // header first
+		{"35=M\x0149=s\x01100=LONG\x01", nil, 0},
+		{"35=M\x0149=s\x01100=S\x01", nil, 0},
+		{"35=M\x0149=s\x01100=LONGER\x01", ErrInvalidEnumValue, 100},
+		{"35=M\x0149=s\x01100=L\x01", ErrInvalidEnumValue, 100},
+		// Missing required tag, unexpected tag and invalid enum: the
+		// required tag is reported.
+		{"35=M\x01999=x\x01100=Q\x01", ErrRequiredTag, 49},
+		// Unexpected tag before invalid enum: the first in field order.
+		{"35=M\x0149=s\x01999=x\x01100=Q\x01", ErrUnexpectedTag, 999},
+		{"35=M\x0149=s\x01100=Q\x01999=x\x01", ErrInvalidEnumValue, 100},
+	} {
+		msg := parseMsg(t, buildFIXMsg(tc.body))
+		err := d.Validate(&msg)
+		var ve *ValidationError
+		if tc.err == nil && err != nil || tc.err != nil && (!errors.Is(err, tc.err) || !errors.As(err, &ve) || ve.Tag != tc.tag) {
+			t.Errorf("%q: got %v, want %v for tag %d", tc.body, err, tc.err, tc.tag)
+		}
+	}
+	// Changing the loaded dictionary does not change validation.
+	d.Fields[100].Enums["LONGER"] = "added"
+	msg := parseMsg(t, buildFIXMsg("35=M\x0149=s\x01100=LONGER\x01"))
+	if err := d.Validate(&msg); !errors.Is(err, ErrInvalidEnumValue) {
+		t.Errorf("after editing the enums: got %v, want the compiled result", err)
+	}
+}
+
+func TestValidate_Concurrent(t *testing.T) {
+	d := loadTestDict(t)
+	const header = "35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01"
+	const order = "11=ORD1\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01"
+	good := parseMsg(t, buildFIXMsg(header+order+"78=2\x0179=A\x0179=B\x01"))
+	bad := parseMsg(t, buildFIXMsg(header+"54=9\x01"))
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for range 1000 {
+				if err := d.Validate(&good); err != nil {
+					t.Error(err)
+					return
+				}
+				if err := d.Validate(&bad); err == nil {
+					t.Error("bad message validated")
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
 }
