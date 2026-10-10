@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -546,5 +547,31 @@ func TestValidate_MultipleValueEnum(t *testing.T) {
 		if !tt.ok && !errors.Is(err, ErrInvalidEnumValue) {
 			t.Errorf("%q: got %v, want ErrInvalidEnumValue", tt.field, err)
 		}
+	}
+}
+
+func TestLoad_ExponentialExpansion(t *testing.T) {
+	// C0 holds one field; each Cn references C(n-1) twice, so M expands to
+	// 2^30 fields although the dictionary is tiny and acyclic.
+	const depth = 30
+	var comps strings.Builder
+	comps.WriteString(`<component name="C0"><field name="F" required="N"/></component>`)
+	for i := 1; i <= depth; i++ {
+		fmt.Fprintf(&comps, `<component name="C%d"><component name="C%d" required="N"/><component name="C%d" required="N"/></component>`, i, i-1, i-1)
+	}
+	xml := fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="N"/></message></messages>
+  <components>%s</components>
+  <fields><field number="1" name="F" type="STRING"/></fields>
+</fix>`, depth, comps.String())
+
+	start := time.Now()
+	_, err := Load(strings.NewReader(xml))
+	if err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+		t.Fatalf("expected expansion error, got %v", err)
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("Load took %v, want it to stop early", d)
 	}
 }

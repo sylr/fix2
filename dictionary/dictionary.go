@@ -246,7 +246,15 @@ type resolver struct {
 	byName   map[string]*FieldDef
 	compMap  map[string]*xmlComponent
 	visiting map[string]bool // components on the current path, for cycle detection
+	visits   int             // fields and groups visited so far, bounded by maxVisits
 }
+
+// maxVisits bounds the fields and groups the resolver visits for a whole
+// dictionary. Components are expanded in place, so a small acyclic dictionary
+// where each component references the previous one twice expands to 2^n
+// fields; cycle detection does not catch that. The full FIX 5.0 SP2
+// dictionary needs about 40,000 visits.
+const maxVisits = 1_000_000
 
 // resolvedBody is the resolved content of a header, trailer, message or group.
 type resolvedBody struct {
@@ -270,6 +278,11 @@ func (r *resolver) resolve(items []xmlItem) (resolvedBody, error) {
 
 func (r *resolver) walk(items []xmlItem, b *resolvedBody) error {
 	for _, it := range items {
+		if it.XMLName.Local != "component" {
+			if r.visits++; r.visits > maxVisits {
+				return fmt.Errorf("expansion exceeds %d fields: components are referenced too many times", maxVisits)
+			}
+		}
 		switch it.XMLName.Local {
 		case "field":
 			fd, ok := r.byName[it.Name]
