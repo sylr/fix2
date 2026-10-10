@@ -452,3 +452,52 @@ func TestTimeParseAndFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateRemovesStaleFiles(t *testing.T) {
+	dict, err := dictionary.LoadFile("testdata/FIX44.xml")
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	outDir := t.TempDir()
+	header := "// " + generatedHeader + "\n\npackage fix44\n"
+	files := map[string]string{
+		"group_no_old.go":  header,                          // stale generated file: removed
+		"msg_old.go":       header,                          // stale generated file: removed
+		"generate.go":      "package fix44\n",               // hand-written: kept
+		"x.go":             "//",                            // shorter than the header: kept
+		"notes.txt":        header,                          // not a .go file: kept
+		"sub/msg_old.go":   header,                          // in a subdirectory: kept
+		"msg_heartbeat.go": "// stale content, rewritten\n", // emitted again: rewritten
+	}
+	for name, content := range files {
+		path := filepath.Join(outDir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := generate(dict, "fix44", outDir); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	for _, name := range []string{"group_no_old.go", "msg_old.go"} {
+		if _, err := os.Stat(filepath.Join(outDir, name)); !os.IsNotExist(err) {
+			t.Errorf("stale %s still exists (err=%v)", name, err)
+		}
+	}
+	for _, name := range []string{"generate.go", "x.go", "notes.txt", "sub/msg_old.go", "doc.go", "group_no_allocs.go", "msg_new_order_single.go"} {
+		if _, err := os.Stat(filepath.Join(outDir, name)); err != nil {
+			t.Errorf("%s should exist: %v", name, err)
+		}
+	}
+	got, err := os.ReadFile(filepath.Join(outDir, "msg_heartbeat.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(got), "// "+generatedHeader) || !strings.Contains(string(got), "func BuildHeartbeat") {
+		t.Errorf("msg_heartbeat.go was not regenerated:\n%s", got)
+	}
+}
