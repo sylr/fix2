@@ -334,3 +334,17 @@ func TestTimestampPrecision(t *testing.T) {
 		}
 	}
 }
+
+// TestLeapSecond reads a UTCTimestamp holding a leap second through a
+// generated getter: 23:59:59.999999999 that day.
+func TestLeapSecond(t *testing.T) {
+	raw := fix2.NewBuilder("FIXT.1.1", "8").SetString(TagTransactTime, "20161231-23:59:60.500").Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := WrapExecutionReport(&msg).TransactTime()
+	if want := time.Date(2016, 12, 31, 23, 59, 59, 999_999_999, time.UTC); !ok || err != nil || !got.Equal(want) {
+		t.Errorf("TransactTime = %v, %v, %v; want %v", got, ok, err, want)
+	}
+}

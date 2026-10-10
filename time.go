@@ -24,6 +24,12 @@ const (
 // Supported formats: "YYYYMMDD-HH:MM:SS" (17) and fractions of seconds in
 // milliseconds (21), microseconds (24), nanoseconds (27) or picoseconds (30),
 // the latter truncated to nanoseconds.
+//
+// FIX allows second 60 for a UTC leap second, which can only be inserted at
+// 23:59:60 on the last day of a month. time.Time cannot represent it: it is
+// returned as 23:59:59.999999999 that day, so that it keeps its date and
+// never sorts before the second preceding it nor after the one following
+// it, at the cost of its fraction.
 func ParseUTCTimestamp(v []byte) (time.Time, error) {
 	return parseFixTime("ParseUTCTimestamp", v, TimeFormatTimestampSec)
 }
@@ -36,7 +42,8 @@ func ParseUTCDate(v []byte) (time.Time, error) {
 // ParseUTCTimeOnly parses a FIX UTCTimeOnly value (e.g. "10:00:00.000").
 // Supported formats: "HH:MM:SS" (8) and fractions of seconds in milliseconds
 // (12), microseconds (15), nanoseconds (18) or picoseconds (21), the latter
-// truncated to nanoseconds.
+// truncated to nanoseconds. A leap second, 23:59:60, is returned as
+// 23:59:59.999999999 (see ParseUTCTimestamp).
 func ParseUTCTimeOnly(v []byte) (time.Time, error) {
 	return parseFixTime("ParseUTCTimeOnly", v, TimeFormatTimeOnlySec)
 }
@@ -44,6 +51,7 @@ func ParseUTCTimeOnly(v []byte) (time.Time, error) {
 // parseFixTime parses v as layout, which ends with whole seconds, followed by
 // no fraction or a fraction of 3, 6, 9 or 12 digits.
 func parseFixTime(name string, v []byte, layout string) (time.Time, error) {
+	base := len(layout)                // end of the whole seconds
 	digits := len(v) - len(layout) - 1 // fraction digits after the dot
 	switch {
 	case len(v) == len(layout):
@@ -64,5 +72,28 @@ func parseFixTime(name string, v []byte, layout string) (time.Time, error) {
 	default:
 		return time.Time{}, fmt.Errorf("%s: cannot parse %q", name, v)
 	}
+	if v[base-2] == '6' && v[base-1] == '0' {
+		return parseLeapSecond(name, v, layout, base)
+	}
 	return time.Parse(layout, string(v))
+}
+
+// parseLeapSecond parses v, whose seconds at v[base-2:base] are 60: only
+// 23:59:60 is a leap second, on the last day of a month for a timestamp.
+func parseLeapSecond(name string, v []byte, layout string, base int) (time.Time, error) {
+	if string(v[base-8:base-3]) != "23:59" {
+		return time.Time{}, fmt.Errorf("%s: cannot parse %q: second 60 outside a leap second", name, v)
+	}
+	// Parse it as second 59, which validates the rest.
+	var buf [32]byte
+	n := copy(buf[:], v)
+	buf[base-2], buf[base-1] = '5', '9'
+	t, err := time.Parse(layout, string(buf[:n]))
+	if err != nil {
+		return time.Time{}, err
+	}
+	if base == len(TimeFormatTimestampSec) && t.AddDate(0, 0, 1).Day() != 1 {
+		return time.Time{}, fmt.Errorf("%s: cannot parse %q: leap second not on the last day of a month", name, v)
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999_999_999, time.UTC), nil
 }

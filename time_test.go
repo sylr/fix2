@@ -72,3 +72,63 @@ func TestFormatMicro(t *testing.T) {
 		t.Errorf("TimeFormatTimeOnlyMicro = %q", got)
 	}
 }
+
+func TestParseLeapSecond(t *testing.T) {
+	leap := func(y int, m time.Month, d int) time.Time {
+		return time.Date(y, m, d, 23, 59, 59, 999_999_999, time.UTC)
+	}
+	for in, want := range map[string]time.Time{
+		"20161231-23:59:60":              leap(2016, 12, 31),
+		"20161231-23:59:60.500":          leap(2016, 12, 31),
+		"20150630-23:59:60.123456":       leap(2015, 6, 30),
+		"20150630-23:59:60.123456789":    leap(2015, 6, 30),
+		"20150630-23:59:60.123456789012": leap(2015, 6, 30),
+		"20160331-23:59:60":              leap(2016, 3, 31), // allowed at the end of any month
+		"20160229-23:59:60":              leap(2016, 2, 29),
+	} {
+		if got, err := ParseUTCTimestamp([]byte(in)); err != nil || !got.Equal(want) {
+			t.Errorf("ParseUTCTimestamp(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	for _, in := range []string{
+		"20161230-23:59:60",     // not the last day of a month
+		"20161231-23:58:60",     // not 23:59
+		"20161231-22:59:60",     // nor this
+		"20161231-23:59:61",     // no second 61
+		"20161231-23:59:60,500", // comma
+		"20161232-23:59:60",     // no such day
+		"20161231-23:59:6x",
+	} {
+		if got, err := ParseUTCTimestamp([]byte(in)); err == nil {
+			t.Errorf("ParseUTCTimestamp(%q) = %v, want error", in, got)
+		}
+	}
+	// 28 February is the last day of its month in 2015, not in 2016.
+	if got, err := ParseUTCTimestamp([]byte("20150228-23:59:60")); err != nil || !got.Equal(leap(2015, 2, 28)) {
+		t.Errorf("28 February 2015: %v, %v", got, err)
+	}
+	if got, err := ParseUTCTimestamp([]byte("20160228-23:59:60")); err == nil {
+		t.Errorf("28 February 2016: %v, want error", got)
+	}
+
+	// The leap second sorts after the second before it and before the next
+	// day.
+	before, _ := ParseUTCTimestamp([]byte("20161231-23:59:59.999"))
+	during, _ := ParseUTCTimestamp([]byte("20161231-23:59:60.500"))
+	after, _ := ParseUTCTimestamp([]byte("20170101-00:00:00.000"))
+	if !before.Before(during) || !during.Before(after) || during.Day() != 31 {
+		t.Errorf("order: %v, %v, %v", before, during, after)
+	}
+
+	at := time.Date(0, 1, 1, 23, 59, 59, 999_999_999, time.UTC)
+	for _, in := range []string{"23:59:60", "23:59:60.000", "23:59:60.123456789012"} {
+		if got, err := ParseUTCTimeOnly([]byte(in)); err != nil || !got.Equal(at) {
+			t.Errorf("ParseUTCTimeOnly(%q) = %v, %v; want %v", in, got, err, at)
+		}
+	}
+	for _, in := range []string{"12:00:60", "23:58:60.000", "23:59:61"} {
+		if got, err := ParseUTCTimeOnly([]byte(in)); err == nil {
+			t.Errorf("ParseUTCTimeOnly(%q) = %v, want error", in, got)
+		}
+	}
+}
