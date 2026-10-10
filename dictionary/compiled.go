@@ -131,8 +131,13 @@ func (s *slots) track(tag int) int32 {
 // Validate joins them per call instead. Dictionaries have at most one.
 const maxSharedSpecs = 4
 
-// compile builds the tables Validate uses from d's exported fields.
+// compile builds the tables Validate uses from d's exported fields, replacing
+// any built before.
 func (d *Dict) compile() {
+	d.enumChecks, d.envelopeSpecs = nil, nil
+	for _, m := range d.Messages {
+		m.requiredTags, m.conds = nil, nil
+	}
 	// Enum checks, by tag.
 	enumIdx := map[int]tagEntry{}
 	for _, tag := range slices.Sorted(maps.Keys(d.Fields)) {

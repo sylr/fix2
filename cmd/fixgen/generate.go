@@ -44,7 +44,7 @@ func enumType(fieldName string) string {
 // "Enum" suffix when a generated type already uses the name: FIX 5.0 has
 // both a SecurityStatus message and a SecurityStatus (965) field.
 func resolveEnumTypeNames(dict *dictionary.Dict) map[string]string {
-	taken := map[string]bool{}
+	taken := map[string]bool{"Dictionary": true} // see writeDictionary
 	for _, md := range dict.Messages {
 		for _, n := range []string{md.Name, md.Name + "Builder", "Wrap" + md.Name, "Build" + md.Name} {
 			taken[n] = true

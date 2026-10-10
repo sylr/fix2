@@ -1710,3 +1710,17 @@ func TestLoad_DuplicateFields(t *testing.T) {
 		}
 	}
 }
+
+func TestNew_Idempotent(t *testing.T) {
+	d := loadTestDict(t)
+	nos := d.Messages["D"]
+	enums, required := len(d.enumChecks), len(nos.requiredTags)
+	New(d)
+	if len(d.enumChecks) != enums || len(nos.requiredTags) != required {
+		t.Errorf("after a second New: %d enum checks, %d required tags; want %d and %d", len(d.enumChecks), len(nos.requiredTags), enums, required)
+	}
+	msg := parseMsg(t, buildFIXMsg("35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x0111=ORD1\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01"))
+	if err := d.Validate(&msg); err != nil {
+		t.Errorf("after a second New: %v", err)
+	}
+}

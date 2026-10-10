@@ -1690,3 +1690,32 @@ func itoa(n int) string {
 func pad(n int) string { s := itoa(n); return strings.Repeat("0", 3-len(s)) + s }
 `)
 }
+
+// TestGenerateDictionaryNames covers an enum field named Dictionary, whose
+// type must not clash with the generated Dictionary function, and a
+// dictionary without messages or groups.
+func TestGenerateDictionaryNames(t *testing.T) {
+	runGenerated(t, `<fix major="4" minor="4"><header/><trailer/>
+  <messages><message name="M" msgtype="M"><field name="Dictionary"/></message></messages>
+  <components/><fields><field number="100" name="Dictionary" type="CHAR"><value enum="A" description="ALPHA"/></field></fields></fix>`, "dictname", `package dictname
+
+import "testing"
+
+func TestNames(t *testing.T) {
+	var v DictionaryEnum = DictionaryAlpha
+	if v != "A" || Dictionary().Fields[TagDictionary].Enums["A"] != "ALPHA" {
+		t.Error(v)
+	}
+}
+`)
+	runGenerated(t, `<fix major="4" minor="4"><header/><trailer/><messages/><components/><fields/></fix>`, "empty", `package empty
+
+import "testing"
+
+func TestEmpty(t *testing.T) {
+	if d := Dictionary(); len(d.Messages) != 0 || len(d.Fields) != 0 {
+		t.Error(d)
+	}
+}
+`)
+}
