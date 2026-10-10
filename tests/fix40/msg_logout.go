@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type Logout struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *Logout) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *Logout) SendingTime() (string, bool) {
+func (m *Logout) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *Logout) OrigSendingTime() (string, bool) {
+func (m *Logout) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *Logout) Text() (string, bool) {
 	v := m.msg.Get(TagText)
@@ -143,12 +154,20 @@ func (b *LogoutBuilder) SetPossResend(v string) *LogoutBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *LogoutBuilder) SetSendingTime(v string) *LogoutBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *LogoutBuilder) SetSendingTime(v time.Time) *LogoutBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *LogoutBuilder) SetOrigSendingTime(v string) *LogoutBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *LogoutBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogoutBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *LogoutBuilder) SetOrigSendingTime(v time.Time) *LogoutBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *LogoutBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogoutBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *LogoutBuilder) SetText(v string) *LogoutBuilder {

@@ -250,7 +250,7 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 	f.Type().Id(entryBuilderName).Struct(structFields...)
 
 	// --- Constructor ---
-	f.Func().Id("New"+mg.Name+"Entry").Params().Op("*").Id(entryBuilderName).Block(
+	f.Func().Id("New" + mg.Name + "Entry").Params().Op("*").Id(entryBuilderName).Block(
 		jen.Return(jen.Op("&").Id(entryBuilderName).Values()),
 	)
 
@@ -331,7 +331,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	)
 
 	// Wrap constructor
-	f.Func().Id("Wrap"+name).Params(
+	f.Func().Id("Wrap" + name).Params(
 		jen.Id("msg").Op("*").Qual(fix2Pkg, "Message"),
 	).Op("*").Id(name).Block(
 		jen.Return(jen.Op("&").Id(name).Values(jen.Dict{
@@ -366,7 +366,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	f.Type().Id(builderName).Struct(builderFields...)
 
 	// Build constructor
-	f.Func().Id("Build"+name).Params(
+	f.Func().Id("Build" + name).Params(
 		jen.Id("beginString").String(),
 	).Op("*").Id(builderName).Block(
 		jen.Return(jen.Op("&").Id(builderName).Values(jen.Dict{
@@ -855,7 +855,7 @@ func tagID(fieldName string) *jen.Statement {
 
 func timeParseFunc(fixType string) string {
 	switch fixType {
-	case "UTCDATE", "LOCALMKTDATE":
+	case "UTCDATE", "LOCALMKTDATE", "DATE":
 		return "ParseUTCDate"
 	case "UTCTIMEONLY":
 		return "ParseUTCTimeOnly"
@@ -866,10 +866,13 @@ func timeParseFunc(fixType string) string {
 
 func timeFormatConst(fixType string) string {
 	switch fixType {
-	case "UTCDATE", "LOCALMKTDATE":
+	case "UTCDATE", "LOCALMKTDATE", "DATE":
 		return "TimeFormatDate"
 	case "UTCTIMEONLY":
 		return "TimeFormatTimeOnly"
+	case "TIME":
+		// FIX 4.0/4.1 TIME is YYYYMMDD-HH:MM:SS, without milliseconds.
+		return "TimeFormatTimestampSec"
 	default:
 		return "TimeFormatTimestamp"
 	}
@@ -906,4 +909,3 @@ func toSnakeCase(s string) string {
 	}
 	return b.String()
 }
-

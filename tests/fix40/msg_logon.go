@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type Logon struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *Logon) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *Logon) SendingTime() (string, bool) {
+func (m *Logon) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *Logon) OrigSendingTime() (string, bool) {
+func (m *Logon) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *Logon) EncryptMethod() (EncryptMethod, bool) {
 	v := m.msg.Get(TagEncryptMethod)
@@ -163,12 +174,20 @@ func (b *LogonBuilder) SetPossResend(v string) *LogonBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *LogonBuilder) SetSendingTime(v string) *LogonBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *LogonBuilder) SetSendingTime(v time.Time) *LogonBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *LogonBuilder) SetOrigSendingTime(v string) *LogonBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *LogonBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogonBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *LogonBuilder) SetOrigSendingTime(v time.Time) *LogonBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *LogonBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogonBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *LogonBuilder) SetEncryptMethod(v EncryptMethod) *LogonBuilder {

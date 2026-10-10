@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type Reject struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *Reject) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *Reject) SendingTime() (string, bool) {
+func (m *Reject) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *Reject) OrigSendingTime() (string, bool) {
+func (m *Reject) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *Reject) RefSeqNum() (int, bool, error) {
 	v := m.msg.Get(TagRefSeqNum)
@@ -151,12 +162,20 @@ func (b *RejectBuilder) SetPossResend(v string) *RejectBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *RejectBuilder) SetSendingTime(v string) *RejectBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *RejectBuilder) SetSendingTime(v time.Time) *RejectBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *RejectBuilder) SetOrigSendingTime(v string) *RejectBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *RejectBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *RejectBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *RejectBuilder) SetOrigSendingTime(v time.Time) *RejectBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *RejectBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *RejectBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *RejectBuilder) SetRefSeqNum(v int) *RejectBuilder {

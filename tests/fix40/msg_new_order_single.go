@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type NewOrderSingle struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *NewOrderSingle) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *NewOrderSingle) SendingTime() (string, bool) {
+func (m *NewOrderSingle) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *NewOrderSingle) OrigSendingTime() (string, bool) {
+func (m *NewOrderSingle) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *NewOrderSingle) ClOrdID() (string, bool) {
 	v := m.msg.Get(TagClOrdID)
@@ -99,9 +110,13 @@ func (m *NewOrderSingle) SettlmntTyp() (SettlmntTyp, bool) {
 	v := m.msg.Get(TagSettlmntTyp)
 	return SettlmntTyp(v), v != nil
 }
-func (m *NewOrderSingle) FutSettDate() (string, bool) {
+func (m *NewOrderSingle) FutSettDate() (time.Time, bool, error) {
 	v := m.msg.Get(TagFutSettDate)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
 }
 func (m *NewOrderSingle) HandlInst() (HandlInst, bool) {
 	v := m.msg.Get(TagHandlInst)
@@ -223,9 +238,13 @@ func (m *NewOrderSingle) TimeInForce() (TimeInForce, bool) {
 	v := m.msg.Get(TagTimeInForce)
 	return TimeInForce(v), v != nil
 }
-func (m *NewOrderSingle) ExpireTime() (string, bool) {
+func (m *NewOrderSingle) ExpireTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagExpireTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *NewOrderSingle) Commission() (float64, bool, error) {
 	v := m.msg.Get(TagCommission)
@@ -315,12 +334,20 @@ func (b *NewOrderSingleBuilder) SetPossResend(v string) *NewOrderSingleBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *NewOrderSingleBuilder) SetSendingTime(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *NewOrderSingleBuilder) SetSendingTime(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *NewOrderSingleBuilder) SetOrigSendingTime(v string) *NewOrderSingleBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *NewOrderSingleBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrigSendingTime(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetClOrdID(v string) *NewOrderSingleBuilder {
@@ -343,8 +370,12 @@ func (b *NewOrderSingleBuilder) SetSettlmntTyp(v SettlmntTyp) *NewOrderSingleBui
 	b.SetString(TagSettlmntTyp, string(v))
 	return b
 }
-func (b *NewOrderSingleBuilder) SetFutSettDate(v string) *NewOrderSingleBuilder {
-	b.SetString(TagFutSettDate, v)
+func (b *NewOrderSingleBuilder) SetFutSettDate(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagFutSettDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetFutSettDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagFutSettDate, v.UTC().Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetHandlInst(v HandlInst) *NewOrderSingleBuilder {
@@ -439,8 +470,12 @@ func (b *NewOrderSingleBuilder) SetTimeInForce(v TimeInForce) *NewOrderSingleBui
 	b.SetString(TagTimeInForce, string(v))
 	return b
 }
-func (b *NewOrderSingleBuilder) SetExpireTime(v string) *NewOrderSingleBuilder {
-	b.SetString(TagExpireTime, v)
+func (b *NewOrderSingleBuilder) SetExpireTime(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagExpireTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetExpireTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagExpireTime, v.UTC().Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetCommission(v float64) *NewOrderSingleBuilder {

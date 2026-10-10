@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type ExecutionReport struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *ExecutionReport) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *ExecutionReport) SendingTime() (string, bool) {
+func (m *ExecutionReport) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *ExecutionReport) OrigSendingTime() (string, bool) {
+func (m *ExecutionReport) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *ExecutionReport) OrderID() (string, bool) {
 	v := m.msg.Get(TagOrderID)
@@ -135,9 +146,13 @@ func (m *ExecutionReport) SettlmntTyp() (SettlmntTyp, bool) {
 	v := m.msg.Get(TagSettlmntTyp)
 	return SettlmntTyp(v), v != nil
 }
-func (m *ExecutionReport) FutSettDate() (string, bool) {
+func (m *ExecutionReport) FutSettDate() (time.Time, bool, error) {
 	v := m.msg.Get(TagFutSettDate)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
 }
 func (m *ExecutionReport) Symbol() (string, bool) {
 	v := m.msg.Get(TagSymbol)
@@ -203,9 +218,13 @@ func (m *ExecutionReport) TimeInForce() (TimeInForce, bool) {
 	v := m.msg.Get(TagTimeInForce)
 	return TimeInForce(v), v != nil
 }
-func (m *ExecutionReport) ExpireTime() (string, bool) {
+func (m *ExecutionReport) ExpireTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagExpireTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *ExecutionReport) ExecInst() (ExecInst, bool) {
 	v := m.msg.Get(TagExecInst)
@@ -255,13 +274,21 @@ func (m *ExecutionReport) AvgPx() (float64, bool, error) {
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
-func (m *ExecutionReport) TradeDate() (string, bool) {
+func (m *ExecutionReport) TradeDate() (time.Time, bool, error) {
 	v := m.msg.Get(TagTradeDate)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
 }
-func (m *ExecutionReport) TransactTime() (string, bool) {
+func (m *ExecutionReport) TransactTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagTransactTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *ExecutionReport) ReportToExch() (ReportToExch, bool) {
 	v := m.msg.Get(TagReportToExch)
@@ -380,12 +407,20 @@ func (b *ExecutionReportBuilder) SetPossResend(v string) *ExecutionReportBuilder
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetSendingTime(v string) *ExecutionReportBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *ExecutionReportBuilder) SetSendingTime(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *ExecutionReportBuilder) SetOrigSendingTime(v string) *ExecutionReportBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *ExecutionReportBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetOrigSendingTime(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *ExecutionReportBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetOrderID(v string) *ExecutionReportBuilder {
@@ -436,8 +471,12 @@ func (b *ExecutionReportBuilder) SetSettlmntTyp(v SettlmntTyp) *ExecutionReportB
 	b.SetString(TagSettlmntTyp, string(v))
 	return b
 }
-func (b *ExecutionReportBuilder) SetFutSettDate(v string) *ExecutionReportBuilder {
-	b.SetString(TagFutSettDate, v)
+func (b *ExecutionReportBuilder) SetFutSettDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagFutSettDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetFutSettDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagFutSettDate, v.UTC().Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetSymbol(v string) *ExecutionReportBuilder {
@@ -492,8 +531,12 @@ func (b *ExecutionReportBuilder) SetTimeInForce(v TimeInForce) *ExecutionReportB
 	b.SetString(TagTimeInForce, string(v))
 	return b
 }
-func (b *ExecutionReportBuilder) SetExpireTime(v string) *ExecutionReportBuilder {
-	b.SetString(TagExpireTime, v)
+func (b *ExecutionReportBuilder) SetExpireTime(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagExpireTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *ExecutionReportBuilder) SetExpireTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagExpireTime, v.UTC().Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetExecInst(v ExecInst) *ExecutionReportBuilder {
@@ -528,12 +571,20 @@ func (b *ExecutionReportBuilder) SetAvgPx(v float64) *ExecutionReportBuilder {
 	b.SetFloat(TagAvgPx, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetTradeDate(v string) *ExecutionReportBuilder {
-	b.SetString(TagTradeDate, v)
+func (b *ExecutionReportBuilder) SetTradeDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagTradeDate, v.UTC().Format(fix2.TimeFormatDate))
 	return b
 }
-func (b *ExecutionReportBuilder) SetTransactTime(v string) *ExecutionReportBuilder {
-	b.SetString(TagTransactTime, v)
+func (b *ExecutionReportBuilder) SetTradeDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagTradeDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetTransactTime(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagTransactTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *ExecutionReportBuilder) SetTransactTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagTransactTime, v.UTC().Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetReportToExch(v ReportToExch) *ExecutionReportBuilder {

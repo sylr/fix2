@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type TestRequest struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *TestRequest) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *TestRequest) SendingTime() (string, bool) {
+func (m *TestRequest) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *TestRequest) OrigSendingTime() (string, bool) {
+func (m *TestRequest) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *TestRequest) TestReqID() (string, bool) {
 	v := m.msg.Get(TagTestReqID)
@@ -143,12 +154,20 @@ func (b *TestRequestBuilder) SetPossResend(v string) *TestRequestBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *TestRequestBuilder) SetSendingTime(v string) *TestRequestBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *TestRequestBuilder) SetSendingTime(v time.Time) *TestRequestBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *TestRequestBuilder) SetOrigSendingTime(v string) *TestRequestBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *TestRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *TestRequestBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *TestRequestBuilder) SetOrigSendingTime(v time.Time) *TestRequestBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *TestRequestBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *TestRequestBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *TestRequestBuilder) SetTestReqID(v string) *TestRequestBuilder {

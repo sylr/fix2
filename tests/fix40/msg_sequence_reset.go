@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type SequenceReset struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *SequenceReset) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *SequenceReset) SendingTime() (string, bool) {
+func (m *SequenceReset) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *SequenceReset) OrigSendingTime() (string, bool) {
+func (m *SequenceReset) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *SequenceReset) GapFillFlag() (GapFillFlag, bool) {
 	v := m.msg.Get(TagGapFillFlag)
@@ -151,12 +162,20 @@ func (b *SequenceResetBuilder) SetPossResend(v string) *SequenceResetBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *SequenceResetBuilder) SetSendingTime(v string) *SequenceResetBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *SequenceResetBuilder) SetSendingTime(v time.Time) *SequenceResetBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *SequenceResetBuilder) SetOrigSendingTime(v string) *SequenceResetBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *SequenceResetBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *SequenceResetBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *SequenceResetBuilder) SetOrigSendingTime(v time.Time) *SequenceResetBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *SequenceResetBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *SequenceResetBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *SequenceResetBuilder) SetGapFillFlag(v GapFillFlag) *SequenceResetBuilder {

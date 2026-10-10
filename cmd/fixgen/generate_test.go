@@ -302,6 +302,8 @@ func TestLookupType(t *testing.T) {
 		{"PRICE", "float64", "float"},
 		{"BOOLEAN", "bool", "bool"},
 		{"UTCTIMESTAMP", "time.Time", "time"},
+		{"TIME", "time.Time", "time"},
+		{"DATE", "time.Time", "time"},
 		{"DATA", "[]byte", "bytes"},
 		{"UNKNOWN", "string", "string"},
 	}
@@ -425,5 +427,28 @@ func TestGeneratedFileContents(t *testing.T) {
 	}
 	if !strings.Contains(dlvyStr, "func (e *NoDlvyInstEntry) DlvyInst()") {
 		t.Error("DlvyInst() getter missing on NoDlvyInstEntry in group file")
+	}
+}
+
+func TestTimeParseAndFormat(t *testing.T) {
+	tests := []struct {
+		fixType   string
+		parseFunc string
+		fmtConst  string
+	}{
+		{"UTCTIMESTAMP", "ParseUTCTimestamp", "TimeFormatTimestamp"},
+		{"TIME", "ParseUTCTimestamp", "TimeFormatTimestampSec"},
+		{"UTCDATE", "ParseUTCDate", "TimeFormatDate"},
+		{"LOCALMKTDATE", "ParseUTCDate", "TimeFormatDate"},
+		{"DATE", "ParseUTCDate", "TimeFormatDate"},
+		{"UTCTIMEONLY", "ParseUTCTimeOnly", "TimeFormatTimeOnly"},
+	}
+	for _, tt := range tests {
+		if got := timeParseFunc(tt.fixType); got != tt.parseFunc {
+			t.Errorf("timeParseFunc(%q) = %q, want %q", tt.fixType, got, tt.parseFunc)
+		}
+		if got := timeFormatConst(tt.fixType); got != tt.fmtConst {
+			t.Errorf("timeFormatConst(%q) = %q, want %q", tt.fixType, got, tt.fmtConst)
+		}
 	}
 }

@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type Heartbeat struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *Heartbeat) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *Heartbeat) SendingTime() (string, bool) {
+func (m *Heartbeat) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *Heartbeat) OrigSendingTime() (string, bool) {
+func (m *Heartbeat) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *Heartbeat) TestReqID() (string, bool) {
 	v := m.msg.Get(TagTestReqID)
@@ -143,12 +154,20 @@ func (b *HeartbeatBuilder) SetPossResend(v string) *HeartbeatBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *HeartbeatBuilder) SetSendingTime(v string) *HeartbeatBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *HeartbeatBuilder) SetSendingTime(v time.Time) *HeartbeatBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *HeartbeatBuilder) SetOrigSendingTime(v string) *HeartbeatBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *HeartbeatBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *HeartbeatBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *HeartbeatBuilder) SetOrigSendingTime(v time.Time) *HeartbeatBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *HeartbeatBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *HeartbeatBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *HeartbeatBuilder) SetTestReqID(v string) *HeartbeatBuilder {

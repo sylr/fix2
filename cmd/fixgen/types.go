@@ -40,6 +40,11 @@ var fixTypeMap = map[string]goTypeInfo{
 	"UTCTIMEONLY":  {GoType: "time.Time", Category: "time"},
 	"LOCALMKTDATE": {GoType: "time.Time", Category: "time"},
 
+	// FIX 4.0/4.1 names: TIME became UTCTIMESTAMP in FIX 4.2, DATE was
+	// replaced by LOCALMKTDATE/UTCDATE.
+	"TIME": {GoType: "time.Time", Category: "time"},
+	"DATE": {GoType: "time.Time", Category: "time"},
+
 	// bytes
 	"DATA": {GoType: "[]byte", Category: "bytes"},
 }

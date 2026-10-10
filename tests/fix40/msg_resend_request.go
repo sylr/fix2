@@ -2,7 +2,10 @@
 
 package fix40
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"time"
+)
 
 type ResendRequest struct {
 	msg *fix2.Message
@@ -71,13 +74,21 @@ func (m *ResendRequest) PossResend() (string, bool) {
 	v := m.msg.Get(TagPossResend)
 	return string(v), v != nil
 }
-func (m *ResendRequest) SendingTime() (string, bool) {
+func (m *ResendRequest) SendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
-func (m *ResendRequest) OrigSendingTime() (string, bool) {
+func (m *ResendRequest) OrigSendingTime() (time.Time, bool, error) {
 	v := m.msg.Get(TagOrigSendingTime)
-	return string(v), v != nil
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
 }
 func (m *ResendRequest) BeginSeqNo() (int, bool, error) {
 	v := m.msg.Get(TagBeginSeqNo)
@@ -155,12 +166,20 @@ func (b *ResendRequestBuilder) SetPossResend(v string) *ResendRequestBuilder {
 	b.SetString(TagPossResend, v)
 	return b
 }
-func (b *ResendRequestBuilder) SetSendingTime(v string) *ResendRequestBuilder {
-	b.SetString(TagSendingTime, v)
+func (b *ResendRequestBuilder) SetSendingTime(v time.Time) *ResendRequestBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
 	return b
 }
-func (b *ResendRequestBuilder) SetOrigSendingTime(v string) *ResendRequestBuilder {
-	b.SetString(TagOrigSendingTime, v)
+func (b *ResendRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *ResendRequestBuilder {
+	b.SetString(TagSendingTime, v.UTC().Format(f))
+	return b
+}
+func (b *ResendRequestBuilder) SetOrigSendingTime(v time.Time) *ResendRequestBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestampSec))
+	return b
+}
+func (b *ResendRequestBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *ResendRequestBuilder {
+	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *ResendRequestBuilder) SetBeginSeqNo(v int) *ResendRequestBuilder {
