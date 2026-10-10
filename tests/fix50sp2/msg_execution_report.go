@@ -2614,24 +2614,20 @@ func (b *ExecutionReportBuilder) SetIssuer(v string) *ExecutionReportBuilder {
 	b.SetString(TagIssuer, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetEncodedIssuerLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagEncodedIssuerLen, v)
-	return b
-}
+
+// SetEncodedIssuer sets EncodedIssuer and its length, EncodedIssuerLen.
 func (b *ExecutionReportBuilder) SetEncodedIssuer(v []byte) *ExecutionReportBuilder {
-	b.Set(TagEncodedIssuer, v)
+	b.SetData(TagEncodedIssuerLen, TagEncodedIssuer, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetSecurityDesc(v string) *ExecutionReportBuilder {
 	b.SetString(TagSecurityDesc, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetEncodedSecurityDescLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagEncodedSecurityDescLen, v)
-	return b
-}
+
+// SetEncodedSecurityDesc sets EncodedSecurityDesc and its length, EncodedSecurityDescLen.
 func (b *ExecutionReportBuilder) SetEncodedSecurityDesc(v []byte) *ExecutionReportBuilder {
-	b.Set(TagEncodedSecurityDesc, v)
+	b.SetData(TagEncodedSecurityDescLen, TagEncodedSecurityDesc, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetPool(v string) *ExecutionReportBuilder {
@@ -2722,12 +2718,10 @@ func (b *ExecutionReportBuilder) SetUnitOfMeasureQty(v float64) *ExecutionReport
 	b.SetFloat(TagUnitOfMeasureQty, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetSecurityXMLLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagSecurityXMLLen, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityXML(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityXML, v)
+
+// SetSecurityXML sets SecurityXML and its length, SecurityXMLLen.
+func (b *ExecutionReportBuilder) SetSecurityXML(v []byte) *ExecutionReportBuilder {
+	b.SetData(TagSecurityXMLLen, TagSecurityXML, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetSecurityXMLSchema(v string) *ExecutionReportBuilder {
@@ -3374,12 +3368,10 @@ func (b *ExecutionReportBuilder) SetText(v string) *ExecutionReportBuilder {
 	b.SetString(TagText, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetEncodedTextLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagEncodedTextLen, v)
-	return b
-}
+
+// SetEncodedText sets EncodedText and its length, EncodedTextLen.
 func (b *ExecutionReportBuilder) SetEncodedText(v []byte) *ExecutionReportBuilder {
-	b.Set(TagEncodedText, v)
+	b.SetData(TagEncodedTextLen, TagEncodedText, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetSettlDate2(v time.Time) *ExecutionReportBuilder {

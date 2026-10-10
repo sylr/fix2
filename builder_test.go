@@ -259,3 +259,40 @@ func TestBuildWith(t *testing.T) {
 		t.Error("BuildWith leaked extra fields into the builder")
 	}
 }
+
+func TestBuilderSetData(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "A").
+		SetInt(95, 99). // stale length set earlier, elsewhere in the body
+		SetString(58, "t").
+		SetData(95, 96, []byte("a\x01b"))
+	raw := b.Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	if got := string(msg.Get(96)); got != "a\x01b" {
+		t.Errorf("RawData = %q", got)
+	}
+	if got := string(msg.Get(95)); got != "3" {
+		t.Errorf("RawDataLength = %q, want 3", got)
+	}
+	if n := bytes.Count(raw, []byte("\x0195=")); n != 1 {
+		t.Errorf("%q: RawDataLength appears %d times", raw, n)
+	}
+}
+
+func TestDataLengthTag(t *testing.T) {
+	for data, want := range map[int]int{96: 95, 213: 212, 1665: 1664, 89: 93, 58: 0, 1619: 0} {
+		if got := DataLengthTag(data); got != want {
+			t.Errorf("DataLengthTag(%d) = %d, want %d", data, got, want)
+		}
+	}
+}
+
+func TestDataTag(t *testing.T) {
+	for length, want := range map[int]int{95: 96, 212: 213, 1664: 1665, 93: 89, 96: 0, 58: 0, -1: 0, 1 << 30: 0} {
+		if got := DataTag(length); got != want {
+			t.Errorf("DataTag(%d) = %d, want %d", length, got, want)
+		}
+	}
+}

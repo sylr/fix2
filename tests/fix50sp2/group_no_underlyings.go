@@ -610,19 +610,17 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCurrency(v string) *NoUnderlyin
 	e.fields = fix2.SetField(e.fields, TagUnderlyingCurrency, []byte(v))
 	return e
 }
-func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingIssuerLen(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuerLen, strconv.AppendInt(nil, int64(v), 10))
-	return e
-}
+
+// SetEncodedUnderlyingIssuer sets EncodedUnderlyingIssuer and its length, EncodedUnderlyingIssuerLen.
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingIssuer(v []byte) *NoUnderlyingsEntryBuilder {
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuerLen, strconv.AppendInt(nil, int64(len(v)), 10))
 	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingIssuer, bytes.Clone(v))
 	return e
 }
-func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDescLen(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDescLen, strconv.AppendInt(nil, int64(v), 10))
-	return e
-}
+
+// SetEncodedUnderlyingSecurityDesc sets EncodedUnderlyingSecurityDesc and its length, EncodedUnderlyingSecurityDescLen.
 func (e *NoUnderlyingsEntryBuilder) SetEncodedUnderlyingSecurityDesc(v []byte) *NoUnderlyingsEntryBuilder {
+	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDescLen, strconv.AppendInt(nil, int64(len(v)), 10))
 	e.fields = fix2.SetField(e.fields, TagEncodedUnderlyingSecurityDesc, bytes.Clone(v))
 	return e
 }

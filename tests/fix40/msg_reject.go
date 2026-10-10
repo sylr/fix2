@@ -127,12 +127,10 @@ func (b *RejectBuilder) SetDeliverToCompID(v string) *RejectBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *RejectBuilder) SetSecureDataLen(v int) *RejectBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *RejectBuilder) SetSecureData(v []byte) *RejectBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *RejectBuilder) SetMsgSeqNum(v int) *RejectBuilder {

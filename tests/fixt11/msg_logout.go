@@ -207,12 +207,10 @@ func (b *LogoutBuilder) SetDeliverToCompID(v string) *LogoutBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *LogoutBuilder) SetSecureDataLen(v int) *LogoutBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *LogoutBuilder) SetSecureData(v []byte) *LogoutBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *LogoutBuilder) SetMsgSeqNum(v int) *LogoutBuilder {
@@ -275,12 +273,10 @@ func (b *LogoutBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFor
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
-func (b *LogoutBuilder) SetXmlDataLen(v int) *LogoutBuilder {
-	b.SetInt(TagXmlDataLen, v)
-	return b
-}
+
+// SetXmlData sets XmlData and its length, XmlDataLen.
 func (b *LogoutBuilder) SetXmlData(v []byte) *LogoutBuilder {
-	b.Set(TagXmlData, v)
+	b.SetData(TagXmlDataLen, TagXmlData, v)
 	return b
 }
 func (b *LogoutBuilder) SetMessageEncoding(v MessageEncoding) *LogoutBuilder {
@@ -323,11 +319,9 @@ func (b *LogoutBuilder) SetText(v string) *LogoutBuilder {
 	b.SetString(TagText, v)
 	return b
 }
-func (b *LogoutBuilder) SetEncodedTextLen(v int) *LogoutBuilder {
-	b.SetInt(TagEncodedTextLen, v)
-	return b
-}
+
+// SetEncodedText sets EncodedText and its length, EncodedTextLen.
 func (b *LogoutBuilder) SetEncodedText(v []byte) *LogoutBuilder {
-	b.Set(TagEncodedText, v)
+	b.SetData(TagEncodedTextLen, TagEncodedText, v)
 	return b
 }

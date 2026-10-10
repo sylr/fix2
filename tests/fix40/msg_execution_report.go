@@ -387,12 +387,10 @@ func (b *ExecutionReportBuilder) SetDeliverToCompID(v string) *ExecutionReportBu
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *ExecutionReportBuilder) SetSecureDataLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *ExecutionReportBuilder) SetSecureData(v []byte) *ExecutionReportBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetMsgSeqNum(v int) *ExecutionReportBuilder {

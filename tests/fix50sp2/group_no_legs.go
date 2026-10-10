@@ -702,11 +702,10 @@ func (e *NoLegsEntryBuilder) SetLegIssuer(v string) *NoLegsEntryBuilder {
 	e.fields = fix2.SetField(e.fields, TagLegIssuer, []byte(v))
 	return e
 }
-func (e *NoLegsEntryBuilder) SetEncodedLegIssuerLen(v int) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuerLen, strconv.AppendInt(nil, int64(v), 10))
-	return e
-}
+
+// SetEncodedLegIssuer sets EncodedLegIssuer and its length, EncodedLegIssuerLen.
 func (e *NoLegsEntryBuilder) SetEncodedLegIssuer(v []byte) *NoLegsEntryBuilder {
+	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuerLen, strconv.AppendInt(nil, int64(len(v)), 10))
 	e.fields = fix2.SetField(e.fields, TagEncodedLegIssuer, bytes.Clone(v))
 	return e
 }
@@ -714,11 +713,10 @@ func (e *NoLegsEntryBuilder) SetLegSecurityDesc(v string) *NoLegsEntryBuilder {
 	e.fields = fix2.SetField(e.fields, TagLegSecurityDesc, []byte(v))
 	return e
 }
-func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDescLen(v int) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDescLen, strconv.AppendInt(nil, int64(v), 10))
-	return e
-}
+
+// SetEncodedLegSecurityDesc sets EncodedLegSecurityDesc and its length, EncodedLegSecurityDescLen.
 func (e *NoLegsEntryBuilder) SetEncodedLegSecurityDesc(v []byte) *NoLegsEntryBuilder {
+	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDescLen, strconv.AppendInt(nil, int64(len(v)), 10))
 	e.fields = fix2.SetField(e.fields, TagEncodedLegSecurityDesc, bytes.Clone(v))
 	return e
 }

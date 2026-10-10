@@ -299,12 +299,10 @@ func (b *NewOrderSingleBuilder) SetDeliverToCompID(v string) *NewOrderSingleBuil
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *NewOrderSingleBuilder) SetSecureDataLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *NewOrderSingleBuilder) SetSecureData(v []byte) *NewOrderSingleBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetMsgSeqNum(v int) *NewOrderSingleBuilder {

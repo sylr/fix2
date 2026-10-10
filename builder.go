@@ -1,6 +1,7 @@
 package fix2
 
 import (
+	"bytes"
 	"fmt"
 	"slices"
 	"strconv"
@@ -53,6 +54,21 @@ func (b *Builder) Set(tag int, value []byte) *Builder {
 		}
 	}
 	b.fields = append(b.fields, Field{Tag: tag, Value: cp})
+	return b
+}
+
+// SetData sets a DATA field and the LENGTH field announcing it (see
+// DataLengthTag), computing the length and keeping the two adjacent as FIX
+// requires: any earlier value of either is removed and both are appended.
+// value is copied.
+func (b *Builder) SetData(lengthTag, dataTag int, value []byte) *Builder {
+	b.fields = slices.DeleteFunc(b.fields, func(f Field) bool {
+		return f.Tag == lengthTag || f.Tag == dataTag
+	})
+	b.fields = append(b.fields,
+		Field{Tag: lengthTag, Value: strconv.AppendInt(nil, int64(len(value)), 10)},
+		Field{Tag: dataTag, Value: bytes.Clone(value)},
+	)
 	return b
 }
 

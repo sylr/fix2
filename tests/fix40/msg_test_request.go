@@ -119,12 +119,10 @@ func (b *TestRequestBuilder) SetDeliverToCompID(v string) *TestRequestBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *TestRequestBuilder) SetSecureDataLen(v int) *TestRequestBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *TestRequestBuilder) SetSecureData(v []byte) *TestRequestBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *TestRequestBuilder) SetMsgSeqNum(v int) *TestRequestBuilder {

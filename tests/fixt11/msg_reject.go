@@ -231,12 +231,10 @@ func (b *RejectBuilder) SetDeliverToCompID(v string) *RejectBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *RejectBuilder) SetSecureDataLen(v int) *RejectBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *RejectBuilder) SetSecureData(v []byte) *RejectBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *RejectBuilder) SetMsgSeqNum(v int) *RejectBuilder {
@@ -299,12 +297,10 @@ func (b *RejectBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFor
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
-func (b *RejectBuilder) SetXmlDataLen(v int) *RejectBuilder {
-	b.SetInt(TagXmlDataLen, v)
-	return b
-}
+
+// SetXmlData sets XmlData and its length, XmlDataLen.
 func (b *RejectBuilder) SetXmlData(v []byte) *RejectBuilder {
-	b.Set(TagXmlData, v)
+	b.SetData(TagXmlDataLen, TagXmlData, v)
 	return b
 }
 func (b *RejectBuilder) SetMessageEncoding(v MessageEncoding) *RejectBuilder {
@@ -363,11 +359,9 @@ func (b *RejectBuilder) SetText(v string) *RejectBuilder {
 	b.SetString(TagText, v)
 	return b
 }
-func (b *RejectBuilder) SetEncodedTextLen(v int) *RejectBuilder {
-	b.SetInt(TagEncodedTextLen, v)
-	return b
-}
+
+// SetEncodedText sets EncodedText and its length, EncodedTextLen.
 func (b *RejectBuilder) SetEncodedText(v []byte) *RejectBuilder {
-	b.Set(TagEncodedText, v)
+	b.SetData(TagEncodedTextLen, TagEncodedText, v)
 	return b
 }

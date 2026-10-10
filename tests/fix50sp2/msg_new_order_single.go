@@ -1889,24 +1889,20 @@ func (b *NewOrderSingleBuilder) SetIssuer(v string) *NewOrderSingleBuilder {
 	b.SetString(TagIssuer, v)
 	return b
 }
-func (b *NewOrderSingleBuilder) SetEncodedIssuerLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagEncodedIssuerLen, v)
-	return b
-}
+
+// SetEncodedIssuer sets EncodedIssuer and its length, EncodedIssuerLen.
 func (b *NewOrderSingleBuilder) SetEncodedIssuer(v []byte) *NewOrderSingleBuilder {
-	b.Set(TagEncodedIssuer, v)
+	b.SetData(TagEncodedIssuerLen, TagEncodedIssuer, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSecurityDesc(v string) *NewOrderSingleBuilder {
 	b.SetString(TagSecurityDesc, v)
 	return b
 }
-func (b *NewOrderSingleBuilder) SetEncodedSecurityDescLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagEncodedSecurityDescLen, v)
-	return b
-}
+
+// SetEncodedSecurityDesc sets EncodedSecurityDesc and its length, EncodedSecurityDescLen.
 func (b *NewOrderSingleBuilder) SetEncodedSecurityDesc(v []byte) *NewOrderSingleBuilder {
-	b.Set(TagEncodedSecurityDesc, v)
+	b.SetData(TagEncodedSecurityDescLen, TagEncodedSecurityDesc, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetPool(v string) *NewOrderSingleBuilder {
@@ -1997,12 +1993,10 @@ func (b *NewOrderSingleBuilder) SetUnitOfMeasureQty(v float64) *NewOrderSingleBu
 	b.SetFloat(TagUnitOfMeasureQty, v)
 	return b
 }
-func (b *NewOrderSingleBuilder) SetSecurityXMLLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagSecurityXMLLen, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSecurityXML(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSecurityXML, v)
+
+// SetSecurityXML sets SecurityXML and its length, SecurityXMLLen.
+func (b *NewOrderSingleBuilder) SetSecurityXML(v []byte) *NewOrderSingleBuilder {
+	b.SetData(TagSecurityXMLLen, TagSecurityXML, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSecurityXMLSchema(v string) *NewOrderSingleBuilder {
@@ -2385,12 +2379,10 @@ func (b *NewOrderSingleBuilder) SetText(v string) *NewOrderSingleBuilder {
 	b.SetString(TagText, v)
 	return b
 }
-func (b *NewOrderSingleBuilder) SetEncodedTextLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagEncodedTextLen, v)
-	return b
-}
+
+// SetEncodedText sets EncodedText and its length, EncodedTextLen.
 func (b *NewOrderSingleBuilder) SetEncodedText(v []byte) *NewOrderSingleBuilder {
-	b.Set(TagEncodedText, v)
+	b.SetData(TagEncodedTextLen, TagEncodedText, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSettlDate2(v time.Time) *NewOrderSingleBuilder {

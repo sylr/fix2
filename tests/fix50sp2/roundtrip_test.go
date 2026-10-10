@@ -251,13 +251,17 @@ func TestGroupBuilderReview(t *testing.T) {
 	})
 
 	t.Run("DATA value copied at Set", func(t *testing.T) {
-		buf := []byte("abc")
-		leg := NewNoLegsEntry().SetLegSymbol("L").SetEncodedLegIssuerLen(len(buf)).SetEncodedLegIssuer(buf)
+		// The DATA setter also sets EncodedLegIssuerLen, right before it.
+		buf := []byte("a\x01c")
+		leg := NewNoLegsEntry().SetLegSymbol("L").SetEncodedLegIssuer(buf)
 		b := BuildExecutionReport("FIXT.1.1").AddNoLegsEntry(leg)
 		copy(buf, "xyz")
 		legs := parse(t, b.Build()).NoLegsEntries()
-		if got, _ := legs[0].EncodedLegIssuer(); string(got) != "abc" {
-			t.Errorf("EncodedLegIssuer = %q, want abc", got)
+		if got, _ := legs[0].EncodedLegIssuer(); string(got) != "a\x01c" {
+			t.Errorf("EncodedLegIssuer = %q, want a\\x01c", got)
+		}
+		if n, _, _ := legs[0].EncodedLegIssuerLen(); n != 3 {
+			t.Errorf("EncodedLegIssuerLen = %d, want 3", n)
 		}
 	})
 
@@ -267,4 +271,26 @@ func TestGroupBuilderReview(t *testing.T) {
 			t.Errorf("Build is not repeatable:\n%q\n%q", first, second)
 		}
 	})
+}
+
+// TestDataSetters checks that message-level DATA setters emit the LENGTH
+// field right before the DATA field, even after other fields, so the parser
+// reads the value by length.
+func TestDataSetters(t *testing.T) {
+	raw := BuildExecutionReport("FIXT.1.1").
+		SetEncodedText([]byte("one")).
+		SetText("t").
+		SetEncodedText([]byte("t\x01wo")). // replaces, still adjacent to its length
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	er := WrapExecutionReport(&msg)
+	if got, _ := er.EncodedText(); string(got) != "t\x01wo" {
+		t.Errorf("EncodedText = %q", got)
+	}
+	if n, _, _ := er.EncodedTextLen(); n != 4 {
+		t.Errorf("EncodedTextLen = %d, want 4", n)
+	}
 }

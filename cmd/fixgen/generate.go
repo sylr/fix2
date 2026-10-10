@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/dave/jennifer/jen"
+	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
 )
 
@@ -343,6 +344,13 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		if fd == nil {
 			continue
 		}
+		if isDataLength(dict, fr.Tag) {
+			continue // computed by the DATA setter
+		}
+		if l := fix2.DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
+			addEntryDataSetter(f, entryBuilderName, fd.Name, dict.Fields[l].Name)
+			continue
+		}
 		info := lookupType(fd.Type)
 		hasEnums := len(fd.Enums) > 0
 		addEntryBuilderSetter(f, entryBuilderName, fr.Tag, fd.Name, fd.Type, info, hasEnums)
@@ -474,7 +482,11 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 
 	// Setters — skip group child tags and counter tags (for builder)
 	for _, fi := range allFields {
-		if groupChildTags[fi.tag] || counterTags[fi.tag] {
+		if groupChildTags[fi.tag] || counterTags[fi.tag] || isDataLength(dict, fi.tag) {
+			continue
+		}
+		if l := fix2.DataLengthTag(fi.tag); l != 0 && dict.Fields[l] != nil {
+			addDataSetter(f, builderName, fi.name, dict.Fields[l].Name)
 			continue
 		}
 		addSetter(f, builderName, fi.tag, fi.name, fi.fixType, fi.goInfo, fi.hasEnums)
@@ -963,6 +975,44 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 			jen.Return(jen.Id("b")),
 		)
 	}
+}
+
+// isDataLength reports whether tag is the LENGTH field of a DATA field the
+// parser reads by length: its value is computed by the DATA setter, so it
+// gets no setter of its own.
+func isDataLength(dict *dictionary.Dict, tag int) bool {
+	data := fix2.DataTag(tag)
+	return data != 0 && dict.Fields[data] != nil
+}
+
+// addDataSetter generates a message builder setter for a DATA field that
+// also sets its LENGTH field, adjacent, as the parser requires.
+func addDataSetter(f *jen.File, builderName, fieldName, lengthName string) {
+	f.Comment("Set" + fieldName + " sets " + fieldName + " and its length, " + lengthName + ".")
+	f.Func().Params(jen.Id("b").Op("*").Id(builderName)).Id("Set"+fieldName).Params(
+		jen.Id("v").Index().Byte(),
+	).Op("*").Id(builderName).Block(
+		jen.Id("b").Dot("SetData").Call(tagID(lengthName), tagID(fieldName), jen.Id("v")),
+		jen.Return(jen.Id("b")),
+	)
+}
+
+// addEntryDataSetter is addDataSetter for group entry builders. The entry's
+// layout keeps the two fields in dictionary order, LENGTH right before DATA.
+func addEntryDataSetter(f *jen.File, entryBuilderName, fieldName, lengthName string) {
+	f.Comment("Set" + fieldName + " sets " + fieldName + " and its length, " + lengthName + ".")
+	f.Func().Params(jen.Id("e").Op("*").Id(entryBuilderName)).Id("Set"+fieldName).Params(
+		jen.Id("v").Index().Byte(),
+	).Op("*").Id(entryBuilderName).Block(
+		jen.Id("e").Dot("fields").Op("=").Qual(fix2Pkg, "SetField").Call(
+			jen.Id("e").Dot("fields"), tagID(lengthName),
+			jen.Qual("strconv", "AppendInt").Call(jen.Nil(), jen.Int64().Call(jen.Len(jen.Id("v"))), jen.Lit(10)),
+		),
+		jen.Id("e").Dot("fields").Op("=").Qual(fix2Pkg, "SetField").Call(
+			jen.Id("e").Dot("fields"), tagID(fieldName), jen.Qual("bytes", "Clone").Call(jen.Id("v")),
+		),
+		jen.Return(jen.Id("e")),
+	)
 }
 
 // tagID returns a jen expression for the tag constant (e.g. TagSide).

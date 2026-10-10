@@ -127,12 +127,10 @@ func (b *SequenceResetBuilder) SetDeliverToCompID(v string) *SequenceResetBuilde
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *SequenceResetBuilder) SetSecureDataLen(v int) *SequenceResetBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *SequenceResetBuilder) SetSecureData(v []byte) *SequenceResetBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *SequenceResetBuilder) SetMsgSeqNum(v int) *SequenceResetBuilder {

@@ -119,3 +119,24 @@ var dataTagFor = func() (t [maxDataTag + 1]int32) {
 	}
 	return t
 }()
+
+// DataLengthTag returns the LENGTH tag that announces DATA tag dataTag in the
+// parser's table, or 0 if dataTag is not a DATA tag the parser reads by
+// length. Builders use it to emit the pair the way the parser expects.
+func DataLengthTag(dataTag int) int {
+	for _, p := range dataFields {
+		if p.data == dataTag {
+			return p.length
+		}
+	}
+	return 0
+}
+
+// DataTag returns the DATA tag announced by LENGTH tag lengthTag in the
+// parser's table, or 0 if lengthTag is not such a LENGTH tag.
+func DataTag(lengthTag int) int {
+	if lengthTag < 0 || lengthTag >= len(dataTagFor) || dataTagFor[lengthTag] <= 0 {
+		return 0
+	}
+	return int(dataTagFor[lengthTag])
+}

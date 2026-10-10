@@ -139,12 +139,10 @@ func (b *LogonBuilder) SetDeliverToCompID(v string) *LogonBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *LogonBuilder) SetSecureDataLen(v int) *LogonBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *LogonBuilder) SetSecureData(v []byte) *LogonBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *LogonBuilder) SetMsgSeqNum(v int) *LogonBuilder {
@@ -199,11 +197,9 @@ func (b *LogonBuilder) SetHeartBtInt(v int) *LogonBuilder {
 	b.SetInt(TagHeartBtInt, v)
 	return b
 }
-func (b *LogonBuilder) SetRawDataLength(v int) *LogonBuilder {
-	b.SetInt(TagRawDataLength, v)
-	return b
-}
+
+// SetRawData sets RawData and its length, RawDataLength.
 func (b *LogonBuilder) SetRawData(v []byte) *LogonBuilder {
-	b.Set(TagRawData, v)
+	b.SetData(TagRawDataLength, TagRawData, v)
 	return b
 }

@@ -195,12 +195,10 @@ func (b *HeartbeatBuilder) SetDeliverToCompID(v string) *HeartbeatBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *HeartbeatBuilder) SetSecureDataLen(v int) *HeartbeatBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *HeartbeatBuilder) SetSecureData(v []byte) *HeartbeatBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *HeartbeatBuilder) SetMsgSeqNum(v int) *HeartbeatBuilder {
@@ -263,12 +261,10 @@ func (b *HeartbeatBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.Time
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
-func (b *HeartbeatBuilder) SetXmlDataLen(v int) *HeartbeatBuilder {
-	b.SetInt(TagXmlDataLen, v)
-	return b
-}
+
+// SetXmlData sets XmlData and its length, XmlDataLen.
 func (b *HeartbeatBuilder) SetXmlData(v []byte) *HeartbeatBuilder {
-	b.Set(TagXmlData, v)
+	b.SetData(TagXmlDataLen, TagXmlData, v)
 	return b
 }
 func (b *HeartbeatBuilder) SetMessageEncoding(v MessageEncoding) *HeartbeatBuilder {

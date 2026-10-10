@@ -119,12 +119,10 @@ func (b *LogoutBuilder) SetDeliverToCompID(v string) *LogoutBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *LogoutBuilder) SetSecureDataLen(v int) *LogoutBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *LogoutBuilder) SetSecureData(v []byte) *LogoutBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *LogoutBuilder) SetMsgSeqNum(v int) *LogoutBuilder {

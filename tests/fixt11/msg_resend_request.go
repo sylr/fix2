@@ -207,12 +207,10 @@ func (b *ResendRequestBuilder) SetDeliverToCompID(v string) *ResendRequestBuilde
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *ResendRequestBuilder) SetSecureDataLen(v int) *ResendRequestBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *ResendRequestBuilder) SetSecureData(v []byte) *ResendRequestBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *ResendRequestBuilder) SetMsgSeqNum(v int) *ResendRequestBuilder {
@@ -275,12 +273,10 @@ func (b *ResendRequestBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
-func (b *ResendRequestBuilder) SetXmlDataLen(v int) *ResendRequestBuilder {
-	b.SetInt(TagXmlDataLen, v)
-	return b
-}
+
+// SetXmlData sets XmlData and its length, XmlDataLen.
 func (b *ResendRequestBuilder) SetXmlData(v []byte) *ResendRequestBuilder {
-	b.Set(TagXmlData, v)
+	b.SetData(TagXmlDataLen, TagXmlData, v)
 	return b
 }
 func (b *ResendRequestBuilder) SetMessageEncoding(v MessageEncoding) *ResendRequestBuilder {

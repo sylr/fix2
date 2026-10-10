@@ -283,12 +283,10 @@ func (b *LogonBuilder) SetDeliverToCompID(v string) *LogonBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *LogonBuilder) SetSecureDataLen(v int) *LogonBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *LogonBuilder) SetSecureData(v []byte) *LogonBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *LogonBuilder) SetMsgSeqNum(v int) *LogonBuilder {
@@ -351,12 +349,10 @@ func (b *LogonBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeForm
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
-func (b *LogonBuilder) SetXmlDataLen(v int) *LogonBuilder {
-	b.SetInt(TagXmlDataLen, v)
-	return b
-}
+
+// SetXmlData sets XmlData and its length, XmlDataLen.
 func (b *LogonBuilder) SetXmlData(v []byte) *LogonBuilder {
-	b.Set(TagXmlData, v)
+	b.SetData(TagXmlDataLen, TagXmlData, v)
 	return b
 }
 func (b *LogonBuilder) SetMessageEncoding(v MessageEncoding) *LogonBuilder {
@@ -403,12 +399,10 @@ func (b *LogonBuilder) SetHeartBtInt(v int) *LogonBuilder {
 	b.SetInt(TagHeartBtInt, v)
 	return b
 }
-func (b *LogonBuilder) SetRawDataLength(v int) *LogonBuilder {
-	b.SetInt(TagRawDataLength, v)
-	return b
-}
+
+// SetRawData sets RawData and its length, RawDataLength.
 func (b *LogonBuilder) SetRawData(v []byte) *LogonBuilder {
-	b.Set(TagRawData, v)
+	b.SetData(TagRawDataLength, TagRawData, v)
 	return b
 }
 func (b *LogonBuilder) SetResetSeqNumFlag(v bool) *LogonBuilder {

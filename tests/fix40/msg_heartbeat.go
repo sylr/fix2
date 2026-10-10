@@ -119,12 +119,10 @@ func (b *HeartbeatBuilder) SetDeliverToCompID(v string) *HeartbeatBuilder {
 	b.SetString(TagDeliverToCompID, v)
 	return b
 }
-func (b *HeartbeatBuilder) SetSecureDataLen(v int) *HeartbeatBuilder {
-	b.SetInt(TagSecureDataLen, v)
-	return b
-}
+
+// SetSecureData sets SecureData and its length, SecureDataLen.
 func (b *HeartbeatBuilder) SetSecureData(v []byte) *HeartbeatBuilder {
-	b.Set(TagSecureData, v)
+	b.SetData(TagSecureDataLen, TagSecureData, v)
 	return b
 }
 func (b *HeartbeatBuilder) SetMsgSeqNum(v int) *HeartbeatBuilder {
