@@ -120,10 +120,12 @@ type MessageDef struct {
 	Fields  []FieldRef // flattened (components/groups resolved)
 	Groups  []GroupDef // top-level groups in this message
 
-	fieldSet   map[int]bool
-	required   map[int]bool      // tags required unconditionally
-	conditions []condition       // tags required only when an optional component is present
-	specs      []*fix2.GroupSpec // body groups, to skip their entries
+	// Compiled for Validate (see compiled.go).
+	body         tagTable          // body tags, with their presence slots
+	requiredTags []tracked         // tags required unconditionally, in order
+	conds        []compiledCond    // tags required only when an optional component is present
+	slots        int32             // presence slots, the envelope's included
+	specs        []*fix2.GroupSpec // groups whose entries are skipped for top-level presence
 }
 
 // condition records the required fields of an optional component: they must
@@ -142,7 +144,10 @@ type rawCondition struct {
 	required  []int
 }
 
-// Dict is a parsed QuickFIX XML data dictionary.
+// Dict is a parsed QuickFIX XML data dictionary. Validate uses tables Load
+// compiles from it: changing the exported fields of a loaded Dict does not
+// change what Validate accepts. A Dict is safe for concurrent use by
+// Validate.
 type Dict struct {
 	Type, Major, Minor string
 
@@ -156,14 +161,18 @@ type Dict struct {
 	HeaderGroups  []GroupDef
 	TrailerGroups []GroupDef
 
-	headerSet    map[int]bool
-	headerReq    map[int]bool
-	headerConds  []condition
-	trailerSet   map[int]bool
-	trailerReq   map[int]bool
-	trailerConds []condition
-	// envelopeSpecs are the specs of the header and trailer groups.
+	// Compiled for Validate (see compiled.go).
+	envelope     tagTable // header, trailer and structural tags
+	envSlots     int32    // presence slots of the envelope's tracked tags
+	headerReq    []tracked
+	trailerReq   []tracked
+	headerConds  []compiledCond
+	trailerConds []compiledCond
+	// envelopeSpecs are the specs of the header and trailer groups when they
+	// are too many to copy into every message's specs.
 	envelopeSpecs []*fix2.GroupSpec
+	enums         tagTable // tag -> index in enumChecks
+	enumChecks    []enumCheck
 
 	fieldsByName map[string]*FieldDef
 }
@@ -261,7 +270,6 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.Header = header.all
 	d.HeaderGroups = header.groups
-	d.headerSet, d.headerReq = buildMaps(d.Header)
 
 	// 4. Flatten trailer.
 	trailer, err := r.resolve(xd.Trailer.Items)
@@ -270,7 +278,6 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.Trailer = trailer.all
 	d.TrailerGroups = trailer.groups
-	d.trailerSet, d.trailerReq = buildMaps(d.Trailer)
 
 	// Tag occurrences in the header and trailer, which every message carries.
 	envelope := map[int]int{}
@@ -279,6 +286,7 @@ func resolve(xd *xmlDict) (*Dict, error) {
 
 	// 5. Flatten each message and resolve its groups.
 	inMessages := map[int]bool{}
+	bodyConds := map[*MessageDef][]condition{}
 	for _, xm := range xd.Messages.Messages {
 		body, err := r.resolve(xm.Items)
 		if err != nil {
@@ -292,28 +300,20 @@ func resolve(xd *xmlDict) (*Dict, error) {
 		for _, ref := range body.all {
 			inMessages[ref.Tag] = true
 		}
-		fs, req := buildMaps(body.all)
-		d.Messages[xm.MsgType] = &MessageDef{
-			Name:       xm.Name,
-			MsgType:    xm.MsgType,
-			MsgCat:     xm.MsgCat,
-			Fields:     body.all,
-			Groups:     body.groups,
-			fieldSet:   fs,
-			required:   req,
-			conditions: body.conditions(envelope, inBody, nil),
+		m := &MessageDef{
+			Name:    xm.Name,
+			MsgType: xm.MsgType,
+			MsgCat:  xm.MsgCat,
+			Fields:  body.all,
+			Groups:  body.groups,
 		}
+		d.Messages[xm.MsgType] = m
+		bodyConds[m] = body.conditions(envelope, inBody, nil)
 	}
 
 	// Header and trailer conditions apply to every message, so a tag also used
 	// in any message body cannot tell their components apart.
-	d.headerConds = header.conditions(envelope, nil, inMessages)
-	d.trailerConds = trailer.conditions(envelope, nil, inMessages)
-
-	d.envelopeSpecs = slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups))
-	for _, m := range d.Messages {
-		m.specs = d.groupSpecs(m.Groups)
-	}
+	d.compile(header.conditions(envelope, nil, inMessages), trailer.conditions(envelope, nil, inMessages), bodyConds)
 
 	return d, nil
 }
@@ -565,17 +565,4 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 		}
 	}
 	return nil
-}
-
-// buildMaps precomputes allowed and required sets from a list of FieldRefs.
-func buildMaps(refs []FieldRef) (fieldSet, required map[int]bool) {
-	fieldSet = make(map[int]bool, len(refs))
-	required = make(map[int]bool)
-	for _, r := range refs {
-		fieldSet[r.Tag] = true
-		if r.Required {
-			required[r.Tag] = true
-		}
-	}
-	return
 }

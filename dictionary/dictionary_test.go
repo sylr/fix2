@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"runtime"
 	"slices"
 	"strings"
@@ -171,7 +170,7 @@ func TestResolve_ComponentFlattened(t *testing.T) {
 	nos := d.Messages["D"]
 
 	// Symbol (tag 55) should be in the flattened field list via Instrument component.
-	if !nos.fieldSet[55] {
+	if nos.body.get(55) == nil {
 		t.Fatal("Symbol (55) should be in NewOrderSingle fields via Instrument component")
 	}
 }
@@ -181,11 +180,11 @@ func TestResolve_GroupCounterAndChildren(t *testing.T) {
 	nos := d.Messages["D"]
 
 	// NoAllocs counter (tag 78) should be present.
-	if !nos.fieldSet[78] {
+	if nos.body.get(78) == nil {
 		t.Fatal("NoAllocs counter (78) should be in NewOrderSingle fields")
 	}
 	// AllocAccount (tag 79) should be present (group child).
-	if !nos.fieldSet[79] {
+	if nos.body.get(79) == nil {
 		t.Fatal("AllocAccount (79) should be in NewOrderSingle fields as group child")
 	}
 }
@@ -726,7 +725,11 @@ func TestValidate_OptionalComponentRequiredFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got, want := slices.Sorted(maps.Keys(d.Messages["M"].required)), []int{101, 105}; !slices.Equal(got, want) {
+	var required []int
+	for _, t := range d.Messages["M"].requiredTags {
+		required = append(required, t.tag)
+	}
+	if got, want := slices.Sorted(slices.Values(required)), []int{101, 105}; !slices.Equal(got, want) {
 		t.Errorf("unconditionally required = %v, want %v", got, want)
 	}
 
@@ -1323,8 +1326,8 @@ func TestValidate_HeaderNoHops(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if spec := d.envelopeSpecs; len(spec) != 1 || spec[0].Counter != 627 || spec[0].Delim != 628 {
-		t.Fatalf("envelope specs = %+v", spec)
+	if spec := d.Messages["0"].specs; len(spec) != 1 || spec[0].Counter != 627 || spec[0].Delim != 628 {
+		t.Fatalf("Heartbeat specs = %+v", spec)
 	}
 }
 
@@ -1493,5 +1496,33 @@ func TestValidate_GroupWithLengthOnly(t *testing.T) {
 	msg = parseMsg(t, buildFIXMsg("35=M\x01100=f\x0193=1\x0189=x\x01"))
 	if err := d.Validate(&msg); !errors.Is(err, ErrUnexpectedTag) {
 		t.Errorf("Signature pair: got %v, want unexpected tag", err)
+	}
+}
+
+func TestValidate_ErrorMessages(t *testing.T) {
+	d := loadTestDict(t)
+	const order = "11=ORD1\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01"
+	for _, tc := range []struct{ body, want string }{
+		{"35=D\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01" + order, "fix2: required header tag 49 missing"},
+		{"35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01", "fix2: required tag 11 missing for message NewOrderSingle"},
+		{"35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01" + order + "999=x\x01", "fix2: tag 999 not allowed in message NewOrderSingle"},
+		{"35=Z\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01", `fix2: unknown MsgType "Z"`},
+	} {
+		msg := parseMsg(t, buildFIXMsg(tc.body))
+		if err := d.Validate(&msg); err == nil || err.Error() != tc.want {
+			t.Errorf("got %v, want %q", err, tc.want)
+		}
+	}
+}
+
+func TestValidate_DoesNotAllocate(t *testing.T) {
+	d := loadTestDict(t)
+	const header = "35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01"
+	const order = "11=ORD1\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01"
+	for _, body := range []string{header + order, header + order + "78=2\x0179=A\x0179=B\x01"} {
+		msg := parseMsg(t, buildFIXMsg(body))
+		if allocs := testing.AllocsPerRun(100, func() { _ = d.Validate(&msg) }); allocs != 0 {
+			t.Errorf("Validate allocated %v times for %q", allocs, body)
+		}
 	}
 }

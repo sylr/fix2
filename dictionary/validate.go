@@ -1,9 +1,9 @@
 package dictionary
 
 import (
+	"bytes"
 	"fmt"
 	"slices"
-	"strings"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -36,14 +36,6 @@ func (e *ValidationError) Unwrap() error {
 	return e.Err
 }
 
-// Structural tags that the parser manages; they are always allowed regardless
-// of dictionary content.
-var structuralTags = map[int]bool{
-	8:  true, // BeginString
-	9:  true, // BodyLength
-	10: true, // CheckSum
-}
-
 // Validate checks msg against the dictionary.
 //
 // It verifies that:
@@ -60,136 +52,159 @@ var structuralTags = map[int]bool{
 // Required tags (2-4) must be present outside group entries: a tag a group
 // entry holds does not stand for the message's own.
 func (d *Dict) Validate(msg *fix2.Message) error {
-	msgType := string(msg.MsgType())
-
 	// 1. MsgType must be known.
-	mdef, ok := d.Messages[msgType]
+	mdef, ok := d.Messages[string(msg.MsgType())]
 	if !ok {
 		return &ValidationError{
 			Err: ErrUnknownMsgType,
-			Msg: fmt.Sprintf("unknown MsgType %q", msgType),
+			Msg: fmt.Sprintf("unknown MsgType %q", msg.MsgType()),
+		}
+	}
+
+	// Presence of the tracked tags (required ones and those activating
+	// optional components), anywhere and at the top level.
+	var small [2][4]uint64
+	present, top := small[0][:], small[1][:]
+	if n := (int(mdef.slots) + 63) / 64; n > len(small[0]) {
+		present, top = make([]uint64, n), make([]uint64, n)
+	}
+
+	// One pass over every field records presence and finds the first tag
+	// that is not allowed or has an invalid enum value (5 and 6), reported
+	// after the required-tag checks.
+	var fieldErr error
+	groups := false
+	for _, f := range msg.Fields() {
+		e := d.lookup(mdef, f.Tag)
+		if e == nil {
+			if fieldErr == nil {
+				fieldErr = &ValidationError{
+					Err: ErrUnexpectedTag,
+					Tag: f.Tag,
+					Msg: fmt.Sprintf("tag %d not allowed in message %s", f.Tag, mdef.Name),
+				}
+			}
+			continue
+		}
+		if e.slot >= 0 {
+			present[e.slot/64] |= 1 << (e.slot % 64)
+		}
+		groups = groups || e.counter
+		if fieldErr == nil && !e.structural {
+			fieldErr = d.checkEnum(f)
 		}
 	}
 
 	// Required tags must be present at the top level: a group entry's field
-	// does not stand for a message's own. Any occurrence, though, shows an
-	// optional component is present, its unique tags possibly being in one
-	// of its groups.
-	present := make(map[int]bool, msg.Count())
-	for _, f := range msg.Fields() {
-		present[f.Tag] = true
-	}
-	top := make(map[int]bool, msg.Count())
-	specs := mdef.specs
-	switch {
-	case len(specs) == 0:
-		specs = d.envelopeSpecs
-	case len(d.envelopeSpecs) > 0:
-		specs = slices.Concat(d.envelopeSpecs, specs)
-	}
-	for f := range msg.TopLevelFields(specs...) {
-		top[f.Tag] = true
-	}
-
-	// 2. Required header tags.
-	for tag := range d.headerReq {
-		if !top[tag] {
-			return &ValidationError{
-				Err: ErrRequiredTag,
-				Tag: tag,
-				Msg: fmt.Sprintf("required header tag %d missing", tag),
+	// does not stand for a message's own. Without any group, every field is.
+	if groups {
+		for f := range msg.TopLevelFields(d.specsOf(mdef)...) {
+			if e := d.lookup(mdef, f.Tag); e != nil && e.slot >= 0 {
+				top[e.slot/64] |= 1 << (e.slot % 64)
 			}
 		}
+	} else {
+		copy(top, present)
 	}
 
-	// 3. Required trailer tags.
-	for tag := range d.trailerReq {
-		if !top[tag] {
-			return &ValidationError{
-				Err: ErrRequiredTag,
-				Tag: tag,
-				Msg: fmt.Sprintf("required trailer tag %d missing", tag),
-			}
-		}
-	}
-
-	// 4. Required message-body tags.
-	for tag := range mdef.required {
-		if !top[tag] {
-			return &ValidationError{
-				Err: ErrRequiredTag,
-				Tag: tag,
-				Msg: fmt.Sprintf("required tag %d missing for message %s", tag, mdef.Name),
-			}
-		}
-	}
-
-	// 4b. Required fields of optional components that are present.
-	for _, cc := range []struct {
-		conds []condition
-		where string
-	}{
-		{d.headerConds, "header"},
-		{d.trailerConds, "trailer"},
-		{mdef.conditions, "message " + mdef.Name},
-	} {
-		if err := checkConditions(cc.conds, present, top, cc.where); err != nil {
-			return err
-		}
-	}
-
-	// 5 & 6. Check each tag is allowed and enum values are valid.
-	allowed := func(tag int) bool { return d.headerSet[tag] || d.trailerSet[tag] || mdef.fieldSet[tag] }
-	paired := func(other int) bool { return other != 0 && allowed(other) }
-	for _, f := range msg.Fields() {
-		tag := f.Tag
-
-		// Structural tags are always allowed.
-		if structuralTags[tag] {
-			continue
-		}
-
-		// Tag must be in header, trailer, or message fields, or pair with
-		// such a field: the parser requires LENGTH right before its DATA
-		// field, and generated builders write both, even when the
-		// dictionary declares only one.
-		if !allowed(tag) && !paired(fix2.DataTag(tag)) && !paired(fix2.DataLengthTag(tag)) {
-			return &ValidationError{
-				Err: ErrUnexpectedTag,
-				Tag: tag,
-				Msg: fmt.Sprintf("tag %d not allowed in message %s", tag, mdef.Name),
-			}
-		}
-
-		// Enum validation.
-		fd := d.Fields[tag]
-		if fd != nil && fd.Enums != nil {
-			val := string(f.Value)
-			if !isMultipleValue(fd.Type) {
-				if _, ok := fd.Enums[val]; !ok {
-					return &ValidationError{
-						Err: ErrInvalidEnumValue,
-						Tag: tag,
-						Msg: fmt.Sprintf("invalid value %q for tag %d (%s)", val, tag, fd.Name),
-					}
+	// 2-4. Required header, trailer and message-body tags. Messages are
+	// formatted only on error: building them would allocate on every call.
+	for i, tags := range [...][]tracked{d.headerReq, d.trailerReq, mdef.requiredTags} {
+		for _, t := range tags {
+			if !has(top, t.slot) {
+				var msg string
+				switch i {
+				case 0:
+					msg = fmt.Sprintf("required header tag %d missing", t.tag)
+				case 1:
+					msg = fmt.Sprintf("required trailer tag %d missing", t.tag)
+				default:
+					msg = fmt.Sprintf("required tag %d missing for message %s", t.tag, mdef.Name)
 				}
+				return &ValidationError{Err: ErrRequiredTag, Tag: t.tag, Msg: msg}
+			}
+		}
+	}
+
+	// 4b. Required fields of optional components that are present: any of
+	// their activation tags is, anywhere, since a component can show its
+	// presence through one of its groups.
+	for i, conds := range [...][]compiledCond{d.headerConds, d.trailerConds, mdef.conds} {
+		for _, c := range conds {
+			if !slices.ContainsFunc(c.activation, func(slot int32) bool { return has(present, slot) }) {
 				continue
 			}
-			// Multiple-value fields hold space-separated enum values.
-			for item := range strings.SplitSeq(val, " ") {
-				if _, ok := fd.Enums[item]; !ok {
+			for _, t := range c.required {
+				if !has(top, t.slot) {
+					where := [...]string{"header", "trailer", "message " + mdef.Name}[i]
 					return &ValidationError{
-						Err: ErrInvalidEnumValue,
-						Tag: tag,
-						Msg: fmt.Sprintf("invalid value %q in %q for tag %d (%s)", item, val, tag, fd.Name),
+						Err: ErrRequiredTag,
+						Tag: t.tag,
+						Msg: fmt.Sprintf("required tag %d missing for component %s in %s", t.tag, c.component, where),
 					}
 				}
 			}
 		}
 	}
 
+	return fieldErr
+}
+
+// lookup returns what the message, then the envelope, knows of tag, or nil
+// if the message does not allow it.
+func (d *Dict) lookup(mdef *MessageDef, tag int) *tagEntry {
+	if e := mdef.body.get(tag); e != nil {
+		return e
+	}
+	return d.envelope.get(tag)
+}
+
+// specsOf returns the specs of the groups whose entries are skipped for
+// top-level presence: the message's, and the header's and trailer's unless
+// they are already among them.
+func (d *Dict) specsOf(mdef *MessageDef) []*fix2.GroupSpec {
+	if len(d.envelopeSpecs) == 0 {
+		return mdef.specs
+	}
+	return slices.Concat(d.envelopeSpecs, mdef.specs)
+}
+
+// has reports whether slot is set in bits.
+func has(bits []uint64, slot int32) bool {
+	return bits[slot/64]&(1<<(slot%64)) != 0
+}
+
+// checkEnum returns an error if f's field has enums and f's value, or one of
+// its space-separated values for a multiple-value field, is not one of them.
+func (d *Dict) checkEnum(f fix2.Field) error {
+	e := d.enums.get(f.Tag)
+	if e == nil {
+		return nil
+	}
+	ec := &d.enumChecks[e.slot]
+	if !ec.multi {
+		if ec.valid(f.Value) {
+			return nil
+		}
+		return &ValidationError{
+			Err: ErrInvalidEnumValue,
+			Tag: f.Tag,
+			Msg: fmt.Sprintf("invalid value %q for tag %d (%s)", f.Value, f.Tag, ec.name),
+		}
+	}
+	for item := range bytes.SplitSeq(f.Value, space) {
+		if !ec.valid(item) {
+			return &ValidationError{
+				Err: ErrInvalidEnumValue,
+				Tag: f.Tag,
+				Msg: fmt.Sprintf("invalid value %q in %q for tag %d (%s)", item, f.Value, f.Tag, ec.name),
+			}
+		}
+	}
 	return nil
 }
+
+var space = []byte{' '}
 
 // isMultipleValue reports whether fixType holds space-separated values:
 // MULTIPLEVALUESTRING in FIX 4.2-4.4, MULTIPLECHARVALUE and
@@ -200,34 +215,6 @@ func isMultipleValue(fixType string) bool {
 		return true
 	}
 	return false
-}
-
-// checkConditions returns an error if an optional component is present (any
-// of its activation tags is, anywhere) but one of its required tags is
-// missing from the top level.
-func checkConditions(conds []condition, present, top map[int]bool, where string) error {
-	for _, c := range conds {
-		active := false
-		for _, tag := range c.activation {
-			if present[tag] {
-				active = true
-				break
-			}
-		}
-		if !active {
-			continue
-		}
-		for _, tag := range c.required {
-			if !top[tag] {
-				return &ValidationError{
-					Err: ErrRequiredTag,
-					Tag: tag,
-					Msg: fmt.Sprintf("required tag %d missing for component %s in %s", tag, c.component, where),
-				}
-			}
-		}
-	}
-	return nil
 }
 
 // groupSpecs returns the specs of groups. An entry may also hold the LENGTH
