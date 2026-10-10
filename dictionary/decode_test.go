@@ -1,10 +1,13 @@
 package dictionary
 
 import (
+	"bytes"
 	"encoding/xml"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -14,8 +17,7 @@ import (
 // encoding/xml struct decoding did, reading in one go or byte by byte.
 func TestDecodeMatchesEncodingXML(t *testing.T) {
 	docs := map[string]string{
-		"prolog, comments, CDATA, PI, DOCTYPE": `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE fix [ <!ENTITY e "<x>"> <!-- > --> ]>
+		"prolog, comments, CDATA, PI": `<?xml version="1.0" encoding="UTF-8"?>
 <!-- <fields><field number="9" name="Hidden" type="STRING"/></fields> -->
 <fix type="FIX" major="4" minor="4" servicepack="0">
   <?pi <field name="X"/> ?>
@@ -104,7 +106,11 @@ func TestMarkupLimits(t *testing.T) {
 		{"tag of maxTagLen bytes", `<fix a="` + strings.Repeat("x", maxTagLen-len(`<fix a=""/>`)) + `"/>`, ""},
 		{"tag over maxTagLen bytes", `<fix a="` + strings.Repeat("x", maxTagLen) + `"/>`, "tag longer than"},
 		{"long end tag", `<fix></fix` + strings.Repeat(" ", maxTagLen) + `>`, "tag longer than"},
-		{"long directive", `<!DOCTYPE fix [` + strings.Repeat("<!ENTITY e 'x'>", maxTagLen/15) + `]><fix/>`, "tag longer than"},
+		{"DOCTYPE", `<!DOCTYPE fix><fix/>`, "not supported"},
+		{"DOCTYPE with a comment hiding a PI", `<!DOCTYPE fix [<!-- > > <?pi -->]><fix` + attrs(maxAttrs+1) + `/>`, "not supported"},
+		{"DOCTYPE with a quote in a comment", `<!DOCTYPE fix [<!-- ' -->]><fix>` + strings.Repeat("x", maxTagLen) + `</fix>`, "not supported"},
+		{"invalid <! sequence", `<fix><!-x></fix>`, "not supported"},
+		{"invalid CDATA opening", `<fix><![CDAT x]]></fix>`, "not supported"},
 		{"long comment", `<!--` + strings.Repeat("<a b='c'>", maxTagLen) + `--><fix/>`, ""},
 		{"long CDATA", `<fix><![CDATA[` + strings.Repeat("<a b='c'>", maxTagLen) + `]]></fix>`, ""},
 		{"long PI", `<?pi ` + strings.Repeat("<a b='c'>", maxTagLen) + `?><fix/>`, ""},
@@ -136,12 +142,68 @@ func TestMarkupLimits(t *testing.T) {
 func TestLoad_AttributeFloodBounded(t *testing.T) {
 	// One root with 8 MB of attributes used to allocate about 400 MiB.
 	flood := `<fix` + strings.Repeat(` a=""`, 8<<20/5) + `/>`
-	var err error
-	allocs := testing.AllocsPerRun(1, func() { _, err = Load(strings.NewReader(flood)) })
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := Load(strings.NewReader(flood))
+	runtime.ReadMemStats(&after)
 	if err == nil || !strings.Contains(err.Error(), "attributes") {
 		t.Fatalf("got %v, want attribute limit error", err)
 	}
-	if allocs > 1000 {
-		t.Errorf("Load allocated %v times", allocs)
+	if n := after.TotalAlloc - before.TotalAlloc; n > 1<<20 {
+		t.Errorf("Load allocated %d bytes", n)
 	}
+}
+
+// FuzzMarkupLimiter checks that the limiter's lexer cannot be desynchronised
+// from encoding/xml: when it accepts an input, every element encoding/xml
+// decodes from it is within the limits. Byte-by-byte reads must agree.
+func FuzzMarkupLimiter(f *testing.F) {
+	for _, seed := range []string{
+		`<fix a="1" b='2'><x/></fix>`,
+		`<?xml version="1.0"?><!-- c --><fix><![CDATA[ <a b="c"> ]]><?pi <x a="b"> ?></fix>`,
+		`<!DOCTYPE fix [<!-- > > <?pi -->]><fix a="" b="" c="" d="" e="" f="" g="" h="" i=""/>`,
+		`<fix a=">" b='"' c="'"></fix >`,
+		`<!-- a-b- --><fix/>`,
+		`<fix><![CDATA[ ]]]></fix>`,
+		`<?pi ??><fix/>`,
+	} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		lerr := limit(bytes.NewReader(data))
+		if oneByte := limit(iotest.OneByteReader(bytes.NewReader(data))); (lerr == nil) != (oneByte == nil) {
+			t.Fatalf("whole read: %v, byte by byte: %v", lerr, oneByte)
+		}
+		if lerr != nil {
+			return
+		}
+		d := xml.NewDecoder(bytes.NewReader(data))
+		for {
+			start := d.InputOffset()
+			tok, err := d.Token()
+			if err != nil {
+				return
+			}
+			n := d.InputOffset() - start
+			switch tok := tok.(type) {
+			case xml.Directive:
+				t.Fatal("accepted a directive")
+			case xml.StartElement:
+				if len(tok.Attr) > maxAttrs || n > maxTagLen {
+					t.Fatalf("accepted an element of %d bytes with %d attributes", n, len(tok.Attr))
+				}
+			case xml.EndElement:
+				if n > maxTagLen {
+					t.Fatalf("accepted an end tag of %d bytes", n)
+				}
+			}
+		}
+	})
+}
+
+// limit reads r through a markupLimiter and returns its error, if any.
+func limit(r io.Reader) error {
+	_, err := io.Copy(io.Discard, &markupLimiter{r: r})
+	return err
 }

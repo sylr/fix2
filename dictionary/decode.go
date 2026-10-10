@@ -2,6 +2,7 @@ package dictionary
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -215,7 +216,7 @@ func attr(start xml.StartElement, name string) string {
 	return v
 }
 
-// maxTagLen and maxAttrs bound one tag, or directive, before encoding/xml
+// maxTagLen and maxAttrs bound one tag before encoding/xml
 // decodes it: it builds a tag's whole attribute list at once, before any
 // element budget can stop it. QuickFIX dictionaries use at most four
 // attributes per element.
@@ -230,7 +231,6 @@ const (
 	inOpen    // right after '<'
 	inBang    // matching "<!--" or "<![CDATA[" after "<!"
 	inTag     // start or end tag
-	inDecl    // directive, e.g. <!DOCTYPE ...>
 	inComment // until "-->"
 	inCDATA   // until "]]>"
 	inPI      // processing instruction, until "?>"
@@ -240,8 +240,8 @@ const (
 // Its lexer is just precise enough to find tags: text, comments, CDATA
 // sections and processing instructions end exactly where encoding/xml ends
 // them, and pass through unbounded since decoding them costs about their
-// size. A directive, whose end it finds less precisely, is bounded like a
-// tag, so a disagreement can only make it reject input.
+// size. Directives such as <!DOCTYPE ...>, whose end depends on a grammar of
+// their own, are rejected: QuickFIX dictionaries do not use them.
 type markupLimiter struct {
 	r      io.Reader
 	state  int
@@ -250,7 +250,6 @@ type markupLimiter struct {
 	quote  byte   // closing quote inside an attribute value, or 0
 	tagLen int
 	attrs  int
-	depth  int // '<' nesting inside a directive
 }
 
 func (l *markupLimiter) Read(p []byte) (int, error) {
@@ -267,7 +266,7 @@ func (l *markupLimiter) step(c byte) error {
 	switch l.state {
 	case inText:
 		if c == '<' {
-			l.state, l.tagLen, l.attrs, l.depth, l.quote = inOpen, 1, 0, 0, 0
+			l.state, l.tagLen, l.attrs, l.quote = inOpen, 1, 0, 0
 		}
 		return nil
 	case inOpen:
@@ -298,7 +297,7 @@ func (l *markupLimiter) step(c byte) error {
 			}
 			return l.grow()
 		}
-		l.state = inDecl
+		return errors.New("XML directives such as DOCTYPE are not supported")
 	case inComment, inCDATA:
 		end := byte('-')
 		if l.state == inCDATA {
@@ -325,7 +324,7 @@ func (l *markupLimiter) step(c byte) error {
 		return nil
 	}
 
-	// inTag or inDecl.
+	// inTag.
 	if err := l.grow(); err != nil {
 		return err
 	}
@@ -336,23 +335,17 @@ func (l *markupLimiter) step(c byte) error {
 		}
 	case c == '"' || c == '\'':
 		l.quote = c
-	case c == '=' && l.state == inTag:
+	case c == '=':
 		if l.attrs++; l.attrs > maxAttrs {
 			return fmt.Errorf("element with more than %d attributes", maxAttrs)
 		}
-	case c == '<' && l.state == inDecl:
-		l.depth++
 	case c == '>':
-		if l.depth == 0 {
-			l.state = inText
-		} else {
-			l.depth--
-		}
+		l.state = inText
 	}
 	return nil
 }
 
-// grow counts a byte of the current tag or directive.
+// grow counts a byte of the current tag.
 func (l *markupLimiter) grow() error {
 	if l.tagLen++; l.tagLen > maxTagLen {
 		return fmt.Errorf("tag longer than %d bytes", maxTagLen)
