@@ -95,8 +95,8 @@ func (m *Logout) Text() (string, bool) {
 	return string(v), v != nil
 }
 
-// LogoutBuilder builds a Logout message. Use it through the pointer
-// BuildLogout returns: a copy would share its fields but not its groups.
+// LogoutBuilder builds a Logout message. A copy shares its fields and
+// groups with the original.
 type LogoutBuilder struct {
 	*fix2.Builder
 }

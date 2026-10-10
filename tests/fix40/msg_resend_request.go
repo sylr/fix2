@@ -107,8 +107,8 @@ func (m *ResendRequest) EndSeqNo() (int, bool, error) {
 	return n, true, err
 }
 
-// ResendRequestBuilder builds a ResendRequest message. Use it through the pointer
-// BuildResendRequest returns: a copy would share its fields but not its groups.
+// ResendRequestBuilder builds a ResendRequest message. A copy shares its fields and
+// groups with the original.
 type ResendRequestBuilder struct {
 	*fix2.Builder
 }

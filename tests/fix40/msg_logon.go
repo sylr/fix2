@@ -115,8 +115,8 @@ func (m *Logon) RawData() ([]byte, bool) {
 	return v, v != nil
 }
 
-// LogonBuilder builds a Logon message. Use it through the pointer
-// BuildLogon returns: a copy would share its fields but not its groups.
+// LogonBuilder builds a Logon message. A copy shares its fields and
+// groups with the original.
 type LogonBuilder struct {
 	*fix2.Builder
 }

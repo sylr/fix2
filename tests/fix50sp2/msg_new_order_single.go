@@ -1637,10 +1637,7 @@ func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
 	return entries
 }
 
-// NewOrderSingleBuilder builds a NewOrderSingle message. Use it through the pointer
-// BuildNewOrderSingle returns: a copy would share its fields but not its groups.
-type NewOrderSingleBuilder struct {
-	*fix2.Builder
+type newOrderSingleGroups struct {
 	noPartyIDs           []*NoPartyIDsEntryBuilder
 	noAllocs             []*NoAllocsEntryBuilder
 	noTradingSessions    []*NoTradingSessionsEntryBuilder
@@ -1654,9 +1651,19 @@ type NewOrderSingleBuilder struct {
 	noTrdRegTimestamps   []*NoTrdRegTimestampsEntryBuilder
 }
 
+// NewOrderSingleBuilder builds a NewOrderSingle message. A copy shares its fields and
+// groups with the original.
+type NewOrderSingleBuilder struct {
+	*fix2.Builder
+	groups *newOrderSingleGroups
+}
+
 func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
-	b := &NewOrderSingleBuilder{Builder: fix2.NewBuilder(beginString, "D")}
-	b.SetGroups(b.appendGroups, TagNoPartyIDs, TagNoAllocs, TagNoTradingSessions, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoStrategyParameters, TagNoTrdRegTimestamps)
+	b := &NewOrderSingleBuilder{
+		Builder: fix2.NewBuilder(beginString, "D"),
+		groups:  &newOrderSingleGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoAllocs, TagNoTradingSessions, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoStrategyParameters, TagNoTrdRegTimestamps)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetClOrdID(v string) *NewOrderSingleBuilder {
@@ -2659,82 +2666,82 @@ func (b *NewOrderSingleBuilder) SetExDestinationIDSource(v ExDestinationIDSource
 // AddNoPartyIDsEntry adds an entry to the NoPartyIDs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoPartyIDsEntry(e *NoPartyIDsEntryBuilder) *NewOrderSingleBuilder {
-	b.noPartyIDs = append(b.noPartyIDs, e)
+	b.groups.noPartyIDs = append(b.groups.noPartyIDs, e)
 	return b
 }
 
 // AddNoAllocsEntry adds an entry to the NoAllocs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoAllocsEntry(e *NoAllocsEntryBuilder) *NewOrderSingleBuilder {
-	b.noAllocs = append(b.noAllocs, e)
+	b.groups.noAllocs = append(b.groups.noAllocs, e)
 	return b
 }
 
 // AddNoTradingSessionsEntry adds an entry to the NoTradingSessions group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoTradingSessionsEntry(e *NoTradingSessionsEntryBuilder) *NewOrderSingleBuilder {
-	b.noTradingSessions = append(b.noTradingSessions, e)
+	b.groups.noTradingSessions = append(b.groups.noTradingSessions, e)
 	return b
 }
 
 // AddNoSecurityAltIDEntry adds an entry to the NoSecurityAltID group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *NewOrderSingleBuilder {
-	b.noSecurityAltID = append(b.noSecurityAltID, e)
+	b.groups.noSecurityAltID = append(b.groups.noSecurityAltID, e)
 	return b
 }
 
 // AddNoEventsEntry adds an entry to the NoEvents group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *NewOrderSingleBuilder {
-	b.noEvents = append(b.noEvents, e)
+	b.groups.noEvents = append(b.groups.noEvents, e)
 	return b
 }
 
 // AddNoInstrumentPartiesEntry adds an entry to the NoInstrumentParties group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *NewOrderSingleBuilder {
-	b.noInstrumentParties = append(b.noInstrumentParties, e)
+	b.groups.noInstrumentParties = append(b.groups.noInstrumentParties, e)
 	return b
 }
 
 // AddNoComplexEventsEntry adds an entry to the NoComplexEvents group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *NewOrderSingleBuilder {
-	b.noComplexEvents = append(b.noComplexEvents, e)
+	b.groups.noComplexEvents = append(b.groups.noComplexEvents, e)
 	return b
 }
 
 // AddNoUnderlyingsEntry adds an entry to the NoUnderlyings group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoUnderlyingsEntry(e *NoUnderlyingsEntryBuilder) *NewOrderSingleBuilder {
-	b.noUnderlyings = append(b.noUnderlyings, e)
+	b.groups.noUnderlyings = append(b.groups.noUnderlyings, e)
 	return b
 }
 
 // AddNoStipulationsEntry adds an entry to the NoStipulations group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoStipulationsEntry(e *NoStipulationsEntryBuilder) *NewOrderSingleBuilder {
-	b.noStipulations = append(b.noStipulations, e)
+	b.groups.noStipulations = append(b.groups.noStipulations, e)
 	return b
 }
 
 // AddNoStrategyParametersEntry adds an entry to the NoStrategyParameters group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoStrategyParametersEntry(e *NoStrategyParametersEntryBuilder) *NewOrderSingleBuilder {
-	b.noStrategyParameters = append(b.noStrategyParameters, e)
+	b.groups.noStrategyParameters = append(b.groups.noStrategyParameters, e)
 	return b
 }
 
 // AddNoTrdRegTimestampsEntry adds an entry to the NoTrdRegTimestamps group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *NewOrderSingleBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestampsEntryBuilder) *NewOrderSingleBuilder {
-	b.noTrdRegTimestamps = append(b.noTrdRegTimestamps, e)
+	b.groups.noTrdRegTimestamps = append(b.groups.noTrdRegTimestamps, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *NewOrderSingleBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *newOrderSingleGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDs) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))
 		for _, entry := range b.noPartyIDs {

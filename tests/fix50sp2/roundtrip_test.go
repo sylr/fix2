@@ -294,3 +294,17 @@ func TestDataSetters(t *testing.T) {
 		t.Errorf("EncodedTextLen = %d, want 4", n)
 	}
 }
+
+// TestBuilderCopySharesGroups checks that a builder copied by value shares
+// its groups with the original, as it shares the embedded Builder.
+func TestBuilderCopySharesGroups(t *testing.T) {
+	cp := *BuildExecutionReport("FIXT.1.1")
+	cp.AddNoLegsEntry(NewNoLegsEntry().SetLegSymbol("A"))
+	msg, err := fix2.Parse(cp.Build())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(WrapExecutionReport(&msg).NoLegsEntries()); n != 1 {
+		t.Errorf("copy built %d legs, want 1", n)
+	}
+}

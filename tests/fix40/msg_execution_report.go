@@ -361,16 +361,23 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	return entries
 }
 
-// ExecutionReportBuilder builds a ExecutionReport message. Use it through the pointer
-// BuildExecutionReport returns: a copy would share its fields but not its groups.
-type ExecutionReportBuilder struct {
-	*fix2.Builder
+type executionReportGroups struct {
 	noMiscFees []*NoMiscFeesEntryBuilder
 }
 
+// ExecutionReportBuilder builds a ExecutionReport message. A copy shares its fields and
+// groups with the original.
+type ExecutionReportBuilder struct {
+	*fix2.Builder
+	groups *executionReportGroups
+}
+
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
-	b := &ExecutionReportBuilder{Builder: fix2.NewBuilder(beginString, "8")}
-	b.SetGroups(b.appendGroups, TagNoMiscFees)
+	b := &ExecutionReportBuilder{
+		Builder: fix2.NewBuilder(beginString, "8"),
+		groups:  &executionReportGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoMiscFees)
 	return b
 }
 func (b *ExecutionReportBuilder) SetSenderCompID(v string) *ExecutionReportBuilder {
@@ -635,12 +642,12 @@ func (b *ExecutionReportBuilder) SetText(v string) *ExecutionReportBuilder {
 // AddNoMiscFeesEntry adds an entry to the NoMiscFees group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
-	b.noMiscFees = append(b.noMiscFees, e)
+	b.groups.noMiscFees = append(b.groups.noMiscFees, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *ExecutionReportBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noMiscFees) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFees))
 		for _, entry := range b.noMiscFees {

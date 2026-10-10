@@ -2313,10 +2313,7 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 	return entries
 }
 
-// ExecutionReportBuilder builds a ExecutionReport message. Use it through the pointer
-// BuildExecutionReport returns: a copy would share its fields but not its groups.
-type ExecutionReportBuilder struct {
-	*fix2.Builder
+type executionReportGroups struct {
 	noPartyIDs           []*NoPartyIDsEntryBuilder
 	noContraBrokers      []*NoContraBrokersEntryBuilder
 	noSecurityAltID      []*NoSecurityAltIDEntryBuilder
@@ -2335,9 +2332,19 @@ type ExecutionReportBuilder struct {
 	noRateSources        []*NoRateSourcesEntryBuilder
 }
 
+// ExecutionReportBuilder builds a ExecutionReport message. A copy shares its fields and
+// groups with the original.
+type ExecutionReportBuilder struct {
+	*fix2.Builder
+	groups *executionReportGroups
+}
+
 func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
-	b := &ExecutionReportBuilder{Builder: fix2.NewBuilder(beginString, "8")}
-	b.SetGroups(b.appendGroups, TagNoPartyIDs, TagNoContraBrokers, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoContAmts, TagNoLegs, TagNoMiscFees, TagNoStrategyParameters, TagNoTrdRegTimestamps, TagNoAllocs, TagNoFills, TagNoRateSources)
+	b := &ExecutionReportBuilder{
+		Builder: fix2.NewBuilder(beginString, "8"),
+		groups:  &executionReportGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoContraBrokers, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoContAmts, TagNoLegs, TagNoMiscFees, TagNoStrategyParameters, TagNoTrdRegTimestamps, TagNoAllocs, TagNoFills, TagNoRateSources)
 	return b
 }
 func (b *ExecutionReportBuilder) SetOrderID(v string) *ExecutionReportBuilder {
@@ -3668,117 +3675,117 @@ func (b *ExecutionReportBuilder) SetApplResendFlag(v bool) *ExecutionReportBuild
 // AddNoPartyIDsEntry adds an entry to the NoPartyIDs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoPartyIDsEntry(e *NoPartyIDsEntryBuilder) *ExecutionReportBuilder {
-	b.noPartyIDs = append(b.noPartyIDs, e)
+	b.groups.noPartyIDs = append(b.groups.noPartyIDs, e)
 	return b
 }
 
 // AddNoContraBrokersEntry adds an entry to the NoContraBrokers group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoContraBrokersEntry(e *NoContraBrokersEntryBuilder) *ExecutionReportBuilder {
-	b.noContraBrokers = append(b.noContraBrokers, e)
+	b.groups.noContraBrokers = append(b.groups.noContraBrokers, e)
 	return b
 }
 
 // AddNoSecurityAltIDEntry adds an entry to the NoSecurityAltID group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *ExecutionReportBuilder {
-	b.noSecurityAltID = append(b.noSecurityAltID, e)
+	b.groups.noSecurityAltID = append(b.groups.noSecurityAltID, e)
 	return b
 }
 
 // AddNoEventsEntry adds an entry to the NoEvents group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *ExecutionReportBuilder {
-	b.noEvents = append(b.noEvents, e)
+	b.groups.noEvents = append(b.groups.noEvents, e)
 	return b
 }
 
 // AddNoInstrumentPartiesEntry adds an entry to the NoInstrumentParties group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *ExecutionReportBuilder {
-	b.noInstrumentParties = append(b.noInstrumentParties, e)
+	b.groups.noInstrumentParties = append(b.groups.noInstrumentParties, e)
 	return b
 }
 
 // AddNoComplexEventsEntry adds an entry to the NoComplexEvents group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *ExecutionReportBuilder {
-	b.noComplexEvents = append(b.noComplexEvents, e)
+	b.groups.noComplexEvents = append(b.groups.noComplexEvents, e)
 	return b
 }
 
 // AddNoUnderlyingsEntry adds an entry to the NoUnderlyings group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoUnderlyingsEntry(e *NoUnderlyingsEntryBuilder) *ExecutionReportBuilder {
-	b.noUnderlyings = append(b.noUnderlyings, e)
+	b.groups.noUnderlyings = append(b.groups.noUnderlyings, e)
 	return b
 }
 
 // AddNoStipulationsEntry adds an entry to the NoStipulations group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoStipulationsEntry(e *NoStipulationsEntryBuilder) *ExecutionReportBuilder {
-	b.noStipulations = append(b.noStipulations, e)
+	b.groups.noStipulations = append(b.groups.noStipulations, e)
 	return b
 }
 
 // AddNoContAmtsEntry adds an entry to the NoContAmts group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoContAmtsEntry(e *NoContAmtsEntryBuilder) *ExecutionReportBuilder {
-	b.noContAmts = append(b.noContAmts, e)
+	b.groups.noContAmts = append(b.groups.noContAmts, e)
 	return b
 }
 
 // AddNoLegsEntry adds an entry to the NoLegs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoLegsEntry(e *NoLegsEntryBuilder) *ExecutionReportBuilder {
-	b.noLegs = append(b.noLegs, e)
+	b.groups.noLegs = append(b.groups.noLegs, e)
 	return b
 }
 
 // AddNoMiscFeesEntry adds an entry to the NoMiscFees group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
-	b.noMiscFees = append(b.noMiscFees, e)
+	b.groups.noMiscFees = append(b.groups.noMiscFees, e)
 	return b
 }
 
 // AddNoStrategyParametersEntry adds an entry to the NoStrategyParameters group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoStrategyParametersEntry(e *NoStrategyParametersEntryBuilder) *ExecutionReportBuilder {
-	b.noStrategyParameters = append(b.noStrategyParameters, e)
+	b.groups.noStrategyParameters = append(b.groups.noStrategyParameters, e)
 	return b
 }
 
 // AddNoTrdRegTimestampsEntry adds an entry to the NoTrdRegTimestamps group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestampsEntryBuilder) *ExecutionReportBuilder {
-	b.noTrdRegTimestamps = append(b.noTrdRegTimestamps, e)
+	b.groups.noTrdRegTimestamps = append(b.groups.noTrdRegTimestamps, e)
 	return b
 }
 
 // AddNoAllocsEntry adds an entry to the NoAllocs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoAllocsEntry(e *NoAllocsEntryBuilder) *ExecutionReportBuilder {
-	b.noAllocs = append(b.noAllocs, e)
+	b.groups.noAllocs = append(b.groups.noAllocs, e)
 	return b
 }
 
 // AddNoFillsEntry adds an entry to the NoFills group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoFillsEntry(e *NoFillsEntryBuilder) *ExecutionReportBuilder {
-	b.noFills = append(b.noFills, e)
+	b.groups.noFills = append(b.groups.noFills, e)
 	return b
 }
 
 // AddNoRateSourcesEntry adds an entry to the NoRateSources group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuilder) *ExecutionReportBuilder {
-	b.noRateSources = append(b.noRateSources, e)
+	b.groups.noRateSources = append(b.groups.noRateSources, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *ExecutionReportBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDs) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))
 		for _, entry := range b.noPartyIDs {

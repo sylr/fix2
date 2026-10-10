@@ -763,6 +763,10 @@ func TestMergeLayouts(t *testing.T) {
 		{"subset", [][]int{{1, 2}, {1, 2, 3}}, []int{1, 2, 3}},
 		// Never ahead of the delimiter, even without a known predecessor.
 		{"no known predecessor", [][]int{{1, 2}, {7, 2}}, []int{1, 7, 2}},
+		// A later layout orders tags an earlier one placed independently.
+		{"compatible constraints", [][]int{{1, 2, 9}, {1, 3, 9}, {1, 2, 3, 9}}, []int{1, 2, 3, 9}},
+		// Conflicting orders: the first layout wins.
+		{"conflict", [][]int{{1, 2, 3}, {1, 3, 2}}, []int{1, 2, 3}},
 	} {
 		if got := mergeLayouts(tc.layouts); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: mergeLayouts = %v, want %v", tc.name, got, tc.want)

@@ -181,16 +181,23 @@ func (m *SequenceReset) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-// SequenceResetBuilder builds a SequenceReset message. Use it through the pointer
-// BuildSequenceReset returns: a copy would share its fields but not its groups.
-type SequenceResetBuilder struct {
-	*fix2.Builder
+type sequenceResetGroups struct {
 	noHops []*NoHopsEntryBuilder
 }
 
+// SequenceResetBuilder builds a SequenceReset message. A copy shares its fields and
+// groups with the original.
+type SequenceResetBuilder struct {
+	*fix2.Builder
+	groups *sequenceResetGroups
+}
+
 func BuildSequenceReset(beginString string) *SequenceResetBuilder {
-	b := &SequenceResetBuilder{Builder: fix2.NewBuilder(beginString, "4")}
-	b.SetGroups(b.appendGroups, TagNoHops)
+	b := &SequenceResetBuilder{
+		Builder: fix2.NewBuilder(beginString, "4"),
+		groups:  &sequenceResetGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoHops)
 	return b
 }
 func (b *SequenceResetBuilder) SetSenderCompID(v string) *SequenceResetBuilder {
@@ -309,12 +316,12 @@ func (b *SequenceResetBuilder) SetNewSeqNo(v int) *SequenceResetBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *SequenceResetBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *SequenceResetBuilder {
-	b.noHops = append(b.noHops, e)
+	b.groups.noHops = append(b.groups.noHops, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *SequenceResetBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *sequenceResetGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

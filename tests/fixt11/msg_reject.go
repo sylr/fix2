@@ -209,16 +209,23 @@ func (m *Reject) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-// RejectBuilder builds a Reject message. Use it through the pointer
-// BuildReject returns: a copy would share its fields but not its groups.
-type RejectBuilder struct {
-	*fix2.Builder
+type rejectGroups struct {
 	noHops []*NoHopsEntryBuilder
 }
 
+// RejectBuilder builds a Reject message. A copy shares its fields and
+// groups with the original.
+type RejectBuilder struct {
+	*fix2.Builder
+	groups *rejectGroups
+}
+
 func BuildReject(beginString string) *RejectBuilder {
-	b := &RejectBuilder{Builder: fix2.NewBuilder(beginString, "3")}
-	b.SetGroups(b.appendGroups, TagNoHops)
+	b := &RejectBuilder{
+		Builder: fix2.NewBuilder(beginString, "3"),
+		groups:  &rejectGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoHops)
 	return b
 }
 func (b *RejectBuilder) SetSenderCompID(v string) *RejectBuilder {
@@ -355,12 +362,12 @@ func (b *RejectBuilder) SetEncodedText(v []byte) *RejectBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *RejectBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *RejectBuilder {
-	b.noHops = append(b.noHops, e)
+	b.groups.noHops = append(b.groups.noHops, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *RejectBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *rejectGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

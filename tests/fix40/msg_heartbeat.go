@@ -95,8 +95,8 @@ func (m *Heartbeat) TestReqID() (string, bool) {
 	return string(v), v != nil
 }
 
-// HeartbeatBuilder builds a Heartbeat message. Use it through the pointer
-// BuildHeartbeat returns: a copy would share its fields but not its groups.
+// HeartbeatBuilder builds a Heartbeat message. A copy shares its fields and
+// groups with the original.
 type HeartbeatBuilder struct {
 	*fix2.Builder
 }

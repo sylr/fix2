@@ -185,16 +185,23 @@ func (m *Logout) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-// LogoutBuilder builds a Logout message. Use it through the pointer
-// BuildLogout returns: a copy would share its fields but not its groups.
-type LogoutBuilder struct {
-	*fix2.Builder
+type logoutGroups struct {
 	noHops []*NoHopsEntryBuilder
 }
 
+// LogoutBuilder builds a Logout message. A copy shares its fields and
+// groups with the original.
+type LogoutBuilder struct {
+	*fix2.Builder
+	groups *logoutGroups
+}
+
 func BuildLogout(beginString string) *LogoutBuilder {
-	b := &LogoutBuilder{Builder: fix2.NewBuilder(beginString, "5")}
-	b.SetGroups(b.appendGroups, TagNoHops)
+	b := &LogoutBuilder{
+		Builder: fix2.NewBuilder(beginString, "5"),
+		groups:  &logoutGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoHops)
 	return b
 }
 func (b *LogoutBuilder) SetSenderCompID(v string) *LogoutBuilder {
@@ -315,12 +322,12 @@ func (b *LogoutBuilder) SetEncodedText(v []byte) *LogoutBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *LogoutBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogoutBuilder {
-	b.noHops = append(b.noHops, e)
+	b.groups.noHops = append(b.groups.noHops, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *LogoutBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *logoutGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

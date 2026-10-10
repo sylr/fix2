@@ -259,17 +259,24 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	return entries
 }
 
-// LogonBuilder builds a Logon message. Use it through the pointer
-// BuildLogon returns: a copy would share its fields but not its groups.
-type LogonBuilder struct {
-	*fix2.Builder
+type logonGroups struct {
 	noHops     []*NoHopsEntryBuilder
 	noMsgTypes []*NoMsgTypesEntryBuilder
 }
 
+// LogonBuilder builds a Logon message. A copy shares its fields and
+// groups with the original.
+type LogonBuilder struct {
+	*fix2.Builder
+	groups *logonGroups
+}
+
 func BuildLogon(beginString string) *LogonBuilder {
-	b := &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
-	b.SetGroups(b.appendGroups, TagNoHops, TagNoMsgTypes)
+	b := &LogonBuilder{
+		Builder: fix2.NewBuilder(beginString, "A"),
+		groups:  &logonGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoHops, TagNoMsgTypes)
 	return b
 }
 func (b *LogonBuilder) SetSenderCompID(v string) *LogonBuilder {
@@ -422,19 +429,19 @@ func (b *LogonBuilder) SetDefaultApplVerID(v string) *LogonBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *LogonBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogonBuilder {
-	b.noHops = append(b.noHops, e)
+	b.groups.noHops = append(b.groups.noHops, e)
 	return b
 }
 
 // AddNoMsgTypesEntry adds an entry to the NoMsgTypes group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuilder {
-	b.noMsgTypes = append(b.noMsgTypes, e)
+	b.groups.noMsgTypes = append(b.groups.noMsgTypes, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *LogonBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *logonGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

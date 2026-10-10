@@ -173,16 +173,23 @@ func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-// TestRequestBuilder builds a TestRequest message. Use it through the pointer
-// BuildTestRequest returns: a copy would share its fields but not its groups.
-type TestRequestBuilder struct {
-	*fix2.Builder
+type testRequestGroups struct {
 	noHops []*NoHopsEntryBuilder
 }
 
+// TestRequestBuilder builds a TestRequest message. A copy shares its fields and
+// groups with the original.
+type TestRequestBuilder struct {
+	*fix2.Builder
+	groups *testRequestGroups
+}
+
 func BuildTestRequest(beginString string) *TestRequestBuilder {
-	b := &TestRequestBuilder{Builder: fix2.NewBuilder(beginString, "1")}
-	b.SetGroups(b.appendGroups, TagNoHops)
+	b := &TestRequestBuilder{
+		Builder: fix2.NewBuilder(beginString, "1"),
+		groups:  &testRequestGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoHops)
 	return b
 }
 func (b *TestRequestBuilder) SetSenderCompID(v string) *TestRequestBuilder {
@@ -297,12 +304,12 @@ func (b *TestRequestBuilder) SetTestReqID(v string) *TestRequestBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *TestRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *TestRequestBuilder {
-	b.noHops = append(b.noHops, e)
+	b.groups.noHops = append(b.groups.noHops, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *TestRequestBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *testRequestGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

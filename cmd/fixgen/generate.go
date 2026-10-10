@@ -287,25 +287,51 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 }
 
 // mergeLayouts merges the entry layouts of a group defined in several
-// messages, keeping each layout's relative order where they agree: a tag
-// missing from the result is inserted right after the closest tag preceding
-// it in its own layout, and never ahead of the delimiter (every layout's
-// first tag).
+// messages into one order that respects every layout where they agree: each
+// layout adds "comes before" constraints between consecutive tags, and the
+// merge is a stable topological sort taking, among the tags whose
+// predecessors are all placed, the one seen first. Conflicting layouts form
+// a cycle, broken by taking the remaining tag seen first, so the earliest
+// definition (lowest MsgType) wins.
 func mergeLayouts(layouts [][]int) []int {
-	var out []int
+	var tags []int // in order of first appearance
+	seen := map[int]bool{}
+	succ := map[int][]int{}
+	indeg := map[int]int{}
 	for _, layout := range layouts {
 		for i, tag := range layout {
-			if slices.Contains(out, tag) {
-				continue
+			if !seen[tag] {
+				seen[tag] = true
+				tags = append(tags, tag)
 			}
-			pos := min(1, len(out)) // after the delimiter
-			for j := i - 1; j >= 0; j-- {
-				if k := slices.Index(out, layout[j]); k >= 0 {
-					pos = k + 1
+			if i > 0 && !slices.Contains(succ[layout[i-1]], tag) {
+				succ[layout[i-1]] = append(succ[layout[i-1]], tag)
+				indeg[tag]++
+			}
+		}
+	}
+	var out []int
+	placed := map[int]bool{}
+	for len(out) < len(tags) {
+		next := -1
+		for _, tag := range tags {
+			if !placed[tag] && indeg[tag] == 0 {
+				next = tag
+				break
+			}
+		}
+		if next < 0 { // conflicting orders
+			for _, tag := range tags {
+				if !placed[tag] {
+					next = tag
 					break
 				}
 			}
-			out = slices.Insert(out, pos, tag)
+		}
+		placed[next] = true
+		out = append(out, next)
+		for _, s := range succ[next] {
+			indeg[s]--
 		}
 	}
 	return out
@@ -483,25 +509,34 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	builderFields := []jen.Code{
 		jen.Op("*").Qual(fix2Pkg, "Builder"),
 	}
-	for _, gd := range groups {
-		builderFields = append(builderFields,
-			jen.Id(unexport(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"),
-		)
+	groupsType := unexport(name) + "Groups"
+	if len(groups) > 0 {
+		// Group entries live in state allocated by the constructor: a copy
+		// of the builder shares them, as it shares the embedded Builder, and
+		// the writer registered with SetGroups sees every Add.
+		var groupFields []jen.Code
+		for _, gd := range groups {
+			groupFields = append(groupFields, jen.Id(unexport(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"))
+		}
+		f.Type().Id(groupsType).Struct(groupFields...)
+		builderFields = append(builderFields, jen.Id("groups").Op("*").Id(groupsType))
 	}
-	f.Comment(builderName + " builds a " + name + " message. Use it through the pointer")
-	f.Comment("Build" + name + " returns: a copy would share its fields but not its groups.")
+	f.Comment(builderName + " builds a " + name + " message. A copy shares its fields and")
+	f.Comment("groups with the original.")
 	f.Type().Id(builderName).Struct(builderFields...)
 
 	// Build constructor
-	ctor := []jen.Code{
-		jen.Id("b").Op(":=").Op("&").Id(builderName).Values(jen.Dict{
-			jen.Id("Builder"): jen.Qual(fix2Pkg, "NewBuilder").Call(jen.Id("beginString"), jen.Lit(md.MsgType)),
-		}),
+	ctorFields := jen.Dict{
+		jen.Id("Builder"): jen.Qual(fix2Pkg, "NewBuilder").Call(jen.Id("beginString"), jen.Lit(md.MsgType)),
 	}
+	if len(groups) > 0 {
+		ctorFields[jen.Id("groups")] = jen.Op("&").Id(groupsType).Values()
+	}
+	ctor := []jen.Code{jen.Id("b").Op(":=").Op("&").Id(builderName).Values(ctorFields)}
 	if len(groups) > 0 {
 		// Every Build call, including the embedded Builder's at the end of
 		// a fluent chain, serializes the groups.
-		args := []jen.Code{jen.Id("b").Dot("appendGroups")}
+		args := []jen.Code{jen.Id("b").Dot("groups").Dot("appendTo")}
 		for _, gd := range groups {
 			args = append(args, tagID(gd.Name))
 		}
@@ -538,8 +573,8 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
 		}
 		body = append(body, jen.Return(jen.Id("dst")))
-		f.Comment("appendGroups appends the message's repeating groups to dst.")
-		f.Func().Params(jen.Id("b").Op("*").Id(builderName)).Id("appendGroups").Params(
+		f.Comment("appendTo appends the message's repeating groups to dst.")
+		f.Func().Params(jen.Id("b").Op("*").Id(groupsType)).Id("appendTo").Params(
 			jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
 		).Index().Qual(fix2Pkg, "Field").Block(body...)
 	}
@@ -787,7 +822,7 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 	).Id("Add"+gd.Name+"Entry").Params(
 		jen.Id("e").Op("*").Id(gd.Name+"EntryBuilder"),
 	).Op("*").Id(builderName).Block(
-		jen.Id("b").Dot(unexport(gd.Name)).Op("=").Append(jen.Id("b").Dot(unexport(gd.Name)), jen.Id("e")),
+		jen.Id("b").Dot("groups").Dot(unexport(gd.Name)).Op("=").Append(jen.Id("b").Dot("groups").Dot(unexport(gd.Name)), jen.Id("e")),
 		jen.Return(jen.Id("b")),
 	)
 }

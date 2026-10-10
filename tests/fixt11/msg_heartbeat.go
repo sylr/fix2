@@ -173,16 +173,23 @@ func (m *Heartbeat) NoHopsEntries() []NoHopsEntry {
 	return entries
 }
 
-// HeartbeatBuilder builds a Heartbeat message. Use it through the pointer
-// BuildHeartbeat returns: a copy would share its fields but not its groups.
-type HeartbeatBuilder struct {
-	*fix2.Builder
+type heartbeatGroups struct {
 	noHops []*NoHopsEntryBuilder
 }
 
+// HeartbeatBuilder builds a Heartbeat message. A copy shares its fields and
+// groups with the original.
+type HeartbeatBuilder struct {
+	*fix2.Builder
+	groups *heartbeatGroups
+}
+
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
-	b := &HeartbeatBuilder{Builder: fix2.NewBuilder(beginString, "0")}
-	b.SetGroups(b.appendGroups, TagNoHops)
+	b := &HeartbeatBuilder{
+		Builder: fix2.NewBuilder(beginString, "0"),
+		groups:  &heartbeatGroups{},
+	}
+	b.SetGroups(b.groups.appendTo, TagNoHops)
 	return b
 }
 func (b *HeartbeatBuilder) SetSenderCompID(v string) *HeartbeatBuilder {
@@ -297,12 +304,12 @@ func (b *HeartbeatBuilder) SetTestReqID(v string) *HeartbeatBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *HeartbeatBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *HeartbeatBuilder {
-	b.noHops = append(b.noHops, e)
+	b.groups.noHops = append(b.groups.noHops, e)
 	return b
 }
 
-// appendGroups appends the message's repeating groups to dst.
-func (b *HeartbeatBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+// appendTo appends the message's repeating groups to dst.
+func (b *heartbeatGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {
