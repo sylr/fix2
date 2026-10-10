@@ -65,8 +65,8 @@ func (e *NoFillsEntry) NoNested4PartyIDsEntries() []NoNested4PartyIDsEntry {
 }
 
 type NoFillsEntryBuilder struct {
-	fields            []fix2.Field
-	noNested4PartyIDs []*NoNested4PartyIDsEntryBuilder
+	fields                   []fix2.Field
+	noNested4PartyIDsEntries []*NoNested4PartyIDsEntryBuilder
 }
 
 func NewNoFillsEntry() *NoFillsEntryBuilder {
@@ -92,7 +92,7 @@ func (e *NoFillsEntryBuilder) SetFillLiquidityInd(v int) *NoFillsEntryBuilder {
 // AddNoNested4PartyIDsEntry adds an entry to the nested NoNested4PartyIDs group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoFillsEntryBuilder) AddNoNested4PartyIDsEntry(ne *NoNested4PartyIDsEntryBuilder) *NoFillsEntryBuilder {
-	e.noNested4PartyIDs = append(e.noNested4PartyIDs, ne)
+	e.noNested4PartyIDsEntries = append(e.noNested4PartyIDsEntries, ne)
 	return e
 }
 
@@ -104,9 +104,9 @@ func (e *NoFillsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
 	for _, tag := range noFillsLayout {
 		switch tag {
 		case TagNoNested4PartyIDs:
-			if len(e.noNested4PartyIDs) > 0 {
-				dst = fix2.AppendCount(dst, TagNoNested4PartyIDs, len(e.noNested4PartyIDs))
-				for _, entry := range e.noNested4PartyIDs {
+			if len(e.noNested4PartyIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested4PartyIDs, len(e.noNested4PartyIDsEntries))
+				for _, entry := range e.noNested4PartyIDsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

@@ -285,6 +285,11 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 		layouts = append(layouts, d.Layout)
 	}
 	mg.Layout = mergeLayouts(layouts)
+	// Definitions starting with different tags could leave another tag
+	// first: the entry must start with the delimiter the readers expect.
+	if i := slices.Index(mg.Layout, mg.DelimTag); i > 0 {
+		mg.Layout = slices.Insert(slices.Delete(mg.Layout, i, i+1), 0, mg.DelimTag)
+	}
 
 	// Union nested groups (recursively merge by name).
 	nestedByName := map[string][]dictionary.GroupDef{}
@@ -399,7 +404,7 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 	}
 	for _, nestedMg := range mg.Groups {
 		structFields = append(structFields,
-			jen.Id(unexport(nestedMg.Name)).Index().Op("*").Id(nestedMg.Name+"EntryBuilder"),
+			jen.Id(entriesField(nestedMg.Name)).Index().Op("*").Id(nestedMg.Name+"EntryBuilder"),
 		)
 	}
 	f.Type().Id(entryBuilderName).Struct(structFields...)
@@ -560,7 +565,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		// the writer registered with SetGroups sees every Add.
 		var groupFields []jen.Code
 		for _, gd := range groups {
-			groupFields = append(groupFields, jen.Id(unexport(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"))
+			groupFields = append(groupFields, jen.Id(entriesField(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"))
 		}
 		f.Type().Id(groupsType).Struct(groupFields...)
 		builderFields = append(builderFields, jen.Id("groups").Op("*").Id(groupsType))
@@ -624,7 +629,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		var body []jen.Code
 		for _, gd := range gs {
 			name := gd.Name
-			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
+			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(entriesField(name)) }, gd))
 		}
 		body = append(body, jen.Return(jen.Id("dst")))
 		f.Comment(doc)
@@ -670,6 +675,11 @@ func collectGroupTags(groups []dictionary.GroupDef, childTags, counterTags map[i
 	}
 }
 
+// entriesField names the builder field holding a group's entries, e.g.
+// noLegsEntries. The suffix keeps it apart from the builders' own members
+// (fields, appendTo...) whatever the group is called.
+func entriesField(groupName string) string { return unexport(groupName) + "Entries" }
+
 // unexport lowercases the first letter of a name.
 func unexport(s string) string {
 	if s == "" {
@@ -686,8 +696,20 @@ func unexport(s string) string {
 // its nested groups.
 func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
 	var tags []jen.Code
+	added := map[int]bool{}
+	addTag := func(tag int) {
+		if !added[tag] {
+			added[tag] = true
+			tags = append(tags, tagID(dict.Fields[tag].Name))
+		}
+	}
 	for _, fr := range gd.Fields {
-		tags = append(tags, tagID(dict.Fields[fr.Tag].Name))
+		// DATA setters also write the LENGTH field (see pairDataLengths),
+		// even when the group does not declare it: readers must accept it.
+		if l := fix2.DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
+			addTag(l)
+		}
+		addTag(fr.Tag)
 	}
 	values := jen.Dict{
 		jen.Id("Counter"): tagID(gd.Name),
@@ -894,7 +916,7 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 	).Id("Add"+gd.Name+"Entry").Params(
 		jen.Id("e").Op("*").Id(gd.Name+"EntryBuilder"),
 	).Op("*").Id(builderName).Block(
-		jen.Id("b").Dot("groups").Dot(unexport(gd.Name)).Op("=").Append(jen.Id("b").Dot("groups").Dot(unexport(gd.Name)), jen.Id("e")),
+		jen.Id("b").Dot("groups").Dot(entriesField(gd.Name)).Op("=").Append(jen.Id("b").Dot("groups").Dot(entriesField(gd.Name)), jen.Id("e")),
 		jen.Return(jen.Id("b")),
 	)
 }
@@ -927,7 +949,7 @@ func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName str
 	var cases []jen.Code
 	for _, gd := range mg.Groups {
 		name := gd.Name
-		owner := func() *jen.Statement { return jen.Id("e").Dot(unexport(name)) }
+		owner := func() *jen.Statement { return jen.Id("e").Dot(entriesField(name)) }
 		block := groupBlock("dst", owner, gd)
 		if gd.CounterTag == mg.DelimTag {
 			block = groupEntries("dst", owner, gd)
@@ -955,13 +977,24 @@ func pairDataLengths(dict *dictionary.Dict, layout []int) []int {
 	out := slices.Clone(layout)
 	for _, tag := range layout {
 		l := fix2.DataLengthTag(tag)
-		if l == 0 || dict.Fields[l] == nil {
+		if l == 0 || dict.Fields[l] == nil || len(out) == 0 {
 			continue
 		}
-		if i := slices.Index(out, l); i >= 0 {
-			out = slices.Delete(out, i, i+1)
+		switch {
+		case out[0] == tag:
+			// DATA is the delimiter: its LENGTH cannot precede it inside
+			// the entry, and the delimiter must stay first.
+			continue
+		case out[0] == l:
+			// LENGTH is the delimiter: bring DATA right after it.
+			i := slices.Index(out, tag)
+			out = slices.Insert(slices.Delete(out, i, i+1), 1, tag)
+		default:
+			if i := slices.Index(out, l); i >= 0 {
+				out = slices.Delete(out, i, i+1)
+			}
+			out = slices.Insert(out, slices.Index(out, tag), l)
 		}
-		out = slices.Insert(out, slices.Index(out, tag), l)
 	}
 	return out
 }
@@ -986,7 +1019,7 @@ func writeEntryGroupAddMethod(f *jen.File, dict *dictionary.Dict, parentBuilderN
 	).Id("Add"+gd.Name+"Entry").Params(
 		jen.Id("ne").Op("*").Id(gd.Name+"EntryBuilder"),
 	).Op("*").Id(parentBuilderName).Block(
-		jen.Id("e").Dot(unexport(gd.Name)).Op("=").Append(jen.Id("e").Dot(unexport(gd.Name)), jen.Id("ne")),
+		jen.Id("e").Dot(entriesField(gd.Name)).Op("=").Append(jen.Id("e").Dot(entriesField(gd.Name)), jen.Id("ne")),
 		jen.Return(jen.Id("e")),
 	)
 }

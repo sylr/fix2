@@ -65,8 +65,8 @@ func (e *NoAllocsEntry) NoNestedPartyIDsEntries() []NoNestedPartyIDsEntry {
 }
 
 type NoAllocsEntryBuilder struct {
-	fields           []fix2.Field
-	noNestedPartyIDs []*NoNestedPartyIDsEntryBuilder
+	fields                  []fix2.Field
+	noNestedPartyIDsEntries []*NoNestedPartyIDsEntryBuilder
 }
 
 func NewNoAllocsEntry() *NoAllocsEntryBuilder {
@@ -96,7 +96,7 @@ func (e *NoAllocsEntryBuilder) SetAllocSettlCurrency(v string) *NoAllocsEntryBui
 // AddNoNestedPartyIDsEntry adds an entry to the nested NoNestedPartyIDs group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoAllocsEntryBuilder) AddNoNestedPartyIDsEntry(ne *NoNestedPartyIDsEntryBuilder) *NoAllocsEntryBuilder {
-	e.noNestedPartyIDs = append(e.noNestedPartyIDs, ne)
+	e.noNestedPartyIDsEntries = append(e.noNestedPartyIDsEntries, ne)
 	return e
 }
 
@@ -108,9 +108,9 @@ func (e *NoAllocsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
 	for _, tag := range noAllocsLayout {
 		switch tag {
 		case TagNoNestedPartyIDs:
-			if len(e.noNestedPartyIDs) > 0 {
-				dst = fix2.AppendCount(dst, TagNoNestedPartyIDs, len(e.noNestedPartyIDs))
-				for _, entry := range e.noNestedPartyIDs {
+			if len(e.noNestedPartyIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNestedPartyIDs, len(e.noNestedPartyIDsEntries))
+				for _, entry := range e.noNestedPartyIDsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

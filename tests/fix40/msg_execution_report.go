@@ -362,7 +362,7 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 }
 
 type executionReportGroups struct {
-	noMiscFees []*NoMiscFeesEntryBuilder
+	noMiscFeesEntries []*NoMiscFeesEntryBuilder
 }
 
 // ExecutionReportBuilder builds a ExecutionReport message. A copy shares its fields and
@@ -643,15 +643,15 @@ func (b *ExecutionReportBuilder) SetText(v string) *ExecutionReportBuilder {
 // AddNoMiscFeesEntry adds an entry to the NoMiscFees group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noMiscFees = append(b.groups.noMiscFees, e)
+	b.groups.noMiscFeesEntries = append(b.groups.noMiscFeesEntries, e)
 	return b
 }
 
 // appendTo appends the message's other repeating groups to dst.
 func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
-	if len(b.noMiscFees) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFees))
-		for _, entry := range b.noMiscFees {
+	if len(b.noMiscFeesEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFeesEntries))
+		for _, entry := range b.noMiscFeesEntries {
 			dst = entry.appendTo(dst)
 		}
 	}

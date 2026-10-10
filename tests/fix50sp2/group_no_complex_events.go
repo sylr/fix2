@@ -77,8 +77,8 @@ func (e *NoComplexEventsEntry) NoComplexEventDatesEntries() []NoComplexEventDate
 }
 
 type NoComplexEventsEntryBuilder struct {
-	fields              []fix2.Field
-	noComplexEventDates []*NoComplexEventDatesEntryBuilder
+	fields                     []fix2.Field
+	noComplexEventDatesEntries []*NoComplexEventDatesEntryBuilder
 }
 
 func NewNoComplexEventsEntry() *NoComplexEventsEntryBuilder {
@@ -116,7 +116,7 @@ func (e *NoComplexEventsEntryBuilder) SetComplexEventCondition(v ComplexEventCon
 // AddNoComplexEventDatesEntry adds an entry to the nested NoComplexEventDates group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoComplexEventsEntryBuilder) AddNoComplexEventDatesEntry(ne *NoComplexEventDatesEntryBuilder) *NoComplexEventsEntryBuilder {
-	e.noComplexEventDates = append(e.noComplexEventDates, ne)
+	e.noComplexEventDatesEntries = append(e.noComplexEventDatesEntries, ne)
 	return e
 }
 
@@ -128,9 +128,9 @@ func (e *NoComplexEventsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
 	for _, tag := range noComplexEventsLayout {
 		switch tag {
 		case TagNoComplexEventDates:
-			if len(e.noComplexEventDates) > 0 {
-				dst = fix2.AppendCount(dst, TagNoComplexEventDates, len(e.noComplexEventDates))
-				for _, entry := range e.noComplexEventDates {
+			if len(e.noComplexEventDatesEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoComplexEventDates, len(e.noComplexEventDatesEntries))
+				for _, entry := range e.noComplexEventDatesEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

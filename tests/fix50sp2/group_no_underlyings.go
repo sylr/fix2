@@ -505,10 +505,10 @@ func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrume
 }
 
 type NoUnderlyingsEntryBuilder struct {
-	fields                    []fix2.Field
-	noUnderlyingSecurityAltID []*NoUnderlyingSecurityAltIDEntryBuilder
-	noUnderlyingStips         []*NoUnderlyingStipsEntryBuilder
-	noUndlyInstrumentParties  []*NoUndlyInstrumentPartiesEntryBuilder
+	fields                           []fix2.Field
+	noUnderlyingSecurityAltIDEntries []*NoUnderlyingSecurityAltIDEntryBuilder
+	noUnderlyingStipsEntries         []*NoUnderlyingStipsEntryBuilder
+	noUndlyInstrumentPartiesEntries  []*NoUndlyInstrumentPartiesEntryBuilder
 }
 
 func NewNoUnderlyingsEntry() *NoUnderlyingsEntryBuilder {
@@ -808,21 +808,21 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingDetachmentPoint(v float64) *NoU
 // AddNoUnderlyingSecurityAltIDEntry adds an entry to the nested NoUnderlyingSecurityAltID group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoUnderlyingsEntryBuilder) AddNoUnderlyingSecurityAltIDEntry(ne *NoUnderlyingSecurityAltIDEntryBuilder) *NoUnderlyingsEntryBuilder {
-	e.noUnderlyingSecurityAltID = append(e.noUnderlyingSecurityAltID, ne)
+	e.noUnderlyingSecurityAltIDEntries = append(e.noUnderlyingSecurityAltIDEntries, ne)
 	return e
 }
 
 // AddNoUnderlyingStipsEntry adds an entry to the nested NoUnderlyingStips group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoUnderlyingsEntryBuilder) AddNoUnderlyingStipsEntry(ne *NoUnderlyingStipsEntryBuilder) *NoUnderlyingsEntryBuilder {
-	e.noUnderlyingStips = append(e.noUnderlyingStips, ne)
+	e.noUnderlyingStipsEntries = append(e.noUnderlyingStipsEntries, ne)
 	return e
 }
 
 // AddNoUndlyInstrumentPartiesEntry adds an entry to the nested NoUndlyInstrumentParties group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoUnderlyingsEntryBuilder) AddNoUndlyInstrumentPartiesEntry(ne *NoUndlyInstrumentPartiesEntryBuilder) *NoUnderlyingsEntryBuilder {
-	e.noUndlyInstrumentParties = append(e.noUndlyInstrumentParties, ne)
+	e.noUndlyInstrumentPartiesEntries = append(e.noUndlyInstrumentPartiesEntries, ne)
 	return e
 }
 
@@ -834,23 +834,23 @@ func (e *NoUnderlyingsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
 	for _, tag := range noUnderlyingsLayout {
 		switch tag {
 		case TagNoUnderlyingSecurityAltID:
-			if len(e.noUnderlyingSecurityAltID) > 0 {
-				dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltID))
-				for _, entry := range e.noUnderlyingSecurityAltID {
+			if len(e.noUnderlyingSecurityAltIDEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltIDEntries))
+				for _, entry := range e.noUnderlyingSecurityAltIDEntries {
 					dst = entry.appendTo(dst)
 				}
 			}
 		case TagNoUnderlyingStips:
-			if len(e.noUnderlyingStips) > 0 {
-				dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStips))
-				for _, entry := range e.noUnderlyingStips {
+			if len(e.noUnderlyingStipsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStipsEntries))
+				for _, entry := range e.noUnderlyingStipsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}
 		case TagNoUndlyInstrumentParties:
-			if len(e.noUndlyInstrumentParties) > 0 {
-				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentParties))
-				for _, entry := range e.noUndlyInstrumentParties {
+			if len(e.noUndlyInstrumentPartiesEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentPartiesEntries))
+				for _, entry := range e.noUndlyInstrumentPartiesEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

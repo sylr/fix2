@@ -186,7 +186,7 @@ func (m *ResendRequest) NoHopsEntries() []NoHopsEntry {
 }
 
 type resendRequestGroups struct {
-	noHops []*NoHopsEntryBuilder
+	noHopsEntries []*NoHopsEntryBuilder
 }
 
 // ResendRequestBuilder builds a ResendRequest message. A copy shares its fields and
@@ -321,15 +321,15 @@ func (b *ResendRequestBuilder) SetEndSeqNo(v int) *ResendRequestBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ResendRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *ResendRequestBuilder {
-	b.groups.noHops = append(b.groups.noHops, e)
+	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
 func (b *resendRequestGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
-	if len(b.noHops) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
-		for _, entry := range b.noHops {
+	if len(b.noHopsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}

@@ -540,11 +540,11 @@ func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
 }
 
 type NoLegsEntryBuilder struct {
-	fields             []fix2.Field
-	noLegAllocs        []*NoLegAllocsEntryBuilder
-	noLegSecurityAltID []*NoLegSecurityAltIDEntryBuilder
-	noLegStipulations  []*NoLegStipulationsEntryBuilder
-	noNested3PartyIDs  []*NoNested3PartyIDsEntryBuilder
+	fields                    []fix2.Field
+	noLegAllocsEntries        []*NoLegAllocsEntryBuilder
+	noLegSecurityAltIDEntries []*NoLegSecurityAltIDEntryBuilder
+	noLegStipulationsEntries  []*NoLegStipulationsEntryBuilder
+	noNested3PartyIDsEntries  []*NoNested3PartyIDsEntryBuilder
 }
 
 func NewNoLegsEntry() *NoLegsEntryBuilder {
@@ -868,28 +868,28 @@ func (e *NoLegsEntryBuilder) SetLegFlowScheduleType(v int) *NoLegsEntryBuilder {
 // AddNoLegAllocsEntry adds an entry to the nested NoLegAllocs group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoLegAllocsEntry(ne *NoLegAllocsEntryBuilder) *NoLegsEntryBuilder {
-	e.noLegAllocs = append(e.noLegAllocs, ne)
+	e.noLegAllocsEntries = append(e.noLegAllocsEntries, ne)
 	return e
 }
 
 // AddNoLegSecurityAltIDEntry adds an entry to the nested NoLegSecurityAltID group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoLegSecurityAltIDEntry(ne *NoLegSecurityAltIDEntryBuilder) *NoLegsEntryBuilder {
-	e.noLegSecurityAltID = append(e.noLegSecurityAltID, ne)
+	e.noLegSecurityAltIDEntries = append(e.noLegSecurityAltIDEntries, ne)
 	return e
 }
 
 // AddNoLegStipulationsEntry adds an entry to the nested NoLegStipulations group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoLegStipulationsEntry(ne *NoLegStipulationsEntryBuilder) *NoLegsEntryBuilder {
-	e.noLegStipulations = append(e.noLegStipulations, ne)
+	e.noLegStipulationsEntries = append(e.noLegStipulationsEntries, ne)
 	return e
 }
 
 // AddNoNested3PartyIDsEntry adds an entry to the nested NoNested3PartyIDs group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoLegsEntryBuilder) AddNoNested3PartyIDsEntry(ne *NoNested3PartyIDsEntryBuilder) *NoLegsEntryBuilder {
-	e.noNested3PartyIDs = append(e.noNested3PartyIDs, ne)
+	e.noNested3PartyIDsEntries = append(e.noNested3PartyIDsEntries, ne)
 	return e
 }
 
@@ -901,30 +901,30 @@ func (e *NoLegsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
 	for _, tag := range noLegsLayout {
 		switch tag {
 		case TagNoLegAllocs:
-			if len(e.noLegAllocs) > 0 {
-				dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocs))
-				for _, entry := range e.noLegAllocs {
+			if len(e.noLegAllocsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocsEntries))
+				for _, entry := range e.noLegAllocsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}
 		case TagNoLegSecurityAltID:
-			if len(e.noLegSecurityAltID) > 0 {
-				dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltID))
-				for _, entry := range e.noLegSecurityAltID {
+			if len(e.noLegSecurityAltIDEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltIDEntries))
+				for _, entry := range e.noLegSecurityAltIDEntries {
 					dst = entry.appendTo(dst)
 				}
 			}
 		case TagNoLegStipulations:
-			if len(e.noLegStipulations) > 0 {
-				dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulations))
-				for _, entry := range e.noLegStipulations {
+			if len(e.noLegStipulationsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulationsEntries))
+				for _, entry := range e.noLegStipulationsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}
 		case TagNoNested3PartyIDs:
-			if len(e.noNested3PartyIDs) > 0 {
-				dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDs))
-				for _, entry := range e.noNested3PartyIDs {
+			if len(e.noNested3PartyIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDsEntries))
+				for _, entry := range e.noNested3PartyIDsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

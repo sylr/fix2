@@ -260,8 +260,8 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 }
 
 type logonGroups struct {
-	noHops     []*NoHopsEntryBuilder
-	noMsgTypes []*NoMsgTypesEntryBuilder
+	noHopsEntries     []*NoHopsEntryBuilder
+	noMsgTypesEntries []*NoMsgTypesEntryBuilder
 }
 
 // LogonBuilder builds a Logon message. A copy shares its fields and
@@ -430,22 +430,22 @@ func (b *LogonBuilder) SetDefaultApplVerID(v string) *LogonBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *LogonBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogonBuilder {
-	b.groups.noHops = append(b.groups.noHops, e)
+	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
 }
 
 // AddNoMsgTypesEntry adds an entry to the NoMsgTypes group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuilder {
-	b.groups.noMsgTypes = append(b.groups.noMsgTypes, e)
+	b.groups.noMsgTypesEntries = append(b.groups.noMsgTypesEntries, e)
 	return b
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
 func (b *logonGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
-	if len(b.noHops) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
-		for _, entry := range b.noHops {
+	if len(b.noHopsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
@@ -454,9 +454,9 @@ func (b *logonGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 
 // appendTo appends the message's other repeating groups to dst.
 func (b *logonGroups) appendTo(dst []fix2.Field) []fix2.Field {
-	if len(b.noMsgTypes) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypes))
-		for _, entry := range b.noMsgTypes {
+	if len(b.noMsgTypesEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypesEntries))
+		for _, entry := range b.noMsgTypesEntries {
 			dst = entry.appendTo(dst)
 		}
 	}

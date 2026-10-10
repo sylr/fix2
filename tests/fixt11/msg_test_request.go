@@ -174,7 +174,7 @@ func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
 }
 
 type testRequestGroups struct {
-	noHops []*NoHopsEntryBuilder
+	noHopsEntries []*NoHopsEntryBuilder
 }
 
 // TestRequestBuilder builds a TestRequest message. A copy shares its fields and
@@ -305,15 +305,15 @@ func (b *TestRequestBuilder) SetTestReqID(v string) *TestRequestBuilder {
 // AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *TestRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *TestRequestBuilder {
-	b.groups.noHops = append(b.groups.noHops, e)
+	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
 func (b *testRequestGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
-	if len(b.noHops) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
-		for _, entry := range b.noHops {
+	if len(b.noHopsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}

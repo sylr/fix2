@@ -53,8 +53,8 @@ func (e *NoInstrumentPartiesEntry) NoInstrumentPartySubIDsEntries() []NoInstrume
 }
 
 type NoInstrumentPartiesEntryBuilder struct {
-	fields                  []fix2.Field
-	noInstrumentPartySubIDs []*NoInstrumentPartySubIDsEntryBuilder
+	fields                         []fix2.Field
+	noInstrumentPartySubIDsEntries []*NoInstrumentPartySubIDsEntryBuilder
 }
 
 func NewNoInstrumentPartiesEntry() *NoInstrumentPartiesEntryBuilder {
@@ -76,7 +76,7 @@ func (e *NoInstrumentPartiesEntryBuilder) SetInstrumentPartyRole(v int) *NoInstr
 // AddNoInstrumentPartySubIDsEntry adds an entry to the nested NoInstrumentPartySubIDs group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoInstrumentPartiesEntryBuilder) AddNoInstrumentPartySubIDsEntry(ne *NoInstrumentPartySubIDsEntryBuilder) *NoInstrumentPartiesEntryBuilder {
-	e.noInstrumentPartySubIDs = append(e.noInstrumentPartySubIDs, ne)
+	e.noInstrumentPartySubIDsEntries = append(e.noInstrumentPartySubIDsEntries, ne)
 	return e
 }
 
@@ -88,9 +88,9 @@ func (e *NoInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Fiel
 	for _, tag := range noInstrumentPartiesLayout {
 		switch tag {
 		case TagNoInstrumentPartySubIDs:
-			if len(e.noInstrumentPartySubIDs) > 0 {
-				dst = fix2.AppendCount(dst, TagNoInstrumentPartySubIDs, len(e.noInstrumentPartySubIDs))
-				for _, entry := range e.noInstrumentPartySubIDs {
+			if len(e.noInstrumentPartySubIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoInstrumentPartySubIDs, len(e.noInstrumentPartySubIDsEntries))
+				for _, entry := range e.noInstrumentPartySubIDsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

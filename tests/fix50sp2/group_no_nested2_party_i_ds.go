@@ -53,8 +53,8 @@ func (e *NoNested2PartyIDsEntry) NoNested2PartySubIDsEntries() []NoNested2PartyS
 }
 
 type NoNested2PartyIDsEntryBuilder struct {
-	fields               []fix2.Field
-	noNested2PartySubIDs []*NoNested2PartySubIDsEntryBuilder
+	fields                      []fix2.Field
+	noNested2PartySubIDsEntries []*NoNested2PartySubIDsEntryBuilder
 }
 
 func NewNoNested2PartyIDsEntry() *NoNested2PartyIDsEntryBuilder {
@@ -76,7 +76,7 @@ func (e *NoNested2PartyIDsEntryBuilder) SetNested2PartyRole(v int) *NoNested2Par
 // AddNoNested2PartySubIDsEntry adds an entry to the nested NoNested2PartySubIDs group. Entries are
 // serialized when the message is built, so later changes to e are included.
 func (e *NoNested2PartyIDsEntryBuilder) AddNoNested2PartySubIDsEntry(ne *NoNested2PartySubIDsEntryBuilder) *NoNested2PartyIDsEntryBuilder {
-	e.noNested2PartySubIDs = append(e.noNested2PartySubIDs, ne)
+	e.noNested2PartySubIDsEntries = append(e.noNested2PartySubIDsEntries, ne)
 	return e
 }
 
@@ -88,9 +88,9 @@ func (e *NoNested2PartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field 
 	for _, tag := range noNested2PartyIDsLayout {
 		switch tag {
 		case TagNoNested2PartySubIDs:
-			if len(e.noNested2PartySubIDs) > 0 {
-				dst = fix2.AppendCount(dst, TagNoNested2PartySubIDs, len(e.noNested2PartySubIDs))
-				for _, entry := range e.noNested2PartySubIDs {
+			if len(e.noNested2PartySubIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested2PartySubIDs, len(e.noNested2PartySubIDsEntries))
+				for _, entry := range e.noNested2PartySubIDsEntries {
 					dst = entry.appendTo(dst)
 				}
 			}

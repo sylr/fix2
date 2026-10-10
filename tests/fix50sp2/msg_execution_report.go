@@ -2314,22 +2314,22 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 }
 
 type executionReportGroups struct {
-	noPartyIDs           []*NoPartyIDsEntryBuilder
-	noContraBrokers      []*NoContraBrokersEntryBuilder
-	noSecurityAltID      []*NoSecurityAltIDEntryBuilder
-	noEvents             []*NoEventsEntryBuilder
-	noInstrumentParties  []*NoInstrumentPartiesEntryBuilder
-	noComplexEvents      []*NoComplexEventsEntryBuilder
-	noUnderlyings        []*NoUnderlyingsEntryBuilder
-	noStipulations       []*NoStipulationsEntryBuilder
-	noContAmts           []*NoContAmtsEntryBuilder
-	noLegs               []*NoLegsEntryBuilder
-	noMiscFees           []*NoMiscFeesEntryBuilder
-	noStrategyParameters []*NoStrategyParametersEntryBuilder
-	noTrdRegTimestamps   []*NoTrdRegTimestampsEntryBuilder
-	noAllocs             []*NoAllocsEntryBuilder
-	noFills              []*NoFillsEntryBuilder
-	noRateSources        []*NoRateSourcesEntryBuilder
+	noPartyIDsEntries           []*NoPartyIDsEntryBuilder
+	noContraBrokersEntries      []*NoContraBrokersEntryBuilder
+	noSecurityAltIDEntries      []*NoSecurityAltIDEntryBuilder
+	noEventsEntries             []*NoEventsEntryBuilder
+	noInstrumentPartiesEntries  []*NoInstrumentPartiesEntryBuilder
+	noComplexEventsEntries      []*NoComplexEventsEntryBuilder
+	noUnderlyingsEntries        []*NoUnderlyingsEntryBuilder
+	noStipulationsEntries       []*NoStipulationsEntryBuilder
+	noContAmtsEntries           []*NoContAmtsEntryBuilder
+	noLegsEntries               []*NoLegsEntryBuilder
+	noMiscFeesEntries           []*NoMiscFeesEntryBuilder
+	noStrategyParametersEntries []*NoStrategyParametersEntryBuilder
+	noTrdRegTimestampsEntries   []*NoTrdRegTimestampsEntryBuilder
+	noAllocsEntries             []*NoAllocsEntryBuilder
+	noFillsEntries              []*NoFillsEntryBuilder
+	noRateSourcesEntries        []*NoRateSourcesEntryBuilder
 }
 
 // ExecutionReportBuilder builds a ExecutionReport message. A copy shares its fields and
@@ -3676,210 +3676,210 @@ func (b *ExecutionReportBuilder) SetApplResendFlag(v bool) *ExecutionReportBuild
 // AddNoPartyIDsEntry adds an entry to the NoPartyIDs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoPartyIDsEntry(e *NoPartyIDsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noPartyIDs = append(b.groups.noPartyIDs, e)
+	b.groups.noPartyIDsEntries = append(b.groups.noPartyIDsEntries, e)
 	return b
 }
 
 // AddNoContraBrokersEntry adds an entry to the NoContraBrokers group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoContraBrokersEntry(e *NoContraBrokersEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noContraBrokers = append(b.groups.noContraBrokers, e)
+	b.groups.noContraBrokersEntries = append(b.groups.noContraBrokersEntries, e)
 	return b
 }
 
 // AddNoSecurityAltIDEntry adds an entry to the NoSecurityAltID group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noSecurityAltID = append(b.groups.noSecurityAltID, e)
+	b.groups.noSecurityAltIDEntries = append(b.groups.noSecurityAltIDEntries, e)
 	return b
 }
 
 // AddNoEventsEntry adds an entry to the NoEvents group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noEvents = append(b.groups.noEvents, e)
+	b.groups.noEventsEntries = append(b.groups.noEventsEntries, e)
 	return b
 }
 
 // AddNoInstrumentPartiesEntry adds an entry to the NoInstrumentParties group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noInstrumentParties = append(b.groups.noInstrumentParties, e)
+	b.groups.noInstrumentPartiesEntries = append(b.groups.noInstrumentPartiesEntries, e)
 	return b
 }
 
 // AddNoComplexEventsEntry adds an entry to the NoComplexEvents group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noComplexEvents = append(b.groups.noComplexEvents, e)
+	b.groups.noComplexEventsEntries = append(b.groups.noComplexEventsEntries, e)
 	return b
 }
 
 // AddNoUnderlyingsEntry adds an entry to the NoUnderlyings group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoUnderlyingsEntry(e *NoUnderlyingsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noUnderlyings = append(b.groups.noUnderlyings, e)
+	b.groups.noUnderlyingsEntries = append(b.groups.noUnderlyingsEntries, e)
 	return b
 }
 
 // AddNoStipulationsEntry adds an entry to the NoStipulations group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoStipulationsEntry(e *NoStipulationsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noStipulations = append(b.groups.noStipulations, e)
+	b.groups.noStipulationsEntries = append(b.groups.noStipulationsEntries, e)
 	return b
 }
 
 // AddNoContAmtsEntry adds an entry to the NoContAmts group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoContAmtsEntry(e *NoContAmtsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noContAmts = append(b.groups.noContAmts, e)
+	b.groups.noContAmtsEntries = append(b.groups.noContAmtsEntries, e)
 	return b
 }
 
 // AddNoLegsEntry adds an entry to the NoLegs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoLegsEntry(e *NoLegsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noLegs = append(b.groups.noLegs, e)
+	b.groups.noLegsEntries = append(b.groups.noLegsEntries, e)
 	return b
 }
 
 // AddNoMiscFeesEntry adds an entry to the NoMiscFees group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noMiscFees = append(b.groups.noMiscFees, e)
+	b.groups.noMiscFeesEntries = append(b.groups.noMiscFeesEntries, e)
 	return b
 }
 
 // AddNoStrategyParametersEntry adds an entry to the NoStrategyParameters group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoStrategyParametersEntry(e *NoStrategyParametersEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noStrategyParameters = append(b.groups.noStrategyParameters, e)
+	b.groups.noStrategyParametersEntries = append(b.groups.noStrategyParametersEntries, e)
 	return b
 }
 
 // AddNoTrdRegTimestampsEntry adds an entry to the NoTrdRegTimestamps group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestampsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noTrdRegTimestamps = append(b.groups.noTrdRegTimestamps, e)
+	b.groups.noTrdRegTimestampsEntries = append(b.groups.noTrdRegTimestampsEntries, e)
 	return b
 }
 
 // AddNoAllocsEntry adds an entry to the NoAllocs group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoAllocsEntry(e *NoAllocsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noAllocs = append(b.groups.noAllocs, e)
+	b.groups.noAllocsEntries = append(b.groups.noAllocsEntries, e)
 	return b
 }
 
 // AddNoFillsEntry adds an entry to the NoFills group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoFillsEntry(e *NoFillsEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noFills = append(b.groups.noFills, e)
+	b.groups.noFillsEntries = append(b.groups.noFillsEntries, e)
 	return b
 }
 
 // AddNoRateSourcesEntry adds an entry to the NoRateSources group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuilder) *ExecutionReportBuilder {
-	b.groups.noRateSources = append(b.groups.noRateSources, e)
+	b.groups.noRateSourcesEntries = append(b.groups.noRateSourcesEntries, e)
 	return b
 }
 
 // appendTo appends the message's other repeating groups to dst.
 func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
-	if len(b.noPartyIDs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))
-		for _, entry := range b.noPartyIDs {
+	if len(b.noPartyIDsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDsEntries))
+		for _, entry := range b.noPartyIDsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noContraBrokers) > 0 {
-		dst = fix2.AppendCount(dst, TagNoContraBrokers, len(b.noContraBrokers))
-		for _, entry := range b.noContraBrokers {
+	if len(b.noContraBrokersEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoContraBrokers, len(b.noContraBrokersEntries))
+		for _, entry := range b.noContraBrokersEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noSecurityAltID) > 0 {
-		dst = fix2.AppendCount(dst, TagNoSecurityAltID, len(b.noSecurityAltID))
-		for _, entry := range b.noSecurityAltID {
+	if len(b.noSecurityAltIDEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoSecurityAltID, len(b.noSecurityAltIDEntries))
+		for _, entry := range b.noSecurityAltIDEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noEvents) > 0 {
-		dst = fix2.AppendCount(dst, TagNoEvents, len(b.noEvents))
-		for _, entry := range b.noEvents {
+	if len(b.noEventsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoEvents, len(b.noEventsEntries))
+		for _, entry := range b.noEventsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noInstrumentParties) > 0 {
-		dst = fix2.AppendCount(dst, TagNoInstrumentParties, len(b.noInstrumentParties))
-		for _, entry := range b.noInstrumentParties {
+	if len(b.noInstrumentPartiesEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoInstrumentParties, len(b.noInstrumentPartiesEntries))
+		for _, entry := range b.noInstrumentPartiesEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noComplexEvents) > 0 {
-		dst = fix2.AppendCount(dst, TagNoComplexEvents, len(b.noComplexEvents))
-		for _, entry := range b.noComplexEvents {
+	if len(b.noComplexEventsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoComplexEvents, len(b.noComplexEventsEntries))
+		for _, entry := range b.noComplexEventsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noUnderlyings) > 0 {
-		dst = fix2.AppendCount(dst, TagNoUnderlyings, len(b.noUnderlyings))
-		for _, entry := range b.noUnderlyings {
+	if len(b.noUnderlyingsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoUnderlyings, len(b.noUnderlyingsEntries))
+		for _, entry := range b.noUnderlyingsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noStipulations) > 0 {
-		dst = fix2.AppendCount(dst, TagNoStipulations, len(b.noStipulations))
-		for _, entry := range b.noStipulations {
+	if len(b.noStipulationsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoStipulations, len(b.noStipulationsEntries))
+		for _, entry := range b.noStipulationsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noContAmts) > 0 {
-		dst = fix2.AppendCount(dst, TagNoContAmts, len(b.noContAmts))
-		for _, entry := range b.noContAmts {
+	if len(b.noContAmtsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoContAmts, len(b.noContAmtsEntries))
+		for _, entry := range b.noContAmtsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noLegs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoLegs, len(b.noLegs))
-		for _, entry := range b.noLegs {
+	if len(b.noLegsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoLegs, len(b.noLegsEntries))
+		for _, entry := range b.noLegsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noMiscFees) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFees))
-		for _, entry := range b.noMiscFees {
+	if len(b.noMiscFeesEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFeesEntries))
+		for _, entry := range b.noMiscFeesEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noStrategyParameters) > 0 {
-		dst = fix2.AppendCount(dst, TagNoStrategyParameters, len(b.noStrategyParameters))
-		for _, entry := range b.noStrategyParameters {
+	if len(b.noStrategyParametersEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoStrategyParameters, len(b.noStrategyParametersEntries))
+		for _, entry := range b.noStrategyParametersEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noTrdRegTimestamps) > 0 {
-		dst = fix2.AppendCount(dst, TagNoTrdRegTimestamps, len(b.noTrdRegTimestamps))
-		for _, entry := range b.noTrdRegTimestamps {
+	if len(b.noTrdRegTimestampsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoTrdRegTimestamps, len(b.noTrdRegTimestampsEntries))
+		for _, entry := range b.noTrdRegTimestampsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noAllocs) > 0 {
-		dst = fix2.AppendCount(dst, TagNoAllocs, len(b.noAllocs))
-		for _, entry := range b.noAllocs {
+	if len(b.noAllocsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoAllocs, len(b.noAllocsEntries))
+		for _, entry := range b.noAllocsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noFills) > 0 {
-		dst = fix2.AppendCount(dst, TagNoFills, len(b.noFills))
-		for _, entry := range b.noFills {
+	if len(b.noFillsEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoFills, len(b.noFillsEntries))
+		for _, entry := range b.noFillsEntries {
 			dst = entry.appendTo(dst)
 		}
 	}
-	if len(b.noRateSources) > 0 {
-		dst = fix2.AppendCount(dst, TagNoRateSources, len(b.noRateSources))
-		for _, entry := range b.noRateSources {
+	if len(b.noRateSourcesEntries) > 0 {
+		dst = fix2.AppendCount(dst, TagNoRateSources, len(b.noRateSourcesEntries))
+		for _, entry := range b.noRateSourcesEntries {
 			dst = entry.appendTo(dst)
 		}
 	}

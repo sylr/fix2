@@ -816,6 +816,10 @@ func TestPairDataLengths(t *testing.T) {
 		{[]int{1, 618, 600, 619}, []int{1, 600, 618, 619}},
 		{[]int{1, 619, 600}, []int{1, 618, 619, 600}},
 		{[]int{1, 618, 619}, []int{1, 618, 619}},
+		// The delimiter stays first: DATA as delimiter is left alone,
+		// LENGTH as delimiter pulls DATA right behind it.
+		{[]int{619, 600}, []int{619, 600}},
+		{[]int{618, 600, 619}, []int{618, 619, 600}},
 	} {
 		if got := pairDataLengths(dict, tc.in); !slices.Equal(got, tc.want) {
 			t.Errorf("pairDataLengths(%v) = %v, want %v", tc.in, got, tc.want)
@@ -870,6 +874,98 @@ func TestSharing(t *testing.T) {
 	}
 	if _, ok := hb.HopCompID(); !ok {
 		t.Errorf("%q: direct HopCompID missing", raw)
+	}
+}
+`)
+}
+
+func TestMergeGroupDefsDelimiterFirst(t *testing.T) {
+	// The second definition puts another tag ahead of the delimiter.
+	mg := mergeGroupDefs([]dictionary.GroupDef{
+		{Name: "NoX", CounterTag: 1, DelimTag: 2, Fields: []dictionary.FieldRef{{Tag: 2}, {Tag: 3}}, Layout: []int{2, 3}},
+		{Name: "NoX", CounterTag: 1, DelimTag: 2, Fields: []dictionary.FieldRef{{Tag: 4}, {Tag: 2}, {Tag: 3}}, Layout: []int{4, 2, 3}},
+	})
+	if mg.Layout[0] != 2 {
+		t.Errorf("merged layout %v does not start with the delimiter", mg.Layout)
+	}
+}
+
+// TestGenerateGroupEdgeCases round-trips groups named like builder members,
+// a group delimited by a LENGTH field and a group with a DATA field but no
+// declared LENGTH field.
+func TestGenerateGroupEdgeCases(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="M" msgtype="U1" msgcat="app">
+      <group name="Fields" required="N">
+        <field name="A" required="N"/>
+        <group name="AppendTo" required="N"><field name="B" required="N"/></group>
+      </group>
+      <group name="NoTexts" required="N">
+        <field name="EncodedTextLen" required="N"/>
+        <field name="EncodedText" required="N"/>
+        <field name="A" required="N"/>
+      </group>
+      <group name="NoNotes" required="N">
+        <field name="B" required="N"/>
+        <field name="EncodedHeadline" required="N"/>
+      </group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="5001" name="Fields" type="NUMINGROUP"/>
+    <field number="5002" name="AppendTo" type="NUMINGROUP"/>
+    <field number="5003" name="NoTexts" type="NUMINGROUP"/>
+    <field number="5004" name="NoNotes" type="NUMINGROUP"/>
+    <field number="5010" name="A" type="STRING"/>
+    <field number="5011" name="B" type="STRING"/>
+    <field number="354" name="EncodedTextLen" type="LENGTH"/>
+    <field number="355" name="EncodedText" type="DATA"/>
+    <field number="358" name="EncodedHeadlineLen" type="LENGTH"/>
+    <field number="359" name="EncodedHeadline" type="DATA"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "edge", `package edge
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestEdges(t *testing.T) {
+	raw := BuildM("FIX.4.4").
+		AddFieldsEntry(NewFieldsEntry().SetA("a").AddAppendToEntry(NewAppendToEntry().SetB("b"))).
+		AddNoTextsEntry(NewNoTextsEntry().SetA("x").SetEncodedText([]byte("t\x01"))).
+		AddNoNotesEntry(NewNoNotesEntry().SetB("y").SetEncodedHeadline([]byte("h\x01"))).
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	m := WrapM(&msg)
+	fields := m.FieldsEntries()
+	if len(fields) != 1 || len(fields[0].AppendToEntries()) != 1 {
+		t.Errorf("%q: Fields/AppendTo not read back", raw)
+	}
+	texts := m.NoTextsEntries()
+	if len(texts) != 1 {
+		t.Fatalf("%q: %d texts, want 1", raw, len(texts))
+	}
+	if v, _ := texts[0].EncodedText(); string(v) != "t\x01" {
+		t.Errorf("EncodedText = %q", v)
+	}
+	if a, _ := texts[0].A(); a != "x" {
+		t.Errorf("A = %q", a)
+	}
+	notes := m.NoNotesEntries()
+	if len(notes) != 1 {
+		t.Fatalf("%q: %d notes, want 1", raw, len(notes))
+	}
+	if v, _ := notes[0].EncodedHeadline(); string(v) != "h\x01" {
+		t.Errorf("EncodedHeadline = %q", v)
 	}
 }
 `)
