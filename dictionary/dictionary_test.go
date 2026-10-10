@@ -495,3 +495,56 @@ func TestParseAndValidate_ReaderIntegration(t *testing.T) {
 		t.Fatalf("expected MsgType '0', got %q", msg.MsgType())
 	}
 }
+
+func TestValidate_MultipleValueEnum(t *testing.T) {
+	const xml = `<fix type="FIX" major="5" minor="0" servicepack="2">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="NewOrderSingle" msgtype="D" msgcat="app">
+      <field name="ExecInst" required="N"/>
+      <field name="Side" required="N"/>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="18" name="ExecInst" type="MULTIPLECHARVALUE">
+      <value enum="1" description="NOT_HELD"/>
+      <value enum="2" description="WORK"/>
+      <value enum="G" description="ALL_OR_NONE"/>
+    </field>
+    <field number="54" name="Side" type="CHAR">
+      <value enum="1" description="BUY"/>
+      <value enum="2" description="SELL"/>
+    </field>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	tests := []struct {
+		field string
+		ok    bool
+	}{
+		{"18=1", true},
+		{"18=1 2 G", true},
+		{"18=1 3", false},  // 3 is not a value
+		{"18=1  2", false}, // empty item
+		{"18=1 2 ", false}, // trailing space
+		{"18=", false},
+		{"54=1", true},
+		{"54=1 2", false}, // Side is single-valued
+	}
+	for _, tt := range tests {
+		msg := parseMsg(t, buildFIXMsg("35=D\x01"+tt.field+"\x01"))
+		err := d.Validate(&msg)
+		if tt.ok && err != nil {
+			t.Errorf("%q: unexpected error: %v", tt.field, err)
+		}
+		if !tt.ok && !errors.Is(err, ErrInvalidEnumValue) {
+			t.Errorf("%q: got %v, want ErrInvalidEnumValue", tt.field, err)
+		}
+	}
+}

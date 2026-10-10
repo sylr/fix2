@@ -2,6 +2,7 @@ package dictionary
 
 import (
 	"fmt"
+	"strings"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -124,15 +125,39 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		fd := d.Fields[tag]
 		if fd != nil && fd.Enums != nil {
 			val := string(f.Value)
-			if _, ok := fd.Enums[val]; !ok {
-				return &ValidationError{
-					Err: ErrInvalidEnumValue,
-					Tag: tag,
-					Msg: fmt.Sprintf("invalid value %q for tag %d (%s)", val, tag, fd.Name),
+			if !isMultipleValue(fd.Type) {
+				if _, ok := fd.Enums[val]; !ok {
+					return &ValidationError{
+						Err: ErrInvalidEnumValue,
+						Tag: tag,
+						Msg: fmt.Sprintf("invalid value %q for tag %d (%s)", val, tag, fd.Name),
+					}
+				}
+				continue
+			}
+			// Multiple-value fields hold space-separated enum values.
+			for item := range strings.SplitSeq(val, " ") {
+				if _, ok := fd.Enums[item]; !ok {
+					return &ValidationError{
+						Err: ErrInvalidEnumValue,
+						Tag: tag,
+						Msg: fmt.Sprintf("invalid value %q in %q for tag %d (%s)", item, val, tag, fd.Name),
+					}
 				}
 			}
 		}
 	}
 
 	return nil
+}
+
+// isMultipleValue reports whether fixType holds space-separated values:
+// MULTIPLEVALUESTRING in FIX 4.2-4.4, MULTIPLECHARVALUE and
+// MULTIPLESTRINGVALUE from FIX 4.4/5.0 on.
+func isMultipleValue(fixType string) bool {
+	switch fixType {
+	case "MULTIPLEVALUESTRING", "MULTIPLECHARVALUE", "MULTIPLESTRINGVALUE":
+		return true
+	}
+	return false
 }
