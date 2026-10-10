@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
@@ -668,8 +670,8 @@ func TestValidate_HeaderNoHops(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if spec := d.Messages["0"].Specs(); len(spec) != 1 || spec[0].Counter != 627 || spec[0].Delim != 628 {
-		t.Fatalf("Heartbeat specs = %+v", spec)
+	if spec := d.CounterSpec(d.Messages["0"], 627); spec == nil || spec.Delim != 628 {
+		t.Fatalf("NoHops spec = %+v", spec)
 	}
 }
 
@@ -965,11 +967,11 @@ func TestValidate_Concurrent(t *testing.T) {
 }
 
 func TestValidate_ManyEnvelopeGroupsDoNotAllocate(t *testing.T) {
-	// More header groups than maxSharedSpecs: their specs are kept once, and
+	// Five header groups: their specs are found by counter, and
 	// a message without groups of its own uses them as they are.
 	var header, fields strings.Builder
 	fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="100" name="F" type="STRING"/>`)
-	for i := range dictionary.MaxSharedSpecs + 1 {
+	for i := range 5 {
 		fmt.Fprintf(&header, `<group name="NoH%d"><field name="F"/></group>`, i)
 		fmt.Fprintf(&fields, `<field number="%d" name="NoH%d" type="NUMINGROUP"/>`, 1000+2*i, i)
 	}
@@ -1002,12 +1004,12 @@ func TestNew_Idempotent(t *testing.T) {
 }
 
 func TestNew_IdempotentWithConditionsAndEnvelopeGroups(t *testing.T) {
-	// Five header groups (more than maxSharedSpecs) and an optional
+	// Five header groups and an optional
 	// component in the body requiring B when C is present.
 	var header, fields strings.Builder
 	fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="100" name="F" type="STRING"/>` +
 		`<field number="102" name="B" type="STRING"/><field number="103" name="C" type="STRING"/>`)
-	for i := range dictionary.MaxSharedSpecs + 1 {
+	for i := range 5 {
 		fmt.Fprintf(&header, `<group name="NoH%d"><field name="F"/></group>`, i)
 		fmt.Fprintf(&fields, `<field number="%d" name="NoH%d" type="NUMINGROUP"/>`, 1000+2*i, i)
 	}
@@ -1036,16 +1038,20 @@ func TestNew_IdempotentWithConditionsAndEnvelopeGroups(t *testing.T) {
 	m := d.Messages["M"]
 	conds := m.CompiledConds()
 	dictionary.New(d)
-	if m.CompiledConds() != conds || len(d.EnvelopeSpecs()) != dictionary.MaxSharedSpecs+1 {
-		t.Errorf("after a second dictionary.New: %d conditions, %d envelope specs", m.CompiledConds(), len(d.EnvelopeSpecs()))
+	if m.CompiledConds() != conds {
+		t.Errorf("after a second dictionary.New: %d conditions, want %d", m.CompiledConds(), conds)
+	}
+	for i := range 5 {
+		if d.CounterSpec(m, 1000+2*i) == nil {
+			t.Errorf("after a second dictionary.New: no spec for NoH%d", i)
+		}
 	}
 	check("after a second New")
-	// Down to maxSharedSpecs header groups: their specs move into the
-	// message's.
-	d.HeaderGroups = d.HeaderGroups[:dictionary.MaxSharedSpecs]
+	// Down to four header groups: the fifth's counter no longer has a spec.
+	d.HeaderGroups = d.HeaderGroups[:4]
 	dictionary.New(d)
-	if d.EnvelopeSpecs() != nil || len(m.Specs()) != dictionary.MaxSharedSpecs {
-		t.Errorf("with %d header groups: envelope specs %d, message specs %d", dictionary.MaxSharedSpecs, len(d.EnvelopeSpecs()), len(m.Specs()))
+	if d.CounterSpec(m, 1008) != nil || d.CounterSpec(m, 1006) == nil {
+		t.Error("with four header groups: wrong counter specs")
 	}
 	check("with fewer header groups")
 }
@@ -1107,5 +1113,49 @@ func TestValidate_EnvelopeActivationPerMessage(t *testing.T) {
 		if tc.missing == 0 && err != nil || tc.missing != 0 && (!errors.As(err, &ve) || ve.Tag != tc.missing) {
 			t.Errorf("%q: got %v, want missing %d", tc.body, err, tc.missing)
 		}
+	}
+}
+
+func TestValidate_ManyGroupsIsLinear(t *testing.T) {
+	// n optional groups and a message repeating an allowed field n times
+	// before one of the counters: each field's counter lookup is one table
+	// lookup, not a scan of the n group specs.
+	load := func(n int) *dictionary.Dict {
+		var groups, fields strings.Builder
+		fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="100" name="F" type="STRING"/>`)
+		for i := range n {
+			fmt.Fprintf(&groups, `<group name="NoG%d"><field name="F"/></group>`, i)
+			fmt.Fprintf(&fields, `<field number="%d" name="NoG%d" type="NUMINGROUP"/>`, 1000+i, i)
+		}
+		d, err := xmldict.Load(strings.NewReader(`<fix major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/>` +
+			`<messages><message name="M" msgtype="M"><field name="F"/>` + groups.String() + `</message></messages><components/><fields>` + fields.String() + `</fields></fix>`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	type tc struct {
+		d   *dictionary.Dict
+		msg fix2.Message
+	}
+	cases := map[int]tc{}
+	for _, n := range []int{2000, 8000} {
+		body := "35=M\x01" + strings.Repeat("100=f\x01", n) + "1000=0\x01"
+		cases[n] = tc{load(n), parseMsg(t, buildFIXMsg(body))}
+	}
+	best := func(n int) time.Duration {
+		c := cases[n]
+		d := time.Duration(math.MaxInt64)
+		for range 5 {
+			start := time.Now()
+			if err := c.d.Validate(&c.msg); err != nil {
+				t.Fatal(err)
+			}
+			d = min(d, time.Since(start))
+		}
+		return d
+	}
+	if r := float64(best(8000)) / float64(best(2000)); r > 10 {
+		t.Errorf("4x the groups and fields took %.1fx longer, want about 4x", r)
 	}
 }

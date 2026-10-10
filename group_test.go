@@ -2,10 +2,13 @@ package fix2
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestGroupsBasic(t *testing.T) {
@@ -518,4 +521,79 @@ func TestScopedReadsDoNotAllocate(t *testing.T) {
 	if allocs := testing.AllocsPerRun(100, func() { m.GroupsOf(parent, other) }); allocs > 1 {
 		t.Errorf("GroupsOf with others allocated %v times, want at most 1 (the result)", allocs)
 	}
+}
+
+// scaling returns how much longer f(4n) takes than f(n), the best of five
+// runs each: about 4 for linear work, 16 for quadratic.
+func scaling(n int, f func(n int)) float64 {
+	best := func(n int) time.Duration {
+		d := time.Duration(math.MaxInt64)
+		for range 5 {
+			start := time.Now()
+			f(n)
+			d = min(d, time.Since(start))
+		}
+		return d
+	}
+	return float64(best(4*n)) / float64(best(n))
+}
+
+func TestWideGroupEntryIsLinear(t *testing.T) {
+	// One entry holding every tag of a wide group: each tag is looked up
+	// in the spec once.
+	run := func(n int) {
+		tags := make([]int, n)
+		pairs := []string{"1=1"}
+		for i := range tags {
+			tags[i] = 1000 + i
+			pairs = append(pairs, fmt.Sprintf("%d=x", 1000+i))
+		}
+		spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
+		m := fieldsMsg(t, pairs...)
+		if got := m.GroupsOf(spec); len(got) != 1 || len(got[0].Fields()) != n {
+			t.Fatalf("%d tags: entries = %d", n, len(got))
+		}
+	}
+	if r := scaling(4000, run); r > 10 {
+		t.Errorf("4x the tags took %.1fx longer, want about 4x", r)
+	}
+}
+
+func TestSpecIndex(t *testing.T) {
+	// Specs from indexedSpec tags and groups on look tags up in an index;
+	// it must agree with scanning, nested counters first.
+	for _, n := range []int{indexedSpec - 2, indexedSpec, 40} {
+		child := &GroupSpec{Counter: 900, Delim: 901, Tags: []int{901}}
+		tags := []int{100}
+		for i := 1; i < n; i++ {
+			tags = append(tags, 100+i)
+		}
+		tags = append(tags, 900, 100) // 900 also a nested counter; 100 twice
+		s := &GroupSpec{Counter: 1, Delim: 100, Tags: tags, Nested: []*GroupSpec{child}}
+		for _, tc := range []struct{ tag, k, child int }{{100, 0, -1}, {100 + n - 1, n - 1, -1}, {900, -1, 0}, {5, -1, -1}} {
+			if k, c := s.find(tc.tag); k != tc.k || c != tc.child {
+				t.Errorf("%d tags: find(%d) = %d, %d; want %d, %d", n, tc.tag, k, c, tc.k, tc.child)
+			}
+		}
+	}
+}
+
+func TestSpecIndexConcurrentFirstUse(t *testing.T) {
+	tags := make([]int, 2*indexedSpec)
+	pairs := []string{"1=1"}
+	for i := range tags {
+		tags[i] = 1000 + i
+		pairs = append(pairs, fmt.Sprintf("%d=x", 1000+i))
+	}
+	spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
+	m := fieldsMsg(t, pairs...)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if got := m.GroupsOf(spec); len(got) != 1 || len(got[0].Fields()) != len(tags) {
+				t.Errorf("entries = %v", entryTags(got))
+			}
+		})
+	}
+	wg.Wait()
 }

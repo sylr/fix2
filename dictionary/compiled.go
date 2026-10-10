@@ -35,10 +35,11 @@ type tagTable struct {
 // tagEntry is what a scope (the envelope or a message body) knows of a tag.
 type tagEntry struct {
 	tag        int
-	slot       int32 // presence slot, or -1 when the tag's presence is not tracked
-	counter    bool  // counter of a group of the message, header or trailer
-	structural bool  // BeginString, BodyLength or CheckSum, never enum-checked
-	declared   bool  // declared by the scope, not only a DATA/LENGTH partner
+	slot       int32           // presence slot, or -1 when the tag's presence is not tracked
+	counter    bool            // counter of a group of the message, header or trailer
+	spec       *fix2.GroupSpec // that group's spec, whose entries top-level presence skips
+	structural bool            // BeginString, BodyLength or CheckSum, never enum-checked
+	declared   bool            // declared by the scope, not only a DATA/LENGTH partner
 	used       bool
 }
 
@@ -127,15 +128,10 @@ func (s *slots) track(tag int) int32 {
 	return slot
 }
 
-// maxSharedSpecs bounds the header and trailer group specs copied into every
-// message's spec list, a cost of messages times envelope groups. Beyond it,
-// Validate joins them per call instead. Dictionaries have at most one.
-const maxSharedSpecs = 4
-
 // compile builds the tables Validate uses from d's exported fields, replacing
 // any built before.
 func (d *Dict) compile() {
-	d.enumChecks, d.envelopeSpecs = nil, nil
+	d.enumChecks = nil
 	for _, m := range d.Messages {
 		m.requiredTags, m.conds = nil, nil
 	}
@@ -172,10 +168,7 @@ func (d *Dict) compile() {
 	d.trailerConds = compileConds(d.TrailerConditions, &env)
 	d.envSlots = env.n
 
-	envCounters := map[int]bool{}
-	for _, g := range slices.Concat(d.HeaderGroups, d.TrailerGroups) {
-		envCounters[g.CounterTag] = true
-	}
+	envCounters := specsByCounter(slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups)))
 	envEntries := map[int]tagEntry{}
 	for _, refs := range [][]FieldRef{d.Header, d.Trailer} {
 		addAllowed(envEntries, refs, env.of, nil, envCounters, nil)
@@ -186,12 +179,6 @@ func (d *Dict) compile() {
 		}
 	}
 	d.envelope = newTagTable(envEntries)
-
-	envSpecs := slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups))
-	shareSpecs := len(envSpecs) <= maxSharedSpecs
-	if !shareSpecs {
-		d.envelopeSpecs = envSpecs
-	}
 
 	// Each message: its own slots, after the envelope's, and its table. A tag
 	// the envelope tracks keeps the envelope's slot, so that one lookup in
@@ -223,18 +210,9 @@ func (d *Dict) compile() {
 		}
 		m.slots = env.n + body.n
 
-		counters := map[int]bool{}
-		for _, g := range m.Groups {
-			counters[g.CounterTag] = true
-		}
 		entries := map[int]tagEntry{}
-		addAllowed(entries, m.Fields, body.of, env.of, counters, envCounters)
+		addAllowed(entries, m.Fields, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
 		m.body = newTagTable(entries)
-
-		m.specs = d.groupSpecs(m.Groups)
-		if shareSpecs && len(envSpecs) > 0 {
-			m.specs = slices.Concat(envSpecs, m.specs)
-		}
 	}
 }
 
@@ -271,13 +249,18 @@ func compileConds(conds []Condition, s *slots) []compiledCond {
 // each pairs with: the parser requires LENGTH right before its DATA field,
 // and generated builders write both, even when the dictionary declares only
 // one. A tag's slot comes from own, else from shared, else it has none; it
-// is a counter if counters or sharedCounters says so.
-func addAllowed(entries map[int]tagEntry, refs []FieldRef, own, shared map[int]int32, counters, sharedCounters map[int]bool) {
+// is a group counter if sharedCounters, the envelope's, or counters has its
+// spec, in that order.
+func addAllowed(entries map[int]tagEntry, refs []FieldRef, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
 	add := func(tag int) {
 		if _, ok := entries[tag]; ok {
 			return
 		}
-		e := tagEntry{slot: -1, counter: counters[tag] || sharedCounters[tag], structural: structural(tag)}
+		e := tagEntry{slot: -1, structural: structural(tag)}
+		if e.spec = sharedCounters[tag]; e.spec == nil {
+			e.spec = counters[tag]
+		}
+		e.counter = e.spec != nil
 		if slot, ok := own[tag]; ok {
 			e.slot = slot
 		} else if slot, ok := shared[tag]; ok {
@@ -309,3 +292,14 @@ func addAllowed(entries map[int]tagEntry, refs []FieldRef, own, shared map[int]i
 // structural reports whether tag is BeginString, BodyLength or CheckSum, which
 // the parser manages: always allowed and never enum-checked.
 func structural(tag int) bool { return tag == 8 || tag == 9 || tag == 10 }
+
+// specsByCounter indexes specs by counter, the first one winning.
+func specsByCounter(specs []*fix2.GroupSpec) map[int]*fix2.GroupSpec {
+	m := make(map[int]*fix2.GroupSpec, len(specs))
+	for _, s := range specs {
+		if m[s.Counter] == nil {
+			m[s.Counter] = s
+		}
+	}
+	return m
+}

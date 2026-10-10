@@ -9,8 +9,6 @@ package dictionary
 import (
 	"maps"
 	"slices"
-
-	fix2 "github.com/sylr/fix2"
 )
 
 // ---------------------------------------------------------------------------
@@ -57,11 +55,10 @@ type MessageDef struct {
 	Conditions []Condition
 
 	// Compiled for Validate (see compiled.go).
-	body         tagTable          // body tags, with their presence slots
-	requiredTags []tracked         // tags required unconditionally, in order
-	conds        []compiledCond    // tags required only when an optional component is present
-	slots        int32             // presence slots, the envelope's included
-	specs        []*fix2.GroupSpec // groups whose entries are skipped for top-level presence
+	body         tagTable       // body tags, with their presence slots
+	requiredTags []tracked      // tags required unconditionally, in order
+	conds        []compiledCond // tags required only when an optional component is present
+	slots        int32          // presence slots, the envelope's included
 }
 
 // Condition records the required fields of an optional component: they must
@@ -101,11 +98,8 @@ type Dict struct {
 	trailerReq   []tracked
 	headerConds  []compiledCond
 	trailerConds []compiledCond
-	// envelopeSpecs are the specs of the header and trailer groups when they
-	// are too many to copy into every message's specs.
-	envelopeSpecs []*fix2.GroupSpec
-	enums         tagTable // tag -> index in enumChecks
-	enumChecks    []enumCheck
+	enums        tagTable // tag -> index in enumChecks
+	enumChecks   []enumCheck
 
 	fieldsByName map[string]*FieldDef
 }

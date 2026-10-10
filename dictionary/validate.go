@@ -98,7 +98,12 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 	// Required tags must be present at the top level: a group entry's field
 	// does not stand for a message's own. Without any group, every field is.
 	if groups {
-		for f := range msg.TopLevelFields(d.specsOf(mdef)...) {
+		for f := range msg.TopLevelFieldsFunc(func(tag int) *fix2.GroupSpec {
+			if e := d.lookup(mdef, tag); e != nil {
+				return e.spec
+			}
+			return nil
+		}) {
 			if e := d.lookup(mdef, f.Tag); e != nil && e.slot >= 0 {
 				top[e.slot/64] |= 1 << (e.slot % 64)
 			}
@@ -169,19 +174,6 @@ func (d *Dict) lookup(mdef *MessageDef, tag int) *tagEntry {
 		return e
 	}
 	return d.envelope.get(tag)
-}
-
-// specsOf returns the specs of the groups whose entries are skipped for
-// top-level presence: the message's, and the header's and trailer's unless
-// they are already among them.
-func (d *Dict) specsOf(mdef *MessageDef) []*fix2.GroupSpec {
-	switch {
-	case len(d.envelopeSpecs) == 0:
-		return mdef.specs
-	case len(mdef.specs) == 0:
-		return d.envelopeSpecs
-	}
-	return slices.Concat(d.envelopeSpecs, mdef.specs)
 }
 
 // has reports whether slot is set in bits.
