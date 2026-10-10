@@ -500,7 +500,15 @@ func TestParseAndValidate_ReaderIntegration(t *testing.T) {
 }
 
 func TestValidate_MultipleValueEnum(t *testing.T) {
-	const xml = `<fix type="FIX" major="5" minor="0" servicepack="2">
+	// FIX 4.2-4.4 MULTIPLEVALUESTRING and FIX 5.0 MULTIPLECHARVALUE /
+	// MULTIPLESTRINGVALUE all hold space-separated values.
+	for _, typ := range []string{"MULTIPLEVALUESTRING", "MULTIPLECHARVALUE", "MULTIPLESTRINGVALUE"} {
+		t.Run(typ, func(t *testing.T) { testMultipleValueEnum(t, typ) })
+	}
+}
+
+func testMultipleValueEnum(t *testing.T, typ string) {
+	xml := `<fix type="FIX" major="5" minor="0" servicepack="2">
   <header><field name="MsgType" required="Y"/></header>
   <trailer/>
   <messages>
@@ -512,7 +520,7 @@ func TestValidate_MultipleValueEnum(t *testing.T) {
   <components/>
   <fields>
     <field number="35" name="MsgType" type="STRING"/>
-    <field number="18" name="ExecInst" type="MULTIPLECHARVALUE">
+    <field number="18" name="ExecInst" type="` + typ + `">
       <value enum="1" description="NOT_HELD"/>
       <value enum="2" description="WORK"/>
       <value enum="G" description="ALL_OR_NONE"/>
@@ -773,11 +781,29 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
     <message name="UsesHopTag" msgtype="U" msgcat="app">
       <field name="HopOther" required="N"/>
     </message>
+    <message name="SharesHeaderTag" msgtype="B" msgcat="app">
+      <component name="BodyOpt" required="N"/>
+    </message>
+    <message name="Duplicated" msgtype="D" msgcat="app">
+      <component name="Dup" required="N"/>
+    </message>
   </messages>
   <components>
     <component name="WithGroup">
       <field name="F" required="Y"/>
-      <group name="NoG" required="Y"><field name="X" required="N"/></group>
+      <group name="NoG" required="Y">
+        <field name="X" required="N"/>
+        <group name="NoH" required="N"><field name="W" required="N"/></group>
+      </group>
+    </component>
+    <component name="BodyOpt">
+      <field name="F2" required="Y"/>
+      <field name="HopTime" required="N"/>
+    </component>
+    <component name="Dup">
+      <field name="F3" required="Y"/>
+      <field name="Y" required="N"/>
+      <group name="NoK" required="N"><field name="Y" required="N"/></group>
     </component>
     <component name="Opt">
       <field name="F" required="Y"/>
@@ -787,6 +813,7 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
       <field name="HopID" required="Y"/>
       <field name="HopTime" required="N"/>
       <field name="HopOther" required="N"/>
+      <field name="HopRef" required="N"/>
     </component>
   </components>
   <fields>
@@ -796,9 +823,16 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
     <field number="103" name="NoG" type="NUMINGROUP"/>
     <field number="104" name="NoY" type="NUMINGROUP"/>
     <field number="105" name="NoZ" type="NUMINGROUP"/>
+    <field number="106" name="W" type="STRING"/>
+    <field number="107" name="NoH" type="NUMINGROUP"/>
+    <field number="108" name="F2" type="STRING"/>
+    <field number="109" name="F3" type="STRING"/>
+    <field number="110" name="Y" type="STRING"/>
+    <field number="111" name="NoK" type="NUMINGROUP"/>
     <field number="628" name="HopID" type="STRING"/>
     <field number="629" name="HopTime" type="STRING"/>
     <field number="630" name="HopOther" type="STRING"/>
+    <field number="631" name="HopRef" type="STRING"/>
   </fields>
 </fix>`
 	d, err := Load(strings.NewReader(xml))
@@ -815,6 +849,12 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
 		{"group child alone activates component", "35=G\x01102=x\x01", 101},
 		{"component with group complete", "35=G\x01101=f\x01103=1\x01102=x\x01", 0},
 		{"component absent", "35=G\x01", 0},
+		{"required group counter missing", "35=G\x01101=f\x01102=x\x01", 103},
+		{"nested group child alone activates component", "35=G\x01106=w\x01", 101},
+		// HopTime is also a header tag, so it cannot activate BodyOpt.
+		{"body tag shared with header", "35=B\x01629=t\x01", 0},
+		// Y occurs twice, both times inside Dup: it still activates Dup.
+		{"tag repeated inside one component", "35=D\x01110=y\x01", 109},
 		// X also occurs in group NoY, so it cannot activate Opt.
 		{"shared tag from another group", "35=S\x01104=1\x01102=x\x01", 0},
 		// Opt is referenced twice: its presence cannot be attributed, so it is
@@ -822,7 +862,7 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
 		{"component referenced twice", "35=T\x01105=1\x01102=x\x01", 0},
 		// Header conditions.
 		{"header component absent", "35=G\x01", 0},
-		{"header component partial", "35=G\x01629=t\x01", 628},
+		{"header component partial", "35=G\x01631=r\x01", 628}, // HopRef is only in the header
 		{"header component complete", "35=G\x01628=h\x01629=t\x01", 0},
 		// HopOther is also a field of message U, so it cannot activate Hop.
 		{"header tag also used in a body", "35=U\x01630=o\x01", 0},

@@ -1,7 +1,9 @@
 package fix50sp2
 
 import (
+	"bytes"
 	"testing"
+	"time"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -79,6 +81,27 @@ func TestNoLegsRoundTrip(t *testing.T) {
 			if got, ok, err := parties[j].Nested3PartyRole(); err != nil || !ok || got != wp.role {
 				t.Errorf("leg %d party %d Role = (%d, %v, %v), want %d", i, j, got, ok, err, wp.role)
 			}
+		}
+	}
+}
+
+// TestLocalMktDate checks that LOCALMKTDATE setters keep the civil date they
+// are given, on a message and in a group entry, east and west of UTC.
+func TestLocalMktDate(t *testing.T) {
+	plus2 := time.FixedZone("UTC+2", 2*3600)
+	minus5 := time.FixedZone("UTC-5", -5*3600)
+	settle := time.Date(2026, 10, 10, 0, 0, 0, 0, plus2)     // 2026-10-09 22:00 UTC
+	legSettle := time.Date(2026, 10, 10, 23, 0, 0, 0, minus5) // 2026-10-11 04:00 UTC
+
+	raw := BuildExecutionReport("FIXT.1.1").
+		SetSettlDate(settle).
+		AddNoLegsEntry(NewNoLegsEntry().
+			SetLegSymbol("L").
+			SetLegSettlDateWithFormat(legSettle, fix2.TimeFormatDate)).
+		Build()
+	for _, want := range []string{"\x0164=20261010\x01", "\x01588=20261010\x01"} {
+		if !bytes.Contains(raw, []byte(want)) {
+			t.Errorf("message %q does not contain %q", raw, want)
 		}
 	}
 }
