@@ -1724,3 +1724,52 @@ func TestNew_Idempotent(t *testing.T) {
 		t.Errorf("after a second New: %v", err)
 	}
 }
+
+func TestNew_IdempotentWithConditionsAndEnvelopeGroups(t *testing.T) {
+	// Five header groups (more than maxSharedSpecs) and an optional
+	// component in the body requiring B when C is present.
+	var header, fields strings.Builder
+	fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="100" name="F" type="STRING"/>` +
+		`<field number="102" name="B" type="STRING"/><field number="103" name="C" type="STRING"/>`)
+	for i := range maxSharedSpecs + 1 {
+		fmt.Fprintf(&header, `<group name="NoH%d"><field name="F"/></group>`, i)
+		fmt.Fprintf(&fields, `<field number="%d" name="NoH%d" type="NUMINGROUP"/>`, 1000+2*i, i)
+	}
+	d, err := Load(strings.NewReader(`<fix major="4" minor="4"><header><field name="MsgType" required="Y"/>` + header.String() +
+		`</header><trailer/><messages><message name="M" msgtype="M"><field name="F" required="Y"/><component name="Opt" required="N"/></message></messages>` +
+		`<components><component name="Opt"><field name="B" required="Y"/><field name="C" required="N"/></component></components><fields>` + fields.String() + `</fields></fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(when string) {
+		t.Helper()
+		for body, want := range map[string]error{
+			"35=M\x011000=1\x01100=g\x01100=f\x01": nil,
+			"35=M\x011000=1\x01100=g\x01":          ErrRequiredTag, // F only in a header group
+			"35=M\x01100=f\x01103=c\x01":           ErrRequiredTag, // Opt present, B missing
+			"35=M\x01100=f\x01103=c\x01102=b\x01":  nil,
+			"35=M\x01100=f\x01999=x\x01":           ErrUnexpectedTag,
+		} {
+			msg := parseMsg(t, buildFIXMsg(body))
+			if err := d.Validate(&msg); want == nil && err != nil || want != nil && !errors.Is(err, want) {
+				t.Errorf("%s: %q: got %v, want %v", when, body, err, want)
+			}
+		}
+	}
+	check("after Load")
+	m := d.Messages["M"]
+	conds := len(m.conds)
+	New(d)
+	if len(m.conds) != conds || len(d.envelopeSpecs) != maxSharedSpecs+1 {
+		t.Errorf("after a second New: %d conditions, %d envelope specs", len(m.conds), len(d.envelopeSpecs))
+	}
+	check("after a second New")
+	// Down to maxSharedSpecs header groups: their specs move into the
+	// message's.
+	d.HeaderGroups = d.HeaderGroups[:maxSharedSpecs]
+	New(d)
+	if d.envelopeSpecs != nil || len(m.specs) != maxSharedSpecs {
+		t.Errorf("with %d header groups: envelope specs %d, message specs %d", maxSharedSpecs, len(d.envelopeSpecs), len(m.specs))
+	}
+	check("with fewer header groups")
+}
