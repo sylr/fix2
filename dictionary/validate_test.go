@@ -1049,3 +1049,17 @@ func TestNew_IdempotentWithConditionsAndEnvelopeGroups(t *testing.T) {
 	}
 	check("with fewer header groups")
 }
+
+func TestCompiledBodyTable(t *testing.T) {
+	// The compiled table of NewOrderSingle holds Symbol (55), from the
+	// Instrument component, the NoAllocs counter (78) and its child (79).
+	nos := loadTestDict(t).Messages["D"]
+	for _, tag := range []int{55, 78, 79} {
+		if !nos.Allows(tag) {
+			t.Errorf("compiled table lacks tag %d", tag)
+		}
+	}
+	if nos.Allows(999) {
+		t.Error("compiled table holds tag 999")
+	}
+}

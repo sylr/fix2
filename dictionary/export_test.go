@@ -26,3 +26,6 @@ func (d *Dict) EnumChecks() int { return len(d.enumChecks) }
 
 // EnvelopeSpecs returns the envelope specs d keeps apart from its messages'.
 func (d *Dict) EnvelopeSpecs() []*fix2.GroupSpec { return d.envelopeSpecs }
+
+// Allows reports whether m's compiled body table holds tag.
+func (m *MessageDef) Allows(tag int) bool { return m.body.get(tag) != nil }
