@@ -970,3 +970,74 @@ func TestEdges(t *testing.T) {
 }
 `)
 }
+
+// TestGenerateNameClashes covers a message named like an enum field, as
+// FIX 5.0's SecurityStatus message and SecurityStatus (965) field.
+func TestGenerateNameClashes(t *testing.T) {
+	const xml = `<fix type="FIX" major="5" minor="0">
+  <header/><trailer/>
+  <messages>
+    <message name="SecurityStatus" msgtype="f" msgcat="app">
+      <field name="SecurityStatus" required="N"/>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="965" name="SecurityStatus" type="STRING">
+      <value enum="1" description="ACTIVE"/>
+    </field>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "clash", `package clash
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestClash(t *testing.T) {
+	raw := BuildSecurityStatus("FIXT.1.1").SetSecurityStatus(SecurityStatusActive).Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st SecurityStatusEnum
+	st, ok := WrapSecurityStatus(&msg).SecurityStatus()
+	if !ok || st != SecurityStatusActive {
+		t.Errorf("SecurityStatus = %q, %v", st, ok)
+	}
+}
+`)
+}
+
+func TestGenerateMethodClashErrors(t *testing.T) {
+	dict := func(fieldName string) *dictionary.Dict {
+		t.Helper()
+		d, err := dictionary.Load(strings.NewReader(fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="U1" msgcat="app">
+    <field name="%s" required="N"/>
+    <group name="NoX" required="N"><field name="A" required="N"/></group>
+  </message></messages>
+  <components/>
+  <fields>
+    <field number="5000" name="%s" type="STRING"/>
+    <field number="5001" name="NoX" type="NUMINGROUP"/>
+    <field number="5002" name="A" type="STRING"/>
+  </fields>
+</fix>`, fieldName, fieldName)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	for _, name := range []string{"NoXEntries", "String"} {
+		if err := generate(dict(name), "m", t.TempDir()); err == nil {
+			t.Errorf("field %s: expected a clash error", name)
+		}
+	}
+	if err := generate(dict("Plain"), "m", t.TempDir()); err != nil {
+		t.Errorf("field Plain: %v", err)
+	}
+}
