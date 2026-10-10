@@ -14,15 +14,15 @@ import (
 // ---------------------------------------------------------------------------
 
 type xmlDict struct {
-	Type        string         `xml:"type,attr"`
-	Major       string         `xml:"major,attr"`
-	Minor       string         `xml:"minor,attr"`
-	ServicePack string         `xml:"servicepack,attr"`
-	Header      xmlMsgBody     `xml:"header"`
-	Trailer     xmlMsgBody     `xml:"trailer"`
-	Messages    xmlMessages    `xml:"messages"`
-	Components  xmlComponents  `xml:"components"`
-	Fields      xmlFieldDefs   `xml:"fields"`
+	Type        string        `xml:"type,attr"`
+	Major       string        `xml:"major,attr"`
+	Minor       string        `xml:"minor,attr"`
+	ServicePack string        `xml:"servicepack,attr"`
+	Header      xmlBody       `xml:"header"`
+	Trailer     xmlBody       `xml:"trailer"`
+	Messages    xmlMessages   `xml:"messages"`
+	Components  xmlComponents `xml:"components"`
+	Fields      xmlFieldDefs  `xml:"fields"`
 }
 
 type xmlMessages struct {
@@ -37,40 +37,32 @@ type xmlFieldDefs struct {
 	Fields []xmlFieldDef `xml:"field"`
 }
 
-type xmlMsgBody struct {
-	Fields     []xmlFieldRef     `xml:"field"`
-	Components []xmlComponentRef `xml:"component"`
-	Groups     []xmlGroup        `xml:"group"`
+// xmlBody is the content of a header, trailer, message, component or group.
+// Children are kept in a single slice so their XML order is preserved: a
+// group's first child, possibly inside a component, is its delimiter.
+type xmlBody struct {
+	Items []xmlItem `xml:",any"`
+}
+
+// xmlItem is a <field>, <component> or <group> reference, told apart by
+// XMLName. Only groups have children.
+type xmlItem struct {
+	XMLName  xml.Name
+	Name     string `xml:"name,attr"`
+	Required string `xml:"required,attr"`
+	xmlBody
 }
 
 type xmlMessage struct {
 	Name    string `xml:"name,attr"`
 	MsgType string `xml:"msgtype,attr"`
 	MsgCat  string `xml:"msgcat,attr"`
-	xmlMsgBody
+	xmlBody
 }
 
 type xmlComponent struct {
 	Name string `xml:"name,attr"`
-	xmlMsgBody
-}
-
-type xmlFieldRef struct {
-	Name     string `xml:"name,attr"`
-	Required string `xml:"required,attr"`
-}
-
-type xmlComponentRef struct {
-	Name     string `xml:"name,attr"`
-	Required string `xml:"required,attr"`
-}
-
-type xmlGroup struct {
-	Name       string            `xml:"name,attr"`
-	Required   string            `xml:"required,attr"`
-	Fields     []xmlFieldRef     `xml:"field"`
-	Components []xmlComponentRef `xml:"component"`
-	Groups     []xmlGroup        `xml:"group"`
+	xmlBody
 }
 
 type xmlFieldDef struct {
@@ -105,11 +97,11 @@ type FieldRef struct {
 
 // GroupDef describes a repeating group within a message.
 type GroupDef struct {
-	CounterTag int        // NUMINGROUP tag (e.g. 78)
-	Name       string     // field name (e.g. "NoAllocs")
+	CounterTag int    // NUMINGROUP tag (e.g. 78)
+	Name       string // field name (e.g. "NoAllocs")
 	Required   bool
-	DelimTag   int        // first child tag — instance delimiter (e.g. 79)
-	Fields     []FieldRef // child fields in order (delimiter is Fields[0])
+	DelimTag   int        // first child tag in XML order — instance delimiter (e.g. 79)
+	Fields     []FieldRef // child fields in XML order, components expanded, nested groups excluded
 	Groups     []GroupDef // nested sub-groups
 }
 
@@ -208,50 +200,37 @@ func resolve(xd *xmlDict) (*Dict, error) {
 		compMap[c.Name] = c
 	}
 
+	r := &resolver{byName: d.fieldsByName, compMap: compMap, visiting: map[string]bool{}}
+
 	// 3. Flatten header.
-	var err error
-	d.Header, err = flatten(xd.Header.Fields, xd.Header.Components, xd.Header.Groups, d.fieldsByName, compMap)
+	header, err := r.resolve(xd.Header.Items)
 	if err != nil {
 		return nil, fmt.Errorf("dictionary: header: %w", err)
 	}
+	d.Header = header.all
 	d.headerSet, d.headerReq = buildMaps(d.Header)
 
 	// 4. Flatten trailer.
-	d.Trailer, err = flatten(xd.Trailer.Fields, xd.Trailer.Components, xd.Trailer.Groups, d.fieldsByName, compMap)
+	trailer, err := r.resolve(xd.Trailer.Items)
 	if err != nil {
 		return nil, fmt.Errorf("dictionary: trailer: %w", err)
 	}
+	d.Trailer = trailer.all
 	d.trailerSet, d.trailerReq = buildMaps(d.Trailer)
 
-	// 5. Flatten each message and resolve groups.
+	// 5. Flatten each message and resolve its groups.
 	for _, xm := range xd.Messages.Messages {
-		refs, err := flatten(xm.Fields, xm.Components, xm.Groups, d.fieldsByName, compMap)
+		body, err := r.resolve(xm.Items)
 		if err != nil {
 			return nil, fmt.Errorf("dictionary: message %s: %w", xm.Name, err)
 		}
-		fs, req := buildMaps(refs)
-		groups, err := resolveGroups(xm.Groups, d.fieldsByName, compMap)
-		if err != nil {
-			return nil, fmt.Errorf("dictionary: message %s: groups: %w", xm.Name, err)
-		}
-		// Also resolve groups from message-level components.
-		for _, c := range xm.Components {
-			comp, ok := compMap[c.Name]
-			if !ok {
-				continue // already caught by flatten
-			}
-			cg, err := resolveGroups(comp.Groups, d.fieldsByName, compMap)
-			if err != nil {
-				return nil, fmt.Errorf("dictionary: message %s: component %s: groups: %w", xm.Name, c.Name, err)
-			}
-			groups = append(groups, cg...)
-		}
+		fs, req := buildMaps(body.all)
 		d.Messages[xm.MsgType] = &MessageDef{
 			Name:     xm.Name,
 			MsgType:  xm.MsgType,
 			MsgCat:   xm.MsgCat,
-			Fields:   refs,
-			Groups:   groups,
+			Fields:   body.all,
+			Groups:   body.groups,
 			fieldSet: fs,
 			required: req,
 		}
@@ -260,121 +239,97 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	return d, nil
 }
 
-// flatten resolves field refs, component refs, and groups into a flat list of FieldRefs.
-func flatten(
-	fields []xmlFieldRef,
-	components []xmlComponentRef,
-	groups []xmlGroup,
-	byName map[string]*FieldDef,
-	compMap map[string]*xmlComponent,
-) ([]FieldRef, error) {
-	return flattenInner(fields, components, groups, byName, compMap, make(map[string]bool))
+// resolver expands field, component and group references into FieldRefs and
+// GroupDefs. It walks items in XML order and expands components in place, so
+// fields and groups keep their position at any depth.
+type resolver struct {
+	byName   map[string]*FieldDef
+	compMap  map[string]*xmlComponent
+	visiting map[string]bool // components on the current path, for cycle detection
 }
 
-func flattenInner(
-	fields []xmlFieldRef,
-	components []xmlComponentRef,
-	groups []xmlGroup,
-	byName map[string]*FieldDef,
-	compMap map[string]*xmlComponent,
-	visiting map[string]bool,
-) ([]FieldRef, error) {
-	var refs []FieldRef
-
-	// Process <field> entries.
-	for _, f := range fields {
-		fd, ok := byName[f.Name]
-		if !ok {
-			return nil, fmt.Errorf("unknown field %q", f.Name)
-		}
-		refs = append(refs, FieldRef{Tag: fd.Tag, Required: f.Required == "Y"})
-	}
-
-	// Process <component> entries.
-	for _, c := range components {
-		comp, ok := compMap[c.Name]
-		if !ok {
-			return nil, fmt.Errorf("unknown component %q", c.Name)
-		}
-		if visiting[c.Name] {
-			return nil, fmt.Errorf("cycle detected in component %q", c.Name)
-		}
-		visiting[c.Name] = true
-		inner, err := flattenInner(comp.Fields, comp.Components, comp.Groups, byName, compMap, visiting)
-		if err != nil {
-			return nil, fmt.Errorf("component %s: %w", c.Name, err)
-		}
-		delete(visiting, c.Name)
-		refs = append(refs, inner...)
-	}
-
-	// Process <group> entries.
-	for _, g := range groups {
-		// The group name is also a field name (the counter tag).
-		fd, ok := byName[g.Name]
-		if !ok {
-			return nil, fmt.Errorf("unknown group field %q", g.Name)
-		}
-		refs = append(refs, FieldRef{Tag: fd.Tag, Required: g.Required == "Y"})
-
-		// Recurse into group children; all children are marked not required
-		// since group instance validation is out of scope.
-		inner, err := flattenInner(g.Fields, g.Components, g.Groups, byName, compMap, visiting)
-		if err != nil {
-			return nil, fmt.Errorf("group %s: %w", g.Name, err)
-		}
-		for i := range inner {
-			inner[i].Required = false
-		}
-		refs = append(refs, inner...)
-	}
-
-	return refs, nil
+// resolvedBody is the resolved content of a header, trailer, message or group.
+type resolvedBody struct {
+	all    []FieldRef // every tag the body can hold, group contents included
+	direct []FieldRef // fields outside any group, components expanded
+	groups []GroupDef // groups at this level, components expanded
+	first  int        // first tag in XML order (field or group counter); 0 if none
 }
 
-// resolveGroups converts XML groups into structured GroupDefs, recursively
-// handling nested groups and expanding component refs within groups.
-func resolveGroups(
-	groups []xmlGroup,
-	byName map[string]*FieldDef,
-	compMap map[string]*xmlComponent,
-) ([]GroupDef, error) {
-	if len(groups) == 0 {
-		return nil, nil
+func (b *resolvedBody) setFirst(tag int) {
+	if b.first == 0 {
+		b.first = tag
 	}
-	var out []GroupDef
-	for _, g := range groups {
-		fd, ok := byName[g.Name]
-		if !ok {
-			return nil, fmt.Errorf("unknown group field %q", g.Name)
-		}
+}
 
-		// Resolve child fields: direct fields + component-expanded fields.
-		childRefs, err := flattenInner(g.Fields, g.Components, nil, byName, compMap, make(map[string]bool))
-		if err != nil {
-			return nil, fmt.Errorf("group %s: %w", g.Name, err)
-		}
+func (r *resolver) resolve(items []xmlItem) (resolvedBody, error) {
+	var b resolvedBody
+	err := r.walk(items, &b)
+	return b, err
+}
 
-		if len(childRefs) == 0 {
-			return nil, fmt.Errorf("group %s: no child fields", g.Name)
-		}
+func (r *resolver) walk(items []xmlItem, b *resolvedBody) error {
+	for _, it := range items {
+		switch it.XMLName.Local {
+		case "field":
+			fd, ok := r.byName[it.Name]
+			if !ok {
+				return fmt.Errorf("unknown field %q", it.Name)
+			}
+			ref := FieldRef{Tag: fd.Tag, Required: it.Required == "Y"}
+			b.all = append(b.all, ref)
+			b.direct = append(b.direct, ref)
+			b.setFirst(fd.Tag)
 
-		// Recursively resolve nested groups.
-		nested, err := resolveGroups(g.Groups, byName, compMap)
-		if err != nil {
-			return nil, fmt.Errorf("group %s: %w", g.Name, err)
-		}
+		case "component":
+			comp, ok := r.compMap[it.Name]
+			if !ok {
+				return fmt.Errorf("unknown component %q", it.Name)
+			}
+			if r.visiting[it.Name] {
+				return fmt.Errorf("cycle detected in component %q", it.Name)
+			}
+			r.visiting[it.Name] = true
+			err := r.walk(comp.Items, b)
+			delete(r.visiting, it.Name)
+			if err != nil {
+				return fmt.Errorf("component %s: %w", it.Name, err)
+			}
 
-		out = append(out, GroupDef{
-			CounterTag: fd.Tag,
-			Name:       g.Name,
-			Required:   g.Required == "Y",
-			DelimTag:   childRefs[0].Tag,
-			Fields:     childRefs,
-			Groups:     nested,
-		})
+		case "group":
+			// The group name is also a field name (the counter tag).
+			fd, ok := r.byName[it.Name]
+			if !ok {
+				return fmt.Errorf("unknown group field %q", it.Name)
+			}
+			inner, err := r.resolve(it.Items)
+			if err != nil {
+				return fmt.Errorf("group %s: %w", it.Name, err)
+			}
+			if inner.first == 0 {
+				return fmt.Errorf("group %s: no child fields", it.Name)
+			}
+			b.all = append(b.all, FieldRef{Tag: fd.Tag, Required: it.Required == "Y"})
+			// Group children are never required at this level since group
+			// instance validation is out of scope.
+			for _, ref := range inner.all {
+				b.all = append(b.all, FieldRef{Tag: ref.Tag})
+			}
+			b.groups = append(b.groups, GroupDef{
+				CounterTag: fd.Tag,
+				Name:       it.Name,
+				Required:   it.Required == "Y",
+				DelimTag:   inner.first,
+				Fields:     inner.direct,
+				Groups:     inner.groups,
+			})
+			b.setFirst(fd.Tag)
+
+		default:
+			return fmt.Errorf("unexpected element <%s>", it.XMLName.Local)
+		}
 	}
-	return out, nil
+	return nil
 }
 
 // buildMaps precomputes allowed and required sets from a list of FieldRefs.

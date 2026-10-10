@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -210,6 +211,125 @@ func TestResolve_GroupStructure(t *testing.T) {
 	}
 	if g.Fields[0].Tag != 79 {
 		t.Errorf("child field tag = %d, want 79", g.Fields[0].Tag)
+	}
+}
+
+// nestedDictXML exercises the shapes FIX 5.0 SP2 relies on: a group whose
+// first child is a component, a group reached through nested components, and
+// a group nested inside another group through a component.
+const nestedDictXML = `<fix type="FIX" major="5" minor="0" servicepack="2">
+  <header/>
+  <trailer/>
+  <messages>
+    <message name="NewOrderMultileg" msgtype="AB" msgcat="app">
+      <field name="ClOrdID" required="Y"/>
+      <component name="Instrument" required="N"/>
+      <group name="NoLegs" required="N">
+        <component name="InstrumentLeg" required="N"/>
+        <field name="LegQty" required="N"/>
+        <component name="NestedParties" required="N"/>
+      </group>
+    </message>
+  </messages>
+  <components>
+    <component name="Instrument">
+      <field name="Symbol" required="N"/>
+      <component name="SecAltIDGrp" required="N"/>
+    </component>
+    <component name="SecAltIDGrp">
+      <group name="NoSecurityAltID" required="N">
+        <field name="SecurityAltID" required="N"/>
+        <field name="SecurityAltIDSource" required="N"/>
+      </group>
+    </component>
+    <component name="InstrumentLeg">
+      <field name="LegSymbol" required="N"/>
+      <field name="LegSide" required="N"/>
+    </component>
+    <component name="NestedParties">
+      <group name="NoNestedPartyIDs" required="N">
+        <field name="NestedPartyID" required="N"/>
+        <field name="NestedPartyRole" required="N"/>
+      </group>
+    </component>
+  </components>
+  <fields>
+    <field number="11" name="ClOrdID" type="STRING"/>
+    <field number="55" name="Symbol" type="STRING"/>
+    <field number="454" name="NoSecurityAltID" type="NUMINGROUP"/>
+    <field number="455" name="SecurityAltID" type="STRING"/>
+    <field number="456" name="SecurityAltIDSource" type="STRING"/>
+    <field number="555" name="NoLegs" type="NUMINGROUP"/>
+    <field number="600" name="LegSymbol" type="STRING"/>
+    <field number="624" name="LegSide" type="CHAR"/>
+    <field number="687" name="LegQty" type="QTY"/>
+    <field number="539" name="NoNestedPartyIDs" type="NUMINGROUP"/>
+    <field number="524" name="NestedPartyID" type="STRING"/>
+    <field number="538" name="NestedPartyRole" type="INT"/>
+  </fields>
+</fix>`
+
+func TestResolve_NestedGroupsAndChildOrder(t *testing.T) {
+	d, err := Load(strings.NewReader(nestedDictXML))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	md := d.Messages["AB"]
+
+	tags := func(refs []FieldRef) []int {
+		var out []int
+		for _, r := range refs {
+			out = append(out, r.Tag)
+		}
+		return out
+	}
+
+	// Every tag in XML order, components expanded in place.
+	if got, want := tags(md.Fields), []int{11, 55, 454, 455, 456, 555, 600, 624, 687, 539, 524, 538}; !slices.Equal(got, want) {
+		t.Errorf("message Fields = %v, want %v", got, want)
+	}
+
+	// Top-level groups in XML order, including one two components deep.
+	if len(md.Groups) != 2 {
+		t.Fatalf("expected 2 top-level groups, got %d", len(md.Groups))
+	}
+	alt, legs := md.Groups[0], md.Groups[1]
+	if alt.Name != "NoSecurityAltID" || alt.DelimTag != 455 {
+		t.Errorf("group 0 = %s delim %d, want NoSecurityAltID delim 455", alt.Name, alt.DelimTag)
+	}
+
+	// NoLegs starts with the InstrumentLeg component: its first field is the delimiter.
+	if legs.Name != "NoLegs" || legs.DelimTag != 600 {
+		t.Errorf("group 1 = %s delim %d, want NoLegs delim 600", legs.Name, legs.DelimTag)
+	}
+	if got, want := tags(legs.Fields), []int{600, 624, 687}; !slices.Equal(got, want) {
+		t.Errorf("NoLegs Fields = %v, want %v", got, want)
+	}
+
+	// NoNestedPartyIDs is nested in NoLegs through the NestedParties component.
+	if len(legs.Groups) != 1 {
+		t.Fatalf("expected 1 group nested in NoLegs, got %d", len(legs.Groups))
+	}
+	if nested := legs.Groups[0]; nested.Name != "NoNestedPartyIDs" || nested.CounterTag != 539 || nested.DelimTag != 524 {
+		t.Errorf("nested group = %s counter %d delim %d, want NoNestedPartyIDs counter 539 delim 524", nested.Name, nested.CounterTag, nested.DelimTag)
+	}
+}
+
+func TestLoad_ComponentCycle(t *testing.T) {
+	xml := `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app"><component name="A" required="N"/></message>
+  </messages>
+  <components>
+    <component name="A"><component name="B" required="N"/></component>
+    <component name="B"><component name="A" required="N"/></component>
+  </components>
+  <fields/>
+</fix>`
+	_, err := Load(strings.NewReader(xml))
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("expected cycle error, got %v", err)
 	}
 }
 
