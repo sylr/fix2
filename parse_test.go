@@ -521,12 +521,12 @@ func TestParseTruncated(t *testing.T) {
 		},
 		{
 			name:     "missing trailer",
-			raw:      "8=FIX.4.4\x019=21\x0135=0\x0149=XXXXXXXXXXXXX\x01",
+			raw:      "8=FIX.4.4\x019=22\x0135=0\x0149=XXXXXXXXXXXXX\x01",
 			sentinel: ErrInvalidCheckSum,
 		},
 		{
 			name:     "truncated trailer tag",
-			raw:      "8=FIX.4.4\x019=21\x0135=0\x0149=XXXXXXXXXXXXX\x0110",
+			raw:      "8=FIX.4.4\x019=22\x0135=0\x0149=XXXXXXXXXXXXX\x0110",
 			sentinel: ErrInvalidCheckSum,
 		},
 	}
@@ -573,16 +573,18 @@ func FuzzParse(f *testing.F) {
 	})
 }
 
+// withChecksum appends the CheckSum trailer to s, header and body.
+func withChecksum(s string) []byte {
+	var sum int
+	for i := range len(s) {
+		sum += int(s[i])
+	}
+	return fmt.Appendf(nil, "%s10=%03d\x01", s, sum%256)
+}
+
 // TestParseHugeBodyLength checks that BodyLength values that overflow, or are
 // too large to allocate, are rejected without panicking.
 func TestParseHugeBodyLength(t *testing.T) {
-	withChecksum := func(s string) []byte {
-		var sum int
-		for i := range len(s) {
-			sum += int(s[i])
-		}
-		return fmt.Appendf(nil, "%s10=%03d\x01", s, sum%256)
-	}
 	maxInt := strconv.Itoa(math.MaxInt)
 
 	tests := []struct {
@@ -867,5 +869,36 @@ func TestParseDataFieldsTable(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestParseBodyLengthBoundaries checks that BodyLength must match the body
+// exactly, from the BodyLength SOH to the SOH before "10=", in both parsers.
+func TestParseBodyLengthBoundaries(t *testing.T) {
+	body := "35=0\x0149=SENDER\x0158=text\x01"
+	header := func(n int) string { return fmt.Sprintf("8=FIX.4.4\x019=%d\x01", n) }
+	for delta := -3; delta <= 3; delta++ {
+		t.Run(fmt.Sprintf("delta=%d", delta), func(t *testing.T) {
+			raw := withChecksum(header(len(body)+delta) + body)
+			_, err := Parse(raw)
+			_, rerr := ParseFromReader(bytes.NewReader(raw))
+			if delta == 0 {
+				if err != nil || rerr != nil {
+					t.Fatalf("Parse = %v, ParseFromReader = %v", err, rerr)
+				}
+				return
+			}
+			if err == nil || rerr == nil {
+				t.Errorf("Parse = %v, ParseFromReader = %v, want errors", err, rerr)
+			}
+		})
+	}
+	// The SOH of the last body field sits right at bodyEnd.
+	raw := withChecksum("8=FIX.4.4\x019=4\x0135=0\x01")
+	if _, err := Parse(raw); !errors.Is(err, ErrBodyLenMismatch) {
+		t.Errorf("Parse = %v, want ErrBodyLenMismatch", err)
+	}
+	if _, err := ParseFromReader(bytes.NewReader(raw)); err == nil {
+		t.Error("ParseFromReader: expected error")
 	}
 }

@@ -111,8 +111,8 @@ func Parse(data []byte) (Message, error) {
 			}
 		} else {
 			sohPos = findByte(data, eqPos+1, soh)
-			if sohPos < 0 || sohPos > bodyEnd {
-				return msg, &ParseError{Err: ErrMalformedField, Offset: cursor}
+			if sohPos < 0 || sohPos >= bodyEnd {
+				return msg, fieldEndError(sohPos, cursor)
 			}
 		}
 		value := data[eqPos+1 : sohPos]
@@ -271,8 +271,8 @@ func ParseFromReader(r io.Reader) (Message, error) {
 			}
 		} else {
 			sohPos = findByte(rest, eqPos+1, soh)
-			if sohPos < 0 || sohPos > bodyEnd {
-				return msg, &ParseError{Err: ErrMalformedField, Offset: len(header) + cursor}
+			if sohPos < 0 || sohPos >= bodyEnd {
+				return msg, fieldEndError(sohPos, len(header)+cursor)
 			}
 		}
 		value := rest[eqPos+1 : sohPos]
@@ -351,6 +351,15 @@ func (d dataField) end(data []byte, tag, cursor, valStart, bodyEnd int) (int, er
 		return 0, &ParseError{Err: fmt.Errorf("%w: DATA tag %d does not end after its declared %d bytes", ErrMalformedField, d.tag, d.length), Offset: cursor}
 	}
 	return valStart + d.length, nil
+}
+
+// fieldEndError reports a body field whose SOH, at sohPos, is missing (-1)
+// or not strictly inside the body declared by BodyLength.
+func fieldEndError(sohPos, offset int) error {
+	if sohPos < 0 {
+		return &ParseError{Err: ErrMalformedField, Offset: offset}
+	}
+	return &ParseError{Err: fmt.Errorf("%w: field runs past the end of the body", ErrBodyLenMismatch), Offset: offset}
 }
 
 // missing reports that the announced DATA field does not come next.
