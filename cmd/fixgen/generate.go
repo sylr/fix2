@@ -383,7 +383,7 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 	var inHeader []int // header tags, which the trailer must not repeat
 	writeSectionVar := func(name, doc string, refs []dictionary.FieldRef, groups []dictionary.GroupDef) {
 		inGroups, counters := map[int]bool{}, map[int]bool{}
-		collectGroupTags(groups, inGroups, counters, false)
+		collectGroupTags(dict, groups, inGroups, counters, false)
 		var list []int
 		add := func(tag int) {
 			// A pair split between header and trailer stays in the header.
@@ -637,19 +637,24 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	// that actually belong to groups in THIS message.
 	groupChildTags := map[int]bool{}
 	counterTags := map[int]bool{}
-	collectGroupTags(groups, groupChildTags, counterTags, false)
+	collectGroupTags(dict, groups, groupChildTags, counterTags, false)
 
 	// A tag that occurs more often in the message's fields (group contents
 	// included) than inside its groups is also a direct field of the
 	// message, e.g. a header group child reused in the body: it keeps its
 	// scalar getter and setter.
-	inGroups := map[int]int{}
-	countGroupTags(groups, inGroups)
+	inGroups, implicit := map[int]int{}, map[int]int{}
+	countGroupTags(dict, groups, inGroups, implicit)
 	occurrences := map[int]int{}
 	for _, refs := range [][]dictionary.FieldRef{dict.Header, md.Fields, dict.Trailer} {
 		for _, ref := range refs {
 			occurrences[ref.Tag]++
 		}
+	}
+	// Group fields are among the refs, their implicit DATA/LENGTH partners
+	// are not.
+	for tag, n := range implicit {
+		occurrences[tag] += n
 	}
 	// Such a tag is read skipping the groups, or its getter could return a
 	// group entry's value.
@@ -845,28 +850,53 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 // Nested counter tags are added to childTags so they are skipped from the base
 // message getters/setters (they only belong on the parent group entry).
 // countGroupTags counts how many times each tag occurs inside groups: their
-// counters, their fields and, recursively, their nested groups.
-func countGroupTags(groups []dictionary.GroupDef, counts map[int]int) {
+// counters, their fields with their implicit DATA/LENGTH partners and,
+// recursively, their nested groups. implicit counts the partners alone.
+func countGroupTags(dict *dictionary.Dict, groups []dictionary.GroupDef, counts, implicit map[int]int) {
 	for _, gd := range groups {
 		counts[gd.CounterTag]++
-		for _, fr := range gd.Fields {
-			counts[fr.Tag]++
+		declared, partners := groupFieldTags(dict, gd)
+		for _, tag := range declared {
+			counts[tag]++
 		}
-		countGroupTags(gd.Groups, counts)
+		for _, tag := range partners {
+			counts[tag]++
+			implicit[tag]++
+		}
+		countGroupTags(dict, gd.Groups, counts, implicit)
 	}
 }
 
-func collectGroupTags(groups []dictionary.GroupDef, childTags, counterTags map[int]bool, nested bool) {
+func collectGroupTags(dict *dictionary.Dict, groups []dictionary.GroupDef, childTags, counterTags map[int]bool, nested bool) {
 	for _, gd := range groups {
 		counterTags[gd.CounterTag] = true
 		if nested {
 			childTags[gd.CounterTag] = true
 		}
-		for _, fr := range gd.Fields {
-			childTags[fr.Tag] = true
+		declared, partners := groupFieldTags(dict, gd)
+		for _, tag := range slices.Concat(declared, partners) {
+			childTags[tag] = true
 		}
-		collectGroupTags(gd.Groups, childTags, counterTags, true)
+		collectGroupTags(dict, gd.Groups, childTags, counterTags, true)
 	}
+}
+
+// groupFieldTags returns the tags a group's entries declare and, apart, the
+// DATA or LENGTH field each pairs with that the group does not declare:
+// builders write the pair together (see pairDataLengths), so the partner
+// is in the entry too.
+func groupFieldTags(dict *dictionary.Dict, gd dictionary.GroupDef) (declared, partners []int) {
+	for _, fr := range gd.Fields {
+		declared = append(declared, fr.Tag)
+	}
+	for _, tag := range declared {
+		for _, p := range []int{fix2.DataLengthTag(tag), fix2.DataTag(tag)} {
+			if p != 0 && dict.Fields[p] != nil && !slices.Contains(declared, p) && !slices.Contains(partners, p) {
+				partners = append(partners, p)
+			}
+		}
+	}
+	return declared, partners
 }
 
 // entriesField names the builder field holding a group's entries, e.g.

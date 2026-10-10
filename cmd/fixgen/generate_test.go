@@ -1720,3 +1720,53 @@ func TestEmpty(t *testing.T) {
 }
 `)
 }
+
+// TestGenerateImplicitGroupLength covers a group declaring a DATA field but
+// not its LENGTH field, which the trailer also declares: the group's
+// implicit LENGTH must not answer the trailer's getter.
+func TestGenerateImplicitGroupLength(t *testing.T) {
+	runGenerated(t, `<fix major="4" minor="4">
+  <header/>
+  <trailer><field name="SignatureLength" required="N"/><field name="Signature" required="N"/></trailer>
+  <messages><message name="M" msgtype="M">
+    <group name="NoG" required="N"><field name="D" required="N"/><field name="Signature" required="N"/></group>
+  </message></messages>
+  <components/>
+  <fields>
+    <field number="89" name="Signature" type="DATA"/>
+    <field number="93" name="SignatureLength" type="LENGTH"/>
+    <field number="100" name="D" type="STRING"/>
+    <field number="500" name="NoG" type="NUMINGROUP"/>
+  </fields>
+</fix>`, "implicitlen", `package implicitlen
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestTrailerLength(t *testing.T) {
+	raw := BuildM("FIX.4.4").
+		AddNoGEntry(NewNoGEntry().SetD("d").SetSignature([]byte("group"))).
+		SetSignature([]byte("sig")).
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	m := WrapM(&msg)
+	if n, ok, err := m.SignatureLength(); !ok || err != nil || n != 3 {
+		t.Errorf("SignatureLength = %d, %v, %v; want the trailer's 3 (%q)", n, ok, err, raw)
+	}
+	if v, _ := m.Signature(); string(v) != "sig" {
+		t.Errorf("Signature = %q", v)
+	}
+	if e := m.NoGEntries(); len(e) != 1 {
+		t.Fatalf("entries = %d", len(e))
+	} else if v, _ := e[0].Signature(); string(v) != "group" {
+		t.Errorf("entry Signature = %q", v)
+	}
+}
+`)
+}
