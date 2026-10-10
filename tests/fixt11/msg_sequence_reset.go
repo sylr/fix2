@@ -138,26 +138,6 @@ func (m *SequenceReset) NoHops() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *SequenceReset) HopCompID() (string, bool) {
-	v := m.msg.Get(TagHopCompID)
-	return string(v), v != nil
-}
-func (m *SequenceReset) HopSendingTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagHopSendingTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *SequenceReset) HopRefID() (int, bool, error) {
-	v := m.msg.Get(TagHopRefID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *SequenceReset) ApplVerID() (ApplVerID, bool) {
 	v := m.msg.Get(TagApplVerID)
 	return ApplVerID(v), v != nil
@@ -179,14 +159,38 @@ func (m *SequenceReset) NewSeqNo() (int, bool, error) {
 	return n, true, err
 }
 
+var sequenceResetNoHopsSpec = &fix2.GroupSpec{
+	Counter: TagNoHops,
+	Delim:   TagHopCompID,
+	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+}
+
+func (m *SequenceReset) NoHopsEntries() []NoHopsEntry {
+	spec := sequenceResetNoHopsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
+	entries := make([]NoHopsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoHopsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
+	}
+	return entries
+}
+
 // SequenceResetBuilder builds a SequenceReset message. Use it through the pointer
 // BuildSequenceReset returns: a copy would share its fields but not its groups.
 type SequenceResetBuilder struct {
 	*fix2.Builder
+	noHops []*NoHopsEntryBuilder
 }
 
 func BuildSequenceReset(beginString string) *SequenceResetBuilder {
 	b := &SequenceResetBuilder{Builder: fix2.NewBuilder(beginString, "4")}
+	b.SetGroups(b.appendGroups, TagNoHops)
 	return b
 }
 func (b *SequenceResetBuilder) SetSenderCompID(v string) *SequenceResetBuilder {
@@ -285,26 +289,6 @@ func (b *SequenceResetBuilder) SetLastMsgSeqNumProcessed(v int) *SequenceResetBu
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *SequenceResetBuilder) SetNoHops(v int) *SequenceResetBuilder {
-	b.SetInt(TagNoHops, v)
-	return b
-}
-func (b *SequenceResetBuilder) SetHopCompID(v string) *SequenceResetBuilder {
-	b.SetString(TagHopCompID, v)
-	return b
-}
-func (b *SequenceResetBuilder) SetHopSendingTime(v time.Time) *SequenceResetBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *SequenceResetBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *SequenceResetBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(f))
-	return b
-}
-func (b *SequenceResetBuilder) SetHopRefID(v int) *SequenceResetBuilder {
-	b.SetInt(TagHopRefID, v)
-	return b
-}
 func (b *SequenceResetBuilder) SetApplVerID(v ApplVerID) *SequenceResetBuilder {
 	b.SetString(TagApplVerID, string(v))
 	return b
@@ -320,4 +304,22 @@ func (b *SequenceResetBuilder) SetGapFillFlag(v bool) *SequenceResetBuilder {
 func (b *SequenceResetBuilder) SetNewSeqNo(v int) *SequenceResetBuilder {
 	b.SetInt(TagNewSeqNo, v)
 	return b
+}
+
+// AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
+func (b *SequenceResetBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *SequenceResetBuilder {
+	b.noHops = append(b.noHops, e)
+	return b
+}
+
+// appendGroups appends the message's repeating groups to dst.
+func (b *SequenceResetBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+	if len(b.noHops) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
+		for _, entry := range b.noHops {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

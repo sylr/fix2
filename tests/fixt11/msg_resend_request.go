@@ -138,26 +138,6 @@ func (m *ResendRequest) NoHops() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *ResendRequest) HopCompID() (string, bool) {
-	v := m.msg.Get(TagHopCompID)
-	return string(v), v != nil
-}
-func (m *ResendRequest) HopSendingTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagHopSendingTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *ResendRequest) HopRefID() (int, bool, error) {
-	v := m.msg.Get(TagHopRefID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *ResendRequest) ApplVerID() (ApplVerID, bool) {
 	v := m.msg.Get(TagApplVerID)
 	return ApplVerID(v), v != nil
@@ -183,14 +163,38 @@ func (m *ResendRequest) EndSeqNo() (int, bool, error) {
 	return n, true, err
 }
 
+var resendRequestNoHopsSpec = &fix2.GroupSpec{
+	Counter: TagNoHops,
+	Delim:   TagHopCompID,
+	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+}
+
+func (m *ResendRequest) NoHopsEntries() []NoHopsEntry {
+	spec := resendRequestNoHopsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
+	entries := make([]NoHopsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoHopsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
+	}
+	return entries
+}
+
 // ResendRequestBuilder builds a ResendRequest message. Use it through the pointer
 // BuildResendRequest returns: a copy would share its fields but not its groups.
 type ResendRequestBuilder struct {
 	*fix2.Builder
+	noHops []*NoHopsEntryBuilder
 }
 
 func BuildResendRequest(beginString string) *ResendRequestBuilder {
 	b := &ResendRequestBuilder{Builder: fix2.NewBuilder(beginString, "2")}
+	b.SetGroups(b.appendGroups, TagNoHops)
 	return b
 }
 func (b *ResendRequestBuilder) SetSenderCompID(v string) *ResendRequestBuilder {
@@ -289,26 +293,6 @@ func (b *ResendRequestBuilder) SetLastMsgSeqNumProcessed(v int) *ResendRequestBu
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *ResendRequestBuilder) SetNoHops(v int) *ResendRequestBuilder {
-	b.SetInt(TagNoHops, v)
-	return b
-}
-func (b *ResendRequestBuilder) SetHopCompID(v string) *ResendRequestBuilder {
-	b.SetString(TagHopCompID, v)
-	return b
-}
-func (b *ResendRequestBuilder) SetHopSendingTime(v time.Time) *ResendRequestBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *ResendRequestBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *ResendRequestBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(f))
-	return b
-}
-func (b *ResendRequestBuilder) SetHopRefID(v int) *ResendRequestBuilder {
-	b.SetInt(TagHopRefID, v)
-	return b
-}
 func (b *ResendRequestBuilder) SetApplVerID(v ApplVerID) *ResendRequestBuilder {
 	b.SetString(TagApplVerID, string(v))
 	return b
@@ -324,4 +308,22 @@ func (b *ResendRequestBuilder) SetBeginSeqNo(v int) *ResendRequestBuilder {
 func (b *ResendRequestBuilder) SetEndSeqNo(v int) *ResendRequestBuilder {
 	b.SetInt(TagEndSeqNo, v)
 	return b
+}
+
+// AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
+func (b *ResendRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *ResendRequestBuilder {
+	b.noHops = append(b.noHops, e)
+	return b
+}
+
+// appendGroups appends the message's repeating groups to dst.
+func (b *ResendRequestBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+	if len(b.noHops) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
+		for _, entry := range b.noHops {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

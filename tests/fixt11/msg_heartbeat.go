@@ -138,26 +138,6 @@ func (m *Heartbeat) NoHops() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Heartbeat) HopCompID() (string, bool) {
-	v := m.msg.Get(TagHopCompID)
-	return string(v), v != nil
-}
-func (m *Heartbeat) HopSendingTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagHopSendingTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *Heartbeat) HopRefID() (int, bool, error) {
-	v := m.msg.Get(TagHopRefID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *Heartbeat) ApplVerID() (ApplVerID, bool) {
 	v := m.msg.Get(TagApplVerID)
 	return ApplVerID(v), v != nil
@@ -171,14 +151,38 @@ func (m *Heartbeat) TestReqID() (string, bool) {
 	return string(v), v != nil
 }
 
+var heartbeatNoHopsSpec = &fix2.GroupSpec{
+	Counter: TagNoHops,
+	Delim:   TagHopCompID,
+	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+}
+
+func (m *Heartbeat) NoHopsEntries() []NoHopsEntry {
+	spec := heartbeatNoHopsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
+	entries := make([]NoHopsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoHopsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
+	}
+	return entries
+}
+
 // HeartbeatBuilder builds a Heartbeat message. Use it through the pointer
 // BuildHeartbeat returns: a copy would share its fields but not its groups.
 type HeartbeatBuilder struct {
 	*fix2.Builder
+	noHops []*NoHopsEntryBuilder
 }
 
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
 	b := &HeartbeatBuilder{Builder: fix2.NewBuilder(beginString, "0")}
+	b.SetGroups(b.appendGroups, TagNoHops)
 	return b
 }
 func (b *HeartbeatBuilder) SetSenderCompID(v string) *HeartbeatBuilder {
@@ -277,26 +281,6 @@ func (b *HeartbeatBuilder) SetLastMsgSeqNumProcessed(v int) *HeartbeatBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *HeartbeatBuilder) SetNoHops(v int) *HeartbeatBuilder {
-	b.SetInt(TagNoHops, v)
-	return b
-}
-func (b *HeartbeatBuilder) SetHopCompID(v string) *HeartbeatBuilder {
-	b.SetString(TagHopCompID, v)
-	return b
-}
-func (b *HeartbeatBuilder) SetHopSendingTime(v time.Time) *HeartbeatBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *HeartbeatBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *HeartbeatBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(f))
-	return b
-}
-func (b *HeartbeatBuilder) SetHopRefID(v int) *HeartbeatBuilder {
-	b.SetInt(TagHopRefID, v)
-	return b
-}
 func (b *HeartbeatBuilder) SetApplVerID(v ApplVerID) *HeartbeatBuilder {
 	b.SetString(TagApplVerID, string(v))
 	return b
@@ -308,4 +292,22 @@ func (b *HeartbeatBuilder) SetCstmApplVerID(v string) *HeartbeatBuilder {
 func (b *HeartbeatBuilder) SetTestReqID(v string) *HeartbeatBuilder {
 	b.SetString(TagTestReqID, v)
 	return b
+}
+
+// AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
+func (b *HeartbeatBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *HeartbeatBuilder {
+	b.noHops = append(b.noHops, e)
+	return b
+}
+
+// appendGroups appends the message's repeating groups to dst.
+func (b *HeartbeatBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+	if len(b.noHops) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
+		for _, entry := range b.noHops {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

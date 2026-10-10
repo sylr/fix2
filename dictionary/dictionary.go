@@ -147,6 +147,11 @@ type Dict struct {
 	Messages map[string]*MessageDef // keyed by MsgType (e.g. "D")
 	Header   []FieldRef
 	Trailer  []FieldRef
+	// HeaderGroups and TrailerGroups are the repeating groups of the
+	// standard header and trailer (e.g. FIXT 1.1 NoHops), which every
+	// message carries.
+	HeaderGroups  []GroupDef
+	TrailerGroups []GroupDef
 
 	headerSet    map[int]bool
 	headerReq    map[int]bool
@@ -251,6 +256,7 @@ func resolve(xd *xmlDict) (*Dict, error) {
 		return nil, fmt.Errorf("dictionary: header: %w", err)
 	}
 	d.Header = header.all
+	d.HeaderGroups = header.groups
 	d.headerSet, d.headerReq = buildMaps(d.Header)
 
 	// 4. Flatten trailer.
@@ -259,6 +265,7 @@ func resolve(xd *xmlDict) (*Dict, error) {
 		return nil, fmt.Errorf("dictionary: trailer: %w", err)
 	}
 	d.Trailer = trailer.all
+	d.TrailerGroups = trailer.groups
 	d.trailerSet, d.trailerReq = buildMaps(d.Trailer)
 
 	// Tag occurrences in the header and trailer, which every message carries.

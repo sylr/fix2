@@ -1068,3 +1068,19 @@ func TestLoad_EnvelopeNotCopiedPerMessage(t *testing.T) {
 		t.Errorf("Load allocated %d MB", alloc>>20)
 	}
 }
+
+func TestLoad_HeaderGroups(t *testing.T) {
+	d, err := LoadFile("../cmd/fixgen/testdata/FIXT11.xml")
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if len(d.HeaderGroups) != 1 {
+		t.Fatalf("got %d header groups, want 1", len(d.HeaderGroups))
+	}
+	if g := d.HeaderGroups[0]; g.Name != "NoHops" || g.CounterTag != 627 || g.DelimTag != 628 {
+		t.Errorf("header group = %s counter %d delim %d, want NoHops 627 628", g.Name, g.CounterTag, g.DelimTag)
+	}
+	if len(d.TrailerGroups) != 0 {
+		t.Errorf("got %d trailer groups, want 0", len(d.TrailerGroups))
+	}
+}

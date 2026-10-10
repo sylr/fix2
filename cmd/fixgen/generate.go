@@ -45,7 +45,7 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 	}
 
 	// Merge group definitions across all messages and generate shared group files.
-	mergedGroups := mergeAllGroups(dict.Messages)
+	mergedGroups := mergeAllGroups(dict)
 	groupNames := make([]string, 0, len(mergedGroups))
 	for name := range mergedGroups {
 		groupNames = append(groupNames, name)
@@ -203,12 +203,14 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 // mergeAllGroups collects every group definition (at any nesting depth) from
 // all messages and produces a single merged GroupDef per unique group name.
 // Fields are unioned: delimiter first, then remaining tags sorted.
-func mergeAllGroups(messages map[string]*dictionary.MessageDef) map[string]dictionary.GroupDef {
+func mergeAllGroups(dict *dictionary.Dict) map[string]dictionary.GroupDef {
 	// Visit messages in MsgType order: the merged definitions, and so the
 	// generated code, must not depend on map iteration order.
 	byName := map[string][]dictionary.GroupDef{}
-	for _, mt := range slices.Sorted(maps.Keys(messages)) {
-		collectGroupDefsRecursive(messages[mt].Groups, byName)
+	collectGroupDefsRecursive(dict.HeaderGroups, byName)
+	collectGroupDefsRecursive(dict.TrailerGroups, byName)
+	for _, mt := range slices.Sorted(maps.Keys(dict.Messages)) {
+		collectGroupDefsRecursive(dict.Messages[mt].Groups, byName)
 	}
 	merged := make(map[string]dictionary.GroupDef, len(byName))
 	for _, defs := range byName {
@@ -401,12 +403,16 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 
 	name := md.Name
 
+	// The message's groups, including those of the standard header and
+	// trailer that every message carries.
+	groups := slices.Concat(dict.HeaderGroups, md.Groups, dict.TrailerGroups)
+
 	// Build sets of group child tags and counter tags from this message's groups.
 	// Use the message's own definitions (not merged) so we only exclude fields
 	// that actually belong to groups in THIS message.
 	groupChildTags := map[int]bool{}
 	counterTags := map[int]bool{}
-	collectGroupTags(md.Groups, groupChildTags, counterTags, false)
+	collectGroupTags(groups, groupChildTags, counterTags, false)
 
 	// Collect fields for this message: header fields + message fields, skip structural.
 	type fieldInfo struct {
@@ -466,7 +472,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	// --- Group iteration methods on message reader ---
 	// Specs come from this message's own group definitions: the same group
 	// can hold different fields in other messages.
-	for _, gd := range md.Groups {
+	for _, gd := range groups {
 		v := unexport(name) + gd.Name + "Spec"
 		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd))
 		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v))
@@ -477,7 +483,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	builderFields := []jen.Code{
 		jen.Op("*").Qual(fix2Pkg, "Builder"),
 	}
-	for _, gd := range md.Groups {
+	for _, gd := range groups {
 		builderFields = append(builderFields,
 			jen.Id(unexport(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"),
 		)
@@ -492,11 +498,11 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 			jen.Id("Builder"): jen.Qual(fix2Pkg, "NewBuilder").Call(jen.Id("beginString"), jen.Lit(md.MsgType)),
 		}),
 	}
-	if len(md.Groups) > 0 {
+	if len(groups) > 0 {
 		// Every Build call, including the embedded Builder's at the end of
 		// a fluent chain, serializes the groups.
 		args := []jen.Code{jen.Id("b").Dot("appendGroups")}
-		for _, gd := range md.Groups {
+		for _, gd := range groups {
 			args = append(args, tagID(gd.Name))
 		}
 		ctor = append(ctor, jen.Id("b").Dot("SetGroups").Call(args...))
@@ -519,15 +525,15 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	}
 
 	// --- Group Add methods on message builder ---
-	for _, gd := range md.Groups {
+	for _, gd := range groups {
 		mg := mergedGroups[gd.Name]
 		writeGroupAddMethod(f, dict, builderName, mg)
 	}
 
 	// --- appendGroups: registered with SetGroups by the constructor ---
-	if len(md.Groups) > 0 {
+	if len(groups) > 0 {
 		var body []jen.Code
-		for _, gd := range md.Groups {
+		for _, gd := range groups {
 			name := gd.Name
 			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
 		}

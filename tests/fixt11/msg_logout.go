@@ -138,26 +138,6 @@ func (m *Logout) NoHops() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Logout) HopCompID() (string, bool) {
-	v := m.msg.Get(TagHopCompID)
-	return string(v), v != nil
-}
-func (m *Logout) HopSendingTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagHopSendingTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *Logout) HopRefID() (int, bool, error) {
-	v := m.msg.Get(TagHopRefID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *Logout) ApplVerID() (ApplVerID, bool) {
 	v := m.msg.Get(TagApplVerID)
 	return ApplVerID(v), v != nil
@@ -183,14 +163,38 @@ func (m *Logout) EncodedText() ([]byte, bool) {
 	return v, v != nil
 }
 
+var logoutNoHopsSpec = &fix2.GroupSpec{
+	Counter: TagNoHops,
+	Delim:   TagHopCompID,
+	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+}
+
+func (m *Logout) NoHopsEntries() []NoHopsEntry {
+	spec := logoutNoHopsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
+	entries := make([]NoHopsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoHopsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
+	}
+	return entries
+}
+
 // LogoutBuilder builds a Logout message. Use it through the pointer
 // BuildLogout returns: a copy would share its fields but not its groups.
 type LogoutBuilder struct {
 	*fix2.Builder
+	noHops []*NoHopsEntryBuilder
 }
 
 func BuildLogout(beginString string) *LogoutBuilder {
 	b := &LogoutBuilder{Builder: fix2.NewBuilder(beginString, "5")}
+	b.SetGroups(b.appendGroups, TagNoHops)
 	return b
 }
 func (b *LogoutBuilder) SetSenderCompID(v string) *LogoutBuilder {
@@ -289,26 +293,6 @@ func (b *LogoutBuilder) SetLastMsgSeqNumProcessed(v int) *LogoutBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *LogoutBuilder) SetNoHops(v int) *LogoutBuilder {
-	b.SetInt(TagNoHops, v)
-	return b
-}
-func (b *LogoutBuilder) SetHopCompID(v string) *LogoutBuilder {
-	b.SetString(TagHopCompID, v)
-	return b
-}
-func (b *LogoutBuilder) SetHopSendingTime(v time.Time) *LogoutBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *LogoutBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogoutBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(f))
-	return b
-}
-func (b *LogoutBuilder) SetHopRefID(v int) *LogoutBuilder {
-	b.SetInt(TagHopRefID, v)
-	return b
-}
 func (b *LogoutBuilder) SetApplVerID(v ApplVerID) *LogoutBuilder {
 	b.SetString(TagApplVerID, string(v))
 	return b
@@ -326,4 +310,22 @@ func (b *LogoutBuilder) SetText(v string) *LogoutBuilder {
 func (b *LogoutBuilder) SetEncodedText(v []byte) *LogoutBuilder {
 	b.SetData(TagEncodedTextLen, TagEncodedText, v)
 	return b
+}
+
+// AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
+func (b *LogoutBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogoutBuilder {
+	b.noHops = append(b.noHops, e)
+	return b
+}
+
+// appendGroups appends the message's repeating groups to dst.
+func (b *LogoutBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+	if len(b.noHops) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
+		for _, entry := range b.noHops {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }

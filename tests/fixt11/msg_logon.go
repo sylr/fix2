@@ -138,26 +138,6 @@ func (m *Logon) NoHops() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Logon) HopCompID() (string, bool) {
-	v := m.msg.Get(TagHopCompID)
-	return string(v), v != nil
-}
-func (m *Logon) HopSendingTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagHopSendingTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *Logon) HopRefID() (int, bool, error) {
-	v := m.msg.Get(TagHopRefID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *Logon) ApplVerID() (ApplVerID, bool) {
 	v := m.msg.Get(TagApplVerID)
 	return ApplVerID(v), v != nil
@@ -235,6 +215,28 @@ func (m *Logon) NoMsgTypes() (int, bool, error) {
 	return n, true, err
 }
 
+var logonNoHopsSpec = &fix2.GroupSpec{
+	Counter: TagNoHops,
+	Delim:   TagHopCompID,
+	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+}
+
+func (m *Logon) NoHopsEntries() []NoHopsEntry {
+	spec := logonNoHopsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
+	entries := make([]NoHopsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoHopsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
+	}
+	return entries
+}
+
 var logonNoMsgTypesSpec = &fix2.GroupSpec{
 	Counter: TagNoMsgTypes,
 	Delim:   TagRefMsgType,
@@ -261,12 +263,13 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 // BuildLogon returns: a copy would share its fields but not its groups.
 type LogonBuilder struct {
 	*fix2.Builder
+	noHops     []*NoHopsEntryBuilder
 	noMsgTypes []*NoMsgTypesEntryBuilder
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
 	b := &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
-	b.SetGroups(b.appendGroups, TagNoMsgTypes)
+	b.SetGroups(b.appendGroups, TagNoHops, TagNoMsgTypes)
 	return b
 }
 func (b *LogonBuilder) SetSenderCompID(v string) *LogonBuilder {
@@ -365,26 +368,6 @@ func (b *LogonBuilder) SetLastMsgSeqNumProcessed(v int) *LogonBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *LogonBuilder) SetNoHops(v int) *LogonBuilder {
-	b.SetInt(TagNoHops, v)
-	return b
-}
-func (b *LogonBuilder) SetHopCompID(v string) *LogonBuilder {
-	b.SetString(TagHopCompID, v)
-	return b
-}
-func (b *LogonBuilder) SetHopSendingTime(v time.Time) *LogonBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *LogonBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogonBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(f))
-	return b
-}
-func (b *LogonBuilder) SetHopRefID(v int) *LogonBuilder {
-	b.SetInt(TagHopRefID, v)
-	return b
-}
 func (b *LogonBuilder) SetApplVerID(v ApplVerID) *LogonBuilder {
 	b.SetString(TagApplVerID, string(v))
 	return b
@@ -436,6 +419,13 @@ func (b *LogonBuilder) SetDefaultApplVerID(v string) *LogonBuilder {
 	return b
 }
 
+// AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
+func (b *LogonBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogonBuilder {
+	b.noHops = append(b.noHops, e)
+	return b
+}
+
 // AddNoMsgTypesEntry adds an entry to the NoMsgTypes group. Entries are serialized
 // by Build, after the other fields, so later changes to e are included.
 func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuilder {
@@ -445,6 +435,12 @@ func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuild
 
 // appendGroups appends the message's repeating groups to dst.
 func (b *LogonBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+	if len(b.noHops) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
+		for _, entry := range b.noHops {
+			dst = entry.appendTo(dst)
+		}
+	}
 	if len(b.noMsgTypes) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypes))
 		for _, entry := range b.noMsgTypes {

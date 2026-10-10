@@ -138,26 +138,6 @@ func (m *Reject) NoHops() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Reject) HopCompID() (string, bool) {
-	v := m.msg.Get(TagHopCompID)
-	return string(v), v != nil
-}
-func (m *Reject) HopSendingTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagHopSendingTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *Reject) HopRefID() (int, bool, error) {
-	v := m.msg.Get(TagHopRefID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *Reject) ApplVerID() (ApplVerID, bool) {
 	v := m.msg.Get(TagApplVerID)
 	return ApplVerID(v), v != nil
@@ -207,14 +187,38 @@ func (m *Reject) EncodedText() ([]byte, bool) {
 	return v, v != nil
 }
 
+var rejectNoHopsSpec = &fix2.GroupSpec{
+	Counter: TagNoHops,
+	Delim:   TagHopCompID,
+	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+}
+
+func (m *Reject) NoHopsEntries() []NoHopsEntry {
+	spec := rejectNoHopsSpec
+	if spec == nil {
+		return nil
+	}
+	groups := m.msg.GroupsOf(spec)
+	entries := make([]NoHopsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoHopsEntry{
+			grp:  groups[i],
+			spec: spec,
+		}
+	}
+	return entries
+}
+
 // RejectBuilder builds a Reject message. Use it through the pointer
 // BuildReject returns: a copy would share its fields but not its groups.
 type RejectBuilder struct {
 	*fix2.Builder
+	noHops []*NoHopsEntryBuilder
 }
 
 func BuildReject(beginString string) *RejectBuilder {
 	b := &RejectBuilder{Builder: fix2.NewBuilder(beginString, "3")}
+	b.SetGroups(b.appendGroups, TagNoHops)
 	return b
 }
 func (b *RejectBuilder) SetSenderCompID(v string) *RejectBuilder {
@@ -313,26 +317,6 @@ func (b *RejectBuilder) SetLastMsgSeqNumProcessed(v int) *RejectBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *RejectBuilder) SetNoHops(v int) *RejectBuilder {
-	b.SetInt(TagNoHops, v)
-	return b
-}
-func (b *RejectBuilder) SetHopCompID(v string) *RejectBuilder {
-	b.SetString(TagHopCompID, v)
-	return b
-}
-func (b *RejectBuilder) SetHopSendingTime(v time.Time) *RejectBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *RejectBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *RejectBuilder {
-	b.SetString(TagHopSendingTime, v.UTC().Format(f))
-	return b
-}
-func (b *RejectBuilder) SetHopRefID(v int) *RejectBuilder {
-	b.SetInt(TagHopRefID, v)
-	return b
-}
 func (b *RejectBuilder) SetApplVerID(v ApplVerID) *RejectBuilder {
 	b.SetString(TagApplVerID, string(v))
 	return b
@@ -366,4 +350,22 @@ func (b *RejectBuilder) SetText(v string) *RejectBuilder {
 func (b *RejectBuilder) SetEncodedText(v []byte) *RejectBuilder {
 	b.SetData(TagEncodedTextLen, TagEncodedText, v)
 	return b
+}
+
+// AddNoHopsEntry adds an entry to the NoHops group. Entries are serialized
+// by Build, after the other fields, so later changes to e are included.
+func (b *RejectBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *RejectBuilder {
+	b.noHops = append(b.noHops, e)
+	return b
+}
+
+// appendGroups appends the message's repeating groups to dst.
+func (b *RejectBuilder) appendGroups(dst []fix2.Field) []fix2.Field {
+	if len(b.noHops) > 0 {
+		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
+		for _, entry := range b.noHops {
+			dst = entry.appendTo(dst)
+		}
+	}
+	return dst
 }
