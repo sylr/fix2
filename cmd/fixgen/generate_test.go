@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -747,4 +749,54 @@ func TestPerMessageSpec(t *testing.T) {
 	}
 }
 `)
+}
+
+func TestMergeLayouts(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		layouts [][]int
+		want    []int
+	}{
+		{"identical", [][]int{{1, 2, 3}, {1, 2, 3}}, []int{1, 2, 3}},
+		// B (5) only in the second layout goes where that layout puts it.
+		{"field only in a later layout", [][]int{{1, 2, 9}, {1, 5, 2, 9}}, []int{1, 5, 2, 9}},
+		{"subset", [][]int{{1, 2}, {1, 2, 3}}, []int{1, 2, 3}},
+		// Never ahead of the delimiter, even without a known predecessor.
+		{"no known predecessor", [][]int{{1, 2}, {7, 2}}, []int{1, 7, 2}},
+	} {
+		if got := mergeLayouts(tc.layouts); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: mergeLayouts = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestGenerateDeterministic generates the same dictionary twice: the output
+// must not depend on map iteration order.
+func TestGenerateDeterministic(t *testing.T) {
+	dict, err := dictionary.LoadFile("testdata/FIX50SP2.xml")
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	var outputs [2]map[string]string
+	for i := range outputs {
+		dir := t.TempDir()
+		if err := generate(dict, "fix50sp2", dir); err != nil {
+			t.Fatalf("generate: %v", err)
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs[i] = map[string]string{}
+		for _, e := range entries {
+			b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			outputs[i][e.Name()] = string(b)
+		}
+	}
+	if !maps.Equal(outputs[0], outputs[1]) {
+		t.Error("two generations of the same dictionary differ")
+	}
 }

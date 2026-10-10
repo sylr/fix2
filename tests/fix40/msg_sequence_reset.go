@@ -103,6 +103,8 @@ func (m *SequenceReset) NewSeqNo() (int, bool, error) {
 	return n, true, err
 }
 
+// SequenceResetBuilder builds a SequenceReset message. Use it through the pointer
+// BuildSequenceReset returns: a copy would share its fields but not its groups.
 type SequenceResetBuilder struct {
 	*fix2.Builder
 }

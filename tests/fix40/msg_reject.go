@@ -103,6 +103,8 @@ func (m *Reject) Text() (string, bool) {
 	return string(v), v != nil
 }
 
+// RejectBuilder builds a Reject message. Use it through the pointer
+// BuildReject returns: a copy would share its fields but not its groups.
 type RejectBuilder struct {
 	*fix2.Builder
 }

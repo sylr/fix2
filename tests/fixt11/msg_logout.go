@@ -183,6 +183,8 @@ func (m *Logout) EncodedText() ([]byte, bool) {
 	return v, v != nil
 }
 
+// LogoutBuilder builds a Logout message. Use it through the pointer
+// BuildLogout returns: a copy would share its fields but not its groups.
 type LogoutBuilder struct {
 	*fix2.Builder
 }

@@ -1637,6 +1637,8 @@ func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
 	return entries
 }
 
+// NewOrderSingleBuilder builds a NewOrderSingle message. Use it through the pointer
+// BuildNewOrderSingle returns: a copy would share its fields but not its groups.
 type NewOrderSingleBuilder struct {
 	*fix2.Builder
 	noPartyIDs           []*NoPartyIDsEntryBuilder

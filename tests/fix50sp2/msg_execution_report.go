@@ -2313,6 +2313,8 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 	return entries
 }
 
+// ExecutionReportBuilder builds a ExecutionReport message. Use it through the pointer
+// BuildExecutionReport returns: a copy would share its fields but not its groups.
 type ExecutionReportBuilder struct {
 	*fix2.Builder
 	noPartyIDs           []*NoPartyIDsEntryBuilder

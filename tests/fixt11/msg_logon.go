@@ -257,6 +257,8 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	return entries
 }
 
+// LogonBuilder builds a Logon message. Use it through the pointer
+// BuildLogon returns: a copy would share its fields but not its groups.
 type LogonBuilder struct {
 	*fix2.Builder
 	noMsgTypes []*NoMsgTypesEntryBuilder

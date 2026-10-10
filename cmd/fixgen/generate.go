@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -202,9 +204,11 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 // all messages and produces a single merged GroupDef per unique group name.
 // Fields are unioned: delimiter first, then remaining tags sorted.
 func mergeAllGroups(messages map[string]*dictionary.MessageDef) map[string]dictionary.GroupDef {
+	// Visit messages in MsgType order: the merged definitions, and so the
+	// generated code, must not depend on map iteration order.
 	byName := map[string][]dictionary.GroupDef{}
-	for _, md := range messages {
-		collectGroupDefsRecursive(md.Groups, byName)
+	for _, mt := range slices.Sorted(maps.Keys(messages)) {
+		collectGroupDefsRecursive(messages[mt].Groups, byName)
 	}
 	merged := make(map[string]dictionary.GroupDef, len(byName))
 	for _, defs := range byName {
@@ -255,16 +259,11 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 		mg.Fields = append(mg.Fields, dictionary.FieldRef{Tag: tag})
 	}
 
-	// Layout: the first definition's order, then tags only others have.
-	inLayout := map[int]bool{}
+	var layouts [][]int
 	for _, d := range defs {
-		for _, tag := range d.Layout {
-			if !inLayout[tag] {
-				inLayout[tag] = true
-				mg.Layout = append(mg.Layout, tag)
-			}
-		}
+		layouts = append(layouts, d.Layout)
 	}
+	mg.Layout = mergeLayouts(layouts)
 
 	// Union nested groups (recursively merge by name).
 	nestedByName := map[string][]dictionary.GroupDef{}
@@ -283,6 +282,31 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 	}
 
 	return mg
+}
+
+// mergeLayouts merges the entry layouts of a group defined in several
+// messages, keeping each layout's relative order where they agree: a tag
+// missing from the result is inserted right after the closest tag preceding
+// it in its own layout, and never ahead of the delimiter (every layout's
+// first tag).
+func mergeLayouts(layouts [][]int) []int {
+	var out []int
+	for _, layout := range layouts {
+		for i, tag := range layout {
+			if slices.Contains(out, tag) {
+				continue
+			}
+			pos := min(1, len(out)) // after the delimiter
+			for j := i - 1; j >= 0; j-- {
+				if k := slices.Index(out, layout[j]); k >= 0 {
+					pos = k + 1
+					break
+				}
+			}
+			out = slices.Insert(out, pos, tag)
+		}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +482,8 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 			jen.Id(unexport(gd.Name)).Index().Op("*").Id(gd.Name+"EntryBuilder"),
 		)
 	}
+	f.Comment(builderName + " builds a " + name + " message. Use it through the pointer")
+	f.Comment("Build" + name + " returns: a copy would share its fields but not its groups.")
 	f.Type().Id(builderName).Struct(builderFields...)
 
 	// Build constructor

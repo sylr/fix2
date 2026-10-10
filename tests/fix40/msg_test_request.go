@@ -95,6 +95,8 @@ func (m *TestRequest) TestReqID() (string, bool) {
 	return string(v), v != nil
 }
 
+// TestRequestBuilder builds a TestRequest message. Use it through the pointer
+// BuildTestRequest returns: a copy would share its fields but not its groups.
 type TestRequestBuilder struct {
 	*fix2.Builder
 }

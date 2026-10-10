@@ -275,6 +275,8 @@ func (m *NewOrderSingle) Text() (string, bool) {
 	return string(v), v != nil
 }
 
+// NewOrderSingleBuilder builds a NewOrderSingle message. Use it through the pointer
+// BuildNewOrderSingle returns: a copy would share its fields but not its groups.
 type NewOrderSingleBuilder struct {
 	*fix2.Builder
 }
