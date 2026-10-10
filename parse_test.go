@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"testing"
 	"testing/iotest"
 )
@@ -222,6 +223,36 @@ func TestChecksumBlock(t *testing.T) {
 	}
 	if got := checksumBlock(data); got != want {
 		t.Errorf("checksumBlock 35-byte = %d, want %d", got, want)
+	}
+}
+
+// TestChecksumBlockMatchesGeneric checks the (possibly SIMD) checksumBlock
+// against the scalar reference across chunk and accumulator-flush boundaries.
+func TestChecksumBlockMatchesGeneric(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	inputs := map[string][]byte{
+		"0xff":   bytes.Repeat([]byte{0xff}, 70000),
+		"random": make([]byte, 70000),
+	}
+	for i := range inputs["random"] {
+		inputs["random"][i] = byte(rng.Uint32())
+	}
+	lengths := []int{65535, 65536, 65537, 70000}
+	for n := 0; n <= 4200; n++ {
+		lengths = append(lengths, n)
+	}
+	for name, data := range inputs {
+		for _, n := range lengths {
+			// Odd offset to exercise unaligned loads.
+			off := 1
+			if n+off > len(data) {
+				off = 0
+			}
+			b := data[off : off+n]
+			if got, want := checksumBlock(b), checksumBlockGeneric(b); got != want {
+				t.Fatalf("%s len=%d: checksumBlock = %d, want %d", name, n, got, want)
+			}
+		}
 	}
 }
 

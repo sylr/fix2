@@ -45,7 +45,7 @@ func BenchmarkParse(b *testing.B) {
 }
 
 func BenchmarkFindByte(b *testing.B) {
-	for _, size := range []int{16, 64, 256, 1024} {
+	for _, size := range []int{16, 31, 64, 143, 256, 1024} {
 		data := make([]byte, size)
 		for i := range data {
 			data[i] = 'a'
@@ -61,7 +61,7 @@ func BenchmarkFindByte(b *testing.B) {
 }
 
 func BenchmarkChecksumBlock(b *testing.B) {
-	for _, size := range []int{16, 64, 256, 1024} {
+	for _, size := range []int{16, 31, 64, 143, 256, 1024} {
 		data := make([]byte, size)
 		for i := range data {
 			data[i] = byte(i)
