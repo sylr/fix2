@@ -20,10 +20,12 @@ import (
 //   - Enum values are checked against a 256-bit set of single-byte values,
 //     falling back to the dictionary's map for longer ones.
 
-// tagTable maps tags to entries with open addressing. Tags are hashed by
-// multiply-shift with a random odd multiplier per table, a universal family:
-// a dictionary cannot be crafted to make its tags collide and building its
-// tables quadratic.
+// tagTable maps tags to entries with open addressing and linear probing.
+// Tags are hashed by multiply-shift with a random odd multiplier per table,
+// which a dictionary cannot know: it cannot be crafted to make its tags
+// collide and building its tables quadratic. Multiply-shift is not enough
+// for constant expected probes on every key set, but structured sets cost at
+// most logarithmically many, and tables stay at most half full.
 type tagTable struct {
 	entries []tagEntry
 	shift   uint

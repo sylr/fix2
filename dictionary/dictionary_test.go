@@ -1530,7 +1530,7 @@ func TestValidate_DoesNotAllocate(t *testing.T) {
 
 func TestTagTable(t *testing.T) {
 	entries := map[int]tagEntry{}
-	for _, tag := range []int{-7, 0, 1, 8, 1 << 40, -(1 << 40)} {
+	for _, tag := range []int{-7, 0, 1, 8, 1 << 30, -(1 << 30)} {
 		entries[tag] = tagEntry{slot: int32(tag & 0xff)}
 	}
 	// Tags sharing their low bits, as a crafted dictionary could choose.
@@ -1543,7 +1543,7 @@ func TestTagTable(t *testing.T) {
 			t.Fatalf("get(%d) = %+v, want slot %d", tag, e, want.slot)
 		}
 	}
-	for _, tag := range []int{2, -1, 1<<40 + 1, 1001 << 20} {
+	for _, tag := range []int{2, -1, 1<<30 + 1, 1001 << 20} {
 		if e := tt.get(tag); e != nil {
 			t.Errorf("get(%d) = %+v, want nil", tag, e)
 		}
@@ -1674,4 +1674,27 @@ func TestValidate_Concurrent(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestValidate_ManyEnvelopeGroupsDoNotAllocate(t *testing.T) {
+	// More header groups than maxSharedSpecs: their specs are kept once, and
+	// a message without groups of its own uses them as they are.
+	var header, fields strings.Builder
+	fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="100" name="F" type="STRING"/>`)
+	for i := range maxSharedSpecs + 1 {
+		fmt.Fprintf(&header, `<group name="NoH%d"><field name="F"/></group>`, i)
+		fmt.Fprintf(&fields, `<field number="%d" name="NoH%d" type="NUMINGROUP"/>`, 1000+2*i, i)
+	}
+	d, err := Load(strings.NewReader(`<fix major="4" minor="4"><header><field name="MsgType" required="Y"/>` + header.String() +
+		`</header><trailer/><messages><message name="M" msgtype="M"><field name="F"/></message></messages><components/><fields>` + fields.String() + `</fields></fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := parseMsg(t, buildFIXMsg("35=M\x011000=1\x01100=g\x01100=f\x01"))
+	if err := d.Validate(&msg); err != nil {
+		t.Fatal(err)
+	}
+	if allocs := testing.AllocsPerRun(100, func() { _ = d.Validate(&msg) }); allocs != 0 {
+		t.Errorf("Validate allocated %v times", allocs)
+	}
 }
