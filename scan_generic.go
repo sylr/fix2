@@ -2,8 +2,8 @@
 
 package fix2
 
-// bulkChecksum reports whether the parsers checksum a message in one
-// checksumBlock call after parsing it rather than field by field as they go.
+// bulkChecksum reports whether the parsers checksum a message's body with
+// checksumBlock after parsing it rather than field by field as they go.
 // Without SIMD, summing field by field is as fast or faster.
 const bulkChecksum = false
 

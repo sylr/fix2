@@ -32,9 +32,9 @@ const MaxBodyLength = 1 << 20
 
 // Parse parses a FIX message from data. All field values are zero-copy slices
 // into data. The caller must not modify data while the returned Message is in use.
-// The checksum is computed incrementally during the single parsing pass; the
-// bytes are already L1-hot from findByte, so the scalar addition has near-zero
-// marginal cost.
+// With SIMD, the checksum is one vector sum over the message after parsing
+// it, while its bytes are in cache; otherwise it is summed field by field as
+// the parser goes (see bulkChecksum).
 func Parse(data []byte) (Message, error) {
 	var msg Message
 	msg.init()
@@ -188,8 +188,8 @@ func checksumRange(data []byte, from, to int) uint32 {
 // ParseFromReader reads a single FIX message from r and parses it.
 // It reads the header byte-by-byte to determine BodyLength without
 // over-reading, then uses io.ReadFull for the remaining body and trailer.
-// Parsing is done inline from the two buffers (header, rest) with
-// incremental checksum — no full-message buffer is assembled.
+// Parsing is done inline from the two buffers (header, rest), each
+// checksummed separately — no full-message buffer is assembled.
 func ParseFromReader(r io.Reader) (Message, error) {
 	// Read tags 8 and 9 (terminated by SOH each) byte by byte so we
 	// never consume bytes belonging to the next message on a stream.
