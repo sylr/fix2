@@ -61,8 +61,10 @@ func Parse(data []byte) (Message, error) {
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 	cursor = sohPos + 1
-	csum += checksumRange(data, csumPos, cursor)
-	csumPos = cursor
+	if !bulkChecksum {
+		csum += checksumRange(data, csumPos, cursor)
+		csumPos = cursor
+	}
 
 	// --- Tag 9: BodyLength ---
 	tag, eqPos, err := parseNextExpectedTag(data, cursor, tagBodyLenStr)
@@ -83,8 +85,10 @@ func Parse(data []byte) (Message, error) {
 	}
 	msg.append(Field{Tag: tagBodyLen, Value: bodyLenVal})
 	cursor = sohPos + 1
-	csum += checksumRange(data, csumPos, cursor)
-	csumPos = cursor
+	if !bulkChecksum {
+		csum += checksumRange(data, csumPos, cursor)
+		csumPos = cursor
+	}
 
 	// Compute body region. Compare by subtraction: bodyStart+bodyLen can
 	// overflow for a BodyLength close to MaxInt.
@@ -124,8 +128,10 @@ func Parse(data []byte) (Message, error) {
 		}
 		msg.append(Field{Tag: tag, Value: value})
 		cursor = sohPos + 1
-		csum += checksumRange(data, csumPos, cursor)
-		csumPos = cursor
+		if !bulkChecksum {
+			csum += checksumRange(data, csumPos, cursor)
+			csumPos = cursor
+		}
 	}
 	if next.tag != 0 {
 		return msg, next.missing(cursor)
@@ -158,7 +164,10 @@ func Parse(data []byte) (Message, error) {
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
 
-	// Validate checksum using incrementally accumulated sum.
+	// Validate the checksum, accumulated field by field or summed at once.
+	if bulkChecksum {
+		csum = checksumBlock(data[:bodyEnd])
+	}
 	computed := csum % 256
 	if int(computed) != expected {
 		return msg, &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(computed)), Offset: cursor}
@@ -283,7 +292,9 @@ func ParseFromReader(r io.Reader) (Message, error) {
 			}
 		}
 		msg.append(Field{Tag: tag, Value: value})
-		csum += checksumRange(rest, cursor, sohPos+1)
+		if !bulkChecksum {
+			csum += checksumRange(rest, cursor, sohPos+1)
+		}
 		cursor = sohPos + 1
 	}
 	if next.tag != 0 {
@@ -318,7 +329,11 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
 
-	// Validate checksum: sum of header + body, mod 256.
+	// Validate checksum: sum of header + body, mod 256, the body accumulated
+	// field by field or summed at once.
+	if bulkChecksum {
+		csum += checksumBlock(rest[:bodyLen])
+	}
 	if int(csum%256) != expected {
 		return msg, &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(csum%256)), Offset: len(header) + bodyLen}
 	}

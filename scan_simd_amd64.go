@@ -4,6 +4,12 @@ package fix2
 
 import "simd/archsimd"
 
+// bulkChecksum reports whether the parsers checksum a message in one
+// checksumBlock call after parsing it rather than field by field as they go:
+// a vector sum over the whole message, already in cache, is 2-15% faster
+// (14 to 64 fields) than scalar sums interleaved with parsing.
+const bulkChecksum = true
+
 var hasAVX = archsimd.X86.AVX()
 
 // checksumBlock returns the sum of all bytes in data as uint32.

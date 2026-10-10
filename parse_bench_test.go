@@ -30,7 +30,7 @@ func benchMsg(extraFields int) []byte {
 func BenchmarkParse(b *testing.B) {
 	for _, extra := range []int{0, 10, 50} {
 		raw := benchMsg(extra)
-		name := fmt.Sprintf("fields=%d", extra+4) // +4 for 8,9,35,10
+		name := fmt.Sprintf("fields=%d", extra+14) // 8, 9, the 11 body fields above and 10
 		b.Run(name, func(b *testing.B) {
 			b.SetBytes(int64(len(raw)))
 			b.ReportAllocs()
