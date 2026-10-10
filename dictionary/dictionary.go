@@ -211,6 +211,9 @@ func resolve(xd *xmlDict) (*Dict, error) {
 
 	// 1. Build Fields map and fieldsByName index.
 	for _, xf := range xd.Fields.Fields {
+		if err := checkName("field", xf.Name); err != nil {
+			return nil, fmt.Errorf("dictionary: %w", err)
+		}
 		fd := &FieldDef{
 			Tag:  xf.Number,
 			Name: xf.Name,
@@ -230,6 +233,9 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	compMap := make(map[string]*xmlComponent, len(xd.Components.Components))
 	for i := range xd.Components.Components {
 		c := &xd.Components.Components[i]
+		if err := checkName("component", c.Name); err != nil {
+			return nil, fmt.Errorf("dictionary: %w", err)
+		}
 		compMap[c.Name] = c
 	}
 
@@ -322,6 +328,19 @@ const maxVisits = 1_000_000
 // the chain of wrapped errors built while unwinding it, small. The deepest
 // nesting in the full FIX 5.0 SP2 dictionary is 11.
 const maxDepth = 64
+
+// maxNameLen bounds field, component and group names. Each reference costs
+// one visit but hashes its name for a map lookup, so long names would make
+// the visit budget meaningless. The longest standard FIX name has 38 bytes.
+const maxNameLen = 256
+
+// checkName rejects names longer than maxNameLen.
+func checkName(kind, name string) error {
+	if len(name) > maxNameLen {
+		return fmt.Errorf("%s name of %d bytes exceeds %d", kind, len(name), maxNameLen)
+	}
+	return nil
+}
 
 // spend charges n units of work against maxVisits.
 func (r *resolver) spend(n int) error {
@@ -425,6 +444,11 @@ func (r *resolver) resolve(items []xmlItem) (resolvedBody, error) {
 func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 	for _, it := range items {
 		if err := r.spend(1); err != nil {
+			return err
+		}
+		// Check before hashing it for a lookup: a visit costs the same
+		// whatever the name length.
+		if err := checkName(it.XMLName.Local, it.Name); err != nil {
 			return err
 		}
 		switch it.XMLName.Local {

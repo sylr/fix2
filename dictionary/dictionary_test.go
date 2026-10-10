@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -991,5 +992,60 @@ func TestResolver_ChargesBeforeRecording(t *testing.T) {
 	}
 	if len(b.conds[0].counts) != 0 || len(b.all) != 0 {
 		t.Errorf("work done before being charged: counts=%v all=%v", b.conds[0].counts, b.all)
+	}
+}
+
+func TestLoad_LongNames(t *testing.T) {
+	long := strings.Repeat("N", maxNameLen+1)
+	dict := func(fieldDef, compDef, ref string) string {
+		return fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="%s" required="N"/></message></messages>
+  <components><component name="%s"><field name="F" required="N"/></component></components>
+  <fields><field number="1" name="%s" type="STRING"/></fields>
+</fix>`, ref, compDef, fieldDef)
+	}
+	for name, xml := range map[string]string{
+		"field definition":     dict(long, "C", "C"),
+		"component definition": dict("F", long, long),
+		"component reference":  dict("F", "C", long),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "exceeds 256") {
+				t.Fatalf("expected name length error, got %v", err)
+			}
+		})
+	}
+	if err := loadWithin(t, dict("F", "C", "C")); err != nil {
+		t.Fatalf("short names: %v", err)
+	}
+}
+
+// TestLoad_EnvelopeNotCopiedPerMessage guards against per-message work
+// proportional to the header size: a 5,000-field header with 2,000 empty
+// messages must load without allocating per-message copies of the header.
+func TestLoad_EnvelopeNotCopiedPerMessage(t *testing.T) {
+	const headerFields, messages = 5_000, 2_000
+	var defs, header, msgs strings.Builder
+	for i := range headerFields {
+		fmt.Fprintf(&defs, `<field number="%d" name="H%d" type="STRING"/>`, 1000+i, i)
+		fmt.Fprintf(&header, `<field name="H%d" required="N"/>`, i)
+	}
+	for i := range messages {
+		fmt.Fprintf(&msgs, `<message name="M%d" msgtype="M%d" msgcat="app"/>`, i, i)
+	}
+	xml := fmt.Sprintf(`<fix type="FIX" major="4" minor="4"><header>%s</header><trailer/><messages>%s</messages><components/><fields>%s</fields></fix>`,
+		header.String(), msgs.String(), defs.String())
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if _, err := Load(strings.NewReader(xml)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	runtime.ReadMemStats(&after)
+	// Copying the 5,000-entry header counts for each of the 2,000 messages
+	// allocates hundreds of MB; without it Load needs a few MB.
+	if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 64<<20 {
+		t.Errorf("Load allocated %d MB", alloc>>20)
 	}
 }
