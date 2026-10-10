@@ -17,7 +17,7 @@ const dictPkg = "github.com/sylr/fix2/dictionary"
 const refsPerLine = 4
 
 // writeDictionary generates dictionary.go: Dictionary returns the dictionary
-// the package was generated from, as dictionary.Load reads it, so that
+// the package was generated from, as xmldict.Load reads it, so that
 // validating messages needs no XML at run time.
 func writeDictionary(dict *dictionary.Dict, pkg, outDir string) error {
 	f := jen.NewFile(pkg)
@@ -55,7 +55,7 @@ func writeDictionary(dict *dictionary.Dict, pkg, outDir string) error {
 	}
 
 	f.Comment("Dictionary returns the dictionary this package was generated from, as")
-	f.Comment("dictionary.Load reads it, for validating messages without the XML. It is built")
+	f.Comment("xmldict.Load reads it, for validating messages without the XML. It is built")
 	f.Comment("on first use and shared: it must not be changed.")
 	f.Var().Id("Dictionary").Op("=").Qual("sync", "OnceValue").Call(
 		jen.Func().Params().Op("*").Qual(dictPkg, "Dict").Block(

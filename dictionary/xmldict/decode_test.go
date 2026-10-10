@@ -1,4 +1,4 @@
-package dictionary
+package xmldict
 
 import (
 	"bytes"
@@ -42,7 +42,10 @@ func TestDecodeMatchesEncodingXML(t *testing.T) {
   <fields><field g:number="7" number="8" name="A" name="B"/></fields>
 </f:fix>`,
 	}
-	files, _ := filepath.Glob("../cmd/fixgen/testdata/*.xml")
+	files, _ := filepath.Glob("../../cmd/fixgen/testdata/*.xml")
+	if len(files) == 0 {
+		t.Fatal("no test dictionaries found")
+	}
 	for _, f := range files {
 		data, err := os.ReadFile(f)
 		if err != nil {

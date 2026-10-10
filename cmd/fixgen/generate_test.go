@@ -11,10 +11,11 @@ import (
 	"testing"
 
 	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/dictionary/xmldict"
 )
 
 func TestGenerate(t *testing.T) {
-	dict, err := dictionary.LoadFile("testdata/FIX44.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX44.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
@@ -322,7 +323,7 @@ func TestLookupType(t *testing.T) {
 }
 
 func TestGeneratedFileContents(t *testing.T) {
-	dict, err := dictionary.LoadFile("testdata/FIX44.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX44.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
@@ -457,7 +458,7 @@ func TestTimeParseAndFormat(t *testing.T) {
 }
 
 func TestGenerateRemovesStaleFiles(t *testing.T) {
-	dict, err := dictionary.LoadFile("testdata/FIX44.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX44.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
@@ -521,7 +522,7 @@ func TestTimeValue(t *testing.T) {
 }
 
 func TestGeneratedGroupSpecs(t *testing.T) {
-	dict, err := dictionary.LoadFile("testdata/FIX44.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX44.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
@@ -571,7 +572,7 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 // module, adds testCode as a test file and runs go test there.
 func runGenerated(t *testing.T, xml, pkg, testCode string) {
 	t.Helper()
-	dict, err := dictionary.Load(strings.NewReader(xml))
+	dict, err := xmldict.Load(strings.NewReader(xml))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -760,7 +761,7 @@ func TestPerMessageSpec(t *testing.T) {
 // TestGenerateDeterministic generates the same dictionary twice: the output
 // must not depend on map iteration order.
 func TestGenerateDeterministic(t *testing.T) {
-	dict, err := dictionary.LoadFile("testdata/FIX50SP2.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX50SP2.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
@@ -789,7 +790,7 @@ func TestGenerateDeterministic(t *testing.T) {
 }
 
 func TestPairDataLengths(t *testing.T) {
-	dict, err := dictionary.LoadFile("testdata/FIX50SP2.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX50SP2.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
@@ -993,7 +994,7 @@ func TestClash(t *testing.T) {
 func TestGenerateMethodClashErrors(t *testing.T) {
 	dict := func(fieldName string) *dictionary.Dict {
 		t.Helper()
-		d, err := dictionary.Load(strings.NewReader(fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+		d, err := xmldict.Load(strings.NewReader(fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
   <header/><trailer/>
   <messages><message name="M" msgtype="U1" msgcat="app">
     <field name="%s" required="N"/>
@@ -1023,7 +1024,7 @@ func TestGenerateMethodClashErrors(t *testing.T) {
 
 func TestGenerateRejectsUnnameable(t *testing.T) {
 	gen := func(xml string) error {
-		d, err := dictionary.Load(strings.NewReader(xml))
+		d, err := xmldict.Load(strings.NewReader(xml))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1089,7 +1090,7 @@ func TestPair(t *testing.T) {
 // generator must either produce compiling code or fail with an error.
 func TestGenerateClashCatchAll(t *testing.T) {
 	gen := func(msgs, fields string) error {
-		d, err := dictionary.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4"><header/><trailer/><messages>` + msgs + `</messages><components/><fields>` + fields + `</fields></fix>`))
+		d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4"><header/><trailer/><messages>` + msgs + `</messages><components/><fields>` + fields + `</fields></fix>`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1203,7 +1204,7 @@ func TestGenerateClashCases(t *testing.T) {
 		{"nested DATA delimiter", `<message name="M" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="A" required="N"/><group name="NoY" required="N"><field name="EncodedText" required="N"/></group></group></message>`,
 			field(5001, "NoX", "NUMINGROUP") + field(5002, "A", "STRING") + field(5003, "NoY", "NUMINGROUP") + field(354, "EncodedTextLen", "LENGTH") + field(355, "EncodedText", "DATA")},
 	} {
-		d, err := dictionary.Load(strings.NewReader(dict(tc.msgs, tc.fields)))
+		d, err := xmldict.Load(strings.NewReader(dict(tc.msgs, tc.fields)))
 		if err != nil {
 			t.Fatalf("%s: Load: %v", tc.name, err)
 		}
@@ -1609,7 +1610,7 @@ const dictionaryTestXML = `<fix type="FIXT" major="1" minor="1">
 </fix>`
 
 // TestGenerateDictionary checks that the generated Dictionary is the one
-// dictionary.Load reads from the same XML, and validates with it.
+// xmldict.Load reads from the same XML, and validates with it.
 func TestGenerateDictionary(t *testing.T) {
 	runGenerated(t, dictionaryTestXML, "gendict", `package gendict
 
@@ -1619,13 +1620,13 @@ import (
 	"testing"
 
 	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/dictionary/xmldict"
 )
 
 const xml = `+"`"+strings.ReplaceAll(dictionaryTestXML, "`", "")+"`"+`
 
 func TestDictionary(t *testing.T) {
-	want, err := dictionary.Load(strings.NewReader(xml))
+	want, err := xmldict.Load(strings.NewReader(xml))
 	if err != nil {
 		t.Fatal(err)
 	}

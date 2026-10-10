@@ -8,7 +8,7 @@ import (
 )
 
 // Dictionary returns the dictionary this package was generated from, as
-// dictionary.Load reads it, for validating messages without the XML. It is built
+// xmldict.Load reads it, for validating messages without the XML. It is built
 // on first use and shared: it must not be changed.
 var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 	return dictionary.New(&dictionary.Dict{

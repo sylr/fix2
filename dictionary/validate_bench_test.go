@@ -1,14 +1,15 @@
-package dictionary
+package dictionary_test
 
 import (
 	"strings"
 	"testing"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary/xmldict"
 )
 
 func BenchmarkValidate(b *testing.B) {
-	d, err := Load(strings.NewReader(testDictXML))
+	d, err := xmldict.Load(strings.NewReader(testDictXML))
 	if err != nil {
 		b.Fatal(err)
 	}

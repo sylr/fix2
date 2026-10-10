@@ -7,13 +7,14 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/dictionary/xmldict"
 )
 
 // This example parses FIX 4.0 NewOrderSingle messages and validates them
 // against a data dictionary: one valid order, one missing a required field and
 // one with an enum value the dictionary does not define.
 func ExampleDict_Validate() {
-	dict, err := dictionary.LoadFile("../cmd/fixgen/testdata/FIX40.xml")
+	dict, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX40.xml")
 	if err != nil {
 		log.Fatal(err)
 	}

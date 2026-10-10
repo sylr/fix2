@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/dictionary/xmldict"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	dict, err := dictionary.LoadFile(*dictPath)
+	dict, err := xmldict.LoadFile(*dictPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fixgen: %v\n", err)
 		os.Exit(1)

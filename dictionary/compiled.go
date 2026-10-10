@@ -9,7 +9,7 @@ import (
 	fix2 "github.com/sylr/fix2"
 )
 
-// Validate runs on tables compiled once by Load, so that validating a message
+// Validate runs on tables compiled once by New, so that validating a message
 // neither builds maps nor allocates:
 //
 //   - tagTable lookups tell whether a tag is allowed and which presence slot,
