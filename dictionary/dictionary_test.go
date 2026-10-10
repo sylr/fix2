@@ -576,13 +576,95 @@ func testExponentialExpansion(t *testing.T, c0 string) {
   <fields><field number="1" name="F" type="STRING"/></fields>
 </fix>`, depth, comps.String())
 
-	start := time.Now()
-	_, err := Load(strings.NewReader(xml))
-	if err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
 		t.Fatalf("expected expansion error, got %v", err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
-		t.Errorf("Load took %v, want it to stop early", d)
+}
+
+// loadWithin loads a dictionary and fails the test if Load does not return
+// within 10 seconds, so a resolver that hangs fails instead of timing out
+// the whole test binary.
+func loadWithin(t *testing.T, xml string) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := Load(strings.NewReader(xml))
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatal("Load did not return within 10s")
+		return nil
+	}
+}
+
+func TestLoad_DeepNesting(t *testing.T) {
+	// A linear chain of components: each Ci references C(i-1) once, ending in
+	// a field. It needs few visits but nests far beyond maxDepth.
+	chain := func(n int, leafField string) string {
+		var comps strings.Builder
+		fmt.Fprintf(&comps, `<component name="C0"><field name="%s" required="N"/></component>`, leafField)
+		for i := 1; i <= n; i++ {
+			fmt.Fprintf(&comps, `<component name="C%d"><component name="C%d" required="N"/></component>`, i, i-1)
+		}
+		return fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="N"/></message></messages>
+  <components>%s</components>
+  <fields><field number="1" name="F" type="STRING"/></fields>
+</fix>`, n, comps.String())
+	}
+	for name, xml := range map[string]string{
+		"known leaf":   chain(10_000, "F"),
+		"unknown leaf": chain(10_000, "Missing"), // error wrapping must not grow with depth
+		"at the limit": chain(maxDepth-1, "F"),   // C(n) ... C0 is n+1 component levels
+		"one past":     chain(maxDepth, "F"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := loadWithin(t, xml)
+			if name == "at the limit" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "nested deeper than") {
+				t.Fatalf("expected depth error, got %v", err)
+			}
+			if len(err.Error()) > 10_000 {
+				t.Errorf("error message is %d bytes long", len(err.Error()))
+			}
+		})
+	}
+}
+
+func TestLoad_NestedGroupCopiesCharged(t *testing.T) {
+	// C0 holds 40,000 fields and each Ci wraps C(i-1) in a group. Few items
+	// are visited, but every group level copies all its descendants into its
+	// parent: about 30 x 40,000 copied refs, above maxVisits.
+	const fields, levels = 40_000, 30
+	var defs, c0, comps strings.Builder
+	c0.WriteString(`<component name="C0">`)
+	for i := range fields {
+		fmt.Fprintf(&defs, `<field number="%d" name="F%d" type="STRING"/>`, 1000+i, i)
+		fmt.Fprintf(&c0, `<field name="F%d" required="N"/>`, i)
+	}
+	c0.WriteString(`</component>`)
+	for i := 1; i <= levels; i++ {
+		fmt.Fprintf(&defs, `<field number="%d" name="NoG%d" type="NUMINGROUP"/>`, 100+i, i)
+		fmt.Fprintf(&comps, `<component name="C%d"><group name="NoG%d" required="N"><component name="C%d" required="N"/></group></component>`, i, i, i-1)
+	}
+	xml := fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="N"/></message></messages>
+  <components>%s%s</components>
+  <fields>%s</fields>
+</fix>`, levels, c0.String(), comps.String(), defs.String())
+
+	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+		t.Fatalf("expected expansion error, got %v", err)
 	}
 }
 

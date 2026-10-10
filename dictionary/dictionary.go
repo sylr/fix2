@@ -261,7 +261,8 @@ type resolver struct {
 	byName   map[string]*FieldDef
 	compMap  map[string]*xmlComponent
 	visiting map[string]bool // components on the current path, for cycle detection
-	visits   int             // items (fields, groups, component refs) visited so far
+	visits   int             // items visited plus group refs copied, bounded by maxVisits
+	depth    int             // current component/group nesting, bounded by maxDepth
 }
 
 // maxVisits bounds the items (fields, groups and component references) the
@@ -271,6 +272,29 @@ type resolver struct {
 // Component references count too, so a chain of empty components is bounded
 // as well.
 const maxVisits = 1_000_000
+
+// maxDepth bounds component and group nesting. It keeps the recursion, and
+// the chain of wrapped errors built while unwinding it, small. The deepest
+// nesting in the full FIX 5.0 SP2 dictionary is 11.
+const maxDepth = 64
+
+// spend charges n units of work against maxVisits.
+func (r *resolver) spend(n int) error {
+	if r.visits += n; r.visits > maxVisits {
+		return fmt.Errorf("expansion exceeds %d items: components are referenced too many times", maxVisits)
+	}
+	return nil
+}
+
+// enter descends one component or group level; the caller must call leave.
+func (r *resolver) enter() error {
+	if r.depth++; r.depth > maxDepth {
+		return fmt.Errorf("components and groups nested deeper than %d levels", maxDepth)
+	}
+	return nil
+}
+
+func (r *resolver) leave() { r.depth-- }
 
 // resolvedBody is the resolved content of a header, trailer, message or group.
 type resolvedBody struct {
@@ -328,8 +352,8 @@ func (r *resolver) resolve(items []xmlItem) (resolvedBody, error) {
 // optional component being expanded, or -1 outside any.
 func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 	for _, it := range items {
-		if r.visits++; r.visits > maxVisits {
-			return fmt.Errorf("expansion exceeds %d items: components are referenced too many times", maxVisits)
+		if err := r.spend(1); err != nil {
+			return err
 		}
 		switch it.XMLName.Local {
 		case "field":
@@ -357,9 +381,13 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 				b.conds = append(b.conds, condition{component: it.Name, parent: ctx, tags: map[int]bool{}})
 				child = len(b.conds) - 1
 			}
+			if err := r.enter(); err != nil {
+				return err
+			}
 			r.visiting[it.Name] = true
 			err := r.walk(comp.Items, b, child)
 			delete(r.visiting, it.Name)
+			r.leave()
 			if err != nil {
 				return fmt.Errorf("component %s: %w", it.Name, err)
 			}
@@ -370,9 +398,18 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			if !ok {
 				return fmt.Errorf("unknown group field %q", it.Name)
 			}
+			if err := r.enter(); err != nil {
+				return err
+			}
 			inner, err := r.resolve(it.Items)
+			r.leave()
 			if err != nil {
 				return fmt.Errorf("group %s: %w", it.Name, err)
+			}
+			// The group's contents are copied into this body: charge them, or
+			// a chain of nested groups would do quadratic uncharged work.
+			if err := r.spend(len(inner.all)); err != nil {
+				return err
 			}
 			if inner.first == 0 {
 				return fmt.Errorf("group %s: no child fields", it.Name)
