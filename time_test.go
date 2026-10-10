@@ -98,6 +98,11 @@ func TestParseLeapSecond(t *testing.T) {
 		"20161231-23:59:60,500", // comma
 		"20161232-23:59:60",     // no such day
 		"20161231-23:59:6x",
+		"20161231-23:59:60.",              // empty fraction
+		"20161231-23:59:60.12x",           // bad fraction digit
+		"20161231-23:59:60.1234",          // 4 fraction digits
+		"20161231-23:59:60.12345678901x",  // bad picosecond digit
+		"20161231-23:59:60.1234567890123", // 13 fraction digits
 	} {
 		if got, err := ParseUTCTimestamp([]byte(in)); err == nil {
 			t.Errorf("ParseUTCTimestamp(%q) = %v, want error", in, got)

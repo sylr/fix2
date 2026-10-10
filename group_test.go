@@ -672,3 +672,40 @@ func TestWideSpecDoesNotAllocate(t *testing.T) {
 		t.Errorf("GetTopLevel allocated %v times", allocs)
 	}
 }
+
+func TestWideSpecScratchReuse(t *testing.T) {
+	// Entries touching 40 bitset words, read with specs of different widths
+	// in turn, so pooled scratches shrink and grow between uses.
+	spec := func(width int) *GroupSpec {
+		tags := make([]int, width)
+		for i := range tags {
+			tags[i] = 1000 + i
+		}
+		return &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
+	}
+	wide, narrower := spec(4000), spec(400)
+	pairs := []string{"1=3"}
+	for e := range 3 {
+		for i := range 40 {
+			pairs = append(pairs, fmt.Sprintf("%d=%d", 1000+i*64, e)) // one word each
+		}
+	}
+	m := fieldsMsg(t, pairs...)
+	for range 3 {
+		if got := m.GroupsOf(wide); len(got) != 3 || len(got[0].Fields()) != 40 {
+			t.Fatalf("wide: %v", entryTags(got))
+		}
+		// 1000+i*64 beyond the narrower spec's 400 tags ends each entry
+		// early: 7 fields each, then 2 more entries the count leaves unread.
+		if got := m.GroupsOf(narrower); len(got) != 1 || len(got[0].Fields()) != 7 {
+			t.Fatalf("narrower: %v", entryTags(got))
+		}
+	}
+	if raceEnabled {
+		return
+	}
+	want := testing.AllocsPerRun(100, func() { m.GroupsOf(&GroupSpec{Counter: 1, Delim: 1000, Tags: wide.Tags[:255]}) })
+	if allocs := testing.AllocsPerRun(100, func() { m.GroupsOf(wide) }); allocs > want {
+		t.Errorf("GroupsOf with 40 touched words allocated %v times, want at most %v", allocs, want)
+	}
+}
