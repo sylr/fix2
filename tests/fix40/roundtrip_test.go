@@ -50,3 +50,50 @@ func TestTimeAndDateRoundTrip(t *testing.T) {
 		t.Errorf("ExpireTime = (_, %v, %v), want absent", ok, err)
 	}
 }
+
+// TestTimeZones checks that DATE (a local market date) keeps the civil date it
+// is given in any time zone, while TIME (UTC) is converted to UTC.
+func TestTimeZones(t *testing.T) {
+	plus2 := time.FixedZone("UTC+2", 2*3600)
+	minus5 := time.FixedZone("UTC-5", -5*3600)
+
+	for _, tc := range []struct {
+		name     string
+		sending  time.Time
+		settle   time.Time
+		wantWire []string
+	}{
+		{
+			name:     "east of UTC",
+			sending:  time.Date(2023, 10, 1, 1, 0, 0, 0, plus2), // 2023-09-30 23:00 UTC
+			settle:   time.Date(2023, 10, 3, 0, 0, 0, 0, plus2), // still 2023-10-03 locally
+			wantWire: []string{"\x0152=20230930-23:00:00\x01", "\x0164=20231003\x01"},
+		},
+		{
+			name:     "west of UTC",
+			sending:  time.Date(2023, 10, 1, 20, 0, 0, 0, minus5), // 2023-10-02 01:00 UTC
+			settle:   time.Date(2023, 10, 3, 23, 0, 0, 0, minus5), // still 2023-10-03 locally
+			wantWire: []string{"\x0152=20231002-01:00:00\x01", "\x0164=20231003\x01"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Both the plain and WithFormat setters must behave the same.
+			for _, raw := range [][]byte{
+				BuildNewOrderSingle("FIX.4.0").
+					SetSendingTime(tc.sending).
+					SetFutSettDate(tc.settle).
+					Build(),
+				BuildNewOrderSingle("FIX.4.0").
+					SetSendingTimeWithFormat(tc.sending, fix2.TimeFormatTimestampSec).
+					SetFutSettDateWithFormat(tc.settle, fix2.TimeFormatDate).
+					Build(),
+			} {
+				for _, want := range tc.wantWire {
+					if !bytes.Contains(raw, []byte(want)) {
+						t.Errorf("message %q does not contain %q", raw, want)
+					}
+				}
+			}
+		})
+	}
+}

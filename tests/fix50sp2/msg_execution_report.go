@@ -2071,11 +2071,11 @@ func (b *ExecutionReportBuilder) SetLastRptRequested(v LastRptRequested) *Execut
 	return b
 }
 func (b *ExecutionReportBuilder) SetTradeOriginationDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagTradeOriginationDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagTradeOriginationDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetTradeOriginationDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagTradeOriginationDate, v.UTC().Format(f))
+	b.SetString(TagTradeOriginationDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetListID(v string) *ExecutionReportBuilder {
@@ -2151,11 +2151,11 @@ func (b *ExecutionReportBuilder) SetSettlType(v SettlType) *ExecutionReportBuild
 	return b
 }
 func (b *ExecutionReportBuilder) SetSettlDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagSettlDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagSettlDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetSettlDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagSettlDate, v.UTC().Format(f))
+	b.SetString(TagSettlDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetCashMargin(v CashMargin) *ExecutionReportBuilder {
@@ -2203,27 +2203,27 @@ func (b *ExecutionReportBuilder) SetMaturityMonthYear(v string) *ExecutionReport
 	return b
 }
 func (b *ExecutionReportBuilder) SetMaturityDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagMaturityDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagMaturityDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagMaturityDate, v.UTC().Format(f))
+	b.SetString(TagMaturityDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetCouponPaymentDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagCouponPaymentDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagCouponPaymentDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagCouponPaymentDate, v.UTC().Format(f))
+	b.SetString(TagCouponPaymentDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetIssueDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagIssueDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagIssueDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagIssueDate, v.UTC().Format(f))
+	b.SetString(TagIssueDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetRepoCollateralSecurityType(v int) *ExecutionReportBuilder {
@@ -2263,11 +2263,11 @@ func (b *ExecutionReportBuilder) SetLocaleOfIssue(v string) *ExecutionReportBuil
 	return b
 }
 func (b *ExecutionReportBuilder) SetRedemptionDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagRedemptionDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagRedemptionDate, v.UTC().Format(f))
+	b.SetString(TagRedemptionDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetStrikePrice(v float64) *ExecutionReportBuilder {
@@ -2335,19 +2335,19 @@ func (b *ExecutionReportBuilder) SetCPRegType(v string) *ExecutionReportBuilder 
 	return b
 }
 func (b *ExecutionReportBuilder) SetDatedDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagDatedDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagDatedDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetDatedDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagDatedDate, v.UTC().Format(f))
+	b.SetString(TagDatedDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetInterestAccrualDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagInterestAccrualDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagInterestAccrualDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetInterestAccrualDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagInterestAccrualDate, v.UTC().Format(f))
+	b.SetString(TagInterestAccrualDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetSecurityStatus(v SecurityStatus) *ExecutionReportBuilder {
@@ -2535,11 +2535,11 @@ func (b *ExecutionReportBuilder) SetAgreementID(v string) *ExecutionReportBuilde
 	return b
 }
 func (b *ExecutionReportBuilder) SetAgreementDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagAgreementDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagAgreementDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetAgreementDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagAgreementDate, v.UTC().Format(f))
+	b.SetString(TagAgreementDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetAgreementCurrency(v string) *ExecutionReportBuilder {
@@ -2551,19 +2551,19 @@ func (b *ExecutionReportBuilder) SetTerminationType(v TerminationType) *Executio
 	return b
 }
 func (b *ExecutionReportBuilder) SetStartDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagStartDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagStartDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetStartDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagStartDate, v.UTC().Format(f))
+	b.SetString(TagStartDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetEndDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagEndDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagEndDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetEndDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagEndDate, v.UTC().Format(f))
+	b.SetString(TagEndDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetDeliveryType(v DeliveryType) *ExecutionReportBuilder {
@@ -2739,11 +2739,11 @@ func (b *ExecutionReportBuilder) SetEffectiveTimeWithFormat(v time.Time, f fix2.
 	return b
 }
 func (b *ExecutionReportBuilder) SetExpireDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagExpireDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagExpireDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetExpireDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagExpireDate, v.UTC().Format(f))
+	b.SetString(TagExpireDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetExpireTime(v time.Time) *ExecutionReportBuilder {
@@ -2847,11 +2847,11 @@ func (b *ExecutionReportBuilder) SetGTBookingInst(v GTBookingInst) *ExecutionRep
 	return b
 }
 func (b *ExecutionReportBuilder) SetTradeDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagTradeDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagTradeDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetTradeDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagTradeDate, v.UTC().Format(f))
+	b.SetString(TagTradeDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetTransactTime(v time.Time) *ExecutionReportBuilder {
@@ -2923,19 +2923,19 @@ func (b *ExecutionReportBuilder) SetYield(v float64) *ExecutionReportBuilder {
 	return b
 }
 func (b *ExecutionReportBuilder) SetYieldCalcDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagYieldCalcDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagYieldCalcDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetYieldCalcDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagYieldCalcDate, v.UTC().Format(f))
+	b.SetString(TagYieldCalcDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetYieldRedemptionDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagYieldRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagYieldRedemptionDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetYieldRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagYieldRedemptionDate, v.UTC().Format(f))
+	b.SetString(TagYieldRedemptionDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetYieldRedemptionPrice(v float64) *ExecutionReportBuilder {
@@ -2955,11 +2955,11 @@ func (b *ExecutionReportBuilder) SetNumDaysInterest(v int) *ExecutionReportBuild
 	return b
 }
 func (b *ExecutionReportBuilder) SetExDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagExDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagExDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetExDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagExDate, v.UTC().Format(f))
+	b.SetString(TagExDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetAccruedInterestRate(v float64) *ExecutionReportBuilder {
@@ -2991,11 +2991,11 @@ func (b *ExecutionReportBuilder) SetTradedFlatSwitch(v TradedFlatSwitch) *Execut
 	return b
 }
 func (b *ExecutionReportBuilder) SetBasisFeatureDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagBasisFeatureDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagBasisFeatureDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetBasisFeatureDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagBasisFeatureDate, v.UTC().Format(f))
+	b.SetString(TagBasisFeatureDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetBasisFeaturePrice(v float64) *ExecutionReportBuilder {
@@ -3067,11 +3067,11 @@ func (b *ExecutionReportBuilder) SetEncodedText(v []byte) *ExecutionReportBuilde
 	return b
 }
 func (b *ExecutionReportBuilder) SetSettlDate2(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagSettlDate2, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagSettlDate2, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetSettlDate2WithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagSettlDate2, v.UTC().Format(f))
+	b.SetString(TagSettlDate2, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetOrderQty2(v float64) *ExecutionReportBuilder {

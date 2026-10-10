@@ -532,28 +532,28 @@ func (e *NoLegsEntryBuilder) SetLegSymbol(v string) *NoLegsEntryBuilder {
 func (e *NoLegsEntryBuilder) SetLegCouponPaymentDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegCouponPaymentDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegCouponPaymentDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegIssueDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegIssueDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegIssueDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -588,14 +588,14 @@ func (e *NoLegsEntryBuilder) SetLegFactor(v float64) *NoLegsEntryBuilder {
 func (e *NoLegsEntryBuilder) SetLegRedemptionDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegRedemptionDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegRedemptionDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -644,14 +644,14 @@ func (e *NoLegsEntryBuilder) SetLegSettlType(v string) *NoLegsEntryBuilder {
 func (e *NoLegsEntryBuilder) SetLegSettlDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegSettlDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSettlDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegSettlDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -735,14 +735,14 @@ func (e *NoLegsEntryBuilder) SetLegMaturityMonthYear(v string) *NoLegsEntryBuild
 func (e *NoLegsEntryBuilder) SetLegMaturityDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegMaturityDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegMaturityDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -882,14 +882,14 @@ func (e *NoLegsEntryBuilder) SetLegSwapType(v LegSwapType) *NoLegsEntryBuilder {
 func (e *NoLegsEntryBuilder) SetLegDatedDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegDatedDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegDatedDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegDatedDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -924,14 +924,14 @@ func (e *NoLegsEntryBuilder) SetLegContractSettlMonth(v string) *NoLegsEntryBuil
 func (e *NoLegsEntryBuilder) SetLegInterestAccrualDate(v time.Time) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegInterestAccrualDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegInterestAccrualDateWithFormat(v time.Time, f fix2.TimeFormat) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegInterestAccrualDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }

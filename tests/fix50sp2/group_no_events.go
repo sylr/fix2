@@ -64,14 +64,14 @@ func (e *NoEventsEntryBuilder) SetEventType(v EventType) *NoEventsEntryBuilder {
 func (e *NoEventsEntryBuilder) SetEventDate(v time.Time) *NoEventsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagEventDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventDateWithFormat(v time.Time, f fix2.TimeFormat) *NoEventsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagEventDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }

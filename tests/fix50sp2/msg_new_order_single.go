@@ -1466,19 +1466,19 @@ func (b *NewOrderSingleBuilder) SetClOrdLinkID(v string) *NewOrderSingleBuilder 
 	return b
 }
 func (b *NewOrderSingleBuilder) SetTradeOriginationDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagTradeOriginationDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagTradeOriginationDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetTradeOriginationDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagTradeOriginationDate, v.UTC().Format(f))
+	b.SetString(TagTradeOriginationDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetTradeDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagTradeDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagTradeDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetTradeDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagTradeDate, v.UTC().Format(f))
+	b.SetString(TagTradeDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetAccount(v string) *NewOrderSingleBuilder {
@@ -1514,11 +1514,11 @@ func (b *NewOrderSingleBuilder) SetSettlType(v SettlType) *NewOrderSingleBuilder
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSettlDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagSettlDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagSettlDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSettlDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagSettlDate, v.UTC().Format(f))
+	b.SetString(TagSettlDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetCashMargin(v CashMargin) *NewOrderSingleBuilder {
@@ -1590,27 +1590,27 @@ func (b *NewOrderSingleBuilder) SetMaturityMonthYear(v string) *NewOrderSingleBu
 	return b
 }
 func (b *NewOrderSingleBuilder) SetMaturityDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagMaturityDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagMaturityDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagMaturityDate, v.UTC().Format(f))
+	b.SetString(TagMaturityDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetCouponPaymentDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagCouponPaymentDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagCouponPaymentDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagCouponPaymentDate, v.UTC().Format(f))
+	b.SetString(TagCouponPaymentDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetIssueDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagIssueDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagIssueDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagIssueDate, v.UTC().Format(f))
+	b.SetString(TagIssueDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetRepoCollateralSecurityType(v int) *NewOrderSingleBuilder {
@@ -1650,11 +1650,11 @@ func (b *NewOrderSingleBuilder) SetLocaleOfIssue(v string) *NewOrderSingleBuilde
 	return b
 }
 func (b *NewOrderSingleBuilder) SetRedemptionDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagRedemptionDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagRedemptionDate, v.UTC().Format(f))
+	b.SetString(TagRedemptionDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetStrikePrice(v float64) *NewOrderSingleBuilder {
@@ -1722,19 +1722,19 @@ func (b *NewOrderSingleBuilder) SetCPRegType(v string) *NewOrderSingleBuilder {
 	return b
 }
 func (b *NewOrderSingleBuilder) SetDatedDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagDatedDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagDatedDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetDatedDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagDatedDate, v.UTC().Format(f))
+	b.SetString(TagDatedDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetInterestAccrualDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagInterestAccrualDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagInterestAccrualDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetInterestAccrualDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagInterestAccrualDate, v.UTC().Format(f))
+	b.SetString(TagInterestAccrualDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSecurityStatus(v SecurityStatus) *NewOrderSingleBuilder {
@@ -1922,11 +1922,11 @@ func (b *NewOrderSingleBuilder) SetAgreementID(v string) *NewOrderSingleBuilder 
 	return b
 }
 func (b *NewOrderSingleBuilder) SetAgreementDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagAgreementDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagAgreementDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetAgreementDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagAgreementDate, v.UTC().Format(f))
+	b.SetString(TagAgreementDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetAgreementCurrency(v string) *NewOrderSingleBuilder {
@@ -1938,19 +1938,19 @@ func (b *NewOrderSingleBuilder) SetTerminationType(v TerminationType) *NewOrderS
 	return b
 }
 func (b *NewOrderSingleBuilder) SetStartDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagStartDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagStartDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetStartDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagStartDate, v.UTC().Format(f))
+	b.SetString(TagStartDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetEndDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagEndDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagEndDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetEndDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagEndDate, v.UTC().Format(f))
+	b.SetString(TagEndDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetDeliveryType(v DeliveryType) *NewOrderSingleBuilder {
@@ -2062,19 +2062,19 @@ func (b *NewOrderSingleBuilder) SetYield(v float64) *NewOrderSingleBuilder {
 	return b
 }
 func (b *NewOrderSingleBuilder) SetYieldCalcDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagYieldCalcDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagYieldCalcDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetYieldCalcDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagYieldCalcDate, v.UTC().Format(f))
+	b.SetString(TagYieldCalcDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetYieldRedemptionDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagYieldRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagYieldRedemptionDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetYieldRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagYieldRedemptionDate, v.UTC().Format(f))
+	b.SetString(TagYieldRedemptionDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetYieldRedemptionPrice(v float64) *NewOrderSingleBuilder {
@@ -2118,11 +2118,11 @@ func (b *NewOrderSingleBuilder) SetEffectiveTimeWithFormat(v time.Time, f fix2.T
 	return b
 }
 func (b *NewOrderSingleBuilder) SetExpireDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagExpireDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagExpireDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetExpireDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagExpireDate, v.UTC().Format(f))
+	b.SetString(TagExpireDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetExpireTime(v time.Time) *NewOrderSingleBuilder {
@@ -2190,11 +2190,11 @@ func (b *NewOrderSingleBuilder) SetEncodedText(v []byte) *NewOrderSingleBuilder 
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSettlDate2(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagSettlDate2, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagSettlDate2, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSettlDate2WithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagSettlDate2, v.UTC().Format(f))
+	b.SetString(TagSettlDate2, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetOrderQty2(v float64) *NewOrderSingleBuilder {

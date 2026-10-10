@@ -371,11 +371,11 @@ func (b *NewOrderSingleBuilder) SetSettlmntTyp(v SettlmntTyp) *NewOrderSingleBui
 	return b
 }
 func (b *NewOrderSingleBuilder) SetFutSettDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagFutSettDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagFutSettDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetFutSettDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagFutSettDate, v.UTC().Format(f))
+	b.SetString(TagFutSettDate, v.Format(f))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetHandlInst(v HandlInst) *NewOrderSingleBuilder {

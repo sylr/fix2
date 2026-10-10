@@ -661,7 +661,7 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Qual("time", "Time"),
 		).Op("*").Id(entryBuilderName).Block(
-			appendField(jen.Index().Byte().Call(jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Qual(fix2Pkg, fmtConst)))),
+			appendField(jen.Index().Byte().Call(timeValue(fixType).Dot("Format").Call(jen.Qual(fix2Pkg, fmtConst)))),
 			jen.Return(jen.Id("e")),
 		)
 		// Set*2 variant accepting a TimeFormat.
@@ -669,7 +669,7 @@ func addEntryBuilderSetter(f *jen.File, entryBuilderName string, tag int, fieldN
 			jen.Id("v").Qual("time", "Time"),
 			jen.Id("f").Qual(fix2Pkg, "TimeFormat"),
 		).Op("*").Id(entryBuilderName).Block(
-			appendField(jen.Index().Byte().Call(jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Id("f")))),
+			appendField(jen.Index().Byte().Call(timeValue(fixType).Dot("Format").Call(jen.Id("f")))),
 			jen.Return(jen.Id("e")),
 		)
 
@@ -883,7 +883,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 		f.Func().Params(recv).Id("Set"+fieldName).Params(
 			jen.Id("v").Qual("time", "Time"),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Qual(fix2Pkg, fmtConst))),
+			jen.Id("b").Dot("SetString").Call(tid, timeValue(fixType).Dot("Format").Call(jen.Qual(fix2Pkg, fmtConst))),
 			jen.Return(jen.Id("b")),
 		)
 		// Set*2 variant accepting a TimeFormat.
@@ -891,7 +891,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 			jen.Id("v").Qual("time", "Time"),
 			jen.Id("f").Qual(fix2Pkg, "TimeFormat"),
 		).Op("*").Id(builderName).Block(
-			jen.Id("b").Dot("SetString").Call(tid, jen.Id("v").Dot("UTC").Call().Dot("Format").Call(jen.Id("f"))),
+			jen.Id("b").Dot("SetString").Call(tid, timeValue(fixType).Dot("Format").Call(jen.Id("f"))),
 			jen.Return(jen.Id("b")),
 		)
 
@@ -923,6 +923,21 @@ func timeParseFunc(fixType string) string {
 	default:
 		return "ParseUTCTimestamp"
 	}
+}
+
+// isLocalDate reports whether fixType is a local (market) date, whose civil
+// year/month/day must be written as given rather than converted to UTC.
+func isLocalDate(fixType string) bool {
+	return fixType == "LOCALMKTDATE" || fixType == "DATE"
+}
+
+// timeValue returns the expression a time setter formats: v as given for local
+// dates, v.UTC() for the UTC types.
+func timeValue(fixType string) *jen.Statement {
+	if isLocalDate(fixType) {
+		return jen.Id("v")
+	}
+	return jen.Id("v").Dot("UTC").Call()
 }
 
 func timeFormatConst(fixType string) string {

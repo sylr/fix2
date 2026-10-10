@@ -503,28 +503,28 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSymbol(v string) *NoUnderlyings
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponPaymentDate(v time.Time) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingCouponPaymentDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingCouponPaymentDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingIssueDate(v time.Time) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingIssueDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingIssueDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -559,14 +559,14 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFactor(v float64) *NoUnderlying
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRedemptionDate(v time.Time) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingRedemptionDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingRedemptionDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }
@@ -720,14 +720,14 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingCFICode(v string) *NoUnderlying
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingMaturityDate(v time.Time) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingMaturityDate,
-		Value: []byte(v.UTC().Format(fix2.TimeFormatDate)),
+		Value: []byte(v.Format(fix2.TimeFormatDate)),
 	})
 	return e
 }
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingMaturityDate,
-		Value: []byte(v.UTC().Format(f)),
+		Value: []byte(v.Format(f)),
 	})
 	return e
 }

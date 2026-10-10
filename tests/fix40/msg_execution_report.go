@@ -472,11 +472,11 @@ func (b *ExecutionReportBuilder) SetSettlmntTyp(v SettlmntTyp) *ExecutionReportB
 	return b
 }
 func (b *ExecutionReportBuilder) SetFutSettDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagFutSettDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagFutSettDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetFutSettDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagFutSettDate, v.UTC().Format(f))
+	b.SetString(TagFutSettDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetSymbol(v string) *ExecutionReportBuilder {
@@ -572,11 +572,11 @@ func (b *ExecutionReportBuilder) SetAvgPx(v float64) *ExecutionReportBuilder {
 	return b
 }
 func (b *ExecutionReportBuilder) SetTradeDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagTradeDate, v.UTC().Format(fix2.TimeFormatDate))
+	b.SetString(TagTradeDate, v.Format(fix2.TimeFormatDate))
 	return b
 }
 func (b *ExecutionReportBuilder) SetTradeDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagTradeDate, v.UTC().Format(f))
+	b.SetString(TagTradeDate, v.Format(f))
 	return b
 }
 func (b *ExecutionReportBuilder) SetTransactTime(v time.Time) *ExecutionReportBuilder {

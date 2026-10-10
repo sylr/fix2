@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -499,5 +500,20 @@ func TestGenerateRemovesStaleFiles(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(got), "// "+generatedHeader) || !strings.Contains(string(got), "func BuildHeartbeat") {
 		t.Errorf("msg_heartbeat.go was not regenerated:\n%s", got)
+	}
+}
+
+func TestTimeValue(t *testing.T) {
+	for fixType, want := range map[string]string{
+		"LOCALMKTDATE": "v",
+		"DATE":         "v",
+		"UTCTIMESTAMP": "v.UTC()",
+		"TIME":         "v.UTC()",
+		"UTCDATE":      "v.UTC()",
+		"UTCTIMEONLY":  "v.UTC()",
+	} {
+		if got := fmt.Sprintf("%#v", timeValue(fixType)); got != want {
+			t.Errorf("timeValue(%q) = %s, want %s", fixType, got, want)
+		}
 	}
 }
