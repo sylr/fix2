@@ -223,6 +223,7 @@ var logon_NoHops_spec = &fix2.GroupSpec{
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
+var logon_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
 func (m *Logon) NoHopsEntries() []NoHopsEntry {
 	spec := logon_NoHops_spec
@@ -245,6 +246,7 @@ var logon_NoMsgTypes_spec = &fix2.GroupSpec{
 	Delim:   TagRefMsgType,
 	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID},
 }
+var logon_NoMsgTypes_layout = &groupLayout{tags: []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}}
 
 func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	spec := logon_NoMsgTypes_spec
@@ -449,7 +451,7 @@ func (b *logon_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, logon_NoHops_layout)
 		}
 	}
 	return dst
@@ -460,7 +462,7 @@ func (b *logon_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noMsgTypesEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypesEntries))
 		for _, entry := range b.noMsgTypesEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, logon_NoMsgTypes_layout)
 		}
 	}
 	return dst

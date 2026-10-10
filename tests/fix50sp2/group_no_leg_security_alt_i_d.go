@@ -2,7 +2,10 @@
 
 package fix50sp2
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"slices"
+)
 
 type NoLegSecurityAltIDEntry struct {
 	grp  fix2.Group
@@ -34,15 +37,27 @@ func (e *NoLegSecurityAltIDEntryBuilder) SetLegSecurityAltIDSource(v string) *No
 	return e
 }
 
-// noLegSecurityAltID_layout lists the tags of a NoLegSecurityAltID entry in dictionary order.
-var noLegSecurityAltID_layout = []int{TagLegSecurityAltID, TagLegSecurityAltIDSource}
+// noLegSecurityAltID_layout is the layout of a NoLegSecurityAltID entry merged across messages, for
+// entries written without a message's own.
+var noLegSecurityAltID_layout = &groupLayout{tags: []int{TagLegSecurityAltID, TagLegSecurityAltIDSource}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoLegSecurityAltIDEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noLegSecurityAltID_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoLegSecurityAltIDEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noLegSecurityAltID_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noLegSecurityAltID_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

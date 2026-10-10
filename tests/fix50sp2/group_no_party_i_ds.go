@@ -2,7 +2,10 @@
 
 package fix50sp2
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"slices"
+)
 
 type NoPartyIDsEntry struct {
 	grp  fix2.Group
@@ -81,22 +84,42 @@ func (e *NoPartyIDsEntryBuilder) AddNoPartySubIDsEntry(ne *NoPartySubIDsEntryBui
 	return e
 }
 
-// noPartyIDs_layout lists the tags of a NoPartyIDs entry in dictionary order.
-var noPartyIDs_layout = []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagNoPartySubIDs}
+// noPartyIDs_layout is the layout of a NoPartyIDs entry merged across messages, for
+// entries written without a message's own.
+var noPartyIDs_layout = &groupLayout{tags: []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagNoPartySubIDs}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoPartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noPartyIDs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoPartyIDsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noPartyIDs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoPartySubIDs:
-			if len(e.noPartySubIDsEntries) > 0 {
+			if len(e.noPartySubIDsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoPartySubIDs, len(e.noPartySubIDsEntries))
 				for _, entry := range e.noPartySubIDsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoPartySubIDs])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noPartyIDs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoPartySubIDs) {
+			if len(e.noPartySubIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoPartySubIDs, len(e.noPartySubIDsEntries))
+				for _, entry := range e.noPartySubIDsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

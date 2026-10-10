@@ -159,6 +159,7 @@ var testRequest_NoHops_spec = &fix2.GroupSpec{
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
 }
+var testRequest_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
 func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
 	spec := testRequest_NoHops_spec
@@ -317,7 +318,7 @@ func (b *testRequest_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHopsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, testRequest_NoHops_layout)
 		}
 	}
 	return dst

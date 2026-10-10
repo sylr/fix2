@@ -5,6 +5,7 @@ package fix50sp2
 import (
 	"bytes"
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -834,36 +835,72 @@ func (e *NoUnderlyingsEntryBuilder) AddNoUndlyInstrumentPartiesEntry(ne *NoUndly
 	return e
 }
 
-// noUnderlyings_layout lists the tags of a NoUnderlyings entry in dictionary order.
-var noUnderlyings_layout = []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagNoUnderlyingSecurityAltID, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagNoUnderlyingStips, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagNoUndlyInstrumentParties, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint}
+// noUnderlyings_layout is the layout of a NoUnderlyings entry merged across messages, for
+// entries written without a message's own.
+var noUnderlyings_layout = &groupLayout{tags: []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagNoUnderlyingSecurityAltID, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagNoUnderlyingStips, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagNoUndlyInstrumentParties, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoUnderlyingsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noUnderlyings_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoUnderlyingsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noUnderlyings_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoUnderlyingSecurityAltID:
-			if len(e.noUnderlyingSecurityAltIDEntries) > 0 {
+			if len(e.noUnderlyingSecurityAltIDEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltIDEntries))
 				for _, entry := range e.noUnderlyingSecurityAltIDEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoUnderlyingSecurityAltID])
 				}
 			}
 		case TagNoUnderlyingStips:
-			if len(e.noUnderlyingStipsEntries) > 0 {
+			if len(e.noUnderlyingStipsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStipsEntries))
 				for _, entry := range e.noUnderlyingStipsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoUnderlyingStips])
 				}
 			}
 		case TagNoUndlyInstrumentParties:
-			if len(e.noUndlyInstrumentPartiesEntries) > 0 {
+			if len(e.noUndlyInstrumentPartiesEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentPartiesEntries))
 				for _, entry := range e.noUndlyInstrumentPartiesEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoUndlyInstrumentParties])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noUnderlyings_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoUnderlyingSecurityAltID) {
+			if len(e.noUnderlyingSecurityAltIDEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUnderlyingSecurityAltID, len(e.noUnderlyingSecurityAltIDEntries))
+				for _, entry := range e.noUnderlyingSecurityAltIDEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
+		}
+		if !slices.Contains(l.tags, TagNoUnderlyingStips) {
+			if len(e.noUnderlyingStipsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUnderlyingStips, len(e.noUnderlyingStipsEntries))
+				for _, entry := range e.noUnderlyingStipsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
+		}
+		if !slices.Contains(l.tags, TagNoUndlyInstrumentParties) {
+			if len(e.noUndlyInstrumentPartiesEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentParties, len(e.noUndlyInstrumentPartiesEntries))
+				for _, entry := range e.noUndlyInstrumentPartiesEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

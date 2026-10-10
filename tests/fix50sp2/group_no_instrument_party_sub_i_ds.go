@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -41,15 +42,27 @@ func (e *NoInstrumentPartySubIDsEntryBuilder) SetInstrumentPartySubIDType(v int)
 	return e
 }
 
-// noInstrumentPartySubIDs_layout lists the tags of a NoInstrumentPartySubIDs entry in dictionary order.
-var noInstrumentPartySubIDs_layout = []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType}
+// noInstrumentPartySubIDs_layout is the layout of a NoInstrumentPartySubIDs entry merged across messages, for
+// entries written without a message's own.
+var noInstrumentPartySubIDs_layout = &groupLayout{tags: []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoInstrumentPartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noInstrumentPartySubIDs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoInstrumentPartySubIDsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noInstrumentPartySubIDs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noInstrumentPartySubIDs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

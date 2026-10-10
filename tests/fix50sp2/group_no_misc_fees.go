@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -57,15 +58,27 @@ func (e *NoMiscFeesEntryBuilder) SetMiscFeeBasis(v MiscFeeBasis) *NoMiscFeesEntr
 	return e
 }
 
-// noMiscFees_layout lists the tags of a NoMiscFees entry in dictionary order.
-var noMiscFees_layout = []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType, TagMiscFeeBasis}
+// noMiscFees_layout is the layout of a NoMiscFees entry merged across messages, for
+// entries written without a message's own.
+var noMiscFees_layout = &groupLayout{tags: []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType, TagMiscFeeBasis}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoMiscFeesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noMiscFees_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoMiscFeesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noMiscFees_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noMiscFees_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

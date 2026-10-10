@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -88,22 +89,42 @@ func (e *NoNestedPartyIDsEntryBuilder) AddNoNestedPartySubIDsEntry(ne *NoNestedP
 	return e
 }
 
-// noNestedPartyIDs_layout lists the tags of a NoNestedPartyIDs entry in dictionary order.
-var noNestedPartyIDs_layout = []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartySubIDs}
+// noNestedPartyIDs_layout is the layout of a NoNestedPartyIDs entry merged across messages, for
+// entries written without a message's own.
+var noNestedPartyIDs_layout = &groupLayout{tags: []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartySubIDs}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoNestedPartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noNestedPartyIDs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoNestedPartyIDsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noNestedPartyIDs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoNestedPartySubIDs:
-			if len(e.noNestedPartySubIDsEntries) > 0 {
+			if len(e.noNestedPartySubIDsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoNestedPartySubIDs, len(e.noNestedPartySubIDsEntries))
 				for _, entry := range e.noNestedPartySubIDsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoNestedPartySubIDs])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noNestedPartyIDs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoNestedPartySubIDs) {
+			if len(e.noNestedPartySubIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNestedPartySubIDs, len(e.noNestedPartySubIDsEntries))
+				for _, entry := range e.noNestedPartySubIDsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

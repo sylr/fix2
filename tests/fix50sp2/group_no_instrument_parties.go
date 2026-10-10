@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -88,22 +89,42 @@ func (e *NoInstrumentPartiesEntryBuilder) AddNoInstrumentPartySubIDsEntry(ne *No
 	return e
 }
 
-// noInstrumentParties_layout lists the tags of a NoInstrumentParties entry in dictionary order.
-var noInstrumentParties_layout = []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole, TagNoInstrumentPartySubIDs}
+// noInstrumentParties_layout is the layout of a NoInstrumentParties entry merged across messages, for
+// entries written without a message's own.
+var noInstrumentParties_layout = &groupLayout{tags: []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole, TagNoInstrumentPartySubIDs}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noInstrumentParties_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noInstrumentParties_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoInstrumentPartySubIDs:
-			if len(e.noInstrumentPartySubIDsEntries) > 0 {
+			if len(e.noInstrumentPartySubIDsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoInstrumentPartySubIDs, len(e.noInstrumentPartySubIDsEntries))
 				for _, entry := range e.noInstrumentPartySubIDsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoInstrumentPartySubIDs])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noInstrumentParties_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoInstrumentPartySubIDs) {
+			if len(e.noInstrumentPartySubIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoInstrumentPartySubIDs, len(e.noInstrumentPartySubIDsEntries))
+				for _, entry := range e.noInstrumentPartySubIDsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

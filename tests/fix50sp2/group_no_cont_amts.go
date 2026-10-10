@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -49,15 +50,27 @@ func (e *NoContAmtsEntryBuilder) SetContAmtCurr(v string) *NoContAmtsEntryBuilde
 	return e
 }
 
-// noContAmts_layout lists the tags of a NoContAmts entry in dictionary order.
-var noContAmts_layout = []int{TagContAmtType, TagContAmtValue, TagContAmtCurr}
+// noContAmts_layout is the layout of a NoContAmts entry merged across messages, for
+// entries written without a message's own.
+var noContAmts_layout = &groupLayout{tags: []int{TagContAmtType, TagContAmtValue, TagContAmtCurr}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoContAmtsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noContAmts_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoContAmtsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noContAmts_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noContAmts_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

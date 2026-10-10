@@ -415,6 +415,16 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 	writeSectionVar("standardHeader", "standardHeader lists the standard header tags, written first.", dict.Header, dict.HeaderGroups)
 	writeSectionVar("standardTrailer", "standardTrailer lists the standard trailer tags, written last.", dict.Trailer, dict.TrailerGroups)
 
+	if len(dict.HeaderGroups)+len(dict.TrailerGroups) > 0 || slices.ContainsFunc(slices.Collect(maps.Values(dict.Messages)), func(md *dictionary.MessageDef) bool { return len(md.Groups) > 0 }) {
+		f.Comment("groupLayout is the order of a group entry's tags in one message's")
+		f.Comment("definition, with the layouts of its nested groups by counter tag: the same")
+		f.Comment("group can order its fields differently in other messages.")
+		f.Type().Id("groupLayout").Struct(
+			jen.Id("tags").Index().Int(),
+			jen.Id("nested").Map(jen.Int()).Op("*").Id("groupLayout"),
+		)
+	}
+
 	return f.Save(filepath.Join(outDir, "fields.go"))
 }
 
@@ -785,6 +795,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	for _, gd := range groups {
 		v := unexport(name) + "_" + gd.Name + "_spec"
 		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd))
+		f.Var().Id(unexport(name) + "_" + gd.Name + "_layout").Op("=").Add(layoutLiteral(dict, gd))
 		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v), jen.Id(specsVar))
 	}
 
@@ -869,7 +880,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		var body []jen.Code
 		for _, gd := range gs {
 			name := gd.Name
-			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(entriesField(name)) }, gd))
+			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(entriesField(name)) }, gd, jen.Id(unexport(md.Name)+"_"+name+"_layout")))
 		}
 		body = append(body, jen.Return(jen.Id("dst")))
 		f.Comment(doc)
@@ -1168,51 +1179,97 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 	)
 }
 
-// groupBlock returns the code appending a group's counter and entries to dst
-// when owner (an expression yielding the entry slice) is not empty.
-func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef) jen.Code {
-	return jen.If(jen.Len(owner()).Op(">").Lit(0)).Block(
-		jen.Id(dst).Op("=").Qual(fix2Pkg, "AppendCount").Call(jen.Id(dst), tagID(gd.Name), jen.Len(owner())),
-		jen.For(jen.List(jen.Id("_"), jen.Id("entry")).Op(":=").Range().Add(owner())).Block(
-			jen.Id(dst).Op("=").Id("entry").Dot("appendTo").Call(jen.Id(dst)),
-		),
-	)
+// groupBlock returns the code appending a group's counter and entries to dst,
+// laid out by layout (an expression yielding a *groupLayout, nil for the
+// merged one), when owner (an expression yielding the entry slice) is not
+// empty.
+func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef, layout jen.Code) jen.Code {
+	return jen.If(jen.Len(owner()).Op(">").Lit(0)).Block(groupWrite(dst, owner, gd, layout)...)
 }
 
-// writeEntryAppendTo generates the entry's layout variable and appendTo,
-// which serializes an entry in dictionary order: each layout tag is either
-// one of the entry's fields, written if set, or a nested group's counter,
-// written with the group's entries. The delimiter comes first; when it is a
-// nested group's counter, it is written even with no entries.
+// groupWrite returns the statements appending a group's counter, even zero,
+// and its entries to dst.
+func groupWrite(dst string, owner func() *jen.Statement, gd dictionary.GroupDef, layout jen.Code) []jen.Code {
+	return []jen.Code{
+		jen.Id(dst).Op("=").Qual(fix2Pkg, "AppendCount").Call(jen.Id(dst), tagID(gd.Name), jen.Len(owner())),
+		jen.For(jen.List(jen.Id("_"), jen.Id("entry")).Op(":=").Range().Add(owner())).Block(
+			jen.Id(dst).Op("=").Id("entry").Dot("appendTo").Call(jen.Id(dst), layout),
+		),
+	}
+}
+
+// layoutLiteral returns a *groupLayout literal for gd as one message defines
+// it: the entry's tags in its own order, LENGTH fields right before their
+// DATA fields, and its nested groups' layouts.
+func layoutLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
+	var tags []jen.Code
+	for _, tag := range pairDataLengths(dict, gd.Layout) {
+		tags = append(tags, tagID(dict.Fields[tag].Name))
+	}
+	values := jen.Dict{jen.Id("tags"): jen.Index().Int().Values(tags...)}
+	if len(gd.Groups) > 0 {
+		nested := jen.Dict{}
+		for _, child := range gd.Groups {
+			nested[tagID(child.Name)] = layoutLiteral(dict, child)
+		}
+		values[jen.Id("nested")] = jen.Map(jen.Int()).Op("*").Id("groupLayout").Values(nested)
+	}
+	return jen.Op("&").Id("groupLayout").Values(values)
+}
+
+// writeEntryAppendTo generates the entry's merged layout variable and
+// appendTo, which serializes an entry in the order of a message's layout:
+// each layout tag is either one of the entry's fields, written if set, or a
+// nested group's counter, written with the group's entries in their own
+// layout. The delimiter comes first; when it is a nested group's counter, it
+// is written even with no entries. Fields and nested groups the layout does
+// not list come after, so nothing set is dropped.
 func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName string, mg dictionary.GroupDef) {
 	layoutVar := unexport(mg.Name) + "_layout"
 	var tags []jen.Code
 	for _, tag := range pairDataLengths(dict, mg.Layout) {
 		tags = append(tags, tagID(dict.Fields[tag].Name))
 	}
-	f.Comment(layoutVar + " lists the tags of a " + mg.Name + " entry in dictionary order.")
-	f.Var().Id(layoutVar).Op("=").Index().Int().Values(tags...)
+	f.Comment(layoutVar + " is the layout of a " + mg.Name + " entry merged across messages, for")
+	f.Comment("entries written without a message's own.")
+	f.Var().Id(layoutVar).Op("=").Op("&").Id("groupLayout").Values(jen.Dict{jen.Id("tags"): jen.Index().Int().Values(tags...)})
 
-	var cases []jen.Code
+	var cases, extraGroups []jen.Code
 	for _, gd := range mg.Groups {
 		name := gd.Name
 		owner := func() *jen.Statement { return jen.Id("e").Dot(entriesField(name)) }
-		block := groupBlock("dst", owner, gd)
-		if gd.CounterTag == mg.DelimTag {
-			block = groupEntries("dst", owner, gd)
-		}
-		cases = append(cases, jen.Case(tagID(gd.Name)).Block(block))
+		nested := jen.Id("l").Dot("nested").Index(tagID(name))
+		cases = append(cases, jen.Case(tagID(name)).Block(
+			jen.If(jen.Len(owner()).Op(">").Lit(0).Op("||").Id("tag").Op("==").Id("l").Dot("tags").Index(jen.Lit(0))).Block(
+				groupWrite("dst", owner, gd, nested)...,
+			),
+		))
+		extraGroups = append(extraGroups, jen.If(jen.Op("!").Qual("slices", "Contains").Call(jen.Id("l").Dot("tags"), tagID(name))).Block(
+			groupBlock("dst", owner, gd, jen.Nil()),
+		))
 	}
 	cases = append(cases, jen.Default().Block(
 		jen.Id("dst").Op("=").Qual(fix2Pkg, "AppendField").Call(jen.Id("dst"), jen.Id("e").Dot("fields"), jen.Id("tag")),
 	))
-	f.Comment("appendTo appends the entry's fields to dst in dictionary order.")
+	extra := []jen.Code{
+		jen.For(jen.List(jen.Id("_"), jen.Id("fld")).Op(":=").Range().Id("e").Dot("fields")).Block(
+			jen.If(jen.Op("!").Qual("slices", "Contains").Call(jen.Id("l").Dot("tags"), jen.Id("fld").Dot("Tag"))).Block(
+				jen.Id("dst").Op("=").Append(jen.Id("dst"), jen.Id("fld")),
+			),
+		),
+	}
+	extra = append(extra, extraGroups...)
+	f.Comment("appendTo appends the entry's fields to dst in the order of l, the entry's")
+	f.Comment("layout in the message being built, or the merged layout if l is nil.")
 	f.Func().Params(jen.Id("e").Op("*").Id(entryBuilderName)).Id("appendTo").Params(
 		jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
+		jen.Id("l").Op("*").Id("groupLayout"),
 	).Index().Qual(fix2Pkg, "Field").Block(
-		jen.For(jen.List(jen.Id("_"), jen.Id("tag")).Op(":=").Range().Id(layoutVar)).Block(
+		jen.If(jen.Id("l").Op("==").Nil()).Block(jen.Id("l").Op("=").Id(layoutVar)),
+		jen.For(jen.List(jen.Id("_"), jen.Id("tag")).Op(":=").Range().Id("l").Dot("tags")).Block(
 			jen.Switch(jen.Id("tag")).Block(cases...),
 		),
+		jen.If(jen.Id("l").Op("!=").Id(layoutVar)).Block(extra...),
 		jen.Return(jen.Id("dst")),
 	)
 }
@@ -1244,17 +1301,6 @@ func pairDataLengths(dict *dictionary.Dict, layout []int) []int {
 		}
 	}
 	return out
-}
-
-// groupEntries returns the code appending a group's counter, even zero, and
-// its entries to dst.
-func groupEntries(dst string, owner func() *jen.Statement, gd dictionary.GroupDef) jen.Code {
-	return jen.Block(
-		jen.Id(dst).Op("=").Qual(fix2Pkg, "AppendCount").Call(jen.Id(dst), tagID(gd.Name), jen.Len(owner())),
-		jen.For(jen.List(jen.Id("_"), jen.Id("entry")).Op(":=").Range().Add(owner())).Block(
-			jen.Id(dst).Op("=").Id("entry").Dot("appendTo").Call(jen.Id(dst)),
-		),
-	)
 }
 
 // writeEntryGroupAddMethod generates an Add method for nested groups on an entry builder.

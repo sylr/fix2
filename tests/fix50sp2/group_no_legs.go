@@ -5,6 +5,7 @@ package fix50sp2
 import (
 	"bytes"
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -901,43 +902,87 @@ func (e *NoLegsEntryBuilder) AddNoNested3PartyIDsEntry(ne *NoNested3PartyIDsEntr
 	return e
 }
 
-// noLegs_layout lists the tags of a NoLegs entry in dictionary order.
-var noLegs_layout = []int{TagLegSymbol, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagNoLegSecurityAltID, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegSecuritySubType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegCreditRating, TagLegInstrRegistry, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegRedemptionDate, TagLegStrikePrice, TagLegStrikeCurrency, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegCurrency, TagLegPool, TagLegDatedDate, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegPrice, TagLegMaturityTime, TagLegPutOrCall, TagLegExerciseStyle, TagLegUnitOfMeasureQty, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType, TagLegQty, TagLegSwapType, TagNoLegStipulations, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegRefID, TagLegSettlType, TagLegSettlDate, TagLegLastPx, TagLegOrderQty, TagLegSettlCurrency, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagNoNested3PartyIDs, TagLegAllocID, TagNoLegAllocs, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty}
+// noLegs_layout is the layout of a NoLegs entry merged across messages, for
+// entries written without a message's own.
+var noLegs_layout = &groupLayout{tags: []int{TagLegSymbol, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagNoLegSecurityAltID, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegSecuritySubType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegCreditRating, TagLegInstrRegistry, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegRedemptionDate, TagLegStrikePrice, TagLegStrikeCurrency, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegCurrency, TagLegPool, TagLegDatedDate, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegPrice, TagLegMaturityTime, TagLegPutOrCall, TagLegExerciseStyle, TagLegUnitOfMeasureQty, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType, TagLegQty, TagLegSwapType, TagNoLegStipulations, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegRefID, TagLegSettlType, TagLegSettlDate, TagLegLastPx, TagLegOrderQty, TagLegSettlCurrency, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagNoNested3PartyIDs, TagLegAllocID, TagNoLegAllocs, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoLegsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noLegs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoLegsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noLegs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoLegAllocs:
-			if len(e.noLegAllocsEntries) > 0 {
+			if len(e.noLegAllocsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocsEntries))
 				for _, entry := range e.noLegAllocsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoLegAllocs])
 				}
 			}
 		case TagNoLegSecurityAltID:
-			if len(e.noLegSecurityAltIDEntries) > 0 {
+			if len(e.noLegSecurityAltIDEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltIDEntries))
 				for _, entry := range e.noLegSecurityAltIDEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoLegSecurityAltID])
 				}
 			}
 		case TagNoLegStipulations:
-			if len(e.noLegStipulationsEntries) > 0 {
+			if len(e.noLegStipulationsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulationsEntries))
 				for _, entry := range e.noLegStipulationsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoLegStipulations])
 				}
 			}
 		case TagNoNested3PartyIDs:
-			if len(e.noNested3PartyIDsEntries) > 0 {
+			if len(e.noNested3PartyIDsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDsEntries))
 				for _, entry := range e.noNested3PartyIDsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoNested3PartyIDs])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noLegs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoLegAllocs) {
+			if len(e.noLegAllocsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegAllocs, len(e.noLegAllocsEntries))
+				for _, entry := range e.noLegAllocsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
+		}
+		if !slices.Contains(l.tags, TagNoLegSecurityAltID) {
+			if len(e.noLegSecurityAltIDEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegSecurityAltID, len(e.noLegSecurityAltIDEntries))
+				for _, entry := range e.noLegSecurityAltIDEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
+		}
+		if !slices.Contains(l.tags, TagNoLegStipulations) {
+			if len(e.noLegStipulationsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoLegStipulations, len(e.noLegStipulationsEntries))
+				for _, entry := range e.noLegStipulationsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
+		}
+		if !slices.Contains(l.tags, TagNoNested3PartyIDs) {
+			if len(e.noNested3PartyIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested3PartyIDs, len(e.noNested3PartyIDsEntries))
+				for _, entry := range e.noNested3PartyIDsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

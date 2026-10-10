@@ -1360,6 +1360,10 @@ var newOrderSingle_NoPartyIDs_spec = &fix2.GroupSpec{
 	}},
 	Tags: []int{TagPartyID, TagPartyIDSource, TagPartyRole},
 }
+var newOrderSingle_NoPartyIDs_layout = &groupLayout{
+	nested: map[int]*groupLayout{TagNoPartySubIDs: &groupLayout{tags: []int{TagPartySubID, TagPartySubIDType}}},
+	tags:   []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagNoPartySubIDs},
+}
 
 func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
 	spec := newOrderSingle_NoPartyIDs_spec
@@ -1392,6 +1396,13 @@ var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{
 	}},
 	Tags: []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagAllocQty},
 }
+var newOrderSingle_NoAllocs_layout = &groupLayout{
+	nested: map[int]*groupLayout{TagNoNestedPartyIDs: &groupLayout{
+		nested: map[int]*groupLayout{TagNoNestedPartySubIDs: &groupLayout{tags: []int{TagNestedPartySubID, TagNestedPartySubIDType}}},
+		tags:   []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartySubIDs},
+	}},
+	tags: []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagNoNestedPartyIDs, TagAllocQty},
+}
 
 func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
 	spec := newOrderSingle_NoAllocs_spec
@@ -1414,6 +1425,7 @@ var newOrderSingle_NoTradingSessions_spec = &fix2.GroupSpec{
 	Delim:   TagTradingSessionID,
 	Tags:    []int{TagTradingSessionID, TagTradingSessionSubID},
 }
+var newOrderSingle_NoTradingSessions_layout = &groupLayout{tags: []int{TagTradingSessionID, TagTradingSessionSubID}}
 
 func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
 	spec := newOrderSingle_NoTradingSessions_spec
@@ -1436,6 +1448,7 @@ var newOrderSingle_NoSecurityAltID_spec = &fix2.GroupSpec{
 	Delim:   TagSecurityAltID,
 	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
 }
+var newOrderSingle_NoSecurityAltID_layout = &groupLayout{tags: []int{TagSecurityAltID, TagSecurityAltIDSource}}
 
 func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	spec := newOrderSingle_NoSecurityAltID_spec
@@ -1458,6 +1471,7 @@ var newOrderSingle_NoEvents_spec = &fix2.GroupSpec{
 	Delim:   TagEventType,
 	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
 }
+var newOrderSingle_NoEvents_layout = &groupLayout{tags: []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime}}
 
 func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
 	spec := newOrderSingle_NoEvents_spec
@@ -1484,6 +1498,10 @@ var newOrderSingle_NoInstrumentParties_spec = &fix2.GroupSpec{
 		Tags:    []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType},
 	}},
 	Tags: []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole},
+}
+var newOrderSingle_NoInstrumentParties_layout = &groupLayout{
+	nested: map[int]*groupLayout{TagNoInstrumentPartySubIDs: &groupLayout{tags: []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType}}},
+	tags:   []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole, TagNoInstrumentPartySubIDs},
 }
 
 func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
@@ -1516,6 +1534,13 @@ var newOrderSingle_NoComplexEvents_spec = &fix2.GroupSpec{
 		Tags: []int{TagComplexEventStartDate, TagComplexEventEndDate},
 	}},
 	Tags: []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition},
+}
+var newOrderSingle_NoComplexEvents_layout = &groupLayout{
+	nested: map[int]*groupLayout{TagNoComplexEventDates: &groupLayout{
+		nested: map[int]*groupLayout{TagNoComplexEventTimes: &groupLayout{tags: []int{TagComplexEventStartTime, TagComplexEventEndTime}}},
+		tags:   []int{TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes},
+	}},
+	tags: []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition, TagNoComplexEventDates},
 }
 
 func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
@@ -1557,6 +1582,17 @@ var newOrderSingle_NoUnderlyings_spec = &fix2.GroupSpec{
 	}},
 	Tags: []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
 }
+var newOrderSingle_NoUnderlyings_layout = &groupLayout{
+	nested: map[int]*groupLayout{
+		TagNoUnderlyingSecurityAltID: &groupLayout{tags: []int{TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource}},
+		TagNoUnderlyingStips:         &groupLayout{tags: []int{TagUnderlyingStipType, TagUnderlyingStipValue}},
+		TagNoUndlyInstrumentParties: &groupLayout{
+			nested: map[int]*groupLayout{TagNoUndlyInstrumentPartySubIDs: &groupLayout{tags: []int{TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType}}},
+			tags:   []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs},
+		},
+	},
+	tags: []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagNoUnderlyingSecurityAltID, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagNoUnderlyingStips, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagNoUndlyInstrumentParties, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
+}
 
 func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	spec := newOrderSingle_NoUnderlyings_spec
@@ -1579,6 +1615,7 @@ var newOrderSingle_NoStipulations_spec = &fix2.GroupSpec{
 	Delim:   TagStipulationType,
 	Tags:    []int{TagStipulationType, TagStipulationValue},
 }
+var newOrderSingle_NoStipulations_layout = &groupLayout{tags: []int{TagStipulationType, TagStipulationValue}}
 
 func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
 	spec := newOrderSingle_NoStipulations_spec
@@ -1601,6 +1638,7 @@ var newOrderSingle_NoStrategyParameters_spec = &fix2.GroupSpec{
 	Delim:   TagStrategyParameterName,
 	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
 }
+var newOrderSingle_NoStrategyParameters_layout = &groupLayout{tags: []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue}}
 
 func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEntry {
 	spec := newOrderSingle_NoStrategyParameters_spec
@@ -1623,6 +1661,7 @@ var newOrderSingle_NoTrdRegTimestamps_spec = &fix2.GroupSpec{
 	Delim:   TagTrdRegTimestamp,
 	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
 }
+var newOrderSingle_NoTrdRegTimestamps_layout = &groupLayout{tags: []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}}
 
 func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
 	spec := newOrderSingle_NoTrdRegTimestamps_spec
@@ -2749,67 +2788,67 @@ func (b *newOrderSingle_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDsEntries))
 		for _, entry := range b.noPartyIDsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoPartyIDs_layout)
 		}
 	}
 	if len(b.noAllocsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoAllocs, len(b.noAllocsEntries))
 		for _, entry := range b.noAllocsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoAllocs_layout)
 		}
 	}
 	if len(b.noTradingSessionsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoTradingSessions, len(b.noTradingSessionsEntries))
 		for _, entry := range b.noTradingSessionsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoTradingSessions_layout)
 		}
 	}
 	if len(b.noSecurityAltIDEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoSecurityAltID, len(b.noSecurityAltIDEntries))
 		for _, entry := range b.noSecurityAltIDEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoSecurityAltID_layout)
 		}
 	}
 	if len(b.noEventsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoEvents, len(b.noEventsEntries))
 		for _, entry := range b.noEventsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoEvents_layout)
 		}
 	}
 	if len(b.noInstrumentPartiesEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoInstrumentParties, len(b.noInstrumentPartiesEntries))
 		for _, entry := range b.noInstrumentPartiesEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoInstrumentParties_layout)
 		}
 	}
 	if len(b.noComplexEventsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoComplexEvents, len(b.noComplexEventsEntries))
 		for _, entry := range b.noComplexEventsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoComplexEvents_layout)
 		}
 	}
 	if len(b.noUnderlyingsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoUnderlyings, len(b.noUnderlyingsEntries))
 		for _, entry := range b.noUnderlyingsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoUnderlyings_layout)
 		}
 	}
 	if len(b.noStipulationsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoStipulations, len(b.noStipulationsEntries))
 		for _, entry := range b.noStipulationsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoStipulations_layout)
 		}
 	}
 	if len(b.noStrategyParametersEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoStrategyParameters, len(b.noStrategyParametersEntries))
 		for _, entry := range b.noStrategyParametersEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoStrategyParameters_layout)
 		}
 	}
 	if len(b.noTrdRegTimestampsEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoTrdRegTimestamps, len(b.noTrdRegTimestampsEntries))
 		for _, entry := range b.noTrdRegTimestampsEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, newOrderSingle_NoTrdRegTimestamps_layout)
 		}
 	}
 	return dst

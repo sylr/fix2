@@ -505,3 +505,17 @@ func TestGroupGetTopLevel(t *testing.T) {
 		t.Errorf("absent parent value = %q", got)
 	}
 }
+
+func TestScopedReadsDoNotAllocate(t *testing.T) {
+	child := &GroupSpec{Counter: 502, Delim: 102, Tags: []int{102, 101}}
+	parent := &GroupSpec{Counter: 501, Delim: 100, Tags: []int{100, 101}, Nested: []*GroupSpec{child}}
+	other := &GroupSpec{Counter: 900, Delim: 103, Tags: []int{103}, Nested: []*GroupSpec{parent}}
+	m := fieldsMsg(t, "900=1", "103=o", "501=1", "100=x", "501=1", "100=p", "502=1", "102=r", "101=child", "101=parent")
+	e := m.GroupsOf(parent, other)[0]
+	if allocs := testing.AllocsPerRun(100, func() { e.GetTopLevel(101, parent.Nested...) }); allocs != 0 {
+		t.Errorf("Group.GetTopLevel allocated %v times", allocs)
+	}
+	if allocs := testing.AllocsPerRun(100, func() { m.GroupsOf(parent, other) }); allocs > 1 {
+		t.Errorf("GroupsOf with others allocated %v times, want at most 1 (the result)", allocs)
+	}
+}

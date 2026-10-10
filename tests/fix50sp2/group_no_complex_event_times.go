@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"time"
 )
 
@@ -53,15 +54,27 @@ func (e *NoComplexEventTimesEntryBuilder) SetComplexEventEndTimeWithFormat(v tim
 	return e
 }
 
-// noComplexEventTimes_layout lists the tags of a NoComplexEventTimes entry in dictionary order.
-var noComplexEventTimes_layout = []int{TagComplexEventStartTime, TagComplexEventEndTime}
+// noComplexEventTimes_layout is the layout of a NoComplexEventTimes entry merged across messages, for
+// entries written without a message's own.
+var noComplexEventTimes_layout = &groupLayout{tags: []int{TagComplexEventStartTime, TagComplexEventEndTime}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoComplexEventTimesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noComplexEventTimes_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoComplexEventTimesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noComplexEventTimes_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noComplexEventTimes_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -108,22 +109,42 @@ func (e *NoAllocsEntryBuilder) AddNoNestedPartyIDsEntry(ne *NoNestedPartyIDsEntr
 	return e
 }
 
-// noAllocs_layout lists the tags of a NoAllocs entry in dictionary order.
-var noAllocs_layout = []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagNoNestedPartyIDs, TagAllocQty}
+// noAllocs_layout is the layout of a NoAllocs entry merged across messages, for
+// entries written without a message's own.
+var noAllocs_layout = &groupLayout{tags: []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagNoNestedPartyIDs, TagAllocQty}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoAllocsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noAllocs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoAllocsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noAllocs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoNestedPartyIDs:
-			if len(e.noNestedPartyIDsEntries) > 0 {
+			if len(e.noNestedPartyIDsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoNestedPartyIDs, len(e.noNestedPartyIDsEntries))
 				for _, entry := range e.noNestedPartyIDsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoNestedPartyIDs])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noAllocs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoNestedPartyIDs) {
+			if len(e.noNestedPartyIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNestedPartyIDs, len(e.noNestedPartyIDsEntries))
+				for _, entry := range e.noNestedPartyIDsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

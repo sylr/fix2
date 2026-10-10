@@ -1389,3 +1389,123 @@ func TestGroupNestedAndDirect(t *testing.T) {
 }
 `)
 }
+
+// TestGeneratePerMessageGroupLayouts covers a group whose entry type is
+// shared by messages ordering it differently: A has NoItems [P, Q, R], B
+// [Q, P], and C starts its entries with the nested NoSub group. Each message
+// writes entries in its own order, so its reader finds them.
+func TestGeneratePerMessageGroupLayouts(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="A" msgtype="U1" msgcat="app">
+      <group name="NoItems" required="N"><field name="P" required="N"/><field name="Q" required="N"/><field name="R" required="N"/></group>
+    </message>
+    <message name="B" msgtype="U2" msgcat="app">
+      <group name="NoItems" required="N"><field name="Q" required="N"/><field name="P" required="N"/></group>
+    </message>
+    <message name="C" msgtype="U3" msgcat="app">
+      <group name="NoItems" required="N">
+        <group name="NoSub" required="N"><field name="S" required="N"/></group>
+        <field name="P" required="N"/>
+      </group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="100" name="P" type="STRING"/>
+    <field number="101" name="Q" type="STRING"/>
+    <field number="102" name="R" type="STRING"/>
+    <field number="103" name="S" type="STRING"/>
+    <field number="500" name="NoItems" type="NUMINGROUP"/>
+    <field number="501" name="NoSub" type="NUMINGROUP"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "layouts", `package layouts
+
+import (
+	"bytes"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func parse(t *testing.T, raw []byte) *fix2.Message {
+	t.Helper()
+	m, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	return &m
+}
+
+func TestOwnOrder(t *testing.T) {
+	item := func() *NoItemsEntryBuilder { return NewNoItemsEntry().SetP("p").SetQ("q") }
+
+	a := BuildA("FIX.4.4").AddNoItemsEntry(item().SetR("r")).AddNoItemsEntry(item()).Build()
+	if !bytes.Contains(a, []byte("\x01500=2\x01100=p\x01101=q\x01102=r\x01100=p\x01101=q\x01")) {
+		t.Errorf("A: unexpected layout %q", a)
+	}
+	if got := WrapA(parse(t, a)).NoItemsEntries(); len(got) != 2 {
+		t.Errorf("A: got %d entries", len(got))
+	}
+
+	b := BuildB("FIX.4.4").AddNoItemsEntry(item()).AddNoItemsEntry(item()).Build()
+	if !bytes.Contains(b, []byte("\x01500=2\x01101=q\x01100=p\x01101=q\x01100=p\x01")) {
+		t.Errorf("B: unexpected layout %q", b)
+	}
+	entries := WrapB(parse(t, b)).NoItemsEntries()
+	if len(entries) != 2 {
+		t.Fatalf("B: got %d entries", len(entries))
+	}
+	for i, e := range entries {
+		if p, _ := e.P(); p != "p" {
+			t.Errorf("B entry %d: P = %q", i, p)
+		}
+	}
+}
+
+func TestNestedDelimiterInOneMessage(t *testing.T) {
+	c := BuildC("FIX.4.4").
+		AddNoItemsEntry(NewNoItemsEntry().SetP("p1").AddNoSubEntry(NewNoSubEntry().SetS("s"))).
+		AddNoItemsEntry(NewNoItemsEntry().SetP("p2")).
+		Build()
+	// C's entries start with NoSub, written even with no entries.
+	if !bytes.Contains(c, []byte("\x01500=2\x01501=1\x01103=s\x01100=p1\x01501=0\x01100=p2\x01")) {
+		t.Errorf("C: unexpected layout %q", c)
+	}
+	entries := WrapC(parse(t, c)).NoItemsEntries()
+	if len(entries) != 2 {
+		t.Fatalf("C: got %d entries", len(entries))
+	}
+	if p, _ := entries[1].P(); p != "p2" {
+		t.Errorf("C entry 1: P = %q", p)
+	}
+	// A defines no NoSub: entries set on it come after A's own fields.
+	a := BuildA("FIX.4.4").AddNoItemsEntry(NewNoItemsEntry().SetP("p").AddNoSubEntry(NewNoSubEntry().SetS("s"))).Build()
+	if !bytes.Contains(a, []byte("\x01500=1\x01100=p\x01501=1\x01103=s\x01")) {
+		t.Errorf("A: unexpected layout %q", a)
+	}
+}
+
+func TestFieldsOutsideTheMessageDefinition(t *testing.T) {
+	// B defines no R: it is written after B's own fields, not dropped.
+	b := BuildB("FIX.4.4").AddNoItemsEntry(NewNoItemsEntry().SetP("p").SetQ("q").SetR("r")).Build()
+	if !bytes.Contains(b, []byte("\x01500=1\x01101=q\x01100=p\x01102=r\x01")) {
+		t.Errorf("B: unexpected layout %q", b)
+	}
+}
+
+func TestZeroValueEntry(t *testing.T) {
+	// Entries not read from a message have no spec: getters and nested
+	// iteration must not panic.
+	var e NoItemsEntry
+	if _, ok := e.P(); ok {
+		t.Error("zero entry has P")
+	}
+	if got := e.NoSubEntries(); got != nil {
+		t.Errorf("zero entry NoSubEntries = %v", got)
+	}
+}
+`)
+}

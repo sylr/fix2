@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -88,22 +89,42 @@ func (e *NoNested3PartyIDsEntryBuilder) AddNoNested3PartySubIDsEntry(ne *NoNeste
 	return e
 }
 
-// noNested3PartyIDs_layout lists the tags of a NoNested3PartyIDs entry in dictionary order.
-var noNested3PartyIDs_layout = []int{TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs}
+// noNested3PartyIDs_layout is the layout of a NoNested3PartyIDs entry merged across messages, for
+// entries written without a message's own.
+var noNested3PartyIDs_layout = &groupLayout{tags: []int{TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoNested3PartyIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noNested3PartyIDs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoNested3PartyIDsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noNested3PartyIDs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoNested3PartySubIDs:
-			if len(e.noNested3PartySubIDsEntries) > 0 {
+			if len(e.noNested3PartySubIDsEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoNested3PartySubIDs, len(e.noNested3PartySubIDsEntries))
 				for _, entry := range e.noNested3PartySubIDsEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoNested3PartySubIDs])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noNested3PartyIDs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoNested3PartySubIDs) {
+			if len(e.noNested3PartySubIDsEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoNested3PartySubIDs, len(e.noNested3PartySubIDsEntries))
+				for _, entry := range e.noNested3PartySubIDsEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

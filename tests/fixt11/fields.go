@@ -245,3 +245,11 @@ var standardHeader = []int{TagSenderCompID, TagTargetCompID, TagOnBehalfOfCompID
 
 // standardTrailer lists the standard trailer tags, written last.
 var standardTrailer = []int{TagSignatureLength, TagSignature}
+
+// groupLayout is the order of a group entry's tags in one message's
+// definition, with the layouts of its nested groups by counter tag: the same
+// group can order its fields differently in other messages.
+type groupLayout struct {
+	tags   []int
+	nested map[int]*groupLayout
+}

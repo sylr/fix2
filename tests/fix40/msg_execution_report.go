@@ -347,6 +347,7 @@ var executionReport_NoMiscFees_spec = &fix2.GroupSpec{
 	Delim:   TagMiscFeeAmt,
 	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType},
 }
+var executionReport_NoMiscFees_layout = &groupLayout{tags: []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType}}
 
 func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	spec := executionReport_NoMiscFees_spec
@@ -655,7 +656,7 @@ func (b *executionReport_groups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noMiscFeesEntries) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMiscFees, len(b.noMiscFeesEntries))
 		for _, entry := range b.noMiscFeesEntries {
-			dst = entry.appendTo(dst)
+			dst = entry.appendTo(dst, executionReport_NoMiscFees_layout)
 		}
 	}
 	return dst

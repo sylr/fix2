@@ -2,7 +2,10 @@
 
 package fixt11
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"slices"
+)
 
 type NoMsgTypesEntry struct {
 	grp  fix2.Group
@@ -50,15 +53,27 @@ func (e *NoMsgTypesEntryBuilder) SetRefCstmApplVerID(v string) *NoMsgTypesEntryB
 	return e
 }
 
-// noMsgTypes_layout lists the tags of a NoMsgTypes entry in dictionary order.
-var noMsgTypes_layout = []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}
+// noMsgTypes_layout is the layout of a NoMsgTypes entry merged across messages, for
+// entries written without a message's own.
+var noMsgTypes_layout = &groupLayout{tags: []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noMsgTypes_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noMsgTypes_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noMsgTypes_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

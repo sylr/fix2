@@ -2,7 +2,10 @@
 
 package fix50sp2
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"slices"
+)
 
 type NoPartySubIDsEntry struct {
 	grp  fix2.Group
@@ -34,15 +37,27 @@ func (e *NoPartySubIDsEntryBuilder) SetPartySubIDType(v PartySubIDType) *NoParty
 	return e
 }
 
-// noPartySubIDs_layout lists the tags of a NoPartySubIDs entry in dictionary order.
-var noPartySubIDs_layout = []int{TagPartySubID, TagPartySubIDType}
+// noPartySubIDs_layout is the layout of a NoPartySubIDs entry merged across messages, for
+// entries written without a message's own.
+var noPartySubIDs_layout = &groupLayout{tags: []int{TagPartySubID, TagPartySubIDType}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoPartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noPartySubIDs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoPartySubIDsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noPartySubIDs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noPartySubIDs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

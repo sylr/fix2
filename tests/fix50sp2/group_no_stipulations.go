@@ -2,7 +2,10 @@
 
 package fix50sp2
 
-import fix2 "github.com/sylr/fix2"
+import (
+	fix2 "github.com/sylr/fix2"
+	"slices"
+)
 
 type NoStipulationsEntry struct {
 	grp  fix2.Group
@@ -34,15 +37,27 @@ func (e *NoStipulationsEntryBuilder) SetStipulationValue(v string) *NoStipulatio
 	return e
 }
 
-// noStipulations_layout lists the tags of a NoStipulations entry in dictionary order.
-var noStipulations_layout = []int{TagStipulationType, TagStipulationValue}
+// noStipulations_layout is the layout of a NoStipulations entry merged across messages, for
+// entries written without a message's own.
+var noStipulations_layout = &groupLayout{tags: []int{TagStipulationType, TagStipulationValue}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoStipulationsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noStipulations_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoStipulationsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noStipulations_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noStipulations_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

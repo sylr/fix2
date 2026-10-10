@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"time"
 )
 
@@ -92,22 +93,42 @@ func (e *NoComplexEventDatesEntryBuilder) AddNoComplexEventTimesEntry(ne *NoComp
 	return e
 }
 
-// noComplexEventDates_layout lists the tags of a NoComplexEventDates entry in dictionary order.
-var noComplexEventDates_layout = []int{TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes}
+// noComplexEventDates_layout is the layout of a NoComplexEventDates entry merged across messages, for
+// entries written without a message's own.
+var noComplexEventDates_layout = &groupLayout{tags: []int{TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoComplexEventDatesEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noComplexEventDates_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoComplexEventDatesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noComplexEventDates_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		case TagNoComplexEventTimes:
-			if len(e.noComplexEventTimesEntries) > 0 {
+			if len(e.noComplexEventTimesEntries) > 0 || tag == l.tags[0] {
 				dst = fix2.AppendCount(dst, TagNoComplexEventTimes, len(e.noComplexEventTimesEntries))
 				for _, entry := range e.noComplexEventTimesEntries {
-					dst = entry.appendTo(dst)
+					dst = entry.appendTo(dst, l.nested[TagNoComplexEventTimes])
 				}
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noComplexEventDates_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
+		}
+		if !slices.Contains(l.tags, TagNoComplexEventTimes) {
+			if len(e.noComplexEventTimesEntries) > 0 {
+				dst = fix2.AppendCount(dst, TagNoComplexEventTimes, len(e.noComplexEventTimesEntries))
+				for _, entry := range e.noComplexEventTimesEntries {
+					dst = entry.appendTo(dst, nil)
+				}
+			}
 		}
 	}
 	return dst

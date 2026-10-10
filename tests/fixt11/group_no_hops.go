@@ -4,6 +4,7 @@ package fixt11
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -58,15 +59,27 @@ func (e *NoHopsEntryBuilder) SetHopRefID(v int) *NoHopsEntryBuilder {
 	return e
 }
 
-// noHops_layout lists the tags of a NoHops entry in dictionary order.
-var noHops_layout = []int{TagHopCompID, TagHopSendingTime, TagHopRefID}
+// noHops_layout is the layout of a NoHops entry merged across messages, for
+// entries written without a message's own.
+var noHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoHopsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noHops_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoHopsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noHops_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noHops_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst

@@ -4,6 +4,7 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
+	"slices"
 	"strconv"
 )
 
@@ -41,15 +42,27 @@ func (e *NoNested2PartySubIDsEntryBuilder) SetNested2PartySubIDType(v int) *NoNe
 	return e
 }
 
-// noNested2PartySubIDs_layout lists the tags of a NoNested2PartySubIDs entry in dictionary order.
-var noNested2PartySubIDs_layout = []int{TagNested2PartySubID, TagNested2PartySubIDType}
+// noNested2PartySubIDs_layout is the layout of a NoNested2PartySubIDs entry merged across messages, for
+// entries written without a message's own.
+var noNested2PartySubIDs_layout = &groupLayout{tags: []int{TagNested2PartySubID, TagNested2PartySubIDType}}
 
-// appendTo appends the entry's fields to dst in dictionary order.
-func (e *NoNested2PartySubIDsEntryBuilder) appendTo(dst []fix2.Field) []fix2.Field {
-	for _, tag := range noNested2PartySubIDs_layout {
+// appendTo appends the entry's fields to dst in the order of l, the entry's
+// layout in the message being built, or the merged layout if l is nil.
+func (e *NoNested2PartySubIDsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+	if l == nil {
+		l = noNested2PartySubIDs_layout
+	}
+	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
+		}
+	}
+	if l != noNested2PartySubIDs_layout {
+		for _, fld := range e.fields {
+			if !slices.Contains(l.tags, fld.Tag) {
+				dst = append(dst, fld)
+			}
 		}
 	}
 	return dst
