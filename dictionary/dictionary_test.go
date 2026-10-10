@@ -1231,3 +1231,127 @@ func TestValidate_RequiredTagOnlyInGroup(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_RequiredTagGroupShapes(t *testing.T) {
+	// F(100) and Sig(140) are required directly and optional in groups of
+	// several shapes: a group starting with a nested group, one starting
+	// with a DATA field (so entries start with its LENGTH), and a trailer
+	// group.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer>
+    <group name="NoT" required="N"><field name="TD" required="N"/><field name="Sig" required="N"/></group>
+    <field name="Sig" required="Y"/>
+  </trailer>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="F" required="Y"/>
+      <group name="NoP" required="N">
+        <group name="NoC" required="N"><field name="CD" required="N"/><field name="F" required="N"/></group>
+        <field name="PD" required="N"/>
+      </group>
+      <group name="NoD" required="N"><field name="EncodedText" required="N"/><field name="F" required="N"/></group>
+      <group name="NoG" required="N"><field name="D" required="N"/><field name="F" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="100" name="F" type="STRING"/>
+    <field number="101" name="NoG" type="NUMINGROUP"/>
+    <field number="102" name="D" type="STRING"/>
+    <field number="140" name="Sig" type="STRING"/>
+    <field number="141" name="NoT" type="NUMINGROUP"/>
+    <field number="142" name="TD" type="STRING"/>
+    <field number="150" name="NoP" type="NUMINGROUP"/>
+    <field number="151" name="PD" type="STRING"/>
+    <field number="152" name="NoC" type="NUMINGROUP"/>
+    <field number="153" name="CD" type="STRING"/>
+    <field number="160" name="NoD" type="NUMINGROUP"/>
+    <field number="354" name="EncodedTextLen" type="LENGTH"/>
+    <field number="355" name="EncodedText" type="DATA"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	const sig = "140=s\x01"
+	tests := []struct {
+		name    string
+		body    string
+		missing int // 0 when valid
+	}{
+		{"F only in a group starting with a nested group", "35=M\x01150=1\x01152=1\x01153=c\x01100=in\x01151=p\x01" + sig, 100},
+		{"F direct after a group starting with a nested group", "35=M\x01150=1\x01152=1\x01153=c\x01100=in\x01151=p\x01100=f\x01" + sig, 0},
+		{"F only in a group starting with DATA", "35=M\x01160=1\x01354=2\x01355=ab\x01100=in\x01" + sig, 100},
+		{"F direct after a group starting with DATA", "35=M\x01160=1\x01354=2\x01355=ab\x01100=in\x01100=f\x01" + sig, 0},
+		{"Sig only in a trailer group", "35=M\x01100=f\x01141=1\x01142=t\x01140=in\x01", 140},
+		{"Sig direct after a trailer group", "35=M\x01100=f\x01141=1\x01142=t\x01140=in\x01140=s\x01", 0},
+		{"count above the entries, F only inside", "35=M\x01101=5\x01102=d\x01100=in\x01" + sig, 100},
+		{"count above the entries, F repeated after", "35=M\x01101=5\x01102=d\x01100=in\x01100=f\x01" + sig, 0},
+		{"entry without its delimiter is top level", "35=M\x01101=1\x01100=f\x01" + sig, 0},
+	}
+	for _, tt := range tests {
+		msg := parseMsg(t, buildFIXMsg(tt.body))
+		err := d.Validate(&msg)
+		if tt.missing == 0 {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tt.name, err)
+			}
+			continue
+		}
+		var ve *ValidationError
+		if !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != tt.missing {
+			t.Errorf("%s: got %v, want required tag %d missing", tt.name, err, tt.missing)
+		}
+	}
+}
+
+func TestValidate_HeaderNoHops(t *testing.T) {
+	d, err := LoadFile("../cmd/fixgen/testdata/FIXT11.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const header = "35=0\x0149=S\x0156=T\x0134=1\x0152=20231001-12:00:00\x01"
+	for name, body := range map[string]string{
+		"no hops":  header,
+		"two hops": header + "627=2\x01628=H1\x01629=20231001-12:00:00\x01628=H2\x01630=1\x01",
+	} {
+		msg := parseMsg(t, buildFIXMsg(body))
+		if err := d.Validate(&msg); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if spec := d.envelopeSpecs; len(spec) != 1 || spec[0].Counter != 627 || spec[0].Delim != 628 {
+		t.Fatalf("envelope specs = %+v", spec)
+	}
+}
+
+func TestLoad_EnvelopeSpecsNotPerMessage(t *testing.T) {
+	// Header groups used to be copied into every message's specs: messages
+	// x header groups pointers, outside the resolver budget.
+	alloc := func(n int) uint64 {
+		var header, msgs, fields strings.Builder
+		fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="1" name="F" type="STRING"/>`)
+		for i := range n {
+			fmt.Fprintf(&header, `<group name="NoH%d"><field name="F"/></group>`, i)
+			fmt.Fprintf(&msgs, `<message name="M%d" msgtype="M%d"><field name="F"/></message>`, i, i)
+			fmt.Fprintf(&fields, `<field number="%d" name="NoH%d" type="NUMINGROUP"/>`, 1000+i, i)
+		}
+		xml := `<fix major="4" minor="4"><header>` + header.String() + `</header><trailer/><messages>` + msgs.String() +
+			`</messages><components/><fields>` + fields.String() + `</fields></fix>`
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		if _, err := Load(strings.NewReader(xml)); err != nil {
+			t.Fatal(err)
+		}
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	small, large := alloc(1000), alloc(4000)
+	if ratio := float64(large) / float64(small); ratio > 6 {
+		t.Errorf("4x the messages and header groups allocated %.1fx more (%d vs %d bytes), want about 4x", ratio, large, small)
+	}
+}

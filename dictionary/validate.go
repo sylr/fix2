@@ -2,6 +2,7 @@ package dictionary
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	fix2 "github.com/sylr/fix2"
@@ -79,7 +80,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		present[f.Tag] = true
 	}
 	top := make(map[int]bool, msg.Count())
-	for f := range msg.TopLevelFields(mdef.specs...) {
+	for f := range msg.TopLevelFields(slices.Concat(d.envelopeSpecs, mdef.specs)...) {
 		top[f.Tag] = true
 	}
 
@@ -131,6 +132,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 	}
 
 	// 5 & 6. Check each tag is allowed and enum values are valid.
+	allowed := func(tag int) bool { return d.headerSet[tag] || d.trailerSet[tag] || mdef.fieldSet[tag] }
 	for _, f := range msg.Fields() {
 		tag := f.Tag
 
@@ -139,8 +141,10 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 			continue
 		}
 
-		// Tag must be in header, trailer, or message fields.
-		if !d.headerSet[tag] && !d.trailerSet[tag] && !mdef.fieldSet[tag] {
+		// Tag must be in header, trailer, or message fields, or be the
+		// LENGTH of such a DATA field: the parser requires it right before
+		// its DATA field even when the dictionary does not declare it.
+		if !allowed(tag) && !allowed(fix2.DataTag(tag)) {
 			return &ValidationError{
 				Err: ErrUnexpectedTag,
 				Tag: tag,
@@ -224,6 +228,11 @@ func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 	specs := make([]*fix2.GroupSpec, 0, len(groups))
 	for _, gd := range groups {
 		s := &fix2.GroupSpec{Counter: gd.CounterTag, Delim: gd.DelimTag}
+		// LENGTH comes right before its DATA field, so an entry whose first
+		// field is DATA starts with LENGTH.
+		if l := fix2.DataLengthTag(gd.DelimTag); l != 0 && d.Fields[l] != nil {
+			s.Delim = l
+		}
 		added := make(map[int]bool, len(gd.Fields))
 		add := func(tag int) {
 			if !added[tag] {

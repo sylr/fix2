@@ -123,7 +123,7 @@ type MessageDef struct {
 	fieldSet   map[int]bool
 	required   map[int]bool      // tags required unconditionally
 	conditions []condition       // tags required only when an optional component is present
-	specs      []*fix2.GroupSpec // header, body and trailer groups, to skip their entries
+	specs      []*fix2.GroupSpec // body groups, to skip their entries
 }
 
 // condition records the required fields of an optional component: they must
@@ -162,6 +162,8 @@ type Dict struct {
 	trailerSet   map[int]bool
 	trailerReq   map[int]bool
 	trailerConds []condition
+	// envelopeSpecs are the specs of the header and trailer groups.
+	envelopeSpecs []*fix2.GroupSpec
 
 	fieldsByName map[string]*FieldDef
 }
@@ -308,9 +310,9 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	d.headerConds = header.conditions(envelope, nil, inMessages)
 	d.trailerConds = trailer.conditions(envelope, nil, inMessages)
 
-	headerSpecs, trailerSpecs := d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups)
+	d.envelopeSpecs = slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups))
 	for _, m := range d.Messages {
-		m.specs = slices.Concat(headerSpecs, d.groupSpecs(m.Groups), trailerSpecs)
+		m.specs = d.groupSpecs(m.Groups)
 	}
 
 	return d, nil
