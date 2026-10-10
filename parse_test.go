@@ -803,3 +803,64 @@ func TestParseDataFieldsRepeated(t *testing.T) {
 		}
 	}
 }
+
+// TestParseDataFieldsTable runs every standard LENGTH/DATA pair, and the
+// adjacency rules, through both parsers.
+func TestParseDataFieldsTable(t *testing.T) {
+	parsers := map[string]func([]byte) (Message, error){
+		"Parse":           Parse,
+		"ParseFromReader": func(b []byte) (Message, error) { return ParseFromReader(bytes.NewReader(b)) },
+	}
+	for _, p := range dataFields {
+		body := fmt.Sprintf("35=A\x01%d=4\x01%d=a\x01=b\x0158=t\x01", p.length, p.data)
+		for name, parse := range parsers {
+			msg, err := parse(buildMsg("FIX.4.4", body))
+			if err != nil {
+				t.Errorf("%s: pair %d/%d: %v", name, p.length, p.data, err)
+				continue
+			}
+			if got := string(msg.Get(p.data)); got != "a\x01=b" {
+				t.Errorf("%s: pair %d/%d: value %q", name, p.length, p.data, got)
+			}
+		}
+	}
+
+	for _, tt := range []struct {
+		name string
+		body string
+		err  error
+		at   string // field the error offset must point at
+	}{
+		// EP105 EncodedRejectText: the payload must not leak 55=X.
+		{name: "EncodedRejectText smuggling", body: "35=3\x011664=6\x011665=A\x0155=X\x01"},
+		{name: "wrong partner", body: "35=A\x0195=2\x01213=ab\x01", err: ErrMalformedField, at: "213=ab"},
+		{name: "consecutive LENGTH fields", body: "35=A\x0195=2\x0195=2\x0196=ab\x01", err: ErrMalformedField, at: "95=2\x0196"},
+		{name: "missing partner at end of body", body: "35=A\x0158=t\x0195=2\x01", err: ErrMalformedField},
+		// Tags the FIX repository and QuickFIX FIX 5.0 SP2 disagree on are
+		// not treated as LENGTH/DATA (here: the official throttle group).
+		{name: "excluded tags parse as ordinary fields", body: "35=A\x011618=2\x011619=D\x011619=8\x01"},
+	} {
+		raw := buildMsg("FIX.4.4", tt.body)
+		for name, parse := range parsers {
+			msg, err := parse(raw)
+			if tt.err == nil {
+				if err != nil {
+					t.Errorf("%s: %s: %v", name, tt.name, err)
+				} else if msg.Get(55) != nil {
+					t.Errorf("%s: %s: tag 55 leaked out of a DATA payload", name, tt.name)
+				}
+				continue
+			}
+			var pe *ParseError
+			if !errors.Is(err, tt.err) || !errors.As(err, &pe) {
+				t.Errorf("%s: %s: got %v, want %v", name, tt.name, err, tt.err)
+				continue
+			}
+			if tt.at != "" {
+				if want := bytes.Index(raw, []byte(tt.at)); pe.Offset != want {
+					t.Errorf("%s: %s: offset %d, want %d", name, tt.name, pe.Offset, want)
+				}
+			}
+		}
+	}
+}
