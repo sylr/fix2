@@ -331,3 +331,16 @@ func TestGetTopLevel(t *testing.T) {
 		t.Errorf("absent tag = %q", got)
 	}
 }
+
+func TestGroupsOfRepeatedTagEndsEntry(t *testing.T) {
+	// 629 belongs to NoHops entries, but may appear only once per entry: the
+	// second 629 is the message's own field after the group.
+	hops := &GroupSpec{Counter: 627, Delim: 628, Tags: []int{628, 629}}
+	m := fieldsMsg(t, "627=1", "628=hop", "629=group", "629=direct", "112=t")
+	if got := entryTags(m.GroupsOf(hops)); !reflect.DeepEqual(got, [][]int{{628, 629}}) {
+		t.Errorf("entries = %v", got)
+	}
+	if got := string(m.GetTopLevel(629, hops)); got != "direct" {
+		t.Errorf("GetTopLevel(629) = %q, want direct", got)
+	}
+}

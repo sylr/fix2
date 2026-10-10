@@ -333,3 +333,12 @@ func TestSetSections(t *testing.T) {
 		t.Errorf("tags = %v, want %v", tags, want)
 	}
 }
+
+func TestSetSectionsTagInBoth(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "0")
+	b.SetSections([]int{90, 91}, []int{90, 91}, nil)
+	raw := b.SetData(90, 91, []byte("x")).Build()
+	if n := bytes.Count(raw, []byte("\x0191=")); n != 1 {
+		t.Errorf("%q: SecureData written %d times, want 1", raw, n)
+	}
+}

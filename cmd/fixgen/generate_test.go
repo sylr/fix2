@@ -1158,3 +1158,39 @@ func TestGenerateClashCatchAll(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerateDataPairAcrossSections covers SecureData declared in the
+// header and its LENGTH in the trailer: the pair is written once, in the
+// header.
+func TestGenerateDataPairAcrossSections(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="SecureData" required="N"/></header>
+  <trailer><field name="SecureDataLen" required="N"/></trailer>
+  <messages><message name="Heartbeat" msgtype="0" msgcat="admin"><field name="TestReqID" required="N"/></message></messages>
+  <components/>
+  <fields>
+    <field number="90" name="SecureDataLen" type="LENGTH"/>
+    <field number="91" name="SecureData" type="DATA"/>
+    <field number="112" name="TestReqID" type="STRING"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "pairsec", `package pairsec
+
+import (
+	"bytes"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestOnce(t *testing.T) {
+	raw := BuildHeartbeat("FIX.4.4").SetTestReqID("T").SetSecureData([]byte("s")).Build()
+	if n := bytes.Count(raw, []byte("\x0191=")); n != 1 {
+		t.Fatalf("%q: SecureData written %d times", raw, n)
+	}
+	if _, err := fix2.Parse(raw); err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+}
+`)
+}

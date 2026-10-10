@@ -123,8 +123,17 @@ func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
 }
 
 // entry consumes the entry whose delimiter is at fields[i] and returns the
-// index just past it.
+// index just past it. FIX does not allow a tag twice in one entry, so a
+// repeated tag ends it: the field belongs to the next entry or to the
+// enclosing message.
 func (s *GroupSpec) entry(fields []Field, i int) int {
+	// Tags seen in this entry, as bits indexed by position in s.Tags: on the
+	// stack for groups of up to 256 tags.
+	var small [4]uint64
+	seen := small[:]
+	if n := (len(s.Tags) + 63) / 64; n > len(small) {
+		seen = make([]uint64, n)
+	}
 	for first := true; i < len(fields); first = false {
 		tag := fields[i].Tag
 		if tag == s.Delim && !first {
@@ -137,8 +146,15 @@ func (s *GroupSpec) entry(fields []Field, i int) int {
 			i = n.skip(fields, i+1, count)
 			continue
 		}
-		if !first && !slices.Contains(s.Tags, tag) {
-			break // not part of this group
+		k := slices.Index(s.Tags, tag)
+		switch {
+		case k < 0 && !first:
+			return i // not part of this group
+		case k >= 0:
+			if seen[k/64]&(1<<(k%64)) != 0 {
+				return i // a tag cannot repeat within an entry
+			}
+			seen[k/64] |= 1 << (k % 64)
 		}
 		i++
 	}

@@ -210,7 +210,8 @@ func (b *Builder) BuildWith(extra []Field) []byte {
 		}
 	}
 	inHeader := func(tag int) bool { return slices.Contains(b.header, tag) }
-	inTrailer := func(tag int) bool { return slices.Contains(b.trailer, tag) }
+	// A tag listed in both sections belongs to the header.
+	inTrailer := func(tag int) bool { return slices.Contains(b.trailer, tag) && !inHeader(tag) }
 
 	appendOwn(inHeader)
 	for _, f := range headerGroups {

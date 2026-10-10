@@ -376,12 +376,14 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 	// Standard header and trailer tags, registered by every message builder
 	// with SetSections. Group tags are left out: header groups are written
 	// by their own writer.
+	var inHeader []int // header tags, which the trailer must not repeat
 	writeSectionVar := func(name, doc string, refs []dictionary.FieldRef, groups []dictionary.GroupDef) {
 		inGroups, counters := map[int]bool{}, map[int]bool{}
 		collectGroupTags(groups, inGroups, counters, false)
 		var list []int
 		add := func(tag int) {
-			if dict.Fields[tag] != nil && !slices.Contains(list, tag) {
+			// A pair split between header and trailer stays in the header.
+			if dict.Fields[tag] != nil && !slices.Contains(list, tag) && !slices.Contains(inHeader, tag) {
 				list = append(list, tag)
 			}
 		}
@@ -403,6 +405,9 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 		var tags []jen.Code
 		for _, tag := range list {
 			tags = append(tags, tagID(dict.Fields[tag].Name))
+		}
+		if inHeader == nil {
+			inHeader = list
 		}
 		f.Comment(doc)
 		f.Var().Id(name).Op("=").Index().Int().Values(tags...)
