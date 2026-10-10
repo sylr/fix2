@@ -11,7 +11,7 @@ var _ fix2.Validator = (*Dict)(nil)
 
 // Sentinel errors for dictionary validation.
 var (
-	ErrValidation       = fmt.Errorf("fix2: validation")
+	ErrValidation       = fmt.Errorf("%w: validation", fix2.ErrFix2)
 	ErrUnknownMsgType   = fmt.Errorf("%w: unknown MsgType", ErrValidation)
 	ErrRequiredTag      = fmt.Errorf("%w: required tag missing", ErrValidation)
 	ErrUnexpectedTag    = fmt.Errorf("%w: unexpected tag", ErrValidation)
@@ -19,6 +19,7 @@ var (
 )
 
 // ValidationError wraps a sentinel error with the offending tag and a message.
+// Its Error text is the message prefixed with "fix2: ".
 type ValidationError struct {
 	Err error
 	Tag int
@@ -26,7 +27,7 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string {
-	return e.Msg
+	return fix2.ErrFix2.Error() + ": " + e.Msg
 }
 
 func (e *ValidationError) Unwrap() error {

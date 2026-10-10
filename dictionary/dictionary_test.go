@@ -334,6 +334,12 @@ func TestValidate_InvalidEnumValue(t *testing.T) {
 	if ve.Tag != 54 {
 		t.Fatalf("expected tag 54, got %d", ve.Tag)
 	}
+	if !errors.Is(err, fix2.ErrFix2) {
+		t.Fatalf("expected fix2.ErrFix2, got: %v", err)
+	}
+	if want := `fix2: invalid value "9" for tag 54 (Side)`; err.Error() != want {
+		t.Fatalf("Error() = %q, want %q", err.Error(), want)
+	}
 }
 
 // ---------------------------------------------------------------------------
