@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"maps"
 	"os"
@@ -43,21 +46,35 @@ func enumType(fieldName string) string {
 func resolveEnumTypeNames(dict *dictionary.Dict) map[string]string {
 	taken := map[string]bool{}
 	for _, md := range dict.Messages {
-		taken[md.Name], taken[md.Name+"Builder"] = true, true
+		for _, n := range []string{md.Name, md.Name + "Builder", "Wrap" + md.Name, "Build" + md.Name} {
+			taken[n] = true
+		}
 	}
 	for name := range mergeAllGroups(dict) {
-		taken[name+"Entry"], taken[name+"EntryBuilder"] = true, true
-	}
-	names := map[string]string{}
-	for _, fd := range dict.Fields {
-		if len(fd.Enums) == 0 {
-			continue
+		for _, n := range []string{name + "Entry", name + "EntryBuilder", "New" + name + "Entry"} {
+			taken[n] = true
 		}
-		name := fd.Name
+	}
+	for _, fd := range dict.Fields {
+		taken["Tag"+fd.Name] = true
+	}
+	// Assign in name order, reserving each name, so renames are stable and
+	// cannot collide with each other (Foo and FooEnum both needing FooEnum).
+	var enumFields []string
+	for _, fd := range dict.Fields {
+		if len(fd.Enums) > 0 {
+			enumFields = append(enumFields, fd.Name)
+		}
+	}
+	slices.Sort(enumFields)
+	names := map[string]string{}
+	for _, field := range enumFields {
+		name := field
 		for taken[name] {
 			name += "Enum"
 		}
-		names[fd.Name] = name
+		taken[name] = true
+		names[field] = name
 	}
 	return names
 }
@@ -95,27 +112,80 @@ func checkNames(dict *dictionary.Dict) error {
 			return fmt.Errorf("message %q: name must be an ASCII letter followed by letters and digits, starting upper case", md.Name)
 		}
 	}
-	for name, mg := range mergeAllGroups(dict) {
-		if fix2.DataLengthTag(mg.DelimTag) != 0 {
-			return fmt.Errorf("group %s starts with DATA field %s, which must follow its LENGTH field", name, dict.Fields[mg.DelimTag].Name)
+	var checkGroups func(gs []dictionary.GroupDef) error
+	checkGroups = func(gs []dictionary.GroupDef) error {
+		for _, gd := range gs {
+			if fix2.DataLengthTag(gd.DelimTag) != 0 {
+				return fmt.Errorf("group %s starts with DATA field %s, which must follow its LENGTH field", gd.Name, dict.Fields[gd.DelimTag].Name)
+			}
+			if err := checkGroups(gd.Groups); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := checkGroups(slices.Concat(dict.HeaderGroups, dict.TrailerGroups)); err != nil {
+		return err
+	}
+	for _, mt := range slices.Sorted(maps.Keys(dict.Messages)) {
+		if err := checkGroups(dict.Messages[mt].Groups); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// checkMethodClashes reports dictionaries whose names would make generated
-// methods clash, rather than generating code that does not compile: a field
-// named like a group's Entries method, or a setter named like a method of
-// the embedded fix2.Builder.
-func checkMethodClashes(dict *dictionary.Dict) error {
-	merged := mergeAllGroups(dict)
-	for _, fd := range dict.Fields {
-		if slices.Contains(builderMethods, "Set"+fd.Name) {
-			return fmt.Errorf("field %s: its setter Set%s would shadow fix2.Builder.Set%s", fd.Name, fd.Name, fd.Name)
+// checkGenerated parses the generated files and reports any top-level
+// identifier, or method of the same type, declared twice: dictionary names
+// can combine into the same Go identifier in many ways (message FooBuilder
+// and message Foo's builder, enum descriptions BUY and Buy, ...), and an
+// explicit error beats generated code that does not compile.
+func checkGenerated(outDir string, written map[string]bool) error {
+	fset := token.NewFileSet()
+	declared := map[string]string{} // identifier -> file declaring it
+	declare := func(id, file string) error {
+		if prev, ok := declared[id]; ok {
+			return fmt.Errorf("generated identifier %s is declared in both %s and %s: rename the dictionary entries it comes from", id, prev, file)
 		}
-		for name := range merged {
-			if fd.Name == name+"Entries" {
-				return fmt.Errorf("field %s clashes with the %sEntries method of group %s", fd.Name, name, name)
+		declared[id] = file
+		return nil
+	}
+	for _, name := range slices.Sorted(maps.Keys(written)) {
+		file, err := parser.ParseFile(fset, filepath.Join(outDir, name), nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				id := d.Name.Name
+				if d.Recv != nil && len(d.Recv.List) > 0 {
+					t := d.Recv.List[0].Type
+					if star, ok := t.(*ast.StarExpr); ok {
+						t = star.X
+					}
+					if ident, ok := t.(*ast.Ident); ok {
+						id = ident.Name + "." + id
+					}
+				}
+				if err := declare(id, name); err != nil {
+					return err
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch sp := spec.(type) {
+					case *ast.TypeSpec:
+						if err := declare(sp.Name.Name, name); err != nil {
+							return err
+						}
+					case *ast.ValueSpec:
+						for _, n := range sp.Names {
+							if err := declare(n.Name, name); err != nil {
+								return err
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -137,9 +207,6 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 		return err
 	}
 	enumTypeNames = resolveEnumTypeNames(dict)
-	if err := checkMethodClashes(dict); err != nil {
-		return err
-	}
 
 	if err := writeDoc(pkg, outDir); err != nil {
 		return fmt.Errorf("doc.go: %w", err)
@@ -159,6 +226,9 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 	for _, name := range groupNames {
 		mg := mergedGroups[name]
 		fileName := groupFileName(name)
+		if written[fileName] {
+			return fmt.Errorf("%s: written twice, two groups map to the same file", fileName)
+		}
 		if err := writeGroupFile(dict, mg, mergedGroups, pkg, outDir); err != nil {
 			return fmt.Errorf("%s: %w", fileName, err)
 		}
@@ -175,12 +245,18 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 	for _, mt := range msgTypes {
 		md := dict.Messages[mt]
 		fileName := msgFileName(md.Name)
+		if written[fileName] {
+			return fmt.Errorf("%s: written twice, two messages are named %s", fileName, md.Name)
+		}
 		if err := writeMessage(dict, md, mergedGroups, pkg, outDir); err != nil {
 			return fmt.Errorf("%s: %w", fileName, err)
 		}
 		written[fileName] = true
 	}
 
+	if err := checkGenerated(outDir, written); err != nil {
+		return err
+	}
 	return removeStale(outDir, written)
 }
 
@@ -744,6 +820,11 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	for _, fi := range allFields {
 		if groupChildTags[fi.tag] || counterTags[fi.tag] || isDataLength(dict, fi.tag) {
 			continue
+		}
+		// The setter must not shadow a fix2.Builder method the generated
+		// code calls on the embedded builder.
+		if slices.Contains(builderMethods, "Set"+fi.name) {
+			return fmt.Errorf("field %s: its setter Set%s would shadow fix2.Builder.Set%s", fi.name, fi.name, fi.name)
 		}
 		if l := fix2.DataLengthTag(fi.tag); l != 0 && dict.Fields[l] != nil {
 			addDataSetter(f, builderName, fi.name, dict.Fields[l].Name)

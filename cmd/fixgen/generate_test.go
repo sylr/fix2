@@ -1109,3 +1109,52 @@ func TestPair(t *testing.T) {
 }
 `)
 }
+
+// TestGenerateClashCatchAll covers name combinations found in review: the
+// generator must either produce compiling code or fail with an error.
+func TestGenerateClashCatchAll(t *testing.T) {
+	gen := func(msgs, fields string) error {
+		d, err := dictionary.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4"><header/><trailer/><messages>` + msgs + `</messages><components/><fields>` + fields + `</fields></fix>`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return generate(d, "x", t.TempDir())
+	}
+	field := func(num int, name, typ string, enums ...string) string {
+		var v strings.Builder
+		for i, e := range enums {
+			fmt.Fprintf(&v, `<value enum="%d" description="%s"/>`, i+1, e)
+		}
+		return fmt.Sprintf(`<field number="%d" name="%s" type="%s">%s</field>`, num, name, typ, v.String())
+	}
+	for _, tc := range []struct {
+		name, msgs, fields string
+		wantErr            bool
+	}{
+		{"message named like another's builder",
+			`<message name="Foo" msgtype="U1" msgcat="app"/><message name="FooBuilder" msgtype="U2" msgcat="app"/>`, "", true},
+		{"enum descriptions normalizing alike",
+			`<message name="M" msgtype="U1" msgcat="app"><field name="Side" required="N"/></message>`, field(54, "Side", "CHAR", "BUY", "Buy"), true},
+		{"two messages with the same name",
+			`<message name="M" msgtype="U1" msgcat="app"/><message name="M" msgtype="U2" msgcat="app"/>`, "", true},
+		{"DATA delimiter in one message only",
+			`<message name="A" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="B" required="N"/></group></message>
+			 <message name="C" msgtype="U2" msgcat="app"><group name="NoX" required="N"><field name="EncodedText" required="N"/></group></message>`,
+			field(5001, "NoX", "NUMINGROUP") + field(5002, "B", "STRING") + field(354, "EncodedTextLen", "LENGTH") + field(355, "EncodedText", "DATA"), true},
+		{"Foo and FooEnum enums next to message Foo",
+			`<message name="Foo" msgtype="U1" msgcat="app"><field name="Foo" required="N"/><field name="FooEnum" required="N"/></message>`,
+			field(5001, "Foo", "CHAR", "A") + field(5002, "FooEnum", "CHAR", "B"), false},
+		{"NoXEntries field on a message without NoX",
+			`<message name="A" msgtype="U1" msgcat="app"><group name="NoX" required="N"><field name="B" required="N"/></group></message>
+			 <message name="C" msgtype="U2" msgcat="app"><field name="NoXEntries" required="N"/></message>`,
+			field(5001, "NoX", "NUMINGROUP") + field(5002, "B", "STRING") + field(5003, "NoXEntries", "STRING"), false},
+	} {
+		err := gen(tc.msgs, tc.fields)
+		if tc.wantErr && err == nil {
+			t.Errorf("%s: expected an error", tc.name)
+		}
+		if !tc.wantErr && err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+}
