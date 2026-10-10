@@ -562,7 +562,9 @@ func TestWideGroupEntryIsLinear(t *testing.T) {
 func TestSpecIndex(t *testing.T) {
 	// Specs from indexedSpec tags and groups on look tags up in an index;
 	// it must agree with scanning, nested counters first.
-	for _, n := range []int{indexedSpec - 2, indexedSpec, 40} {
+	// Each spec holds n+1 tags and one nested group: n+2 in all, 15 and 16
+	// around indexedSpec, then 42.
+	for _, n := range []int{indexedSpec - 3, indexedSpec - 2, 40} {
 		child := &GroupSpec{Counter: 900, Delim: 901, Tags: []int{901}}
 		tags := []int{100}
 		for i := 1; i < n; i++ {
@@ -596,4 +598,27 @@ func TestSpecIndexConcurrentFirstUse(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestWideGroupSmallEntriesIsLinear(t *testing.T) {
+	// n entries holding only the delimiter of a group n tags wide: each
+	// entry costs its own fields, not the group's width.
+	run := func(n int) {
+		tags := make([]int, n)
+		for i := range tags {
+			tags[i] = 1000 + i
+		}
+		spec := &GroupSpec{Counter: 1, Delim: 1000, Tags: tags}
+		pairs := []string{fmt.Sprintf("1=%d", n)}
+		for range n {
+			pairs = append(pairs, "1000=x")
+		}
+		m := fieldsMsg(t, pairs...)
+		if got := m.GroupsOf(spec); len(got) != n {
+			t.Fatalf("%d entries, want %d", len(got), n)
+		}
+	}
+	if r := scaling(8000, run); r > 10 {
+		t.Errorf("4x the entries and tags took %.1fx longer, want about 4x", r)
+	}
 }

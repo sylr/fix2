@@ -3,6 +3,7 @@ package fix2
 import (
 	"iter"
 	"slices"
+	"sync"
 	"sync/atomic"
 )
 
@@ -74,8 +75,9 @@ func (g *Group) Groups(counterTag int, childTags []int) []Group {
 // delimiter every entry starts with, the tags an entry holds directly and the
 // groups it can contain. A group's fields can differ between messages, so
 // generated code declares a spec tree per message group, from that message's
-// own definition. A spec must not change once used: large ones build an
-// index of their tags on first use.
+// own definition. A spec must not be changed or copied once used: large
+// ones build an index of their tags on first use, which go vet's copylocks
+// check guards.
 type GroupSpec struct {
 	Counter int          // NUMINGROUP tag
 	Delim   int          // first tag of every entry
@@ -170,9 +172,11 @@ func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
 // with the index just past the block.
 func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
 	var groups []Group
+	wide := s.wideSeen()
+	defer releaseSeen(wide)
 	for len(groups) < count && i < len(fields) && fields[i].Tag == s.Delim {
 		start := i
-		i = s.entry(fields, i)
+		i = s.entry(fields, i, wide)
 		// Cap the capacity so appending to an entry cannot overwrite the
 		// fields that follow it.
 		groups = append(groups, Group{fields: fields[start:i:i]})
@@ -184,54 +188,101 @@ func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
 // index just past it. FIX does not allow a tag twice in one entry, so a
 // repeated tag ends it: the field belongs to the next entry or to the
 // enclosing message.
-func (s *GroupSpec) entry(fields []Field, i int) int {
+//
+// wide is the zeroed bitset of a spec of more than 256 tags and groups (see
+// wideSeen), or nil; entry leaves it zeroed.
+func (s *GroupSpec) entry(fields []Field, i int, wide []uint64) int {
 	// Tags seen in this entry, as bits indexed by position in s.Tags, then
 	// nested counters by position in s.Nested: on the stack for groups of up
-	// to 256 of them.
+	// to 256 of them. A wider spec's bitset is shared by its entries, and
+	// only the words an entry sets are cleared, so that many small entries
+	// do not cost the spec's width each.
 	var small [4]uint64
 	seen := small[:]
-	if n := (len(s.Tags) + len(s.Nested) + 63) / 64; n > len(small) {
-		seen = make([]uint64, n)
+	var touchedBuf [16]int
+	touched := touchedBuf[:0]
+	if wide != nil {
+		seen = wide
 	}
+	end := len(fields)
 	for first := true; i < len(fields); first = false {
 		tag := fields[i].Tag
 		if tag == s.Delim && !first {
-			break // the next entry starts
+			end = i // the next entry starts
+			break
 		}
 		k, c := s.find(tag)
-		if c >= 0 {
+		switch {
+		case c >= 0:
 			// A nested counter, possibly the delimiter itself: it cannot
 			// repeat within the entry either, then skip its entries by count.
-			k := len(s.Tags) + c
+			k = len(s.Tags) + c
+		case k < 0 && !first:
+			end = i // not part of this group
+		}
+		if end != len(fields) {
+			break
+		}
+		if k >= 0 {
 			if seen[k/64]&(1<<(k%64)) != 0 {
-				return i
+				end = i // a tag cannot repeat within an entry
+				break
+			}
+			if wide != nil && seen[k/64] == 0 {
+				touched = append(touched, k/64)
 			}
 			seen[k/64] |= 1 << (k % 64)
+		}
+		if c >= 0 {
 			count, _ := ParseInt(fields[i].Value)
 			i = s.Nested[c].skip(fields, i+1, count)
 			continue
 		}
-		switch {
-		case k < 0 && !first:
-			return i // not part of this group
-		case k >= 0:
-			if seen[k/64]&(1<<(k%64)) != 0 {
-				return i // a tag cannot repeat within an entry
-			}
-			seen[k/64] |= 1 << (k % 64)
-		}
 		i++
 	}
-	return i
+	if i < end {
+		end = i
+	}
+	for _, w := range touched {
+		seen[w] = 0
+	}
+	return end
 }
 
 // skip returns the index just past up to count entries starting at
 // fields[i], like entries without building them.
 func (s *GroupSpec) skip(fields []Field, i, count int) int {
+	wide := s.wideSeen()
+	defer releaseSeen(wide)
 	for n := 0; n < count && i < len(fields) && fields[i].Tag == s.Delim; n++ {
-		i = s.entry(fields, i)
+		i = s.entry(fields, i, wide)
 	}
 	return i
+}
+
+// seenPool holds the zeroed bitsets of wide specs between uses.
+var seenPool sync.Pool
+
+// wideSeen returns a zeroed bitset for the entries of a spec of more than 256
+// tags and nested groups, or nil for a narrower one; releaseSeen returns it,
+// zeroed, to seenPool.
+func (s *GroupSpec) wideSeen() []uint64 {
+	n := (len(s.Tags) + len(s.Nested) + 63) / 64
+	if n <= 4 {
+		return nil
+	}
+	if p, ok := seenPool.Get().(*[]uint64); ok && cap(*p) >= n {
+		return (*p)[:n]
+	}
+	return make([]uint64, n)
+}
+
+func releaseSeen(seen []uint64) {
+	if seen != nil {
+		p := new([]uint64)
+		*p = seen
+		seenPool.Put(p)
+	}
 }
 
 // childIndex returns the index in s.Nested of the group whose counter is tag,
