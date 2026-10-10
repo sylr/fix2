@@ -303,12 +303,30 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 	writeSectionVar := func(name, doc string, refs []dictionary.FieldRef, groups []dictionary.GroupDef) {
 		inGroups, counters := map[int]bool{}, map[int]bool{}
 		collectGroupTags(groups, inGroups, counters, false)
-		var tags []jen.Code
+		var list []int
+		add := func(tag int) {
+			if dict.Fields[tag] != nil && !slices.Contains(list, tag) {
+				list = append(list, tag)
+			}
+		}
 		for _, ref := range refs {
 			if structuralTags[ref.Tag] || inGroups[ref.Tag] || counters[ref.Tag] || dict.Fields[ref.Tag] == nil {
 				continue
 			}
-			tags = append(tags, tagID(dict.Fields[ref.Tag].Name))
+			// Keep both fields of a LENGTH/DATA pair in the section, even
+			// if the dictionary lists one of them elsewhere, so SetData's
+			// adjacent pair is not split between sections.
+			if l := fix2.DataLengthTag(ref.Tag); l != 0 {
+				add(l)
+			}
+			add(ref.Tag)
+			if d := fix2.DataTag(ref.Tag); d != 0 {
+				add(d)
+			}
+		}
+		var tags []jen.Code
+		for _, tag := range list {
+			tags = append(tags, tagID(dict.Fields[tag].Name))
 		}
 		f.Comment(doc)
 		f.Var().Id(name).Op("=").Index().Int().Values(tags...)
@@ -587,9 +605,13 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 			occurrences[ref.Tag]++
 		}
 	}
+	// Such a tag is read skipping the groups, or its getter could return a
+	// group entry's value.
+	topLevel := map[int]bool{}
 	for tag := range groupChildTags {
 		if occurrences[tag] > inGroups[tag] {
 			delete(groupChildTags, tag)
+			topLevel[tag] = true
 		}
 	}
 
@@ -645,7 +667,15 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		if groupChildTags[fi.tag] {
 			continue
 		}
-		addGetter(f, name, fi.tag, fi.name, fi.fixType, fi.goInfo, fi.hasEnums)
+		var get *jen.Statement
+		if topLevel[fi.tag] {
+			args := []jen.Code{tagID(fi.name)}
+			for _, gd := range groups {
+				args = append(args, jen.Id(unexport(name)+"_"+gd.Name+"_spec"))
+			}
+			get = jen.Id("m").Dot("msg").Dot("GetTopLevel").Call(args...)
+		}
+		addGetter(f, name, fi.tag, fi.name, fi.fixType, fi.goInfo, fi.hasEnums, get)
 	}
 
 	// --- Group iteration methods on message reader ---
@@ -1132,10 +1162,13 @@ func writeEntryGroupAddMethod(f *jen.File, dict *dictionary.Dict, parentBuilderN
 // getter generation
 // ---------------------------------------------------------------------------
 
-func addGetter(f *jen.File, structName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
+func addGetter(f *jen.File, structName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool, get *jen.Statement) {
 	recv := jen.Id("m").Op("*").Id(structName)
 	tid := tagID(fieldName)
 	getCall := jen.Id("m").Dot("msg").Dot("Get").Call(tid)
+	if get != nil {
+		getCall = get
+	}
 
 	switch {
 	case hasEnums:

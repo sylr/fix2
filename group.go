@@ -167,3 +167,34 @@ func (s *GroupSpec) Child(counter int) *GroupSpec {
 	}
 	return nil
 }
+
+// GetTopLevel returns the value of the first field with the given tag that is
+// not inside one of the groups described by specs, or nil. Use it for a tag
+// that a message holds both directly and inside a repeating group: Get would
+// return whichever occurrence comes first.
+func (m *Message) GetTopLevel(tag int, specs ...*GroupSpec) []byte {
+	fields := m.fields
+	for i := 0; i < len(fields); {
+		f := fields[i]
+		if spec := groupSpecFor(specs, f.Tag); spec != nil {
+			count, _ := ParseInt(f.Value)
+			i = spec.skip(fields, i+1, count)
+			continue
+		}
+		if f.Tag == tag {
+			return f.Value
+		}
+		i++
+	}
+	return nil
+}
+
+// groupSpecFor returns the spec whose counter is tag, or nil.
+func groupSpecFor(specs []*GroupSpec, tag int) *GroupSpec {
+	for _, s := range specs {
+		if s.Counter == tag {
+			return s
+		}
+	}
+	return nil
+}

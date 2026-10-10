@@ -316,3 +316,18 @@ func TestGroupSpecChild(t *testing.T) {
 		t.Error("Child on a nil spec must return nil")
 	}
 }
+
+func TestGetTopLevel(t *testing.T) {
+	hops := &GroupSpec{Counter: 627, Delim: 628, Tags: []int{628}}
+	// HopCompID (628) occurs in the NoHops group first, then directly.
+	m := fieldsMsg(t, "627=2", "628=hop1", "628=hop2", "112=t", "628=direct")
+	if got := string(m.GetTopLevel(628, hops)); got != "direct" {
+		t.Errorf("GetTopLevel = %q, want direct", got)
+	}
+	if got := string(m.Get(628)); got != "hop1" {
+		t.Errorf("Get = %q, want hop1 (first occurrence)", got)
+	}
+	if got := m.GetTopLevel(999, hops); got != nil {
+		t.Errorf("absent tag = %q", got)
+	}
+}

@@ -868,11 +868,16 @@ func TestSharing(t *testing.T) {
 		t.Fatalf("Parse(%q): %v", raw, err)
 	}
 	hb := WrapHeartbeat(&msg)
-	if n := len(hb.NoHopsEntries()); n != 1 {
-		t.Errorf("%q: %d hops, want 1", raw, n)
+	hops := hb.NoHopsEntries()
+	if len(hops) != 1 {
+		t.Fatalf("%q: %d hops, want 1", raw, len(hops))
 	}
-	if _, ok := hb.HopCompID(); !ok {
-		t.Errorf("%q: direct HopCompID missing", raw)
+	if v, _ := hops[0].HopCompID(); v != "hop" {
+		t.Errorf("hop HopCompID = %q, want hop", v)
+	}
+	// The header group comes first on the wire: the direct getter must skip it.
+	if v, _ := hb.HopCompID(); v != "direct" {
+		t.Errorf("direct HopCompID = %q, want direct", v)
 	}
 }
 `)
@@ -1063,4 +1068,44 @@ func TestGenerateRejectsUnnameable(t *testing.T) {
 			t.Errorf("%s: expected an error", name)
 		}
 	}
+}
+
+// TestGenerateHeaderDataPair covers a header declaring SecureData without
+// its LENGTH field: the pair must stay together in the header section.
+func TestGenerateHeaderDataPair(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="SenderCompID" required="Y"/><field name="SecureData" required="N"/></header>
+  <trailer/>
+  <messages><message name="Heartbeat" msgtype="0" msgcat="admin"><field name="TestReqID" required="N"/></message></messages>
+  <components/>
+  <fields>
+    <field number="49" name="SenderCompID" type="STRING"/>
+    <field number="90" name="SecureDataLen" type="LENGTH"/>
+    <field number="91" name="SecureData" type="DATA"/>
+    <field number="112" name="TestReqID" type="STRING"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "hdrdata", `package hdrdata
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestPair(t *testing.T) {
+	raw := BuildHeartbeat("FIX.4.4").
+		SetTestReqID("T").
+		SetSecureData([]byte("s\x01d")).
+		SetSenderCompID("S").
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	if v, _ := WrapHeartbeat(&msg).SecureData(); string(v) != "s\x01d" {
+		t.Errorf("SecureData = %q", v)
+	}
+}
+`)
 }
