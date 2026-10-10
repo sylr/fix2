@@ -47,6 +47,9 @@ func parseFixTime(name string, v []byte, layout string) (time.Time, error) {
 	digits := len(v) - len(layout) - 1 // fraction digits after the dot
 	switch {
 	case len(v) == len(layout):
+	case len(v) < len(layout) || v[len(layout)] != '.':
+		// time.Parse also takes a comma, FIX does not.
+		return time.Time{}, fmt.Errorf("%s: cannot parse %q", name, v)
 	case digits == 3 || digits == 6 || digits == 9:
 		layout += ".000000000"[:digits+1]
 	case digits == 12:

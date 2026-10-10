@@ -27,6 +27,9 @@ func TestParseUTCTimestamp(t *testing.T) {
 		"", "20011217", "20011217-09:30:47.", "20011217-09:30:47.1", "20011217-09:30:47.1234",
 		"20011217-09:30:47.1234567", "20011217-09:30:47.12345678901", "20011217-09:30:47.12345678901x",
 		"20011217-09:30:47.1234567890123", "20011217-09:30:4x.123456",
+		"20011217-09:30:47,123", "20011217-09:30:47,123456", "20011217-09:30:47,123456789",
+		"20011217-09:30:47,123456789012", "20010230-09:30:47.123456", "20011217-24:30:47.123456",
+		"20011217-09:30:60.123456", "20011217-09:30:47123456",
 	} {
 		if got, err := ParseUTCTimestamp([]byte(in)); err == nil {
 			t.Errorf("ParseUTCTimestamp(%q) = %v, want error", in, got)
@@ -52,9 +55,20 @@ func TestParseUTCTimeOnly(t *testing.T) {
 			t.Errorf("ParseUTCTimeOnly(%q) = %v, %v; want %v", tt.in, got, err, tt.want)
 		}
 	}
-	for _, in := range []string{"", "09:30", "09:30:47.", "09:30:47.12", "09:30:47.1234", "09:30:47.12345678901x", "09:30:47.123456789012345"} {
+	for _, in := range []string{"", "09:30", "09:30:47.", "09:30:47.12", "09:30:47.1234", "09:30:47.12345678901x", "09:30:47.123456789012345",
+		"09:30:47,123", "09:30:47,123456", "09:30:47,123456789", "09:30:47,123456789012", "25:30:47.123456"} {
 		if got, err := ParseUTCTimeOnly([]byte(in)); err == nil {
 			t.Errorf("ParseUTCTimeOnly(%q) = %v, want error", in, got)
 		}
+	}
+}
+
+func TestFormatMicro(t *testing.T) {
+	ts := time.Date(2001, 12, 17, 9, 30, 47, 123_456_789, time.UTC)
+	if got := ts.Format(TimeFormatTimestampMicro); got != "20011217-09:30:47.123456" {
+		t.Errorf("TimeFormatTimestampMicro = %q", got)
+	}
+	if got := ts.Format(TimeFormatTimeOnlyMicro); got != "09:30:47.123456" {
+		t.Errorf("TimeFormatTimeOnlyMicro = %q", got)
 	}
 }

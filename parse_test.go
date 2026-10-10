@@ -902,3 +902,45 @@ func TestParseBodyLengthBoundaries(t *testing.T) {
 		t.Error("ParseFromReader: expected error")
 	}
 }
+
+// TestParseBodyEndSentinels checks the exact error and offset both parsers
+// return when the last body field, DATA or not, ends right at bodyEnd.
+func TestParseBodyEndSentinels(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    []byte
+		err    error // nil: valid
+		offset int
+	}{
+		{"field SOH at bodyEnd", withChecksum("8=FIX.4.4\x019=4\x0135=0\x01"), ErrBodyLenMismatch, 14},
+		{"DATA SOH at bodyEnd", withChecksum("8=FIX.4.4\x019=15\x0135=0\x0195=2\x0196=ab\x01"), ErrMalformedField, 25},
+		{"empty DATA ending the body", withChecksum("8=FIX.4.4\x019=14\x0135=0\x0195=0\x0196=\x01"), nil, 0},
+		{"DATA ending the body", withChecksum("8=FIX.4.4\x019=16\x0135=0\x0195=2\x0196=ab\x01"), nil, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.raw)
+			_, rerr := ParseFromReader(bytes.NewReader(tt.raw))
+			for name, err := range map[string]error{"Parse": err, "ParseFromReader": rerr} {
+				if tt.err == nil {
+					if err != nil {
+						t.Errorf("%s: %v", name, err)
+					}
+					continue
+				}
+				var pe *ParseError
+				if !errors.Is(err, tt.err) || !errors.As(err, &pe) || pe.Offset != tt.offset {
+					t.Errorf("%s = %v (offset %d), want %v at offset %d", name, err, offsetOf(err), tt.err, tt.offset)
+				}
+			}
+		})
+	}
+}
+
+func offsetOf(err error) int {
+	var pe *ParseError
+	if errors.As(err, &pe) {
+		return pe.Offset
+	}
+	return -1
+}
