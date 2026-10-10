@@ -193,6 +193,25 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 		f.Const().Defs(enumConsts...)
 	}
 
+	// Standard header and trailer tags, registered by every message builder
+	// with SetSections. Group tags are left out: header groups are written
+	// by their own writer.
+	writeSectionVar := func(name, doc string, refs []dictionary.FieldRef, groups []dictionary.GroupDef) {
+		inGroups, counters := map[int]bool{}, map[int]bool{}
+		collectGroupTags(groups, inGroups, counters, false)
+		var tags []jen.Code
+		for _, ref := range refs {
+			if structuralTags[ref.Tag] || inGroups[ref.Tag] || counters[ref.Tag] || dict.Fields[ref.Tag] == nil {
+				continue
+			}
+			tags = append(tags, tagID(dict.Fields[ref.Tag].Name))
+		}
+		f.Comment(doc)
+		f.Var().Id(name).Op("=").Index().Int().Values(tags...)
+	}
+	writeSectionVar("standardHeader", "standardHeader lists the standard header tags, written first.", dict.Header, dict.HeaderGroups)
+	writeSectionVar("standardTrailer", "standardTrailer lists the standard trailer tags, written last.", dict.Trailer, dict.TrailerGroups)
+
 	return f.Save(filepath.Join(outDir, "fields.go"))
 }
 
@@ -431,7 +450,14 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 
 	// The message's groups, including those of the standard header and
 	// trailer that every message carries.
-	groups := slices.Concat(dict.HeaderGroups, md.Groups, dict.TrailerGroups)
+	groups := slices.Clone(dict.HeaderGroups)
+	for _, gd := range slices.Concat(md.Groups, dict.TrailerGroups) {
+		if !slices.ContainsFunc(groups, func(g dictionary.GroupDef) bool { return g.Name == gd.Name }) {
+			groups = append(groups, gd)
+		}
+	}
+	headerGroups := groups[:len(dict.HeaderGroups)]
+	bodyGroups := groups[len(dict.HeaderGroups):]
 
 	// Build sets of group child tags and counter tags from this message's groups.
 	// Use the message's own definitions (not merged) so we only exclude fields
@@ -439,6 +465,24 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	groupChildTags := map[int]bool{}
 	counterTags := map[int]bool{}
 	collectGroupTags(groups, groupChildTags, counterTags, false)
+
+	// A tag that occurs more often in the message's fields (group contents
+	// included) than inside its groups is also a direct field of the
+	// message, e.g. a header group child reused in the body: it keeps its
+	// scalar getter and setter.
+	inGroups := map[int]int{}
+	countGroupTags(groups, inGroups)
+	occurrences := map[int]int{}
+	for _, refs := range [][]dictionary.FieldRef{dict.Header, md.Fields, dict.Trailer} {
+		for _, ref := range refs {
+			occurrences[ref.Tag]++
+		}
+	}
+	for tag := range groupChildTags {
+		if occurrences[tag] > inGroups[tag] {
+			delete(groupChildTags, tag)
+		}
+	}
 
 	// Collect fields for this message: header fields + message fields, skip structural.
 	type fieldInfo struct {
@@ -533,10 +577,20 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		ctorFields[jen.Id("groups")] = jen.Op("&").Id(groupsType).Values()
 	}
 	ctor := []jen.Code{jen.Id("b").Op(":=").Op("&").Id(builderName).Values(ctorFields)}
+	// Every Build call, including the embedded Builder's at the end of a
+	// fluent chain, writes the header first and the trailer last, and
+	// serializes the groups.
+	headerWriter := jen.Code(jen.Nil())
+	if len(headerGroups) > 0 {
+		headerWriter = jen.Id("b").Dot("groups").Dot("appendHeaderTo")
+	}
+	ctor = append(ctor, jen.Id("b").Dot("SetSections").Call(jen.Id("standardHeader"), jen.Id("standardTrailer"), headerWriter))
 	if len(groups) > 0 {
-		// Every Build call, including the embedded Builder's at the end of
-		// a fluent chain, serializes the groups.
-		args := []jen.Code{jen.Id("b").Dot("groups").Dot("appendTo")}
+		bodyWriter := jen.Code(jen.Nil())
+		if len(bodyGroups) > 0 {
+			bodyWriter = jen.Id("b").Dot("groups").Dot("appendTo")
+		}
+		args := []jen.Code{bodyWriter}
 		for _, gd := range groups {
 			args = append(args, tagID(gd.Name))
 		}
@@ -565,18 +619,24 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		writeGroupAddMethod(f, dict, builderName, mg)
 	}
 
-	// --- appendGroups: registered with SetGroups by the constructor ---
-	if len(groups) > 0 {
+	// --- group writers: registered by the constructor ---
+	writeGroupWriter := func(method, doc string, gs []dictionary.GroupDef) {
 		var body []jen.Code
-		for _, gd := range groups {
+		for _, gd := range gs {
 			name := gd.Name
 			body = append(body, groupBlock("dst", func() *jen.Statement { return jen.Id("b").Dot(unexport(name)) }, gd))
 		}
 		body = append(body, jen.Return(jen.Id("dst")))
-		f.Comment("appendTo appends the message's repeating groups to dst.")
-		f.Func().Params(jen.Id("b").Op("*").Id(groupsType)).Id("appendTo").Params(
+		f.Comment(doc)
+		f.Func().Params(jen.Id("b").Op("*").Id(groupsType)).Id(method).Params(
 			jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
 		).Index().Qual(fix2Pkg, "Field").Block(body...)
+	}
+	if len(headerGroups) > 0 {
+		writeGroupWriter("appendHeaderTo", "appendHeaderTo appends the standard header's repeating groups to dst.", headerGroups)
+	}
+	if len(bodyGroups) > 0 {
+		writeGroupWriter("appendTo", "appendTo appends the message's other repeating groups to dst.", bodyGroups)
 	}
 
 	return f.Save(filepath.Join(outDir, msgFileName(name)))
@@ -585,6 +645,18 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 // collectGroupTags recursively collects child tags and counter tags from groups.
 // Nested counter tags are added to childTags so they are skipped from the base
 // message getters/setters (they only belong on the parent group entry).
+// countGroupTags counts how many times each tag occurs inside groups: their
+// counters, their fields and, recursively, their nested groups.
+func countGroupTags(groups []dictionary.GroupDef, counts map[int]int) {
+	for _, gd := range groups {
+		counts[gd.CounterTag]++
+		for _, fr := range gd.Fields {
+			counts[fr.Tag]++
+		}
+		countGroupTags(gd.Groups, counts)
+	}
+}
+
 func collectGroupTags(groups []dictionary.GroupDef, childTags, counterTags map[int]bool, nested bool) {
 	for _, gd := range groups {
 		counterTags[gd.CounterTag] = true

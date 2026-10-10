@@ -111,6 +111,7 @@ type RejectBuilder struct {
 
 func BuildReject(beginString string) *RejectBuilder {
 	b := &RejectBuilder{Builder: fix2.NewBuilder(beginString, "3")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *RejectBuilder) SetSenderCompID(v string) *RejectBuilder {

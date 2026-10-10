@@ -276,6 +276,7 @@ func BuildLogon(beginString string) *LogonBuilder {
 		Builder: fix2.NewBuilder(beginString, "A"),
 		groups:  &logonGroups{},
 	}
+	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(b.groups.appendTo, TagNoHops, TagNoMsgTypes)
 	return b
 }
@@ -440,14 +441,19 @@ func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuild
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
-func (b *logonGroups) appendTo(dst []fix2.Field) []fix2.Field {
+// appendHeaderTo appends the standard header's repeating groups to dst.
+func (b *logonGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {
 			dst = entry.appendTo(dst)
 		}
 	}
+	return dst
+}
+
+// appendTo appends the message's other repeating groups to dst.
+func (b *logonGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noMsgTypes) > 0 {
 		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypes))
 		for _, entry := range b.noMsgTypes {

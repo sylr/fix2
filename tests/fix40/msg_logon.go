@@ -123,6 +123,7 @@ type LogonBuilder struct {
 
 func BuildLogon(beginString string) *LogonBuilder {
 	b := &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *LogonBuilder) SetSenderCompID(v string) *LogonBuilder {

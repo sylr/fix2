@@ -18,6 +18,23 @@ type Builder struct {
 
 	groups   func(dst []Field) []Field // appends repeating groups, see SetGroups
 	counters []int                     // counter tags groups manages
+
+	header       []int                     // standard header tags, see SetSections
+	trailer      []int                     // standard trailer tags
+	headerGroups func(dst []Field) []Field // appends the header's repeating groups
+}
+
+// SetSections registers the standard header and trailer: Build writes the
+// fields whose tags are in header first, then the header's repeating groups
+// (appended by headerGroups, which may be nil), then the other fields and
+// groups, and the fields whose tags are in trailer last, as FIX requires
+// whatever order they were set in. Counter tags of the header groups are
+// registered with SetGroups. Generated message builders call it once, from
+// their constructor.
+func (b *Builder) SetSections(header, trailer []int, headerGroups func(dst []Field) []Field) {
+	b.header = header
+	b.trailer = trailer
+	b.headerGroups = headerGroups
 }
 
 // SetGroups registers write, which appends the message's repeating groups to
@@ -163,31 +180,50 @@ func (b *Builder) Build() []byte {
 // BuildWith is Build with extra fields serialized after the builder's own
 // fields and groups, without adding them to the builder.
 func (b *Builder) BuildWith(extra []Field) []byte {
-	var groups []Field
+	var headerGroups, groups []Field
+	if b.headerGroups != nil {
+		headerGroups = b.headerGroups(nil)
+	}
 	if b.groups != nil {
 		groups = b.groups(nil)
 	}
+	emitted := slices.Concat(headerGroups, groups)
 
-	// Build body: 35=<msgType>\x01 + all user fields.
+	// Build body: 35=<msgType>\x01, then the header fields and groups, the
+	// other fields and groups, and the trailer fields.
 	var body []byte
 	body = append(body, "35="...)
 	body = append(body, b.msgType...)
 	body = append(body, soh)
-	for _, f := range b.fields {
-		if b.managedCounter(f.Tag, groups) {
-			continue // the groups carry their own counter
+	appendField := func(f Field) {
+		body = strconv.AppendInt(body, int64(f.Tag), 10)
+		body = append(body, '=')
+		body = append(body, f.Value...)
+		body = append(body, soh)
+	}
+	appendOwn := func(keep func(tag int) bool) {
+		for _, f := range b.fields {
+			// A raw counter is dropped when the groups carry their own.
+			if keep(f.Tag) && !b.managedCounter(f.Tag, emitted) {
+				appendField(f)
+			}
 		}
-		body = strconv.AppendInt(body, int64(f.Tag), 10)
-		body = append(body, '=')
-		body = append(body, f.Value...)
-		body = append(body, soh)
 	}
-	for _, f := range append(groups, extra...) {
-		body = strconv.AppendInt(body, int64(f.Tag), 10)
-		body = append(body, '=')
-		body = append(body, f.Value...)
-		body = append(body, soh)
+	inHeader := func(tag int) bool { return slices.Contains(b.header, tag) }
+	inTrailer := func(tag int) bool { return slices.Contains(b.trailer, tag) }
+
+	appendOwn(inHeader)
+	for _, f := range headerGroups {
+		appendField(f)
 	}
+	appendOwn(func(tag int) bool { return !inHeader(tag) && !inTrailer(tag) })
+	for _, f := range groups {
+		appendField(f)
+	}
+	for _, f := range extra {
+		appendField(f)
+	}
+	appendOwn(inTrailer)
 
 	// Header: 8=<beginString>\x01 9=<bodyLen>\x01
 	var msg []byte

@@ -2344,6 +2344,7 @@ func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
 		Builder: fix2.NewBuilder(beginString, "8"),
 		groups:  &executionReportGroups{},
 	}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoContraBrokers, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoContAmts, TagNoLegs, TagNoMiscFees, TagNoStrategyParameters, TagNoTrdRegTimestamps, TagNoAllocs, TagNoFills, TagNoRateSources)
 	return b
 }
@@ -3784,7 +3785,7 @@ func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuil
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
+// appendTo appends the message's other repeating groups to dst.
 func (b *executionReportGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDs) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))

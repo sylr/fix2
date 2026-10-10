@@ -283,6 +283,7 @@ type NewOrderSingleBuilder struct {
 
 func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
 	b := &NewOrderSingleBuilder{Builder: fix2.NewBuilder(beginString, "D")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSenderCompID(v string) *NewOrderSingleBuilder {

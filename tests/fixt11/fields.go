@@ -239,3 +239,9 @@ const (
 	ApplVerIDFix50sp1 ApplVerID = "8"
 	ApplVerIDFix50sp2 ApplVerID = "9"
 )
+
+// standardHeader lists the standard header tags, written first.
+var standardHeader = []int{TagSenderCompID, TagTargetCompID, TagOnBehalfOfCompID, TagDeliverToCompID, TagSecureDataLen, TagSecureData, TagMsgSeqNum, TagSenderSubID, TagSenderLocationID, TagTargetSubID, TagTargetLocationID, TagOnBehalfOfSubID, TagOnBehalfOfLocationID, TagDeliverToSubID, TagDeliverToLocationID, TagPossDupFlag, TagPossResend, TagSendingTime, TagOrigSendingTime, TagXmlDataLen, TagXmlData, TagMessageEncoding, TagLastMsgSeqNumProcessed, TagApplVerID, TagCstmApplVerID}
+
+// standardTrailer lists the standard trailer tags, written last.
+var standardTrailer = []int{TagSignatureLength, TagSignature}

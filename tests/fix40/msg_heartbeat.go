@@ -103,6 +103,7 @@ type HeartbeatBuilder struct {
 
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
 	b := &HeartbeatBuilder{Builder: fix2.NewBuilder(beginString, "0")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *HeartbeatBuilder) SetSenderCompID(v string) *HeartbeatBuilder {

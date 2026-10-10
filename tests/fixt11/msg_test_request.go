@@ -189,7 +189,8 @@ func BuildTestRequest(beginString string) *TestRequestBuilder {
 		Builder: fix2.NewBuilder(beginString, "1"),
 		groups:  &testRequestGroups{},
 	}
-	b.SetGroups(b.groups.appendTo, TagNoHops)
+	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
+	b.SetGroups(nil, TagNoHops)
 	return b
 }
 func (b *TestRequestBuilder) SetSenderCompID(v string) *TestRequestBuilder {
@@ -308,8 +309,8 @@ func (b *TestRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *TestRequestB
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
-func (b *testRequestGroups) appendTo(dst []fix2.Field) []fix2.Field {
+// appendHeaderTo appends the standard header's repeating groups to dst.
+func (b *testRequestGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

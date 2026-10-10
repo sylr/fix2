@@ -111,6 +111,7 @@ type SequenceResetBuilder struct {
 
 func BuildSequenceReset(beginString string) *SequenceResetBuilder {
 	b := &SequenceResetBuilder{Builder: fix2.NewBuilder(beginString, "4")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *SequenceResetBuilder) SetSenderCompID(v string) *SequenceResetBuilder {

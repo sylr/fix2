@@ -1,6 +1,7 @@
 package fixt11
 
 import (
+	"slices"
 	"testing"
 
 	fix2 "github.com/sylr/fix2"
@@ -34,5 +35,29 @@ func TestHeaderHops(t *testing.T) {
 		if ref, _, _ := hops[i].HopRefID(); ref != want.ref {
 			t.Errorf("hop %d HopRefID = %d, want %d", i, ref, want.ref)
 		}
+	}
+}
+
+// TestHeaderFirst checks that the standard header, header groups included,
+// is written before the body whatever order fields were set in.
+func TestHeaderFirst(t *testing.T) {
+	raw := BuildHeartbeat("FIXT.1.1").
+		SetTestReqID("T").
+		AddNoHopsEntry(NewNoHopsEntry().SetHopCompID("A")).
+		SetSenderCompID("S").
+		SetTargetCompID("D").
+		SetMsgSeqNum(1).
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	var tags []int
+	for _, f := range msg.Fields() {
+		tags = append(tags, f.Tag)
+	}
+	want := []int{8, 9, 35, TagSenderCompID, TagTargetCompID, TagMsgSeqNum, TagNoHops, TagHopCompID, TagTestReqID, 10}
+	if !slices.Equal(tags, want) {
+		t.Errorf("tags = %v, want %v", tags, want)
 	}
 }

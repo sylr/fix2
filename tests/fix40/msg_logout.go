@@ -103,6 +103,7 @@ type LogoutBuilder struct {
 
 func BuildLogout(beginString string) *LogoutBuilder {
 	b := &LogoutBuilder{Builder: fix2.NewBuilder(beginString, "5")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *LogoutBuilder) SetSenderCompID(v string) *LogoutBuilder {

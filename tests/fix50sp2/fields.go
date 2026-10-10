@@ -2427,3 +2427,9 @@ const (
 	ComplexEventConditionAnd ComplexEventCondition = "1"
 	ComplexEventConditionOr  ComplexEventCondition = "2"
 )
+
+// standardHeader lists the standard header tags, written first.
+var standardHeader = []int{}
+
+// standardTrailer lists the standard trailer tags, written last.
+var standardTrailer = []int{}

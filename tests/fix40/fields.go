@@ -379,3 +379,9 @@ const (
 	MiscFeeTypeLevy            MiscFeeType = "6"
 	MiscFeeTypeOther           MiscFeeType = "7"
 )
+
+// standardHeader lists the standard header tags, written first.
+var standardHeader = []int{TagSenderCompID, TagTargetCompID, TagOnBehalfOfCompID, TagDeliverToCompID, TagSecureDataLen, TagSecureData, TagMsgSeqNum, TagSenderSubID, TagTargetSubID, TagOnBehalfOfSubID, TagDeliverToSubID, TagPossDupFlag, TagPossResend, TagSendingTime, TagOrigSendingTime}
+
+// standardTrailer lists the standard trailer tags, written last.
+var standardTrailer = []int{TagSignatureLength, TagSignature}

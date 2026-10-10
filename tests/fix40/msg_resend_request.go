@@ -115,6 +115,7 @@ type ResendRequestBuilder struct {
 
 func BuildResendRequest(beginString string) *ResendRequestBuilder {
 	b := &ResendRequestBuilder{Builder: fix2.NewBuilder(beginString, "2")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *ResendRequestBuilder) SetSenderCompID(v string) *ResendRequestBuilder {

@@ -103,6 +103,7 @@ type TestRequestBuilder struct {
 
 func BuildTestRequest(beginString string) *TestRequestBuilder {
 	b := &TestRequestBuilder{Builder: fix2.NewBuilder(beginString, "1")}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
 func (b *TestRequestBuilder) SetSenderCompID(v string) *TestRequestBuilder {

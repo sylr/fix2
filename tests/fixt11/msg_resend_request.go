@@ -201,7 +201,8 @@ func BuildResendRequest(beginString string) *ResendRequestBuilder {
 		Builder: fix2.NewBuilder(beginString, "2"),
 		groups:  &resendRequestGroups{},
 	}
-	b.SetGroups(b.groups.appendTo, TagNoHops)
+	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
+	b.SetGroups(nil, TagNoHops)
 	return b
 }
 func (b *ResendRequestBuilder) SetSenderCompID(v string) *ResendRequestBuilder {
@@ -324,8 +325,8 @@ func (b *ResendRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *ResendRequ
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
-func (b *resendRequestGroups) appendTo(dst []fix2.Field) []fix2.Field {
+// appendHeaderTo appends the standard header's repeating groups to dst.
+func (b *resendRequestGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

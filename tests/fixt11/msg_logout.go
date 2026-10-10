@@ -201,7 +201,8 @@ func BuildLogout(beginString string) *LogoutBuilder {
 		Builder: fix2.NewBuilder(beginString, "5"),
 		groups:  &logoutGroups{},
 	}
-	b.SetGroups(b.groups.appendTo, TagNoHops)
+	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
+	b.SetGroups(nil, TagNoHops)
 	return b
 }
 func (b *LogoutBuilder) SetSenderCompID(v string) *LogoutBuilder {
@@ -326,8 +327,8 @@ func (b *LogoutBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogoutBuilder {
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
-func (b *logoutGroups) appendTo(dst []fix2.Field) []fix2.Field {
+// appendHeaderTo appends the standard header's repeating groups to dst.
+func (b *logoutGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

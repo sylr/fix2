@@ -1663,6 +1663,7 @@ func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
 		Builder: fix2.NewBuilder(beginString, "D"),
 		groups:  &newOrderSingleGroups{},
 	}
+	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoAllocs, TagNoTradingSessions, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoStrategyParameters, TagNoTrdRegTimestamps)
 	return b
 }
@@ -2740,7 +2741,7 @@ func (b *NewOrderSingleBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestamps
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
+// appendTo appends the message's other repeating groups to dst.
 func (b *newOrderSingleGroups) appendTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noPartyIDs) > 0 {
 		dst = fix2.AppendCount(dst, TagNoPartyIDs, len(b.noPartyIDs))

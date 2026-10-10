@@ -822,3 +822,55 @@ func TestPairDataLengths(t *testing.T) {
 		}
 	}
 }
+
+// TestGenerateHeaderGroupSharing covers a message that redefines the
+// header's group under the same name and reuses a header-group child as a
+// direct body field.
+func TestGenerateHeaderGroupSharing(t *testing.T) {
+	const xml = `<fix type="FIXT" major="1" minor="1">
+  <header>
+    <field name="SenderCompID" required="Y"/>
+    <group name="NoHops" required="N"><field name="HopCompID" required="N"/></group>
+  </header>
+  <trailer/>
+  <messages>
+    <message name="Heartbeat" msgtype="0" msgcat="admin">
+      <field name="HopCompID" required="N"/>
+      <group name="NoHops" required="N"><field name="HopCompID" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="49" name="SenderCompID" type="STRING"/>
+    <field number="627" name="NoHops" type="NUMINGROUP"/>
+    <field number="628" name="HopCompID" type="STRING"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "hdr", `package hdr
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestSharing(t *testing.T) {
+	raw := BuildHeartbeat("FIXT.1.1").
+		SetSenderCompID("S").
+		SetHopCompID("direct").
+		AddNoHopsEntry(NewNoHopsEntry().SetHopCompID("hop")).
+		Build()
+	msg, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	hb := WrapHeartbeat(&msg)
+	if n := len(hb.NoHopsEntries()); n != 1 {
+		t.Errorf("%q: %d hops, want 1", raw, n)
+	}
+	if _, ok := hb.HopCompID(); !ok {
+		t.Errorf("%q: direct HopCompID missing", raw)
+	}
+}
+`)
+}

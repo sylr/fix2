@@ -197,7 +197,8 @@ func BuildSequenceReset(beginString string) *SequenceResetBuilder {
 		Builder: fix2.NewBuilder(beginString, "4"),
 		groups:  &sequenceResetGroups{},
 	}
-	b.SetGroups(b.groups.appendTo, TagNoHops)
+	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
+	b.SetGroups(nil, TagNoHops)
 	return b
 }
 func (b *SequenceResetBuilder) SetSenderCompID(v string) *SequenceResetBuilder {
@@ -320,8 +321,8 @@ func (b *SequenceResetBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *SequenceRe
 	return b
 }
 
-// appendTo appends the message's repeating groups to dst.
-func (b *sequenceResetGroups) appendTo(dst []fix2.Field) []fix2.Field {
+// appendHeaderTo appends the standard header's repeating groups to dst.
+func (b *sequenceResetGroups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 	if len(b.noHops) > 0 {
 		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHops))
 		for _, entry := range b.noHops {

@@ -2,6 +2,7 @@ package fix2
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 )
 
@@ -307,5 +308,28 @@ func TestBuilderSetDataManagedTags(t *testing.T) {
 			}()
 			NewBuilder("FIX.4.4", "A").SetData(tags[0], tags[1], []byte("x"))
 		}()
+	}
+}
+
+func TestSetSections(t *testing.T) {
+	b := NewBuilder("FIXT.1.1", "0")
+	b.SetSections([]int{49, 56, 34}, []int{93, 89}, func(dst []Field) []Field {
+		return append(AppendCount(dst, 627, 1), Field{Tag: 628, Value: []byte("H")})
+	})
+	b.SetGroups(func(dst []Field) []Field { return dst }, 627)
+	// Set in an order that mixes sections.
+	b.SetString(112, "T").SetData(93, 89, []byte("sig")).SetString(49, "S").SetString(56, "D").SetInt(34, 1)
+	raw := b.Build()
+	var tags []int
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	for _, f := range msg.Fields() {
+		tags = append(tags, f.Tag)
+	}
+	want := []int{8, 9, 35, 49, 56, 34, 627, 628, 112, 93, 89, 10}
+	if !slices.Equal(tags, want) {
+		t.Errorf("tags = %v, want %v", tags, want)
 	}
 }
