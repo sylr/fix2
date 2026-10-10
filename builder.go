@@ -6,8 +6,9 @@ import (
 )
 
 // Builder constructs a FIX message from individual fields.
-// Tags 8, 9, 35 and 10 are managed by Build — callers set body and header
-// fields only.
+// Tags 8, 9, 35 and 10 are managed by Build. Setting or appending BeginString
+// (8) or MsgType (35) replaces the value Build writes; setting BodyLength (9)
+// or CheckSum (10), which Build computes, panics.
 type Builder struct {
 	beginString string
 	msgType     string
@@ -25,6 +26,9 @@ func NewBuilder(beginString, msgType string) *Builder {
 // Set sets a body/header field to a raw byte value.
 // If the tag already exists it is replaced; otherwise it is appended.
 func (b *Builder) Set(tag int, value []byte) *Builder {
+	if b.setManaged(tag, value) {
+		return b
+	}
 	cp := make([]byte, len(value))
 	copy(cp, value)
 	for i := range b.fields {
@@ -64,6 +68,9 @@ func (b *Builder) SetBool(tag int, value bool) *Builder {
 // Append appends a field without checking for duplicates.
 // This is needed for repeating groups where the same tag appears multiple times.
 func (b *Builder) Append(tag int, value []byte) *Builder {
+	if b.setManaged(tag, value) {
+		return b
+	}
 	cp := make([]byte, len(value))
 	copy(cp, value)
 	b.fields = append(b.fields, Field{Tag: tag, Value: cp})
@@ -91,6 +98,22 @@ func (b *Builder) AppendBool(tag int, value bool) *Builder {
 		return b.Append(tag, []byte("Y"))
 	}
 	return b.Append(tag, []byte("N"))
+}
+
+// setManaged handles the tags Build manages. It reports whether tag was one
+// of them, so the caller must not store it as a body field.
+func (b *Builder) setManaged(tag int, value []byte) bool {
+	switch tag {
+	case tagBeginStr:
+		b.beginString = string(value)
+		return true
+	case tagMsgType:
+		b.msgType = string(value)
+		return true
+	case tagBodyLen, tagCheckSum:
+		panic(fmt.Sprintf("fix2: Builder: tag %d is computed by Build and cannot be set", tag))
+	}
+	return false
 }
 
 // Build serializes the message into a complete FIX wire-format byte slice:

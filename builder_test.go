@@ -130,3 +130,54 @@ func TestBuilderMinimal(t *testing.T) {
 		t.Errorf("MsgType = %q, want %q", msg.MsgType(), "0")
 	}
 }
+
+func TestBuilderManagedTags(t *testing.T) {
+	// Setting BeginString or MsgType replaces the managed value instead of
+	// emitting a duplicate tag.
+	raw := NewBuilder("FIX.4.4", "D").
+		SetString(35, "F").
+		AppendString(8, "FIX.4.2").
+		SetString(11, "ORD").
+		Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	if got := string(msg.BeginString()); got != "FIX.4.2" {
+		t.Errorf("BeginString = %q, want FIX.4.2", got)
+	}
+	if got := string(msg.MsgType()); got != "F" {
+		t.Errorf("MsgType = %q, want F", got)
+	}
+	for _, tag := range []int{8, 35} {
+		n := 0
+		for _, f := range msg.Fields() {
+			if f.Tag == tag {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("tag %d appears %d times in %q, want 1", tag, n, raw)
+		}
+	}
+
+	// BodyLength and CheckSum are computed by Build: setting them panics.
+	for _, tc := range []struct {
+		name string
+		call func(b *Builder)
+	}{
+		{"Set 9", func(b *Builder) { b.SetInt(9, 1) }},
+		{"Append 9", func(b *Builder) { b.AppendInt(9, 1) }},
+		{"Set 10", func(b *Builder) { b.SetString(10, "000") }},
+		{"Append 10", func(b *Builder) { b.AppendString(10, "000") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("expected panic")
+				}
+			}()
+			tc.call(NewBuilder("FIX.4.4", "D"))
+		})
+	}
+}
