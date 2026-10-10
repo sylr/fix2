@@ -1532,6 +1532,27 @@ func TestAdjacent(t *testing.T) {
 	if q, _ := entries[0].Q(); q != "q" {
 		t.Errorf("Q = %q, want q: the DATA field must not end the entry", q)
 	}
+
+	raw = BuildB("FIX.4.4").
+		AddNoItemsEntry(NewNoItemsEntry().SetP("p1").SetRawData([]byte("x"))).
+		AddNoItemsEntry(NewNoItemsEntry().SetP("p2").SetRawData([]byte("yz")).SetQ("q2")).
+		Build()
+	m, err = fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	entries = WrapB(&m).NoItemsEntries()
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+	for i, want := range []string{"x", "yz"} {
+		if v, _ := entries[i].RawData(); string(v) != want {
+			t.Errorf("entry %d RawData = %q, want %q", i, v, want)
+		}
+	}
+	if q, _ := entries[1].Q(); q != "q2" {
+		t.Errorf("entry 1 Q = %q, want q2", q)
+	}
 }
 `)
 }

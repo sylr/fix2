@@ -140,6 +140,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 
 	// 5 & 6. Check each tag is allowed and enum values are valid.
 	allowed := func(tag int) bool { return d.headerSet[tag] || d.trailerSet[tag] || mdef.fieldSet[tag] }
+	paired := func(other int) bool { return other != 0 && allowed(other) }
 	for _, f := range msg.Fields() {
 		tag := f.Tag
 
@@ -148,10 +149,11 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 			continue
 		}
 
-		// Tag must be in header, trailer, or message fields, or be the
-		// LENGTH of such a DATA field: the parser requires it right before
-		// its DATA field even when the dictionary does not declare it.
-		if dt := fix2.DataTag(tag); !allowed(tag) && (dt == 0 || !allowed(dt)) {
+		// Tag must be in header, trailer, or message fields, or pair with
+		// such a field: the parser requires LENGTH right before its DATA
+		// field, and generated builders write both, even when the
+		// dictionary declares only one.
+		if !allowed(tag) && !paired(fix2.DataTag(tag)) && !paired(fix2.DataLengthTag(tag)) {
 			return &ValidationError{
 				Err: ErrUnexpectedTag,
 				Tag: tag,

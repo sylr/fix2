@@ -1484,4 +1484,14 @@ func TestValidate_GroupWithLengthOnly(t *testing.T) {
 	if err := d.Validate(&msg); !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != 100 {
 		t.Errorf("got %v, want required tag 100 missing", err)
 	}
+	// Two entries with their DATA field, and F direct: valid.
+	msg = parseMsg(t, buildFIXMsg("35=M\x01100=f\x01101=2\x01102=d\x0195=2\x0196=ab\x01102=e\x0195=1\x0196=c\x01"))
+	if err := d.Validate(&msg); err != nil {
+		t.Errorf("valid message: %v", err)
+	}
+	// A pair the message declares neither field of stays unexpected.
+	msg = parseMsg(t, buildFIXMsg("35=M\x01100=f\x0193=1\x0189=x\x01"))
+	if err := d.Validate(&msg); !errors.Is(err, ErrUnexpectedTag) {
+		t.Errorf("Signature pair: got %v, want unexpected tag", err)
+	}
 }
