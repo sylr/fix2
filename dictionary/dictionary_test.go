@@ -749,3 +749,95 @@ func TestValidate_OptionalComponentRequiredFields(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_OptionalComponentScopes(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header>
+    <field name="MsgType" required="Y"/>
+    <component name="Hop" required="N"/>
+  </header>
+  <trailer/>
+  <messages>
+    <message name="Grouped" msgtype="G" msgcat="app">
+      <component name="WithGroup" required="N"/>
+    </message>
+    <message name="Shared" msgtype="S" msgcat="app">
+      <component name="Opt" required="N"/>
+      <group name="NoY" required="N"><field name="X" required="N"/></group>
+    </message>
+    <message name="Twice" msgtype="T" msgcat="app">
+      <component name="Opt" required="N"/>
+      <group name="NoZ" required="N"><component name="Opt" required="N"/></group>
+    </message>
+    <message name="UsesHopTag" msgtype="U" msgcat="app">
+      <field name="HopOther" required="N"/>
+    </message>
+  </messages>
+  <components>
+    <component name="WithGroup">
+      <field name="F" required="Y"/>
+      <group name="NoG" required="Y"><field name="X" required="N"/></group>
+    </component>
+    <component name="Opt">
+      <field name="F" required="Y"/>
+      <field name="X" required="N"/>
+    </component>
+    <component name="Hop">
+      <field name="HopID" required="Y"/>
+      <field name="HopTime" required="N"/>
+      <field name="HopOther" required="N"/>
+    </component>
+  </components>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="101" name="F" type="STRING"/>
+    <field number="102" name="X" type="STRING"/>
+    <field number="103" name="NoG" type="NUMINGROUP"/>
+    <field number="104" name="NoY" type="NUMINGROUP"/>
+    <field number="105" name="NoZ" type="NUMINGROUP"/>
+    <field number="628" name="HopID" type="STRING"/>
+    <field number="629" name="HopTime" type="STRING"/>
+    <field number="630" name="HopOther" type="STRING"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		body    string
+		missing int // 0 when valid
+	}{
+		// Group contents show the enclosing optional component is present.
+		{"group child alone activates component", "35=G\x01102=x\x01", 101},
+		{"component with group complete", "35=G\x01101=f\x01103=1\x01102=x\x01", 0},
+		{"component absent", "35=G\x01", 0},
+		// X also occurs in group NoY, so it cannot activate Opt.
+		{"shared tag from another group", "35=S\x01104=1\x01102=x\x01", 0},
+		// Opt is referenced twice: its presence cannot be attributed, so it is
+		// not enforced rather than rejecting valid messages.
+		{"component referenced twice", "35=T\x01105=1\x01102=x\x01", 0},
+		// Header conditions.
+		{"header component absent", "35=G\x01", 0},
+		{"header component partial", "35=G\x01629=t\x01", 628},
+		{"header component complete", "35=G\x01628=h\x01629=t\x01", 0},
+		// HopOther is also a field of message U, so it cannot activate Hop.
+		{"header tag also used in a body", "35=U\x01630=o\x01", 0},
+	}
+	for _, tt := range tests {
+		msg := parseMsg(t, buildFIXMsg(tt.body))
+		err := d.Validate(&msg)
+		if tt.missing == 0 {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tt.name, err)
+			}
+			continue
+		}
+		var ve *ValidationError
+		if !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != tt.missing {
+			t.Errorf("%s: got %v, want required tag %d missing", tt.name, err, tt.missing)
+		}
+	}
+}

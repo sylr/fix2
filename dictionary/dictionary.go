@@ -6,7 +6,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 )
 
 // ---------------------------------------------------------------------------
@@ -119,12 +121,19 @@ type MessageDef struct {
 }
 
 // condition records the required fields of an optional component: they must
-// be present only when the component is, i.e. when any of its tags is.
+// be present only when the component is.
 type condition struct {
-	component string       // name of the optional component
-	parent    int          // index of the enclosing optional component's condition, or -1
-	tags      map[int]bool // tags whose presence means the component is present
-	required  []int        // tags required when the component is present
+	component  string // name of the optional component
+	activation []int  // tags found only in this component: any present means it is
+	required   []int  // tags required when the component is present
+}
+
+// rawCondition is a condition while its body is being resolved.
+type rawCondition struct {
+	component string
+	parent    int         // index of the enclosing optional component, or -1
+	counts    map[int]int // occurrences of each tag inside the component
+	required  []int
 }
 
 // Dict is a parsed QuickFIX XML data dictionary.
@@ -221,7 +230,6 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.Header = header.all
 	d.headerSet, d.headerReq = buildMaps(d.Header)
-	d.headerConds = header.conditions()
 
 	// 4. Flatten trailer.
 	trailer, err := r.resolve(xd.Trailer.Items)
@@ -230,13 +238,23 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.Trailer = trailer.all
 	d.trailerSet, d.trailerReq = buildMaps(d.Trailer)
-	d.trailerConds = trailer.conditions()
+
+	// Tag occurrences in the header and trailer, which every message carries.
+	envelope := map[int]int{}
+	countTags(envelope, header.all)
+	countTags(envelope, trailer.all)
 
 	// 5. Flatten each message and resolve its groups.
+	inMessages := map[int]bool{}
 	for _, xm := range xd.Messages.Messages {
 		body, err := r.resolve(xm.Items)
 		if err != nil {
 			return nil, fmt.Errorf("dictionary: message %s: %w", xm.Name, err)
+		}
+		total := maps.Clone(envelope)
+		countTags(total, body.all)
+		for _, ref := range body.all {
+			inMessages[ref.Tag] = true
 		}
 		fs, req := buildMaps(body.all)
 		d.Messages[xm.MsgType] = &MessageDef{
@@ -247,11 +265,23 @@ func resolve(xd *xmlDict) (*Dict, error) {
 			Groups:     body.groups,
 			fieldSet:   fs,
 			required:   req,
-			conditions: body.conditions(),
+			conditions: body.conditions(total, nil),
 		}
 	}
 
+	// Header and trailer conditions apply to every message, so a tag also used
+	// in any message body cannot tell their components apart.
+	d.headerConds = header.conditions(envelope, inMessages)
+	d.trailerConds = trailer.conditions(envelope, inMessages)
+
 	return d, nil
+}
+
+// countTags adds one occurrence per ref to counts.
+func countTags(counts map[int]int, refs []FieldRef) {
+	for _, ref := range refs {
+		counts[ref.Tag]++
+	}
 }
 
 // resolver expands field, component and group references into FieldRefs and
@@ -302,14 +332,14 @@ type resolvedBody struct {
 	direct []FieldRef // fields outside any group, components expanded
 	groups []GroupDef // groups at this level, components expanded
 	first  int        // first tag in XML order (field or group counter); 0 if none
-	conds  []condition
+	conds  []rawCondition
 }
 
 // markPresent records tag as part of the optional component at index ctx and
 // of every optional component enclosing it.
 func (b *resolvedBody) markPresent(ctx, tag int) {
 	for i := ctx; i >= 0; i = b.conds[i].parent {
-		b.conds[i].tags[tag] = true
+		b.conds[i].counts[tag]++
 	}
 }
 
@@ -325,13 +355,29 @@ func (b *resolvedBody) addField(ctx, tag int, required bool) FieldRef {
 	return FieldRef{Tag: tag, Required: required && ctx < 0}
 }
 
-// conditions returns the optional components that have required fields.
-func (b *resolvedBody) conditions() []condition {
+// conditions turns the optional components that have required fields into
+// conditions. A tag activates a component only if every occurrence of it,
+// counted in total (envelope and message), lies inside the component and it is
+// not in exclude; otherwise its presence could come from elsewhere. A
+// component left without activation tags is dropped: its presence cannot be
+// told apart, and enforcing it could reject valid messages.
+func (b *resolvedBody) conditions(total map[int]int, exclude map[int]bool) []condition {
 	var out []condition
 	for _, c := range b.conds {
-		if len(c.required) > 0 {
-			out = append(out, c)
+		if len(c.required) == 0 {
+			continue
 		}
+		var activation []int
+		for tag, n := range c.counts {
+			if n == total[tag] && !exclude[tag] {
+				activation = append(activation, tag)
+			}
+		}
+		if len(activation) == 0 {
+			continue
+		}
+		slices.Sort(activation)
+		out = append(out, condition{component: c.component, activation: activation, required: c.required})
 	}
 	return out
 }
@@ -378,7 +424,7 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			// one opens a new condition nested in it.
 			child := ctx
 			if it.Required != "Y" {
-				b.conds = append(b.conds, condition{component: it.Name, parent: ctx, tags: map[int]bool{}})
+				b.conds = append(b.conds, rawCondition{component: it.Name, parent: ctx, counts: map[int]int{}})
 				child = len(b.conds) - 1
 			}
 			if err := r.enter(); err != nil {
@@ -418,6 +464,7 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			// Group children are never required at this level since group
 			// instance validation is out of scope.
 			for _, ref := range inner.all {
+				b.markPresent(ctx, ref.Tag) // group contents show their component is present
 				b.all = append(b.all, FieldRef{Tag: ref.Tag})
 			}
 			b.groups = append(b.groups, GroupDef{
