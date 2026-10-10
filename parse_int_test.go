@@ -1,6 +1,7 @@
 package fix2
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"testing"
@@ -66,9 +67,22 @@ func FuzzParseInt(f *testing.F) {
 	f.Add([]byte(""))
 	f.Add([]byte("-"))
 	f.Add([]byte("abc"))
+	f.Add([]byte("9223372036854775807"))
+	f.Add([]byte("9223372036854775808"))
+	f.Add([]byte("-9223372036854775808"))
+	f.Add([]byte("18446744073709551621"))
 
 	f.Fuzz(func(t *testing.T, v []byte) {
 		got, err := ParseInt(v)
+
+		// For plain decimal input, strconv.Atoi is the reference: same value,
+		// and an error exactly when it reports one (e.g. out of range).
+		if plainDecimal(v) {
+			want, werr := strconv.Atoi(string(v))
+			if (err != nil) != (werr != nil) || (err == nil && got != want) {
+				t.Fatalf("ParseInt(%q) = (%d, %v), strconv.Atoi = (%d, %v)", v, got, err, want, werr)
+			}
+		}
 		if err != nil {
 			return
 		}
@@ -157,4 +171,61 @@ func FuzzParseFloat(f *testing.F) {
 			t.Fatalf("ParseFloat round-trip: %v != %v (input %q)", got, got2, v)
 		}
 	})
+}
+
+func TestParseIntRange(t *testing.T) {
+	maxInt := strconv.Itoa(math.MaxInt)
+	minInt := strconv.Itoa(math.MinInt)
+	for _, tt := range []struct {
+		in   string
+		want int
+	}{
+		{maxInt, math.MaxInt},
+		{minInt, math.MinInt},
+		{"000" + maxInt, math.MaxInt},
+	} {
+		if got, err := ParseInt([]byte(tt.in)); err != nil || got != tt.want {
+			t.Errorf("ParseInt(%q) = (%d, %v), want %d", tt.in, got, err, tt.want)
+		}
+	}
+
+	for _, in := range []string{
+		"9223372036854775808",  // MaxInt64 + 1
+		"-9223372036854775809", // MinInt64 - 1
+		"18446744073709551621", // 2^64 + 5, wraps to 5 without the check
+		"99999999999999999999999",
+	} {
+		got, err := ParseInt([]byte(in))
+		if !errors.Is(err, strconv.ErrRange) {
+			t.Errorf("ParseInt(%q) = (%d, %v), want strconv.ErrRange", in, got, err)
+		}
+	}
+}
+
+func TestParseUintRange(t *testing.T) {
+	maxInt := strconv.Itoa(math.MaxInt)
+	if got, ok := parseUint([]byte(maxInt)); !ok || got != math.MaxInt {
+		t.Errorf("parseUint(%q) = (%d, %v), want (%d, true)", maxInt, got, ok, math.MaxInt)
+	}
+	for _, in := range []string{"9223372036854775808", "18446744073709551621", "18446744073709551651"} {
+		if got, ok := parseUint([]byte(in)); ok {
+			t.Errorf("parseUint(%q) = (%d, true), want overflow", in, got)
+		}
+	}
+}
+
+// plainDecimal reports whether v is an optional '-' followed by one or more digits.
+func plainDecimal(v []byte) bool {
+	if len(v) > 0 && v[0] == '-' {
+		v = v[1:]
+	}
+	if len(v) == 0 {
+		return false
+	}
+	for _, c := range v {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }

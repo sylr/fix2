@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 )
 
 const (
@@ -311,20 +312,31 @@ func parseNextExpectedTag(data []byte, cursor int, expectedTag string) (int, int
 }
 
 // parseUint parses an ASCII decimal integer from b without allocating.
-// Returns the value and true on success.
+// Returns the value and true on success, false on a non-digit byte or if the
+// value does not fit in an int.
 func parseUint(b []byte) (int, bool) {
 	if len(b) == 0 {
 		return 0, false
 	}
 	n := 0
+	if len(b) <= maxSafeDigits {
+		for _, c := range b {
+			if c < '0' || c > '9' {
+				return 0, false
+			}
+			n = n*10 + int(c-'0')
+		}
+		return n, true
+	}
 	for _, c := range b {
 		if c < '0' || c > '9' {
 			return 0, false
 		}
-		n = n*10 + int(c-'0')
-		if n < 0 { // overflow
+		d := int(c - '0')
+		if n > (math.MaxInt-d)/10 {
 			return 0, false
 		}
+		n = n*10 + d
 	}
 	return n, true
 }
