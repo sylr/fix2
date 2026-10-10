@@ -24,7 +24,7 @@ type decoder struct {
 // decode reads a QuickFIX dictionary. Like encoding/xml, it takes the first
 // element whatever its name as the root, and skips unknown elements.
 func decode(r io.Reader) (*xmlDict, error) {
-	dec := &decoder{d: xml.NewDecoder(r)}
+	dec := &decoder{d: xml.NewDecoder(&markupLimiter{r: r})}
 	var root xml.StartElement
 	for {
 		tok, err := dec.d.Token()
@@ -97,12 +97,21 @@ func decode(r io.Reader) (*xmlDict, error) {
 // fieldDef reads a <field> definition and its enum <value>s.
 func (dec *decoder) fieldDef(start xml.StartElement) (xmlFieldDef, error) {
 	f := xmlFieldDef{Name: attr(start, "name"), Type: attr(start, "type")}
-	if s := strings.TrimSpace(attr(start, "number")); s != "" {
-		n, err := strconv.Atoi(s)
+	// Like encoding/xml: every matching attribute is parsed, the last one
+	// wins, and only an empty value stands for 0.
+	for _, a := range start.Attr {
+		if a.Name.Local != "number" {
+			continue
+		}
+		f.Number = 0
+		if a.Value == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(a.Value), 10, strconv.IntSize)
 		if err != nil {
 			return f, fmt.Errorf("field %q: number: %w", f.Name, err)
 		}
-		f.Number = n
+		f.Number = int(n)
 	}
 	err := dec.children(func(start xml.StartElement) error {
 		if start.Name.Local == "value" {
@@ -204,4 +213,149 @@ func attr(start xml.StartElement, name string) string {
 		}
 	}
 	return v
+}
+
+// maxTagLen and maxAttrs bound one tag, or directive, before encoding/xml
+// decodes it: it builds a tag's whole attribute list at once, before any
+// element budget can stop it. QuickFIX dictionaries use at most four
+// attributes per element.
+const (
+	maxTagLen = 64 << 10
+	maxAttrs  = 8
+)
+
+// Lexer states of markupLimiter.
+const (
+	inText    = iota
+	inOpen    // right after '<'
+	inBang    // matching "<!--" or "<![CDATA[" after "<!"
+	inTag     // start or end tag
+	inDecl    // directive, e.g. <!DOCTYPE ...>
+	inComment // until "-->"
+	inCDATA   // until "]]>"
+	inPI      // processing instruction, until "?>"
+)
+
+// markupLimiter enforces maxTagLen and maxAttrs on the XML read through it.
+// Its lexer is just precise enough to find tags: text, comments, CDATA
+// sections and processing instructions end exactly where encoding/xml ends
+// them, and pass through unbounded since decoding them costs about their
+// size. A directive, whose end it finds less precisely, is bounded like a
+// tag, so a disagreement can only make it reject input.
+type markupLimiter struct {
+	r      io.Reader
+	state  int
+	want   string // inBang: the opening being matched
+	match  int    // bytes of want, or of the state's terminator, matched
+	quote  byte   // closing quote inside an attribute value, or 0
+	tagLen int
+	attrs  int
+	depth  int // '<' nesting inside a directive
+}
+
+func (l *markupLimiter) Read(p []byte) (int, error) {
+	n, err := l.r.Read(p)
+	for _, c := range p[:n] {
+		if lerr := l.step(c); lerr != nil {
+			return 0, lerr
+		}
+	}
+	return n, err
+}
+
+func (l *markupLimiter) step(c byte) error {
+	switch l.state {
+	case inText:
+		if c == '<' {
+			l.state, l.tagLen, l.attrs, l.depth, l.quote = inOpen, 1, 0, 0, 0
+		}
+		return nil
+	case inOpen:
+		switch c {
+		case '?':
+			l.state, l.match = inPI, 0
+			return nil
+		case '!':
+			l.state, l.want, l.match = inBang, "", 1
+			return l.grow()
+		}
+		l.state = inTag
+	case inBang:
+		if l.want == "" {
+			switch c {
+			case '-':
+				l.want = "!--"
+			case '[':
+				l.want = "![CDATA["
+			}
+		}
+		if l.want != "" && c == l.want[l.match] {
+			if l.match++; l.match == len(l.want) {
+				l.state, l.match = inComment, 0
+				if l.want != "!--" {
+					l.state = inCDATA
+				}
+			}
+			return l.grow()
+		}
+		l.state = inDecl
+	case inComment, inCDATA:
+		end := byte('-')
+		if l.state == inCDATA {
+			end = ']'
+		}
+		switch {
+		case c == end:
+			l.match = min(l.match+1, 2)
+		case c == '>' && l.match == 2:
+			l.state = inText
+		default:
+			l.match = 0
+		}
+		return nil
+	case inPI:
+		switch {
+		case c == '?':
+			l.match = 1
+		case c == '>' && l.match == 1:
+			l.state = inText
+		default:
+			l.match = 0
+		}
+		return nil
+	}
+
+	// inTag or inDecl.
+	if err := l.grow(); err != nil {
+		return err
+	}
+	switch {
+	case l.quote != 0:
+		if c == l.quote {
+			l.quote = 0
+		}
+	case c == '"' || c == '\'':
+		l.quote = c
+	case c == '=' && l.state == inTag:
+		if l.attrs++; l.attrs > maxAttrs {
+			return fmt.Errorf("element with more than %d attributes", maxAttrs)
+		}
+	case c == '<' && l.state == inDecl:
+		l.depth++
+	case c == '>':
+		if l.depth == 0 {
+			l.state = inText
+		} else {
+			l.depth--
+		}
+	}
+	return nil
+}
+
+// grow counts a byte of the current tag or directive.
+func (l *markupLimiter) grow() error {
+	if l.tagLen++; l.tagLen > maxTagLen {
+		return fmt.Errorf("tag longer than %d bytes", maxTagLen)
+	}
+	return nil
 }
