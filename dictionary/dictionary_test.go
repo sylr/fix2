@@ -928,3 +928,45 @@ func TestLoad_ConditionTrackingCharged(t *testing.T) {
 		t.Fatalf("expected expansion error, got %v", err)
 	}
 }
+
+func TestLoad_SizeBoundary(t *testing.T) {
+	const head = `<fix type="FIX" major="4" minor="4"><header/><trailer/><messages/><components/><fields/><!--`
+	const tail = `--></fix>`
+	dict := func(size int) string {
+		return head + strings.Repeat("a", size-len(head)-len(tail)) + tail
+	}
+	if _, err := Load(strings.NewReader(dict(maxDictSize))); err != nil {
+		t.Errorf("dictionary of exactly maxDictSize bytes: %v", err)
+	}
+	// Valid XML that decodes successfully but is one byte over the limit.
+	if _, err := Load(strings.NewReader(dict(maxDictSize + 1))); err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Errorf("dictionary of maxDictSize+1 bytes: got %v, want size error", err)
+	}
+}
+
+func TestLoad_GroupConditionTrackingCharged(t *testing.T) {
+	// A group of 30,000 fields inside 40 nested optional components: every
+	// group child is recorded in all 40 enclosing conditions.
+	const fields, levels = 30_000, 40
+	var defs, c0, comps strings.Builder
+	defs.WriteString(`<field number="998" name="NoG" type="NUMINGROUP"/><field number="999" name="R" type="STRING"/>`)
+	c0.WriteString(`<component name="C0"><field name="R" required="Y"/><group name="NoG" required="N">`)
+	for i := range fields {
+		fmt.Fprintf(&defs, `<field number="%d" name="F%d" type="STRING"/>`, 1000+i, i)
+		fmt.Fprintf(&c0, `<field name="F%d" required="N"/>`, i)
+	}
+	c0.WriteString(`</group></component>`)
+	for i := 1; i <= levels; i++ {
+		fmt.Fprintf(&comps, `<component name="C%d"><component name="C%d" required="N"/></component>`, i, i-1)
+	}
+	xml := fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="N"/></message></messages>
+  <components>%s%s</components>
+  <fields>%s</fields>
+</fix>`, levels, c0.String(), comps.String(), defs.String())
+
+	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+		t.Fatalf("expected expansion error, got %v", err)
+	}
+}
