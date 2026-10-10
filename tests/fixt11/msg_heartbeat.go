@@ -130,14 +130,6 @@ func (m *Heartbeat) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Heartbeat) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *Heartbeat) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *Heartbeat) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *Heartbeat) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *Heartbeat) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *Heartbeat) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *Heartbeat) TestReqID() (string, bool) {
 	v := m.msg.Get(TagTestReqID)
@@ -278,14 +278,6 @@ func (b *HeartbeatBuilder) SetLastMsgSeqNumProcessed(v int) *HeartbeatBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *HeartbeatBuilder) SetApplVerID(v ApplVerID) *HeartbeatBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *HeartbeatBuilder) SetCstmApplVerID(v string) *HeartbeatBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *HeartbeatBuilder) SetNoHops(v int) *HeartbeatBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -304,6 +296,14 @@ func (b *HeartbeatBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeF
 }
 func (b *HeartbeatBuilder) SetHopRefID(v int) *HeartbeatBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *HeartbeatBuilder) SetApplVerID(v ApplVerID) *HeartbeatBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *HeartbeatBuilder) SetCstmApplVerID(v string) *HeartbeatBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *HeartbeatBuilder) SetTestReqID(v string) *HeartbeatBuilder {

@@ -279,6 +279,14 @@ func (m *ExecutionReport) CommType() (CommType, bool) {
 	v := m.msg.Get(TagCommType)
 	return CommType(v), v != nil
 }
+func (m *ExecutionReport) NoMiscFees() (int, bool, error) {
+	v := m.msg.Get(TagNoMiscFees)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *ExecutionReport) NetMoney() (float64, bool, error) {
 	v := m.msg.Get(TagNetMoney)
 	if v == nil {
@@ -302,14 +310,6 @@ func (m *ExecutionReport) SettlCurrency() (string, bool) {
 func (m *ExecutionReport) Text() (string, bool) {
 	v := m.msg.Get(TagText)
 	return string(v), v != nil
-}
-func (m *ExecutionReport) NoMiscFees() (int, bool, error) {
-	v := m.msg.Get(TagNoMiscFees)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
 }
 func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	groups := m.msg.Groups(TagNoMiscFees, noMiscFeesChildTags)

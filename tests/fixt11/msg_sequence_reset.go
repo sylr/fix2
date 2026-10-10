@@ -130,14 +130,6 @@ func (m *SequenceReset) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *SequenceReset) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *SequenceReset) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *SequenceReset) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *SequenceReset) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *SequenceReset) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *SequenceReset) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *SequenceReset) GapFillFlag() (bool, bool) {
 	v := m.msg.Get(TagGapFillFlag)
@@ -286,14 +286,6 @@ func (b *SequenceResetBuilder) SetLastMsgSeqNumProcessed(v int) *SequenceResetBu
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *SequenceResetBuilder) SetApplVerID(v ApplVerID) *SequenceResetBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *SequenceResetBuilder) SetCstmApplVerID(v string) *SequenceResetBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *SequenceResetBuilder) SetNoHops(v int) *SequenceResetBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -312,6 +304,14 @@ func (b *SequenceResetBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.T
 }
 func (b *SequenceResetBuilder) SetHopRefID(v int) *SequenceResetBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *SequenceResetBuilder) SetApplVerID(v ApplVerID) *SequenceResetBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *SequenceResetBuilder) SetCstmApplVerID(v string) *SequenceResetBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *SequenceResetBuilder) SetGapFillFlag(v bool) *SequenceResetBuilder {

@@ -130,14 +130,6 @@ func (m *ResendRequest) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *ResendRequest) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *ResendRequest) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *ResendRequest) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *ResendRequest) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *ResendRequest) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *ResendRequest) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *ResendRequest) BeginSeqNo() (int, bool, error) {
 	v := m.msg.Get(TagBeginSeqNo)
@@ -290,14 +290,6 @@ func (b *ResendRequestBuilder) SetLastMsgSeqNumProcessed(v int) *ResendRequestBu
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *ResendRequestBuilder) SetApplVerID(v ApplVerID) *ResendRequestBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *ResendRequestBuilder) SetCstmApplVerID(v string) *ResendRequestBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *ResendRequestBuilder) SetNoHops(v int) *ResendRequestBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -316,6 +308,14 @@ func (b *ResendRequestBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.T
 }
 func (b *ResendRequestBuilder) SetHopRefID(v int) *ResendRequestBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *ResendRequestBuilder) SetApplVerID(v ApplVerID) *ResendRequestBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *ResendRequestBuilder) SetCstmApplVerID(v string) *ResendRequestBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *ResendRequestBuilder) SetBeginSeqNo(v int) *ResendRequestBuilder {

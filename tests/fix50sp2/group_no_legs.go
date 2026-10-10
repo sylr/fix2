@@ -12,13 +12,9 @@ type NoLegsEntry struct {
 	grp fix2.Group
 }
 
-func (e *NoLegsEntry) LegQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegQty)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
+func (e *NoLegsEntry) LegSymbol() (string, bool) {
+	v := e.grp.Get(TagLegSymbol)
+	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegCouponPaymentDate() (time.Time, bool, error) {
 	v := e.grp.Get(TagLegCouponPaymentDate)
@@ -132,10 +128,6 @@ func (e *NoLegsEntry) LegInstrRegistry() (string, bool) {
 	v := e.grp.Get(TagLegInstrRegistry)
 	return string(v), v != nil
 }
-func (e *NoLegsEntry) LegSymbol() (string, bool) {
-	v := e.grp.Get(TagLegSymbol)
-	return string(v), v != nil
-}
 func (e *NoLegsEntry) LegSymbolSfx() (string, bool) {
 	v := e.grp.Get(TagLegSymbolSfx)
 	return string(v), v != nil
@@ -146,18 +138,6 @@ func (e *NoLegsEntry) LegSecurityID() (string, bool) {
 }
 func (e *NoLegsEntry) LegSecurityIDSource() (string, bool) {
 	v := e.grp.Get(TagLegSecurityIDSource)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) NoLegSecurityAltID() (string, bool) {
-	v := e.grp.Get(TagNoLegSecurityAltID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) LegSecurityAltID() (string, bool) {
-	v := e.grp.Get(TagLegSecurityAltID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) LegSecurityAltIDSource() (string, bool) {
-	v := e.grp.Get(TagLegSecurityAltIDSource)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegProduct() (int, bool, error) {
@@ -276,45 +256,9 @@ func (e *NoLegsEntry) LegRefID() (string, bool) {
 	v := e.grp.Get(TagLegRefID)
 	return string(v), v != nil
 }
-func (e *NoLegsEntry) NoLegAllocs() (int, bool, error) {
-	v := e.grp.Get(TagNoLegAllocs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) LegAllocAccount() (string, bool) {
-	v := e.grp.Get(TagLegAllocAccount)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) LegIndividualAllocID() (string, bool) {
-	v := e.grp.Get(TagLegIndividualAllocID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) LegAllocQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegAllocQty)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (e *NoLegsEntry) LegAllocAcctIDSource() (string, bool) {
-	v := e.grp.Get(TagLegAllocAcctIDSource)
-	return string(v), v != nil
-}
 func (e *NoLegsEntry) LegSettlCurrency() (string, bool) {
 	v := e.grp.Get(TagLegSettlCurrency)
 	return string(v), v != nil
-}
-func (e *NoLegsEntry) NoLegStipulations() (int, bool, error) {
-	v := e.grp.Get(TagNoLegStipulations)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
 }
 func (e *NoLegsEntry) LegOrderQty() (float64, bool, error) {
 	v := e.grp.Get(TagLegOrderQty)
@@ -324,13 +268,13 @@ func (e *NoLegsEntry) LegOrderQty() (float64, bool, error) {
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
-func (e *NoLegsEntry) LegStipulationType() (string, bool) {
-	v := e.grp.Get(TagLegStipulationType)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) LegStipulationValue() (string, bool) {
-	v := e.grp.Get(TagLegStipulationValue)
-	return string(v), v != nil
+func (e *NoLegsEntry) LegQty() (float64, bool, error) {
+	v := e.grp.Get(TagLegQty)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
 }
 func (e *NoLegsEntry) LegSwapType() (LegSwapType, bool) {
 	v := e.grp.Get(TagLegSwapType)
@@ -348,101 +292,13 @@ func (e *NoLegsEntry) LegPool() (string, bool) {
 	v := e.grp.Get(TagLegPool)
 	return string(v), v != nil
 }
-func (e *NoLegsEntry) NoNested2PartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested2PartyIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) Nested2PartyID() (string, bool) {
-	v := e.grp.Get(TagNested2PartyID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) Nested2PartyIDSource() (string, bool) {
-	v := e.grp.Get(TagNested2PartyIDSource)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) Nested2PartyRole() (int, bool, error) {
-	v := e.grp.Get(TagNested2PartyRole)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) Nested2PartySubID() (string, bool) {
-	v := e.grp.Get(TagNested2PartySubID)
-	return string(v), v != nil
-}
 func (e *NoLegsEntry) LegSecuritySubType() (string, bool) {
 	v := e.grp.Get(TagLegSecuritySubType)
 	return string(v), v != nil
 }
-func (e *NoLegsEntry) NoNested2PartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested2PartySubIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) Nested2PartySubIDType() (int, bool, error) {
-	v := e.grp.Get(TagNested2PartySubIDType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (e *NoLegsEntry) LegStrikeCurrency() (string, bool) {
 	v := e.grp.Get(TagLegStrikeCurrency)
 	return string(v), v != nil
-}
-func (e *NoLegsEntry) NoNested3PartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested3PartyIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) Nested3PartyID() (string, bool) {
-	v := e.grp.Get(TagNested3PartyID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) Nested3PartyIDSource() (string, bool) {
-	v := e.grp.Get(TagNested3PartyIDSource)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) Nested3PartyRole() (int, bool, error) {
-	v := e.grp.Get(TagNested3PartyRole)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) NoNested3PartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested3PartySubIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoLegsEntry) Nested3PartySubID() (string, bool) {
-	v := e.grp.Get(TagNested3PartySubID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) Nested3PartySubIDType() (int, bool, error) {
-	v := e.grp.Get(TagNested3PartySubIDType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
 }
 func (e *NoLegsEntry) LegContractSettlMonth() (string, bool) {
 	v := e.grp.Get(TagLegContractSettlMonth)
@@ -514,10 +370,6 @@ func (e *NoLegsEntry) LegPutOrCall() (int, bool, error) {
 }
 func (e *NoLegsEntry) LegAllocID() (string, bool) {
 	v := e.grp.Get(TagLegAllocID)
-	return string(v), v != nil
-}
-func (e *NoLegsEntry) LegAllocSettlCurrency() (string, bool) {
-	v := e.grp.Get(TagLegAllocSettlCurrency)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegVolatility() (float64, bool, error) {
@@ -592,20 +444,88 @@ func (e *NoLegsEntry) LegFlowScheduleType() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (e *NoLegsEntry) NoLegAllocs() (int, bool, error) {
+	v := e.grp.Get(TagNoLegAllocs)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoLegsEntry) NoLegAllocsEntries() []NoLegAllocsEntry {
+	groups := e.grp.Groups(TagNoLegAllocs, noLegAllocsChildTags)
+	entries := make([]NoLegAllocsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoLegAllocsEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (e *NoLegsEntry) NoLegSecurityAltID() (int, bool, error) {
+	v := e.grp.Get(TagNoLegSecurityAltID)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoLegsEntry) NoLegSecurityAltIDEntries() []NoLegSecurityAltIDEntry {
+	groups := e.grp.Groups(TagNoLegSecurityAltID, noLegSecurityAltIDChildTags)
+	entries := make([]NoLegSecurityAltIDEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoLegSecurityAltIDEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (e *NoLegsEntry) NoLegStipulations() (int, bool, error) {
+	v := e.grp.Get(TagNoLegStipulations)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoLegsEntry) NoLegStipulationsEntries() []NoLegStipulationsEntry {
+	groups := e.grp.Groups(TagNoLegStipulations, noLegStipulationsChildTags)
+	entries := make([]NoLegStipulationsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoLegStipulationsEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (e *NoLegsEntry) NoNested3PartyIDs() (int, bool, error) {
+	v := e.grp.Get(TagNoNested3PartyIDs)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
+	groups := e.grp.Groups(TagNoNested3PartyIDs, noNested3PartyIDsChildTags)
+	entries := make([]NoNested3PartyIDsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoNested3PartyIDsEntry{grp: groups[i]}
+	}
+	return entries
+}
 
-var noLegsChildTags = []int{TagLegQty, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegRedemptionDate, TagLegCreditRating, TagLegCurrency, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegPrice, TagLegSettlType, TagLegSettlDate, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegInstrRegistry, TagLegSymbol, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagNoLegSecurityAltID, TagLegSecurityAltID, TagLegSecurityAltIDSource, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegStrikePrice, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegLastPx, TagLegRefID, TagNoLegAllocs, TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegSettlCurrency, TagNoLegStipulations, TagLegOrderQty, TagLegStipulationType, TagLegStipulationValue, TagLegSwapType, TagLegDatedDate, TagLegPool, TagNoNested2PartyIDs, TagNested2PartyID, TagNested2PartyIDSource, TagNested2PartyRole, TagNested2PartySubID, TagLegSecuritySubType, TagNoNested2PartySubIDs, TagNested2PartySubIDType, TagLegStrikeCurrency, TagNoNested3PartyIDs, TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs, TagNested3PartySubID, TagNested3PartySubIDType, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagLegMaturityTime, TagLegUnitOfMeasureQty, TagLegPutOrCall, TagLegAllocID, TagLegAllocSettlCurrency, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty, TagLegExerciseStyle, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType}
+var noLegsChildTags = []int{TagLegSymbol, TagLegCouponPaymentDate, TagLegIssueDate, TagLegRepoCollateralSecurityType, TagLegRepurchaseTerm, TagLegRepurchaseRate, TagLegFactor, TagLegRedemptionDate, TagLegCreditRating, TagLegCurrency, TagLegPositionEffect, TagLegCoveredOrUncovered, TagLegPrice, TagLegSettlType, TagLegSettlDate, TagLegCountryOfIssue, TagLegStateOrProvinceOfIssue, TagLegLocaleOfIssue, TagLegInstrRegistry, TagLegSymbolSfx, TagLegSecurityID, TagLegSecurityIDSource, TagLegProduct, TagLegCFICode, TagLegSecurityType, TagLegMaturityMonthYear, TagLegMaturityDate, TagLegStrikePrice, TagLegOptAttribute, TagLegContractMultiplier, TagLegCouponRate, TagLegSecurityExchange, TagLegIssuer, TagEncodedLegIssuerLen, TagEncodedLegIssuer, TagLegSecurityDesc, TagEncodedLegSecurityDescLen, TagEncodedLegSecurityDesc, TagLegRatioQty, TagLegSide, TagLegLastPx, TagLegRefID, TagLegSettlCurrency, TagLegOrderQty, TagLegQty, TagLegSwapType, TagLegDatedDate, TagLegPool, TagLegSecuritySubType, TagLegStrikeCurrency, TagLegContractSettlMonth, TagLegInterestAccrualDate, TagLegUnitOfMeasure, TagLegTimeUnit, TagLegOptionRatio, TagLegLastForwardPoints, TagLegCalculatedCcyLastQty, TagLegGrossTradeAmt, TagLegMaturityTime, TagLegUnitOfMeasureQty, TagLegPutOrCall, TagLegAllocID, TagLegVolatility, TagLegDividendYield, TagLegCurrencyRatio, TagLegExecInst, TagLegLastQty, TagLegExerciseStyle, TagLegPriceUnitOfMeasure, TagLegPriceUnitOfMeasureQty, TagLegContractMultiplierUnit, TagLegFlowScheduleType, TagNoLegAllocs, TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency, TagNoNested2PartyIDs, TagNested2PartyID, TagNested2PartyIDSource, TagNested2PartyRole, TagNoNested2PartySubIDs, TagNested2PartySubID, TagNested2PartySubIDType, TagNoLegSecurityAltID, TagLegSecurityAltID, TagLegSecurityAltIDSource, TagNoLegStipulations, TagLegStipulationType, TagLegStipulationValue, TagNoNested3PartyIDs, TagNested3PartyID, TagNested3PartyIDSource, TagNested3PartyRole, TagNoNested3PartySubIDs, TagNested3PartySubID, TagNested3PartySubIDType}
 
 type NoLegsEntryBuilder struct {
-	fields []fix2.Field
+	fields                  []fix2.Field
+	noLegAllocsCount        int
+	noLegSecurityAltIDCount int
+	noLegStipulationsCount  int
+	noNested3PartyIDsCount  int
 }
 
 func NewNoLegsEntry() *NoLegsEntryBuilder {
 	return &NoLegsEntryBuilder{}
 }
-func (e *NoLegsEntryBuilder) SetLegQty(v float64) *NoLegsEntryBuilder {
+func (e *NoLegsEntryBuilder) SetLegSymbol(v string) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
+		Tag:   TagLegSymbol,
+		Value: []byte(v),
 	})
 	return e
 }
@@ -763,13 +683,6 @@ func (e *NoLegsEntryBuilder) SetLegInstrRegistry(v string) *NoLegsEntryBuilder {
 	})
 	return e
 }
-func (e *NoLegsEntryBuilder) SetLegSymbol(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSymbol,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoLegsEntryBuilder) SetLegSymbolSfx(v string) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegSymbolSfx,
@@ -787,27 +700,6 @@ func (e *NoLegsEntryBuilder) SetLegSecurityID(v string) *NoLegsEntryBuilder {
 func (e *NoLegsEntryBuilder) SetLegSecurityIDSource(v string) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegSecurityIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNoLegSecurityAltID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoLegSecurityAltID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegSecurityAltID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityAltID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegSecurityAltIDSource(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegSecurityAltIDSource,
 		Value: []byte(v),
 	})
 	return e
@@ -959,52 +851,10 @@ func (e *NoLegsEntryBuilder) SetLegRefID(v string) *NoLegsEntryBuilder {
 	})
 	return e
 }
-func (e *NoLegsEntryBuilder) SetNoLegAllocs(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoLegAllocs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegAllocAccount(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegAllocAccount,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegIndividualAllocID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegIndividualAllocID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegAllocQty(v float64) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegAllocQty,
-		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegAllocAcctIDSource(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegAllocAcctIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoLegsEntryBuilder) SetLegSettlCurrency(v string) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegSettlCurrency,
 		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNoLegStipulations(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoLegStipulations,
-		Value: strconv.AppendInt(nil, int64(v), 10),
 	})
 	return e
 }
@@ -1015,17 +865,10 @@ func (e *NoLegsEntryBuilder) SetLegOrderQty(v float64) *NoLegsEntryBuilder {
 	})
 	return e
 }
-func (e *NoLegsEntryBuilder) SetLegStipulationType(v string) *NoLegsEntryBuilder {
+func (e *NoLegsEntryBuilder) SetLegQty(v float64) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStipulationType,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetLegStipulationValue(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegStipulationValue,
-		Value: []byte(v),
+		Tag:   TagLegQty,
+		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
 	})
 	return e
 }
@@ -1057,41 +900,6 @@ func (e *NoLegsEntryBuilder) SetLegPool(v string) *NoLegsEntryBuilder {
 	})
 	return e
 }
-func (e *NoLegsEntryBuilder) SetNoNested2PartyIDs(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNested2PartyIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested2PartyID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartyID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested2PartyIDSource(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartyIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested2PartyRole(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested2PartySubID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartySubID,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoLegsEntryBuilder) SetLegSecuritySubType(v string) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegSecuritySubType,
@@ -1099,73 +907,10 @@ func (e *NoLegsEntryBuilder) SetLegSecuritySubType(v string) *NoLegsEntryBuilder
 	})
 	return e
 }
-func (e *NoLegsEntryBuilder) SetNoNested2PartySubIDs(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNested2PartySubIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested2PartySubIDType(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested2PartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
 func (e *NoLegsEntryBuilder) SetLegStrikeCurrency(v string) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegStrikeCurrency,
 		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNoNested3PartyIDs(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNested3PartyIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested3PartyID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested3PartyID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested3PartyIDSource(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested3PartyIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested3PartyRole(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested3PartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNoNested3PartySubIDs(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNested3PartySubIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested3PartySubID(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested3PartySubID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoLegsEntryBuilder) SetNested3PartySubIDType(v int) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested3PartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
 	})
 	return e
 }
@@ -1260,13 +1005,6 @@ func (e *NoLegsEntryBuilder) SetLegAllocID(v string) *NoLegsEntryBuilder {
 	})
 	return e
 }
-func (e *NoLegsEntryBuilder) SetLegAllocSettlCurrency(v string) *NoLegsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagLegAllocSettlCurrency,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoLegsEntryBuilder) SetLegVolatility(v float64) *NoLegsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagLegVolatility,
@@ -1335,5 +1073,121 @@ func (e *NoLegsEntryBuilder) SetLegFlowScheduleType(v int) *NoLegsEntryBuilder {
 		Tag:   TagLegFlowScheduleType,
 		Value: strconv.AppendInt(nil, int64(v), 10),
 	})
+	return e
+}
+func (e *NoLegsEntryBuilder) AddNoLegAllocsEntry(ne *NoLegAllocsEntryBuilder) *NoLegsEntryBuilder {
+	e.noLegAllocsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noLegAllocsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoLegAllocs {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoLegAllocs,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagLegAllocAccount {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
+	return e
+}
+func (e *NoLegsEntryBuilder) AddNoLegSecurityAltIDEntry(ne *NoLegSecurityAltIDEntryBuilder) *NoLegsEntryBuilder {
+	e.noLegSecurityAltIDCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noLegSecurityAltIDCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoLegSecurityAltID {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoLegSecurityAltID,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagLegSecurityAltID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
+	return e
+}
+func (e *NoLegsEntryBuilder) AddNoLegStipulationsEntry(ne *NoLegStipulationsEntryBuilder) *NoLegsEntryBuilder {
+	e.noLegStipulationsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noLegStipulationsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoLegStipulations {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoLegStipulations,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagLegStipulationType {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
+	return e
+}
+func (e *NoLegsEntryBuilder) AddNoNested3PartyIDsEntry(ne *NoNested3PartyIDsEntryBuilder) *NoLegsEntryBuilder {
+	e.noNested3PartyIDsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noNested3PartyIDsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoNested3PartyIDs {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoNested3PartyIDs,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagNested3PartyID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
 	return e
 }

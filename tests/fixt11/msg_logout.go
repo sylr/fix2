@@ -130,14 +130,6 @@ func (m *Logout) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Logout) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *Logout) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *Logout) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *Logout) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *Logout) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *Logout) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *Logout) Text() (string, bool) {
 	v := m.msg.Get(TagText)
@@ -290,14 +290,6 @@ func (b *LogoutBuilder) SetLastMsgSeqNumProcessed(v int) *LogoutBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *LogoutBuilder) SetApplVerID(v ApplVerID) *LogoutBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *LogoutBuilder) SetCstmApplVerID(v string) *LogoutBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *LogoutBuilder) SetNoHops(v int) *LogoutBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -316,6 +308,14 @@ func (b *LogoutBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeForm
 }
 func (b *LogoutBuilder) SetHopRefID(v int) *LogoutBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *LogoutBuilder) SetApplVerID(v ApplVerID) *LogoutBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *LogoutBuilder) SetCstmApplVerID(v string) *LogoutBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *LogoutBuilder) SetText(v string) *LogoutBuilder {

@@ -27,34 +27,6 @@ func (e *NoAllocsEntry) IndividualAllocID() (string, bool) {
 	v := e.grp.Get(TagIndividualAllocID)
 	return string(v), v != nil
 }
-func (e *NoAllocsEntry) NestedPartyID() (string, bool) {
-	v := e.grp.Get(TagNestedPartyID)
-	return string(v), v != nil
-}
-func (e *NoAllocsEntry) NestedPartyIDSource() (string, bool) {
-	v := e.grp.Get(TagNestedPartyIDSource)
-	return string(v), v != nil
-}
-func (e *NoAllocsEntry) NestedPartyRole() (int, bool, error) {
-	v := e.grp.Get(TagNestedPartyRole)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoAllocsEntry) NoNestedPartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNestedPartyIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoAllocsEntry) NestedPartySubID() (string, bool) {
-	v := e.grp.Get(TagNestedPartySubID)
-	return string(v), v != nil
-}
 func (e *NoAllocsEntry) AllocAcctIDSource() (int, bool, error) {
 	v := e.grp.Get(TagAllocAcctIDSource)
 	if v == nil {
@@ -67,27 +39,28 @@ func (e *NoAllocsEntry) AllocSettlCurrency() (string, bool) {
 	v := e.grp.Get(TagAllocSettlCurrency)
 	return string(v), v != nil
 }
-func (e *NoAllocsEntry) NoNestedPartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNestedPartySubIDs)
+func (e *NoAllocsEntry) NoNestedPartyIDs() (int, bool, error) {
+	v := e.grp.Get(TagNoNestedPartyIDs)
 	if v == nil {
 		return 0, false, nil
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (e *NoAllocsEntry) NestedPartySubIDType() (int, bool, error) {
-	v := e.grp.Get(TagNestedPartySubIDType)
-	if v == nil {
-		return 0, false, nil
+func (e *NoAllocsEntry) NoNestedPartyIDsEntries() []NoNestedPartyIDsEntry {
+	groups := e.grp.Groups(TagNoNestedPartyIDs, noNestedPartyIDsChildTags)
+	entries := make([]NoNestedPartyIDsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoNestedPartyIDsEntry{grp: groups[i]}
 	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
+	return entries
 }
 
-var noAllocsChildTags = []int{TagAllocAccount, TagAllocQty, TagIndividualAllocID, TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartyIDs, TagNestedPartySubID, TagAllocAcctIDSource, TagAllocSettlCurrency, TagNoNestedPartySubIDs, TagNestedPartySubIDType}
+var noAllocsChildTags = []int{TagAllocAccount, TagAllocQty, TagIndividualAllocID, TagAllocAcctIDSource, TagAllocSettlCurrency, TagNoNestedPartyIDs, TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartySubIDs, TagNestedPartySubID, TagNestedPartySubIDType}
 
 type NoAllocsEntryBuilder struct {
-	fields []fix2.Field
+	fields                []fix2.Field
+	noNestedPartyIDsCount int
 }
 
 func NewNoAllocsEntry() *NoAllocsEntryBuilder {
@@ -114,41 +87,6 @@ func (e *NoAllocsEntryBuilder) SetIndividualAllocID(v string) *NoAllocsEntryBuil
 	})
 	return e
 }
-func (e *NoAllocsEntryBuilder) SetNestedPartyID(v string) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartyID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoAllocsEntryBuilder) SetNestedPartyIDSource(v string) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartyIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoAllocsEntryBuilder) SetNestedPartyRole(v int) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoAllocsEntryBuilder) SetNoNestedPartyIDs(v int) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNestedPartyIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoAllocsEntryBuilder) SetNestedPartySubID(v string) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartySubID,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoAllocsEntryBuilder) SetAllocAcctIDSource(v int) *NoAllocsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagAllocAcctIDSource,
@@ -163,17 +101,32 @@ func (e *NoAllocsEntryBuilder) SetAllocSettlCurrency(v string) *NoAllocsEntryBui
 	})
 	return e
 }
-func (e *NoAllocsEntryBuilder) SetNoNestedPartySubIDs(v int) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNestedPartySubIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoAllocsEntryBuilder) SetNestedPartySubIDType(v int) *NoAllocsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNestedPartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
+func (e *NoAllocsEntryBuilder) AddNoNestedPartyIDsEntry(ne *NoNestedPartyIDsEntryBuilder) *NoAllocsEntryBuilder {
+	e.noNestedPartyIDsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noNestedPartyIDsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoNestedPartyIDs {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoNestedPartyIDs,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagNestedPartyID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
 	return e
 }

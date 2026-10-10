@@ -130,14 +130,6 @@ func (m *Reject) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Reject) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *Reject) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *Reject) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *Reject) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *Reject) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *Reject) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *Reject) RefSeqNum() (int, bool, error) {
 	v := m.msg.Get(TagRefSeqNum)
@@ -314,14 +314,6 @@ func (b *RejectBuilder) SetLastMsgSeqNumProcessed(v int) *RejectBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *RejectBuilder) SetApplVerID(v ApplVerID) *RejectBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *RejectBuilder) SetCstmApplVerID(v string) *RejectBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *RejectBuilder) SetNoHops(v int) *RejectBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -340,6 +332,14 @@ func (b *RejectBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeForm
 }
 func (b *RejectBuilder) SetHopRefID(v int) *RejectBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *RejectBuilder) SetApplVerID(v ApplVerID) *RejectBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *RejectBuilder) SetCstmApplVerID(v string) *RejectBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *RejectBuilder) SetRefSeqNum(v int) *RejectBuilder {

@@ -66,6 +66,14 @@ func (m *ExecutionReport) LastRptRequested() (LastRptRequested, bool) {
 	v := m.msg.Get(TagLastRptRequested)
 	return LastRptRequested(v), v != nil
 }
+func (m *ExecutionReport) NoPartyIDs() (int, bool, error) {
+	v := m.msg.Get(TagNoPartyIDs)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *ExecutionReport) TradeOriginationDate() (time.Time, bool, error) {
 	v := m.msg.Get(TagTradeOriginationDate)
 	if v == nil {
@@ -73,6 +81,14 @@ func (m *ExecutionReport) TradeOriginationDate() (time.Time, bool, error) {
 	}
 	t, err := fix2.ParseUTCDate(v)
 	return t, true, err
+}
+func (m *ExecutionReport) NoContraBrokers() (int, bool, error) {
+	v := m.msg.Get(TagNoContraBrokers)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
 }
 func (m *ExecutionReport) ListID() (string, bool) {
 	v := m.msg.Get(TagListID)
@@ -162,13 +178,613 @@ func (m *ExecutionReport) ClearingFeeIndicator() (ClearingFeeIndicator, bool) {
 	v := m.msg.Get(TagClearingFeeIndicator)
 	return ClearingFeeIndicator(v), v != nil
 }
+func (m *ExecutionReport) Symbol() (string, bool) {
+	v := m.msg.Get(TagSymbol)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) SymbolSfx() (SymbolSfx, bool) {
+	v := m.msg.Get(TagSymbolSfx)
+	return SymbolSfx(v), v != nil
+}
+func (m *ExecutionReport) SecurityID() (string, bool) {
+	v := m.msg.Get(TagSecurityID)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) SecurityIDSource() (SecurityIDSource, bool) {
+	v := m.msg.Get(TagSecurityIDSource)
+	return SecurityIDSource(v), v != nil
+}
+func (m *ExecutionReport) NoSecurityAltID() (int, bool, error) {
+	v := m.msg.Get(TagNoSecurityAltID)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) Product() (Product, bool) {
+	v := m.msg.Get(TagProduct)
+	return Product(v), v != nil
+}
+func (m *ExecutionReport) CFICode() (string, bool) {
+	v := m.msg.Get(TagCFICode)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) SecurityType() (SecurityType, bool) {
+	v := m.msg.Get(TagSecurityType)
+	return SecurityType(v), v != nil
+}
+func (m *ExecutionReport) SecuritySubType() (string, bool) {
+	v := m.msg.Get(TagSecuritySubType)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) MaturityMonthYear() (string, bool) {
+	v := m.msg.Get(TagMaturityMonthYear)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) MaturityDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagMaturityDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) CouponPaymentDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagCouponPaymentDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) IssueDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagIssueDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) RepoCollateralSecurityType() (int, bool, error) {
+	v := m.msg.Get(TagRepoCollateralSecurityType)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) RepurchaseTerm() (int, bool, error) {
+	v := m.msg.Get(TagRepurchaseTerm)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) RepurchaseRate() (float64, bool, error) {
+	v := m.msg.Get(TagRepurchaseRate)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) Factor() (float64, bool, error) {
+	v := m.msg.Get(TagFactor)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) CreditRating() (string, bool) {
+	v := m.msg.Get(TagCreditRating)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) InstrRegistry() (string, bool) {
+	v := m.msg.Get(TagInstrRegistry)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) CountryOfIssue() (string, bool) {
+	v := m.msg.Get(TagCountryOfIssue)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) StateOrProvinceOfIssue() (string, bool) {
+	v := m.msg.Get(TagStateOrProvinceOfIssue)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) LocaleOfIssue() (string, bool) {
+	v := m.msg.Get(TagLocaleOfIssue)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) RedemptionDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagRedemptionDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) StrikePrice() (float64, bool, error) {
+	v := m.msg.Get(TagStrikePrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) StrikeCurrency() (string, bool) {
+	v := m.msg.Get(TagStrikeCurrency)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) OptAttribute() (string, bool) {
+	v := m.msg.Get(TagOptAttribute)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) ContractMultiplier() (float64, bool, error) {
+	v := m.msg.Get(TagContractMultiplier)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) CouponRate() (float64, bool, error) {
+	v := m.msg.Get(TagCouponRate)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) SecurityExchange() (string, bool) {
+	v := m.msg.Get(TagSecurityExchange)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) Issuer() (string, bool) {
+	v := m.msg.Get(TagIssuer)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) EncodedIssuerLen() (int, bool, error) {
+	v := m.msg.Get(TagEncodedIssuerLen)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) EncodedIssuer() ([]byte, bool) {
+	v := m.msg.Get(TagEncodedIssuer)
+	return v, v != nil
+}
+func (m *ExecutionReport) SecurityDesc() (string, bool) {
+	v := m.msg.Get(TagSecurityDesc)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) EncodedSecurityDescLen() (int, bool, error) {
+	v := m.msg.Get(TagEncodedSecurityDescLen)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) EncodedSecurityDesc() ([]byte, bool) {
+	v := m.msg.Get(TagEncodedSecurityDesc)
+	return v, v != nil
+}
+func (m *ExecutionReport) Pool() (string, bool) {
+	v := m.msg.Get(TagPool)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) ContractSettlMonth() (string, bool) {
+	v := m.msg.Get(TagContractSettlMonth)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) CPProgram() (CPProgram, bool) {
+	v := m.msg.Get(TagCPProgram)
+	return CPProgram(v), v != nil
+}
+func (m *ExecutionReport) CPRegType() (string, bool) {
+	v := m.msg.Get(TagCPRegType)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) NoEvents() (int, bool, error) {
+	v := m.msg.Get(TagNoEvents)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) DatedDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagDatedDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) InterestAccrualDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagInterestAccrualDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) SecurityStatus() (SecurityStatus, bool) {
+	v := m.msg.Get(TagSecurityStatus)
+	return SecurityStatus(v), v != nil
+}
+func (m *ExecutionReport) SettleOnOpenFlag() (string, bool) {
+	v := m.msg.Get(TagSettleOnOpenFlag)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) InstrmtAssignmentMethod() (string, bool) {
+	v := m.msg.Get(TagInstrmtAssignmentMethod)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) StrikeMultiplier() (float64, bool, error) {
+	v := m.msg.Get(TagStrikeMultiplier)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) StrikeValue() (float64, bool, error) {
+	v := m.msg.Get(TagStrikeValue)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) MinPriceIncrement() (float64, bool, error) {
+	v := m.msg.Get(TagMinPriceIncrement)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) PositionLimit() (int, bool, error) {
+	v := m.msg.Get(TagPositionLimit)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) NTPositionLimit() (int, bool, error) {
+	v := m.msg.Get(TagNTPositionLimit)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) NoInstrumentParties() (int, bool, error) {
+	v := m.msg.Get(TagNoInstrumentParties)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) UnitOfMeasure() (UnitOfMeasure, bool) {
+	v := m.msg.Get(TagUnitOfMeasure)
+	return UnitOfMeasure(v), v != nil
+}
+func (m *ExecutionReport) TimeUnit() (TimeUnit, bool) {
+	v := m.msg.Get(TagTimeUnit)
+	return TimeUnit(v), v != nil
+}
+func (m *ExecutionReport) MaturityTime() (string, bool) {
+	v := m.msg.Get(TagMaturityTime)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) SecurityGroup() (string, bool) {
+	v := m.msg.Get(TagSecurityGroup)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) MinPriceIncrementAmount() (float64, bool, error) {
+	v := m.msg.Get(TagMinPriceIncrementAmount)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) UnitOfMeasureQty() (float64, bool, error) {
+	v := m.msg.Get(TagUnitOfMeasureQty)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) SecurityXMLLen() (int, bool, error) {
+	v := m.msg.Get(TagSecurityXMLLen)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) SecurityXML() (string, bool) {
+	v := m.msg.Get(TagSecurityXML)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) SecurityXMLSchema() (string, bool) {
+	v := m.msg.Get(TagSecurityXMLSchema)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) ProductComplex() (string, bool) {
+	v := m.msg.Get(TagProductComplex)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) PriceUnitOfMeasure() (string, bool) {
+	v := m.msg.Get(TagPriceUnitOfMeasure)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) PriceUnitOfMeasureQty() (float64, bool, error) {
+	v := m.msg.Get(TagPriceUnitOfMeasureQty)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) SettlMethod() (SettlMethod, bool) {
+	v := m.msg.Get(TagSettlMethod)
+	return SettlMethod(v), v != nil
+}
+func (m *ExecutionReport) ExerciseStyle() (ExerciseStyle, bool) {
+	v := m.msg.Get(TagExerciseStyle)
+	return ExerciseStyle(v), v != nil
+}
+func (m *ExecutionReport) OptPayoutAmount() (float64, bool, error) {
+	v := m.msg.Get(TagOptPayoutAmount)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) PriceQuoteMethod() (PriceQuoteMethod, bool) {
+	v := m.msg.Get(TagPriceQuoteMethod)
+	return PriceQuoteMethod(v), v != nil
+}
+func (m *ExecutionReport) ListMethod() (ListMethod, bool) {
+	v := m.msg.Get(TagListMethod)
+	return ListMethod(v), v != nil
+}
+func (m *ExecutionReport) CapPrice() (float64, bool, error) {
+	v := m.msg.Get(TagCapPrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) FloorPrice() (float64, bool, error) {
+	v := m.msg.Get(TagFloorPrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) PutOrCall() (PutOrCall, bool) {
+	v := m.msg.Get(TagPutOrCall)
+	return PutOrCall(v), v != nil
+}
+func (m *ExecutionReport) FlexibleIndicator() (bool, bool) {
+	v := m.msg.Get(TagFlexibleIndicator)
+	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *ExecutionReport) FlexProductEligibilityIndicator() (bool, bool) {
+	v := m.msg.Get(TagFlexProductEligibilityIndicator)
+	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *ExecutionReport) ValuationMethod() (ValuationMethod, bool) {
+	v := m.msg.Get(TagValuationMethod)
+	return ValuationMethod(v), v != nil
+}
+func (m *ExecutionReport) ContractMultiplierUnit() (ContractMultiplierUnit, bool) {
+	v := m.msg.Get(TagContractMultiplierUnit)
+	return ContractMultiplierUnit(v), v != nil
+}
+func (m *ExecutionReport) FlowScheduleType() (FlowScheduleType, bool) {
+	v := m.msg.Get(TagFlowScheduleType)
+	return FlowScheduleType(v), v != nil
+}
+func (m *ExecutionReport) RestructuringType() (RestructuringType, bool) {
+	v := m.msg.Get(TagRestructuringType)
+	return RestructuringType(v), v != nil
+}
+func (m *ExecutionReport) Seniority() (Seniority, bool) {
+	v := m.msg.Get(TagSeniority)
+	return Seniority(v), v != nil
+}
+func (m *ExecutionReport) NotionalPercentageOutstanding() (float64, bool, error) {
+	v := m.msg.Get(TagNotionalPercentageOutstanding)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) OriginalNotionalPercentageOutstanding() (float64, bool, error) {
+	v := m.msg.Get(TagOriginalNotionalPercentageOutstanding)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) AttachmentPoint() (float64, bool, error) {
+	v := m.msg.Get(TagAttachmentPoint)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) DetachmentPoint() (float64, bool, error) {
+	v := m.msg.Get(TagDetachmentPoint)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) StrikePriceDeterminationMethod() (StrikePriceDeterminationMethod, bool) {
+	v := m.msg.Get(TagStrikePriceDeterminationMethod)
+	return StrikePriceDeterminationMethod(v), v != nil
+}
+func (m *ExecutionReport) StrikePriceBoundaryMethod() (StrikePriceBoundaryMethod, bool) {
+	v := m.msg.Get(TagStrikePriceBoundaryMethod)
+	return StrikePriceBoundaryMethod(v), v != nil
+}
+func (m *ExecutionReport) StrikePriceBoundaryPrecision() (float64, bool, error) {
+	v := m.msg.Get(TagStrikePriceBoundaryPrecision)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) UnderlyingPriceDeterminationMethod() (UnderlyingPriceDeterminationMethod, bool) {
+	v := m.msg.Get(TagUnderlyingPriceDeterminationMethod)
+	return UnderlyingPriceDeterminationMethod(v), v != nil
+}
+func (m *ExecutionReport) OptPayoutType() (OptPayoutType, bool) {
+	v := m.msg.Get(TagOptPayoutType)
+	return OptPayoutType(v), v != nil
+}
+func (m *ExecutionReport) NoComplexEvents() (int, bool, error) {
+	v := m.msg.Get(TagNoComplexEvents)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) AgreementDesc() (string, bool) {
+	v := m.msg.Get(TagAgreementDesc)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) AgreementID() (string, bool) {
+	v := m.msg.Get(TagAgreementID)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) AgreementDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagAgreementDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) AgreementCurrency() (string, bool) {
+	v := m.msg.Get(TagAgreementCurrency)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) TerminationType() (TerminationType, bool) {
+	v := m.msg.Get(TagTerminationType)
+	return TerminationType(v), v != nil
+}
+func (m *ExecutionReport) StartDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagStartDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) EndDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagEndDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) DeliveryType() (DeliveryType, bool) {
+	v := m.msg.Get(TagDeliveryType)
+	return DeliveryType(v), v != nil
+}
+func (m *ExecutionReport) MarginRatio() (float64, bool, error) {
+	v := m.msg.Get(TagMarginRatio)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) NoUnderlyings() (int, bool, error) {
+	v := m.msg.Get(TagNoUnderlyings)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *ExecutionReport) Side() (Side, bool) {
 	v := m.msg.Get(TagSide)
 	return Side(v), v != nil
 }
+func (m *ExecutionReport) NoStipulations() (int, bool, error) {
+	v := m.msg.Get(TagNoStipulations)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *ExecutionReport) QtyType() (QtyType, bool) {
 	v := m.msg.Get(TagQtyType)
 	return QtyType(v), v != nil
+}
+func (m *ExecutionReport) OrderQty() (float64, bool, error) {
+	v := m.msg.Get(TagOrderQty)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) CashOrderQty() (float64, bool, error) {
+	v := m.msg.Get(TagCashOrderQty)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) OrderPercent() (float64, bool, error) {
+	v := m.msg.Get(TagOrderPercent)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) RoundingDirection() (RoundingDirection, bool) {
+	v := m.msg.Get(TagRoundingDirection)
+	return RoundingDirection(v), v != nil
+}
+func (m *ExecutionReport) RoundingModulus() (float64, bool, error) {
+	v := m.msg.Get(TagRoundingModulus)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
 }
 func (m *ExecutionReport) OrdType() (OrdType, bool) {
 	v := m.msg.Get(TagOrdType)
@@ -193,6 +809,86 @@ func (m *ExecutionReport) StopPx() (float64, bool, error) {
 	}
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
+}
+func (m *ExecutionReport) PegOffsetValue() (float64, bool, error) {
+	v := m.msg.Get(TagPegOffsetValue)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) PegMoveType() (PegMoveType, bool) {
+	v := m.msg.Get(TagPegMoveType)
+	return PegMoveType(v), v != nil
+}
+func (m *ExecutionReport) PegOffsetType() (PegOffsetType, bool) {
+	v := m.msg.Get(TagPegOffsetType)
+	return PegOffsetType(v), v != nil
+}
+func (m *ExecutionReport) PegLimitType() (PegLimitType, bool) {
+	v := m.msg.Get(TagPegLimitType)
+	return PegLimitType(v), v != nil
+}
+func (m *ExecutionReport) PegRoundDirection() (PegRoundDirection, bool) {
+	v := m.msg.Get(TagPegRoundDirection)
+	return PegRoundDirection(v), v != nil
+}
+func (m *ExecutionReport) PegScope() (PegScope, bool) {
+	v := m.msg.Get(TagPegScope)
+	return PegScope(v), v != nil
+}
+func (m *ExecutionReport) PegPriceType() (PegPriceType, bool) {
+	v := m.msg.Get(TagPegPriceType)
+	return PegPriceType(v), v != nil
+}
+func (m *ExecutionReport) PegSecurityIDSource() (string, bool) {
+	v := m.msg.Get(TagPegSecurityIDSource)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) PegSecurityID() (string, bool) {
+	v := m.msg.Get(TagPegSecurityID)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) PegSymbol() (string, bool) {
+	v := m.msg.Get(TagPegSymbol)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) PegSecurityDesc() (string, bool) {
+	v := m.msg.Get(TagPegSecurityDesc)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) DiscretionInst() (DiscretionInst, bool) {
+	v := m.msg.Get(TagDiscretionInst)
+	return DiscretionInst(v), v != nil
+}
+func (m *ExecutionReport) DiscretionOffsetValue() (float64, bool, error) {
+	v := m.msg.Get(TagDiscretionOffsetValue)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) DiscretionMoveType() (DiscretionMoveType, bool) {
+	v := m.msg.Get(TagDiscretionMoveType)
+	return DiscretionMoveType(v), v != nil
+}
+func (m *ExecutionReport) DiscretionOffsetType() (DiscretionOffsetType, bool) {
+	v := m.msg.Get(TagDiscretionOffsetType)
+	return DiscretionOffsetType(v), v != nil
+}
+func (m *ExecutionReport) DiscretionLimitType() (DiscretionLimitType, bool) {
+	v := m.msg.Get(TagDiscretionLimitType)
+	return DiscretionLimitType(v), v != nil
+}
+func (m *ExecutionReport) DiscretionRoundDirection() (DiscretionRoundDirection, bool) {
+	v := m.msg.Get(TagDiscretionRoundDirection)
+	return DiscretionRoundDirection(v), v != nil
+}
+func (m *ExecutionReport) DiscretionScope() (DiscretionScope, bool) {
+	v := m.msg.Get(TagDiscretionScope)
+	return DiscretionScope(v), v != nil
 }
 func (m *ExecutionReport) PeggedPrice() (float64, bool, error) {
 	v := m.msg.Get(TagPeggedPrice)
@@ -433,6 +1129,110 @@ func (m *ExecutionReport) TransactTime() (time.Time, bool, error) {
 func (m *ExecutionReport) ReportToExch() (ReportToExch, bool) {
 	v := m.msg.Get(TagReportToExch)
 	return ReportToExch(v), v != nil
+}
+func (m *ExecutionReport) Commission() (float64, bool, error) {
+	v := m.msg.Get(TagCommission)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) CommType() (CommType, bool) {
+	v := m.msg.Get(TagCommType)
+	return CommType(v), v != nil
+}
+func (m *ExecutionReport) CommCurrency() (string, bool) {
+	v := m.msg.Get(TagCommCurrency)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) FundRenewWaiv() (FundRenewWaiv, bool) {
+	v := m.msg.Get(TagFundRenewWaiv)
+	return FundRenewWaiv(v), v != nil
+}
+func (m *ExecutionReport) Spread() (string, bool) {
+	v := m.msg.Get(TagSpread)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) BenchmarkCurveCurrency() (string, bool) {
+	v := m.msg.Get(TagBenchmarkCurveCurrency)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) BenchmarkCurveName() (BenchmarkCurveName, bool) {
+	v := m.msg.Get(TagBenchmarkCurveName)
+	return BenchmarkCurveName(v), v != nil
+}
+func (m *ExecutionReport) BenchmarkCurvePoint() (string, bool) {
+	v := m.msg.Get(TagBenchmarkCurvePoint)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) BenchmarkPrice() (float64, bool, error) {
+	v := m.msg.Get(TagBenchmarkPrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) BenchmarkPriceType() (int, bool, error) {
+	v := m.msg.Get(TagBenchmarkPriceType)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) BenchmarkSecurityID() (string, bool) {
+	v := m.msg.Get(TagBenchmarkSecurityID)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) BenchmarkSecurityIDSource() (string, bool) {
+	v := m.msg.Get(TagBenchmarkSecurityIDSource)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) YieldType() (YieldType, bool) {
+	v := m.msg.Get(TagYieldType)
+	return YieldType(v), v != nil
+}
+func (m *ExecutionReport) Yield() (float64, bool, error) {
+	v := m.msg.Get(TagYield)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) YieldCalcDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagYieldCalcDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) YieldRedemptionDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagYieldRedemptionDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *ExecutionReport) YieldRedemptionPrice() (float64, bool, error) {
+	v := m.msg.Get(TagYieldRedemptionPrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) YieldRedemptionPriceType() (int, bool, error) {
+	v := m.msg.Get(TagYieldRedemptionPriceType)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
 }
 func (m *ExecutionReport) GrossTradeAmt() (float64, bool, error) {
 	v := m.msg.Get(TagGrossTradeAmt)
@@ -706,9 +1506,41 @@ func (m *ExecutionReport) LastLiquidityInd() (LastLiquidityInd, bool) {
 	v := m.msg.Get(TagLastLiquidityInd)
 	return LastLiquidityInd(v), v != nil
 }
+func (m *ExecutionReport) NoContAmts() (int, bool, error) {
+	v := m.msg.Get(TagNoContAmts)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) NoLegs() (int, bool, error) {
+	v := m.msg.Get(TagNoLegs)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *ExecutionReport) CopyMsgIndicator() (bool, bool) {
 	v := m.msg.Get(TagCopyMsgIndicator)
 	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *ExecutionReport) NoMiscFees() (int, bool, error) {
+	v := m.msg.Get(TagNoMiscFees)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) NoStrategyParameters() (int, bool, error) {
+	v := m.msg.Get(TagNoStrategyParameters)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
 }
 func (m *ExecutionReport) HostCrossID() (string, bool) {
 	v := m.msg.Get(TagHostCrossID)
@@ -733,6 +1565,14 @@ func (m *ExecutionReport) CustOrderHandlingInst() (CustOrderHandlingInst, bool) 
 func (m *ExecutionReport) OrderHandlingInstSource() (OrderHandlingInstSource, bool) {
 	v := m.msg.Get(TagOrderHandlingInstSource)
 	return OrderHandlingInstSource(v), v != nil
+}
+func (m *ExecutionReport) NoTrdRegTimestamps() (int, bool, error) {
+	v := m.msg.Get(TagNoTrdRegTimestamps)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
 }
 func (m *ExecutionReport) AggressorIndicator() (AggressorIndicator, bool) {
 	v := m.msg.Get(TagAggressorIndicator)
@@ -765,1098 +1605,6 @@ func (m *ExecutionReport) LotType() (LotType, bool) {
 func (m *ExecutionReport) PriceProtectionScope() (PriceProtectionScope, bool) {
 	v := m.msg.Get(TagPriceProtectionScope)
 	return PriceProtectionScope(v), v != nil
-}
-func (m *ExecutionReport) PeggedRefPrice() (float64, bool, error) {
-	v := m.msg.Get(TagPeggedRefPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PreTradeAnonymity() (bool, bool) {
-	v := m.msg.Get(TagPreTradeAnonymity)
-	return len(v) == 1 && v[0] == 'Y', v != nil
-}
-func (m *ExecutionReport) MatchIncrement() (float64, bool, error) {
-	v := m.msg.Get(TagMatchIncrement)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) MaxPriceLevels() (int, bool, error) {
-	v := m.msg.Get(TagMaxPriceLevels)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) Volatility() (float64, bool, error) {
-	v := m.msg.Get(TagVolatility)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) TimeToExpiration() (float64, bool, error) {
-	v := m.msg.Get(TagTimeToExpiration)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) RiskFreeRate() (float64, bool, error) {
-	v := m.msg.Get(TagRiskFreeRate)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PriceDelta() (float64, bool, error) {
-	v := m.msg.Get(TagPriceDelta)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) TrdMatchID() (string, bool) {
-	v := m.msg.Get(TagTrdMatchID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) AllocID() (string, bool) {
-	v := m.msg.Get(TagAllocID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) TotNoFills() (int, bool, error) {
-	v := m.msg.Get(TagTotNoFills)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) LastFragment() (LastFragment, bool) {
-	v := m.msg.Get(TagLastFragment)
-	return LastFragment(v), v != nil
-}
-func (m *ExecutionReport) DividendYield() (float64, bool, error) {
-	v := m.msg.Get(TagDividendYield)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) NoPartyIDs() (int, bool, error) {
-	v := m.msg.Get(TagNoPartyIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoContraBrokers() (int, bool, error) {
-	v := m.msg.Get(TagNoContraBrokers)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) Symbol() (string, bool) {
-	v := m.msg.Get(TagSymbol)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) SymbolSfx() (SymbolSfx, bool) {
-	v := m.msg.Get(TagSymbolSfx)
-	return SymbolSfx(v), v != nil
-}
-func (m *ExecutionReport) SecurityID() (string, bool) {
-	v := m.msg.Get(TagSecurityID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) SecurityIDSource() (SecurityIDSource, bool) {
-	v := m.msg.Get(TagSecurityIDSource)
-	return SecurityIDSource(v), v != nil
-}
-func (m *ExecutionReport) Product() (Product, bool) {
-	v := m.msg.Get(TagProduct)
-	return Product(v), v != nil
-}
-func (m *ExecutionReport) CFICode() (string, bool) {
-	v := m.msg.Get(TagCFICode)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) SecurityType() (SecurityType, bool) {
-	v := m.msg.Get(TagSecurityType)
-	return SecurityType(v), v != nil
-}
-func (m *ExecutionReport) SecuritySubType() (string, bool) {
-	v := m.msg.Get(TagSecuritySubType)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) MaturityMonthYear() (string, bool) {
-	v := m.msg.Get(TagMaturityMonthYear)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) MaturityDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagMaturityDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) CouponPaymentDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagCouponPaymentDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) IssueDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagIssueDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) RepoCollateralSecurityType() (int, bool, error) {
-	v := m.msg.Get(TagRepoCollateralSecurityType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) RepurchaseTerm() (int, bool, error) {
-	v := m.msg.Get(TagRepurchaseTerm)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) RepurchaseRate() (float64, bool, error) {
-	v := m.msg.Get(TagRepurchaseRate)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) Factor() (float64, bool, error) {
-	v := m.msg.Get(TagFactor)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) CreditRating() (string, bool) {
-	v := m.msg.Get(TagCreditRating)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) InstrRegistry() (string, bool) {
-	v := m.msg.Get(TagInstrRegistry)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) CountryOfIssue() (string, bool) {
-	v := m.msg.Get(TagCountryOfIssue)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) StateOrProvinceOfIssue() (string, bool) {
-	v := m.msg.Get(TagStateOrProvinceOfIssue)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) LocaleOfIssue() (string, bool) {
-	v := m.msg.Get(TagLocaleOfIssue)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) RedemptionDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagRedemptionDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) StrikePrice() (float64, bool, error) {
-	v := m.msg.Get(TagStrikePrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) StrikeCurrency() (string, bool) {
-	v := m.msg.Get(TagStrikeCurrency)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) OptAttribute() (string, bool) {
-	v := m.msg.Get(TagOptAttribute)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) ContractMultiplier() (float64, bool, error) {
-	v := m.msg.Get(TagContractMultiplier)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) CouponRate() (float64, bool, error) {
-	v := m.msg.Get(TagCouponRate)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) SecurityExchange() (string, bool) {
-	v := m.msg.Get(TagSecurityExchange)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) Issuer() (string, bool) {
-	v := m.msg.Get(TagIssuer)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) EncodedIssuerLen() (int, bool, error) {
-	v := m.msg.Get(TagEncodedIssuerLen)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) EncodedIssuer() ([]byte, bool) {
-	v := m.msg.Get(TagEncodedIssuer)
-	return v, v != nil
-}
-func (m *ExecutionReport) SecurityDesc() (string, bool) {
-	v := m.msg.Get(TagSecurityDesc)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) EncodedSecurityDescLen() (int, bool, error) {
-	v := m.msg.Get(TagEncodedSecurityDescLen)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) EncodedSecurityDesc() ([]byte, bool) {
-	v := m.msg.Get(TagEncodedSecurityDesc)
-	return v, v != nil
-}
-func (m *ExecutionReport) Pool() (string, bool) {
-	v := m.msg.Get(TagPool)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) ContractSettlMonth() (string, bool) {
-	v := m.msg.Get(TagContractSettlMonth)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) CPProgram() (CPProgram, bool) {
-	v := m.msg.Get(TagCPProgram)
-	return CPProgram(v), v != nil
-}
-func (m *ExecutionReport) CPRegType() (string, bool) {
-	v := m.msg.Get(TagCPRegType)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) DatedDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagDatedDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) InterestAccrualDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagInterestAccrualDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) SecurityStatus() (SecurityStatus, bool) {
-	v := m.msg.Get(TagSecurityStatus)
-	return SecurityStatus(v), v != nil
-}
-func (m *ExecutionReport) SettleOnOpenFlag() (string, bool) {
-	v := m.msg.Get(TagSettleOnOpenFlag)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) InstrmtAssignmentMethod() (string, bool) {
-	v := m.msg.Get(TagInstrmtAssignmentMethod)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) StrikeMultiplier() (float64, bool, error) {
-	v := m.msg.Get(TagStrikeMultiplier)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) StrikeValue() (float64, bool, error) {
-	v := m.msg.Get(TagStrikeValue)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) MinPriceIncrement() (float64, bool, error) {
-	v := m.msg.Get(TagMinPriceIncrement)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PositionLimit() (int, bool, error) {
-	v := m.msg.Get(TagPositionLimit)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NTPositionLimit() (int, bool, error) {
-	v := m.msg.Get(TagNTPositionLimit)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) UnitOfMeasure() (UnitOfMeasure, bool) {
-	v := m.msg.Get(TagUnitOfMeasure)
-	return UnitOfMeasure(v), v != nil
-}
-func (m *ExecutionReport) TimeUnit() (TimeUnit, bool) {
-	v := m.msg.Get(TagTimeUnit)
-	return TimeUnit(v), v != nil
-}
-func (m *ExecutionReport) MaturityTime() (string, bool) {
-	v := m.msg.Get(TagMaturityTime)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) SecurityGroup() (string, bool) {
-	v := m.msg.Get(TagSecurityGroup)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) MinPriceIncrementAmount() (float64, bool, error) {
-	v := m.msg.Get(TagMinPriceIncrementAmount)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) UnitOfMeasureQty() (float64, bool, error) {
-	v := m.msg.Get(TagUnitOfMeasureQty)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) ProductComplex() (string, bool) {
-	v := m.msg.Get(TagProductComplex)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) PriceUnitOfMeasure() (string, bool) {
-	v := m.msg.Get(TagPriceUnitOfMeasure)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) PriceUnitOfMeasureQty() (float64, bool, error) {
-	v := m.msg.Get(TagPriceUnitOfMeasureQty)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) SettlMethod() (SettlMethod, bool) {
-	v := m.msg.Get(TagSettlMethod)
-	return SettlMethod(v), v != nil
-}
-func (m *ExecutionReport) ExerciseStyle() (ExerciseStyle, bool) {
-	v := m.msg.Get(TagExerciseStyle)
-	return ExerciseStyle(v), v != nil
-}
-func (m *ExecutionReport) OptPayoutAmount() (float64, bool, error) {
-	v := m.msg.Get(TagOptPayoutAmount)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PriceQuoteMethod() (PriceQuoteMethod, bool) {
-	v := m.msg.Get(TagPriceQuoteMethod)
-	return PriceQuoteMethod(v), v != nil
-}
-func (m *ExecutionReport) ListMethod() (ListMethod, bool) {
-	v := m.msg.Get(TagListMethod)
-	return ListMethod(v), v != nil
-}
-func (m *ExecutionReport) CapPrice() (float64, bool, error) {
-	v := m.msg.Get(TagCapPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) FloorPrice() (float64, bool, error) {
-	v := m.msg.Get(TagFloorPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PutOrCall() (PutOrCall, bool) {
-	v := m.msg.Get(TagPutOrCall)
-	return PutOrCall(v), v != nil
-}
-func (m *ExecutionReport) FlexibleIndicator() (bool, bool) {
-	v := m.msg.Get(TagFlexibleIndicator)
-	return len(v) == 1 && v[0] == 'Y', v != nil
-}
-func (m *ExecutionReport) FlexProductEligibilityIndicator() (bool, bool) {
-	v := m.msg.Get(TagFlexProductEligibilityIndicator)
-	return len(v) == 1 && v[0] == 'Y', v != nil
-}
-func (m *ExecutionReport) ValuationMethod() (ValuationMethod, bool) {
-	v := m.msg.Get(TagValuationMethod)
-	return ValuationMethod(v), v != nil
-}
-func (m *ExecutionReport) ContractMultiplierUnit() (ContractMultiplierUnit, bool) {
-	v := m.msg.Get(TagContractMultiplierUnit)
-	return ContractMultiplierUnit(v), v != nil
-}
-func (m *ExecutionReport) FlowScheduleType() (FlowScheduleType, bool) {
-	v := m.msg.Get(TagFlowScheduleType)
-	return FlowScheduleType(v), v != nil
-}
-func (m *ExecutionReport) RestructuringType() (RestructuringType, bool) {
-	v := m.msg.Get(TagRestructuringType)
-	return RestructuringType(v), v != nil
-}
-func (m *ExecutionReport) Seniority() (Seniority, bool) {
-	v := m.msg.Get(TagSeniority)
-	return Seniority(v), v != nil
-}
-func (m *ExecutionReport) NotionalPercentageOutstanding() (float64, bool, error) {
-	v := m.msg.Get(TagNotionalPercentageOutstanding)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) OriginalNotionalPercentageOutstanding() (float64, bool, error) {
-	v := m.msg.Get(TagOriginalNotionalPercentageOutstanding)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) AttachmentPoint() (float64, bool, error) {
-	v := m.msg.Get(TagAttachmentPoint)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) DetachmentPoint() (float64, bool, error) {
-	v := m.msg.Get(TagDetachmentPoint)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) StrikePriceDeterminationMethod() (StrikePriceDeterminationMethod, bool) {
-	v := m.msg.Get(TagStrikePriceDeterminationMethod)
-	return StrikePriceDeterminationMethod(v), v != nil
-}
-func (m *ExecutionReport) StrikePriceBoundaryMethod() (StrikePriceBoundaryMethod, bool) {
-	v := m.msg.Get(TagStrikePriceBoundaryMethod)
-	return StrikePriceBoundaryMethod(v), v != nil
-}
-func (m *ExecutionReport) StrikePriceBoundaryPrecision() (float64, bool, error) {
-	v := m.msg.Get(TagStrikePriceBoundaryPrecision)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) UnderlyingPriceDeterminationMethod() (UnderlyingPriceDeterminationMethod, bool) {
-	v := m.msg.Get(TagUnderlyingPriceDeterminationMethod)
-	return UnderlyingPriceDeterminationMethod(v), v != nil
-}
-func (m *ExecutionReport) OptPayoutType() (OptPayoutType, bool) {
-	v := m.msg.Get(TagOptPayoutType)
-	return OptPayoutType(v), v != nil
-}
-func (m *ExecutionReport) NoSecurityAltID() (int, bool, error) {
-	v := m.msg.Get(TagNoSecurityAltID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) SecurityAltID() (string, bool) {
-	v := m.msg.Get(TagSecurityAltID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) SecurityAltIDSource() (string, bool) {
-	v := m.msg.Get(TagSecurityAltIDSource)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) NoEvents() (int, bool, error) {
-	v := m.msg.Get(TagNoEvents)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) EventType() (EventType, bool) {
-	v := m.msg.Get(TagEventType)
-	return EventType(v), v != nil
-}
-func (m *ExecutionReport) EventDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagEventDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) EventPx() (float64, bool, error) {
-	v := m.msg.Get(TagEventPx)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) EventText() (string, bool) {
-	v := m.msg.Get(TagEventText)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) EventTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagEventTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *ExecutionReport) NoInstrumentParties() (int, bool, error) {
-	v := m.msg.Get(TagNoInstrumentParties)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) InstrumentPartyID() (string, bool) {
-	v := m.msg.Get(TagInstrumentPartyID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) InstrumentPartyIDSource() (string, bool) {
-	v := m.msg.Get(TagInstrumentPartyIDSource)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) InstrumentPartyRole() (int, bool, error) {
-	v := m.msg.Get(TagInstrumentPartyRole)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoInstrumentPartySubIDs() (int, bool, error) {
-	v := m.msg.Get(TagNoInstrumentPartySubIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) InstrumentPartySubID() (string, bool) {
-	v := m.msg.Get(TagInstrumentPartySubID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) InstrumentPartySubIDType() (int, bool, error) {
-	v := m.msg.Get(TagInstrumentPartySubIDType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) SecurityXMLLen() (int, bool, error) {
-	v := m.msg.Get(TagSecurityXMLLen)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) SecurityXML() (string, bool) {
-	v := m.msg.Get(TagSecurityXML)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) SecurityXMLSchema() (string, bool) {
-	v := m.msg.Get(TagSecurityXMLSchema)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) NoComplexEvents() (int, bool, error) {
-	v := m.msg.Get(TagNoComplexEvents)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) ComplexEventType() (ComplexEventType, bool) {
-	v := m.msg.Get(TagComplexEventType)
-	return ComplexEventType(v), v != nil
-}
-func (m *ExecutionReport) ComplexOptPayoutAmount() (float64, bool, error) {
-	v := m.msg.Get(TagComplexOptPayoutAmount)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) ComplexEventPrice() (float64, bool, error) {
-	v := m.msg.Get(TagComplexEventPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) ComplexEventPriceBoundaryMethod() (ComplexEventPriceBoundaryMethod, bool) {
-	v := m.msg.Get(TagComplexEventPriceBoundaryMethod)
-	return ComplexEventPriceBoundaryMethod(v), v != nil
-}
-func (m *ExecutionReport) ComplexEventPriceBoundaryPrecision() (float64, bool, error) {
-	v := m.msg.Get(TagComplexEventPriceBoundaryPrecision)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) ComplexEventPriceTimeType() (ComplexEventPriceTimeType, bool) {
-	v := m.msg.Get(TagComplexEventPriceTimeType)
-	return ComplexEventPriceTimeType(v), v != nil
-}
-func (m *ExecutionReport) ComplexEventCondition() (ComplexEventCondition, bool) {
-	v := m.msg.Get(TagComplexEventCondition)
-	return ComplexEventCondition(v), v != nil
-}
-func (m *ExecutionReport) NoComplexEventDates() (int, bool, error) {
-	v := m.msg.Get(TagNoComplexEventDates)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) ComplexEventStartDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventStartDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *ExecutionReport) ComplexEventEndDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventEndDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *ExecutionReport) NoComplexEventTimes() (int, bool, error) {
-	v := m.msg.Get(TagNoComplexEventTimes)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) ComplexEventStartTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventStartTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimeOnly(v)
-	return t, true, err
-}
-func (m *ExecutionReport) ComplexEventEndTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventEndTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimeOnly(v)
-	return t, true, err
-}
-func (m *ExecutionReport) AgreementDesc() (string, bool) {
-	v := m.msg.Get(TagAgreementDesc)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) AgreementID() (string, bool) {
-	v := m.msg.Get(TagAgreementID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) AgreementDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagAgreementDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) AgreementCurrency() (string, bool) {
-	v := m.msg.Get(TagAgreementCurrency)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) TerminationType() (TerminationType, bool) {
-	v := m.msg.Get(TagTerminationType)
-	return TerminationType(v), v != nil
-}
-func (m *ExecutionReport) StartDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagStartDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) EndDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagEndDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) DeliveryType() (DeliveryType, bool) {
-	v := m.msg.Get(TagDeliveryType)
-	return DeliveryType(v), v != nil
-}
-func (m *ExecutionReport) MarginRatio() (float64, bool, error) {
-	v := m.msg.Get(TagMarginRatio)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) NoUnderlyings() (int, bool, error) {
-	v := m.msg.Get(TagNoUnderlyings)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoStipulations() (int, bool, error) {
-	v := m.msg.Get(TagNoStipulations)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) OrderQty() (float64, bool, error) {
-	v := m.msg.Get(TagOrderQty)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) CashOrderQty() (float64, bool, error) {
-	v := m.msg.Get(TagCashOrderQty)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) OrderPercent() (float64, bool, error) {
-	v := m.msg.Get(TagOrderPercent)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) RoundingDirection() (RoundingDirection, bool) {
-	v := m.msg.Get(TagRoundingDirection)
-	return RoundingDirection(v), v != nil
-}
-func (m *ExecutionReport) RoundingModulus() (float64, bool, error) {
-	v := m.msg.Get(TagRoundingModulus)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PegOffsetValue() (float64, bool, error) {
-	v := m.msg.Get(TagPegOffsetValue)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) PegMoveType() (PegMoveType, bool) {
-	v := m.msg.Get(TagPegMoveType)
-	return PegMoveType(v), v != nil
-}
-func (m *ExecutionReport) PegOffsetType() (PegOffsetType, bool) {
-	v := m.msg.Get(TagPegOffsetType)
-	return PegOffsetType(v), v != nil
-}
-func (m *ExecutionReport) PegLimitType() (PegLimitType, bool) {
-	v := m.msg.Get(TagPegLimitType)
-	return PegLimitType(v), v != nil
-}
-func (m *ExecutionReport) PegRoundDirection() (PegRoundDirection, bool) {
-	v := m.msg.Get(TagPegRoundDirection)
-	return PegRoundDirection(v), v != nil
-}
-func (m *ExecutionReport) PegScope() (PegScope, bool) {
-	v := m.msg.Get(TagPegScope)
-	return PegScope(v), v != nil
-}
-func (m *ExecutionReport) PegPriceType() (PegPriceType, bool) {
-	v := m.msg.Get(TagPegPriceType)
-	return PegPriceType(v), v != nil
-}
-func (m *ExecutionReport) PegSecurityIDSource() (string, bool) {
-	v := m.msg.Get(TagPegSecurityIDSource)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) PegSecurityID() (string, bool) {
-	v := m.msg.Get(TagPegSecurityID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) PegSymbol() (string, bool) {
-	v := m.msg.Get(TagPegSymbol)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) PegSecurityDesc() (string, bool) {
-	v := m.msg.Get(TagPegSecurityDesc)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) DiscretionInst() (DiscretionInst, bool) {
-	v := m.msg.Get(TagDiscretionInst)
-	return DiscretionInst(v), v != nil
-}
-func (m *ExecutionReport) DiscretionOffsetValue() (float64, bool, error) {
-	v := m.msg.Get(TagDiscretionOffsetValue)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) DiscretionMoveType() (DiscretionMoveType, bool) {
-	v := m.msg.Get(TagDiscretionMoveType)
-	return DiscretionMoveType(v), v != nil
-}
-func (m *ExecutionReport) DiscretionOffsetType() (DiscretionOffsetType, bool) {
-	v := m.msg.Get(TagDiscretionOffsetType)
-	return DiscretionOffsetType(v), v != nil
-}
-func (m *ExecutionReport) DiscretionLimitType() (DiscretionLimitType, bool) {
-	v := m.msg.Get(TagDiscretionLimitType)
-	return DiscretionLimitType(v), v != nil
-}
-func (m *ExecutionReport) DiscretionRoundDirection() (DiscretionRoundDirection, bool) {
-	v := m.msg.Get(TagDiscretionRoundDirection)
-	return DiscretionRoundDirection(v), v != nil
-}
-func (m *ExecutionReport) DiscretionScope() (DiscretionScope, bool) {
-	v := m.msg.Get(TagDiscretionScope)
-	return DiscretionScope(v), v != nil
-}
-func (m *ExecutionReport) Commission() (float64, bool, error) {
-	v := m.msg.Get(TagCommission)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) CommType() (CommType, bool) {
-	v := m.msg.Get(TagCommType)
-	return CommType(v), v != nil
-}
-func (m *ExecutionReport) CommCurrency() (string, bool) {
-	v := m.msg.Get(TagCommCurrency)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) FundRenewWaiv() (FundRenewWaiv, bool) {
-	v := m.msg.Get(TagFundRenewWaiv)
-	return FundRenewWaiv(v), v != nil
-}
-func (m *ExecutionReport) Spread() (string, bool) {
-	v := m.msg.Get(TagSpread)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) BenchmarkCurveCurrency() (string, bool) {
-	v := m.msg.Get(TagBenchmarkCurveCurrency)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) BenchmarkCurveName() (BenchmarkCurveName, bool) {
-	v := m.msg.Get(TagBenchmarkCurveName)
-	return BenchmarkCurveName(v), v != nil
-}
-func (m *ExecutionReport) BenchmarkCurvePoint() (string, bool) {
-	v := m.msg.Get(TagBenchmarkCurvePoint)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) BenchmarkPrice() (float64, bool, error) {
-	v := m.msg.Get(TagBenchmarkPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) BenchmarkPriceType() (int, bool, error) {
-	v := m.msg.Get(TagBenchmarkPriceType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) BenchmarkSecurityID() (string, bool) {
-	v := m.msg.Get(TagBenchmarkSecurityID)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) BenchmarkSecurityIDSource() (string, bool) {
-	v := m.msg.Get(TagBenchmarkSecurityIDSource)
-	return string(v), v != nil
-}
-func (m *ExecutionReport) YieldType() (YieldType, bool) {
-	v := m.msg.Get(TagYieldType)
-	return YieldType(v), v != nil
-}
-func (m *ExecutionReport) Yield() (float64, bool, error) {
-	v := m.msg.Get(TagYield)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) YieldCalcDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagYieldCalcDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) YieldRedemptionDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagYieldRedemptionDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *ExecutionReport) YieldRedemptionPrice() (float64, bool, error) {
-	v := m.msg.Get(TagYieldRedemptionPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *ExecutionReport) YieldRedemptionPriceType() (int, bool, error) {
-	v := m.msg.Get(TagYieldRedemptionPriceType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoContAmts() (int, bool, error) {
-	v := m.msg.Get(TagNoContAmts)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoLegs() (int, bool, error) {
-	v := m.msg.Get(TagNoLegs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoMiscFees() (int, bool, error) {
-	v := m.msg.Get(TagNoMiscFees)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoStrategyParameters() (int, bool, error) {
-	v := m.msg.Get(TagNoStrategyParameters)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *ExecutionReport) NoTrdRegTimestamps() (int, bool, error) {
-	v := m.msg.Get(TagNoTrdRegTimestamps)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
 }
 func (m *ExecutionReport) TriggerType() (TriggerType, bool) {
 	v := m.msg.Get(TagTriggerType)
@@ -1930,6 +1678,34 @@ func (m *ExecutionReport) TriggerTradingSessionSubID() (string, bool) {
 	v := m.msg.Get(TagTriggerTradingSessionSubID)
 	return string(v), v != nil
 }
+func (m *ExecutionReport) PeggedRefPrice() (float64, bool, error) {
+	v := m.msg.Get(TagPeggedRefPrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) PreTradeAnonymity() (bool, bool) {
+	v := m.msg.Get(TagPreTradeAnonymity)
+	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *ExecutionReport) MatchIncrement() (float64, bool, error) {
+	v := m.msg.Get(TagMatchIncrement)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) MaxPriceLevels() (int, bool, error) {
+	v := m.msg.Get(TagMaxPriceLevels)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *ExecutionReport) SecondaryDisplayQty() (float64, bool, error) {
 	v := m.msg.Get(TagSecondaryDisplayQty)
 	if v == nil {
@@ -1986,6 +1762,46 @@ func (m *ExecutionReport) DisplayQty() (float64, bool, error) {
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
+func (m *ExecutionReport) Volatility() (float64, bool, error) {
+	v := m.msg.Get(TagVolatility)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) TimeToExpiration() (float64, bool, error) {
+	v := m.msg.Get(TagTimeToExpiration)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) RiskFreeRate() (float64, bool, error) {
+	v := m.msg.Get(TagRiskFreeRate)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) PriceDelta() (float64, bool, error) {
+	v := m.msg.Get(TagPriceDelta)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *ExecutionReport) TrdMatchID() (string, bool) {
+	v := m.msg.Get(TagTrdMatchID)
+	return string(v), v != nil
+}
+func (m *ExecutionReport) AllocID() (string, bool) {
+	v := m.msg.Get(TagAllocID)
+	return string(v), v != nil
+}
 func (m *ExecutionReport) NoAllocs() (int, bool, error) {
 	v := m.msg.Get(TagNoAllocs)
 	if v == nil {
@@ -1994,6 +1810,18 @@ func (m *ExecutionReport) NoAllocs() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *ExecutionReport) TotNoFills() (int, bool, error) {
+	v := m.msg.Get(TagTotNoFills)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *ExecutionReport) LastFragment() (LastFragment, bool) {
+	v := m.msg.Get(TagLastFragment)
+	return LastFragment(v), v != nil
+}
 func (m *ExecutionReport) NoFills() (int, bool, error) {
 	v := m.msg.Get(TagNoFills)
 	if v == nil {
@@ -2001,6 +1829,14 @@ func (m *ExecutionReport) NoFills() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *ExecutionReport) DividendYield() (float64, bool, error) {
+	v := m.msg.Get(TagDividendYield)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
 }
 func (m *ExecutionReport) ApplID() (string, bool) {
 	v := m.msg.Get(TagApplID)
@@ -2047,6 +1883,38 @@ func (m *ExecutionReport) NoContraBrokersEntries() []NoContraBrokersEntry {
 	entries := make([]NoContraBrokersEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoContraBrokersEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *ExecutionReport) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
+	groups := m.msg.Groups(TagNoSecurityAltID, noSecurityAltIDChildTags)
+	entries := make([]NoSecurityAltIDEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoSecurityAltIDEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *ExecutionReport) NoEventsEntries() []NoEventsEntry {
+	groups := m.msg.Groups(TagNoEvents, noEventsChildTags)
+	entries := make([]NoEventsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoEventsEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *ExecutionReport) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
+	groups := m.msg.Groups(TagNoInstrumentParties, noInstrumentPartiesChildTags)
+	entries := make([]NoInstrumentPartiesEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoInstrumentPartiesEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *ExecutionReport) NoComplexEventsEntries() []NoComplexEventsEntry {
+	groups := m.msg.Groups(TagNoComplexEvents, noComplexEventsChildTags)
+	entries := make([]NoComplexEventsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoComplexEventsEntry{grp: groups[i]}
 	}
 	return entries
 }
@@ -2135,6 +2003,10 @@ type ExecutionReportBuilder struct {
 	*fix2.Builder
 	noPartyIDsCount           int
 	noContraBrokersCount      int
+	noSecurityAltIDCount      int
+	noEventsCount             int
+	noInstrumentPartiesCount  int
+	noComplexEventsCount      int
 	noUnderlyingsCount        int
 	noStipulationsCount       int
 	noContAmtsCount           int
@@ -2294,12 +2166,440 @@ func (b *ExecutionReportBuilder) SetClearingFeeIndicator(v ClearingFeeIndicator)
 	b.SetString(TagClearingFeeIndicator, string(v))
 	return b
 }
+func (b *ExecutionReportBuilder) SetSymbol(v string) *ExecutionReportBuilder {
+	b.SetString(TagSymbol, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSymbolSfx(v SymbolSfx) *ExecutionReportBuilder {
+	b.SetString(TagSymbolSfx, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityID(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecurityID, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityIDSource(v SecurityIDSource) *ExecutionReportBuilder {
+	b.SetString(TagSecurityIDSource, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetProduct(v Product) *ExecutionReportBuilder {
+	b.SetString(TagProduct, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCFICode(v string) *ExecutionReportBuilder {
+	b.SetString(TagCFICode, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityType(v SecurityType) *ExecutionReportBuilder {
+	b.SetString(TagSecurityType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecuritySubType(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecuritySubType, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetMaturityMonthYear(v string) *ExecutionReportBuilder {
+	b.SetString(TagMaturityMonthYear, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetMaturityDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagMaturityDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagMaturityDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCouponPaymentDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagCouponPaymentDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagCouponPaymentDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetIssueDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagIssueDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagIssueDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetRepoCollateralSecurityType(v int) *ExecutionReportBuilder {
+	b.SetInt(TagRepoCollateralSecurityType, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetRepurchaseTerm(v int) *ExecutionReportBuilder {
+	b.SetInt(TagRepurchaseTerm, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetRepurchaseRate(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagRepurchaseRate, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetFactor(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagFactor, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetCreditRating(v string) *ExecutionReportBuilder {
+	b.SetString(TagCreditRating, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetInstrRegistry(v string) *ExecutionReportBuilder {
+	b.SetString(TagInstrRegistry, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetCountryOfIssue(v string) *ExecutionReportBuilder {
+	b.SetString(TagCountryOfIssue, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetStateOrProvinceOfIssue(v string) *ExecutionReportBuilder {
+	b.SetString(TagStateOrProvinceOfIssue, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetLocaleOfIssue(v string) *ExecutionReportBuilder {
+	b.SetString(TagLocaleOfIssue, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetRedemptionDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagRedemptionDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikePrice(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagStrikePrice, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikeCurrency(v string) *ExecutionReportBuilder {
+	b.SetString(TagStrikeCurrency, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetOptAttribute(v string) *ExecutionReportBuilder {
+	b.SetString(TagOptAttribute, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetContractMultiplier(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagContractMultiplier, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetCouponRate(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagCouponRate, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityExchange(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecurityExchange, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetIssuer(v string) *ExecutionReportBuilder {
+	b.SetString(TagIssuer, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetEncodedIssuerLen(v int) *ExecutionReportBuilder {
+	b.SetInt(TagEncodedIssuerLen, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetEncodedIssuer(v []byte) *ExecutionReportBuilder {
+	b.Set(TagEncodedIssuer, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityDesc(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecurityDesc, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetEncodedSecurityDescLen(v int) *ExecutionReportBuilder {
+	b.SetInt(TagEncodedSecurityDescLen, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetEncodedSecurityDesc(v []byte) *ExecutionReportBuilder {
+	b.Set(TagEncodedSecurityDesc, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPool(v string) *ExecutionReportBuilder {
+	b.SetString(TagPool, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetContractSettlMonth(v string) *ExecutionReportBuilder {
+	b.SetString(TagContractSettlMonth, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetCPProgram(v CPProgram) *ExecutionReportBuilder {
+	b.SetString(TagCPProgram, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCPRegType(v string) *ExecutionReportBuilder {
+	b.SetString(TagCPRegType, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetDatedDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagDatedDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDatedDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagDatedDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetInterestAccrualDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagInterestAccrualDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetInterestAccrualDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagInterestAccrualDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityStatus(v SecurityStatus) *ExecutionReportBuilder {
+	b.SetString(TagSecurityStatus, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetSettleOnOpenFlag(v string) *ExecutionReportBuilder {
+	b.SetString(TagSettleOnOpenFlag, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetInstrmtAssignmentMethod(v string) *ExecutionReportBuilder {
+	b.SetString(TagInstrmtAssignmentMethod, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikeMultiplier(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagStrikeMultiplier, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikeValue(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagStrikeValue, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetMinPriceIncrement(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagMinPriceIncrement, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPositionLimit(v int) *ExecutionReportBuilder {
+	b.SetInt(TagPositionLimit, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetNTPositionLimit(v int) *ExecutionReportBuilder {
+	b.SetInt(TagNTPositionLimit, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetUnitOfMeasure(v UnitOfMeasure) *ExecutionReportBuilder {
+	b.SetString(TagUnitOfMeasure, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetTimeUnit(v TimeUnit) *ExecutionReportBuilder {
+	b.SetString(TagTimeUnit, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetMaturityTime(v string) *ExecutionReportBuilder {
+	b.SetString(TagMaturityTime, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityGroup(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecurityGroup, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetMinPriceIncrementAmount(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagMinPriceIncrementAmount, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetUnitOfMeasureQty(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagUnitOfMeasureQty, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityXMLLen(v int) *ExecutionReportBuilder {
+	b.SetInt(TagSecurityXMLLen, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityXML(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecurityXML, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSecurityXMLSchema(v string) *ExecutionReportBuilder {
+	b.SetString(TagSecurityXMLSchema, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetProductComplex(v string) *ExecutionReportBuilder {
+	b.SetString(TagProductComplex, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPriceUnitOfMeasure(v string) *ExecutionReportBuilder {
+	b.SetString(TagPriceUnitOfMeasure, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPriceUnitOfMeasureQty(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagPriceUnitOfMeasureQty, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetSettlMethod(v SettlMethod) *ExecutionReportBuilder {
+	b.SetString(TagSettlMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetExerciseStyle(v ExerciseStyle) *ExecutionReportBuilder {
+	b.SetString(TagExerciseStyle, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetOptPayoutAmount(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagOptPayoutAmount, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPriceQuoteMethod(v PriceQuoteMethod) *ExecutionReportBuilder {
+	b.SetString(TagPriceQuoteMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetListMethod(v ListMethod) *ExecutionReportBuilder {
+	b.SetString(TagListMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCapPrice(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagCapPrice, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetFloorPrice(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagFloorPrice, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPutOrCall(v PutOrCall) *ExecutionReportBuilder {
+	b.SetString(TagPutOrCall, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetFlexibleIndicator(v bool) *ExecutionReportBuilder {
+	b.SetBool(TagFlexibleIndicator, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetFlexProductEligibilityIndicator(v bool) *ExecutionReportBuilder {
+	b.SetBool(TagFlexProductEligibilityIndicator, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetValuationMethod(v ValuationMethod) *ExecutionReportBuilder {
+	b.SetString(TagValuationMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetContractMultiplierUnit(v ContractMultiplierUnit) *ExecutionReportBuilder {
+	b.SetString(TagContractMultiplierUnit, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetFlowScheduleType(v FlowScheduleType) *ExecutionReportBuilder {
+	b.SetString(TagFlowScheduleType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetRestructuringType(v RestructuringType) *ExecutionReportBuilder {
+	b.SetString(TagRestructuringType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetSeniority(v Seniority) *ExecutionReportBuilder {
+	b.SetString(TagSeniority, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetNotionalPercentageOutstanding(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagNotionalPercentageOutstanding, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetOriginalNotionalPercentageOutstanding(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagOriginalNotionalPercentageOutstanding, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetAttachmentPoint(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagAttachmentPoint, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetDetachmentPoint(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagDetachmentPoint, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikePriceDeterminationMethod(v StrikePriceDeterminationMethod) *ExecutionReportBuilder {
+	b.SetString(TagStrikePriceDeterminationMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikePriceBoundaryMethod(v StrikePriceBoundaryMethod) *ExecutionReportBuilder {
+	b.SetString(TagStrikePriceBoundaryMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetStrikePriceBoundaryPrecision(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagStrikePriceBoundaryPrecision, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetUnderlyingPriceDeterminationMethod(v UnderlyingPriceDeterminationMethod) *ExecutionReportBuilder {
+	b.SetString(TagUnderlyingPriceDeterminationMethod, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetOptPayoutType(v OptPayoutType) *ExecutionReportBuilder {
+	b.SetString(TagOptPayoutType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetAgreementDesc(v string) *ExecutionReportBuilder {
+	b.SetString(TagAgreementDesc, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetAgreementID(v string) *ExecutionReportBuilder {
+	b.SetString(TagAgreementID, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetAgreementDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagAgreementDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetAgreementDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagAgreementDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetAgreementCurrency(v string) *ExecutionReportBuilder {
+	b.SetString(TagAgreementCurrency, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetTerminationType(v TerminationType) *ExecutionReportBuilder {
+	b.SetString(TagTerminationType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetStartDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagStartDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetStartDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagStartDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetEndDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagEndDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetEndDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagEndDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDeliveryType(v DeliveryType) *ExecutionReportBuilder {
+	b.SetString(TagDeliveryType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetMarginRatio(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagMarginRatio, v)
+	return b
+}
 func (b *ExecutionReportBuilder) SetSide(v Side) *ExecutionReportBuilder {
 	b.SetString(TagSide, string(v))
 	return b
 }
 func (b *ExecutionReportBuilder) SetQtyType(v QtyType) *ExecutionReportBuilder {
 	b.SetString(TagQtyType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetOrderQty(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagOrderQty, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetCashOrderQty(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagCashOrderQty, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetOrderPercent(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagOrderPercent, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetRoundingDirection(v RoundingDirection) *ExecutionReportBuilder {
+	b.SetString(TagRoundingDirection, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetRoundingModulus(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagRoundingModulus, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetOrdType(v OrdType) *ExecutionReportBuilder {
@@ -2316,6 +2616,78 @@ func (b *ExecutionReportBuilder) SetPrice(v float64) *ExecutionReportBuilder {
 }
 func (b *ExecutionReportBuilder) SetStopPx(v float64) *ExecutionReportBuilder {
 	b.SetFloat(TagStopPx, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegOffsetValue(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagPegOffsetValue, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegMoveType(v PegMoveType) *ExecutionReportBuilder {
+	b.SetString(TagPegMoveType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegOffsetType(v PegOffsetType) *ExecutionReportBuilder {
+	b.SetString(TagPegOffsetType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegLimitType(v PegLimitType) *ExecutionReportBuilder {
+	b.SetString(TagPegLimitType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegRoundDirection(v PegRoundDirection) *ExecutionReportBuilder {
+	b.SetString(TagPegRoundDirection, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegScope(v PegScope) *ExecutionReportBuilder {
+	b.SetString(TagPegScope, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegPriceType(v PegPriceType) *ExecutionReportBuilder {
+	b.SetString(TagPegPriceType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegSecurityIDSource(v string) *ExecutionReportBuilder {
+	b.SetString(TagPegSecurityIDSource, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegSecurityID(v string) *ExecutionReportBuilder {
+	b.SetString(TagPegSecurityID, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegSymbol(v string) *ExecutionReportBuilder {
+	b.SetString(TagPegSymbol, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPegSecurityDesc(v string) *ExecutionReportBuilder {
+	b.SetString(TagPegSecurityDesc, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionInst(v DiscretionInst) *ExecutionReportBuilder {
+	b.SetString(TagDiscretionInst, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionOffsetValue(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagDiscretionOffsetValue, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionMoveType(v DiscretionMoveType) *ExecutionReportBuilder {
+	b.SetString(TagDiscretionMoveType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionOffsetType(v DiscretionOffsetType) *ExecutionReportBuilder {
+	b.SetString(TagDiscretionOffsetType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionLimitType(v DiscretionLimitType) *ExecutionReportBuilder {
+	b.SetString(TagDiscretionLimitType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionRoundDirection(v DiscretionRoundDirection) *ExecutionReportBuilder {
+	b.SetString(TagDiscretionRoundDirection, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDiscretionScope(v DiscretionScope) *ExecutionReportBuilder {
+	b.SetString(TagDiscretionScope, string(v))
 	return b
 }
 func (b *ExecutionReportBuilder) SetPeggedPrice(v float64) *ExecutionReportBuilder {
@@ -2492,6 +2864,86 @@ func (b *ExecutionReportBuilder) SetTransactTimeWithFormat(v time.Time, f fix2.T
 }
 func (b *ExecutionReportBuilder) SetReportToExch(v ReportToExch) *ExecutionReportBuilder {
 	b.SetString(TagReportToExch, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCommission(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagCommission, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetCommType(v CommType) *ExecutionReportBuilder {
+	b.SetString(TagCommType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetCommCurrency(v string) *ExecutionReportBuilder {
+	b.SetString(TagCommCurrency, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetFundRenewWaiv(v FundRenewWaiv) *ExecutionReportBuilder {
+	b.SetString(TagFundRenewWaiv, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetSpread(v string) *ExecutionReportBuilder {
+	b.SetString(TagSpread, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkCurveCurrency(v string) *ExecutionReportBuilder {
+	b.SetString(TagBenchmarkCurveCurrency, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkCurveName(v BenchmarkCurveName) *ExecutionReportBuilder {
+	b.SetString(TagBenchmarkCurveName, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkCurvePoint(v string) *ExecutionReportBuilder {
+	b.SetString(TagBenchmarkCurvePoint, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkPrice(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagBenchmarkPrice, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkPriceType(v int) *ExecutionReportBuilder {
+	b.SetInt(TagBenchmarkPriceType, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkSecurityID(v string) *ExecutionReportBuilder {
+	b.SetString(TagBenchmarkSecurityID, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetBenchmarkSecurityIDSource(v string) *ExecutionReportBuilder {
+	b.SetString(TagBenchmarkSecurityIDSource, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldType(v YieldType) *ExecutionReportBuilder {
+	b.SetString(TagYieldType, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetYield(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagYield, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldCalcDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagYieldCalcDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldCalcDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagYieldCalcDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldRedemptionDate(v time.Time) *ExecutionReportBuilder {
+	b.SetString(TagYieldRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
+	b.SetString(TagYieldRedemptionDate, v.UTC().Format(f))
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldRedemptionPrice(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagYieldRedemptionPrice, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetYieldRedemptionPriceType(v int) *ExecutionReportBuilder {
+	b.SetInt(TagYieldRedemptionPriceType, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetGrossTradeAmt(v float64) *ExecutionReportBuilder {
@@ -2742,782 +3194,6 @@ func (b *ExecutionReportBuilder) SetPriceProtectionScope(v PriceProtectionScope)
 	b.SetString(TagPriceProtectionScope, string(v))
 	return b
 }
-func (b *ExecutionReportBuilder) SetPeggedRefPrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagPeggedRefPrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPreTradeAnonymity(v bool) *ExecutionReportBuilder {
-	b.SetBool(TagPreTradeAnonymity, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetMatchIncrement(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagMatchIncrement, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetMaxPriceLevels(v int) *ExecutionReportBuilder {
-	b.SetInt(TagMaxPriceLevels, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetVolatility(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagVolatility, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetTimeToExpiration(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagTimeToExpiration, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetRiskFreeRate(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagRiskFreeRate, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPriceDelta(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagPriceDelta, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetTrdMatchID(v string) *ExecutionReportBuilder {
-	b.SetString(TagTrdMatchID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetAllocID(v string) *ExecutionReportBuilder {
-	b.SetString(TagAllocID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetTotNoFills(v int) *ExecutionReportBuilder {
-	b.SetInt(TagTotNoFills, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetLastFragment(v LastFragment) *ExecutionReportBuilder {
-	b.SetString(TagLastFragment, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDividendYield(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagDividendYield, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSymbol(v string) *ExecutionReportBuilder {
-	b.SetString(TagSymbol, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSymbolSfx(v SymbolSfx) *ExecutionReportBuilder {
-	b.SetString(TagSymbolSfx, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityID(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityIDSource(v SecurityIDSource) *ExecutionReportBuilder {
-	b.SetString(TagSecurityIDSource, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetProduct(v Product) *ExecutionReportBuilder {
-	b.SetString(TagProduct, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCFICode(v string) *ExecutionReportBuilder {
-	b.SetString(TagCFICode, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityType(v SecurityType) *ExecutionReportBuilder {
-	b.SetString(TagSecurityType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecuritySubType(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecuritySubType, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetMaturityMonthYear(v string) *ExecutionReportBuilder {
-	b.SetString(TagMaturityMonthYear, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetMaturityDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagMaturityDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetMaturityDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagMaturityDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCouponPaymentDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagCouponPaymentDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCouponPaymentDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagCouponPaymentDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetIssueDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagIssueDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetIssueDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagIssueDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetRepoCollateralSecurityType(v int) *ExecutionReportBuilder {
-	b.SetInt(TagRepoCollateralSecurityType, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetRepurchaseTerm(v int) *ExecutionReportBuilder {
-	b.SetInt(TagRepurchaseTerm, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetRepurchaseRate(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagRepurchaseRate, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetFactor(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagFactor, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetCreditRating(v string) *ExecutionReportBuilder {
-	b.SetString(TagCreditRating, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrRegistry(v string) *ExecutionReportBuilder {
-	b.SetString(TagInstrRegistry, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetCountryOfIssue(v string) *ExecutionReportBuilder {
-	b.SetString(TagCountryOfIssue, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetStateOrProvinceOfIssue(v string) *ExecutionReportBuilder {
-	b.SetString(TagStateOrProvinceOfIssue, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetLocaleOfIssue(v string) *ExecutionReportBuilder {
-	b.SetString(TagLocaleOfIssue, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetRedemptionDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagRedemptionDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikePrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagStrikePrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikeCurrency(v string) *ExecutionReportBuilder {
-	b.SetString(TagStrikeCurrency, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetOptAttribute(v string) *ExecutionReportBuilder {
-	b.SetString(TagOptAttribute, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetContractMultiplier(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagContractMultiplier, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetCouponRate(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagCouponRate, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityExchange(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityExchange, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetIssuer(v string) *ExecutionReportBuilder {
-	b.SetString(TagIssuer, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEncodedIssuerLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagEncodedIssuerLen, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEncodedIssuer(v []byte) *ExecutionReportBuilder {
-	b.Set(TagEncodedIssuer, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityDesc(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityDesc, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEncodedSecurityDescLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagEncodedSecurityDescLen, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEncodedSecurityDesc(v []byte) *ExecutionReportBuilder {
-	b.Set(TagEncodedSecurityDesc, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPool(v string) *ExecutionReportBuilder {
-	b.SetString(TagPool, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetContractSettlMonth(v string) *ExecutionReportBuilder {
-	b.SetString(TagContractSettlMonth, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetCPProgram(v CPProgram) *ExecutionReportBuilder {
-	b.SetString(TagCPProgram, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCPRegType(v string) *ExecutionReportBuilder {
-	b.SetString(TagCPRegType, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetDatedDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagDatedDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDatedDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagDatedDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetInterestAccrualDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagInterestAccrualDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetInterestAccrualDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagInterestAccrualDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityStatus(v SecurityStatus) *ExecutionReportBuilder {
-	b.SetString(TagSecurityStatus, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetSettleOnOpenFlag(v string) *ExecutionReportBuilder {
-	b.SetString(TagSettleOnOpenFlag, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrmtAssignmentMethod(v string) *ExecutionReportBuilder {
-	b.SetString(TagInstrmtAssignmentMethod, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikeMultiplier(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagStrikeMultiplier, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikeValue(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagStrikeValue, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetMinPriceIncrement(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagMinPriceIncrement, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPositionLimit(v int) *ExecutionReportBuilder {
-	b.SetInt(TagPositionLimit, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetNTPositionLimit(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNTPositionLimit, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetUnitOfMeasure(v UnitOfMeasure) *ExecutionReportBuilder {
-	b.SetString(TagUnitOfMeasure, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetTimeUnit(v TimeUnit) *ExecutionReportBuilder {
-	b.SetString(TagTimeUnit, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetMaturityTime(v string) *ExecutionReportBuilder {
-	b.SetString(TagMaturityTime, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityGroup(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityGroup, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetMinPriceIncrementAmount(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagMinPriceIncrementAmount, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetUnitOfMeasureQty(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagUnitOfMeasureQty, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetProductComplex(v string) *ExecutionReportBuilder {
-	b.SetString(TagProductComplex, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPriceUnitOfMeasure(v string) *ExecutionReportBuilder {
-	b.SetString(TagPriceUnitOfMeasure, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPriceUnitOfMeasureQty(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagPriceUnitOfMeasureQty, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSettlMethod(v SettlMethod) *ExecutionReportBuilder {
-	b.SetString(TagSettlMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetExerciseStyle(v ExerciseStyle) *ExecutionReportBuilder {
-	b.SetString(TagExerciseStyle, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetOptPayoutAmount(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagOptPayoutAmount, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPriceQuoteMethod(v PriceQuoteMethod) *ExecutionReportBuilder {
-	b.SetString(TagPriceQuoteMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetListMethod(v ListMethod) *ExecutionReportBuilder {
-	b.SetString(TagListMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCapPrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagCapPrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetFloorPrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagFloorPrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPutOrCall(v PutOrCall) *ExecutionReportBuilder {
-	b.SetString(TagPutOrCall, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetFlexibleIndicator(v bool) *ExecutionReportBuilder {
-	b.SetBool(TagFlexibleIndicator, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetFlexProductEligibilityIndicator(v bool) *ExecutionReportBuilder {
-	b.SetBool(TagFlexProductEligibilityIndicator, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetValuationMethod(v ValuationMethod) *ExecutionReportBuilder {
-	b.SetString(TagValuationMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetContractMultiplierUnit(v ContractMultiplierUnit) *ExecutionReportBuilder {
-	b.SetString(TagContractMultiplierUnit, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetFlowScheduleType(v FlowScheduleType) *ExecutionReportBuilder {
-	b.SetString(TagFlowScheduleType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetRestructuringType(v RestructuringType) *ExecutionReportBuilder {
-	b.SetString(TagRestructuringType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetSeniority(v Seniority) *ExecutionReportBuilder {
-	b.SetString(TagSeniority, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetNotionalPercentageOutstanding(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagNotionalPercentageOutstanding, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetOriginalNotionalPercentageOutstanding(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagOriginalNotionalPercentageOutstanding, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetAttachmentPoint(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagAttachmentPoint, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetDetachmentPoint(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagDetachmentPoint, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikePriceDeterminationMethod(v StrikePriceDeterminationMethod) *ExecutionReportBuilder {
-	b.SetString(TagStrikePriceDeterminationMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikePriceBoundaryMethod(v StrikePriceBoundaryMethod) *ExecutionReportBuilder {
-	b.SetString(TagStrikePriceBoundaryMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetStrikePriceBoundaryPrecision(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagStrikePriceBoundaryPrecision, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetUnderlyingPriceDeterminationMethod(v UnderlyingPriceDeterminationMethod) *ExecutionReportBuilder {
-	b.SetString(TagUnderlyingPriceDeterminationMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetOptPayoutType(v OptPayoutType) *ExecutionReportBuilder {
-	b.SetString(TagOptPayoutType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoSecurityAltID(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoSecurityAltID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityAltID(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityAltID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityAltIDSource(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityAltIDSource, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoEvents(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoEvents, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventType(v EventType) *ExecutionReportBuilder {
-	b.SetString(TagEventType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagEventDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagEventDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventPx(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagEventPx, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventText(v string) *ExecutionReportBuilder {
-	b.SetString(TagEventText, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventTime(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagEventTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *ExecutionReportBuilder) SetEventTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagEventTime, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoInstrumentParties(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoInstrumentParties, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrumentPartyID(v string) *ExecutionReportBuilder {
-	b.SetString(TagInstrumentPartyID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrumentPartyIDSource(v string) *ExecutionReportBuilder {
-	b.SetString(TagInstrumentPartyIDSource, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrumentPartyRole(v int) *ExecutionReportBuilder {
-	b.SetInt(TagInstrumentPartyRole, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoInstrumentPartySubIDs(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoInstrumentPartySubIDs, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrumentPartySubID(v string) *ExecutionReportBuilder {
-	b.SetString(TagInstrumentPartySubID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetInstrumentPartySubIDType(v int) *ExecutionReportBuilder {
-	b.SetInt(TagInstrumentPartySubIDType, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityXMLLen(v int) *ExecutionReportBuilder {
-	b.SetInt(TagSecurityXMLLen, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityXML(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityXML, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetSecurityXMLSchema(v string) *ExecutionReportBuilder {
-	b.SetString(TagSecurityXMLSchema, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoComplexEvents(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoComplexEvents, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventType(v ComplexEventType) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexOptPayoutAmount(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagComplexOptPayoutAmount, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventPrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagComplexEventPrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventPriceBoundaryMethod(v ComplexEventPriceBoundaryMethod) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventPriceBoundaryMethod, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventPriceBoundaryPrecision(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagComplexEventPriceBoundaryPrecision, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventPriceTimeType(v ComplexEventPriceTimeType) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventPriceTimeType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventCondition(v ComplexEventCondition) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventCondition, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoComplexEventDates(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoComplexEventDates, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventStartDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventStartDate, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventStartDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventStartDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventEndDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventEndDate, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventEndDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventEndDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetNoComplexEventTimes(v int) *ExecutionReportBuilder {
-	b.SetInt(TagNoComplexEventTimes, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventStartTime(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventStartTime, v.UTC().Format(fix2.TimeFormatTimeOnly))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventStartTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventStartTime, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventEndTime(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventEndTime, v.UTC().Format(fix2.TimeFormatTimeOnly))
-	return b
-}
-func (b *ExecutionReportBuilder) SetComplexEventEndTimeWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagComplexEventEndTime, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetAgreementDesc(v string) *ExecutionReportBuilder {
-	b.SetString(TagAgreementDesc, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetAgreementID(v string) *ExecutionReportBuilder {
-	b.SetString(TagAgreementID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetAgreementDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagAgreementDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetAgreementDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagAgreementDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetAgreementCurrency(v string) *ExecutionReportBuilder {
-	b.SetString(TagAgreementCurrency, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetTerminationType(v TerminationType) *ExecutionReportBuilder {
-	b.SetString(TagTerminationType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetStartDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagStartDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetStartDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagStartDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetEndDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagEndDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetEndDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagEndDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDeliveryType(v DeliveryType) *ExecutionReportBuilder {
-	b.SetString(TagDeliveryType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetMarginRatio(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagMarginRatio, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetOrderQty(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagOrderQty, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetCashOrderQty(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagCashOrderQty, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetOrderPercent(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagOrderPercent, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetRoundingDirection(v RoundingDirection) *ExecutionReportBuilder {
-	b.SetString(TagRoundingDirection, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetRoundingModulus(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagRoundingModulus, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegOffsetValue(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagPegOffsetValue, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegMoveType(v PegMoveType) *ExecutionReportBuilder {
-	b.SetString(TagPegMoveType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegOffsetType(v PegOffsetType) *ExecutionReportBuilder {
-	b.SetString(TagPegOffsetType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegLimitType(v PegLimitType) *ExecutionReportBuilder {
-	b.SetString(TagPegLimitType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegRoundDirection(v PegRoundDirection) *ExecutionReportBuilder {
-	b.SetString(TagPegRoundDirection, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegScope(v PegScope) *ExecutionReportBuilder {
-	b.SetString(TagPegScope, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegPriceType(v PegPriceType) *ExecutionReportBuilder {
-	b.SetString(TagPegPriceType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegSecurityIDSource(v string) *ExecutionReportBuilder {
-	b.SetString(TagPegSecurityIDSource, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegSecurityID(v string) *ExecutionReportBuilder {
-	b.SetString(TagPegSecurityID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegSymbol(v string) *ExecutionReportBuilder {
-	b.SetString(TagPegSymbol, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetPegSecurityDesc(v string) *ExecutionReportBuilder {
-	b.SetString(TagPegSecurityDesc, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionInst(v DiscretionInst) *ExecutionReportBuilder {
-	b.SetString(TagDiscretionInst, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionOffsetValue(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagDiscretionOffsetValue, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionMoveType(v DiscretionMoveType) *ExecutionReportBuilder {
-	b.SetString(TagDiscretionMoveType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionOffsetType(v DiscretionOffsetType) *ExecutionReportBuilder {
-	b.SetString(TagDiscretionOffsetType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionLimitType(v DiscretionLimitType) *ExecutionReportBuilder {
-	b.SetString(TagDiscretionLimitType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionRoundDirection(v DiscretionRoundDirection) *ExecutionReportBuilder {
-	b.SetString(TagDiscretionRoundDirection, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetDiscretionScope(v DiscretionScope) *ExecutionReportBuilder {
-	b.SetString(TagDiscretionScope, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCommission(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagCommission, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetCommType(v CommType) *ExecutionReportBuilder {
-	b.SetString(TagCommType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetCommCurrency(v string) *ExecutionReportBuilder {
-	b.SetString(TagCommCurrency, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetFundRenewWaiv(v FundRenewWaiv) *ExecutionReportBuilder {
-	b.SetString(TagFundRenewWaiv, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetSpread(v string) *ExecutionReportBuilder {
-	b.SetString(TagSpread, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkCurveCurrency(v string) *ExecutionReportBuilder {
-	b.SetString(TagBenchmarkCurveCurrency, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkCurveName(v BenchmarkCurveName) *ExecutionReportBuilder {
-	b.SetString(TagBenchmarkCurveName, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkCurvePoint(v string) *ExecutionReportBuilder {
-	b.SetString(TagBenchmarkCurvePoint, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkPrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagBenchmarkPrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkPriceType(v int) *ExecutionReportBuilder {
-	b.SetInt(TagBenchmarkPriceType, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkSecurityID(v string) *ExecutionReportBuilder {
-	b.SetString(TagBenchmarkSecurityID, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetBenchmarkSecurityIDSource(v string) *ExecutionReportBuilder {
-	b.SetString(TagBenchmarkSecurityIDSource, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldType(v YieldType) *ExecutionReportBuilder {
-	b.SetString(TagYieldType, string(v))
-	return b
-}
-func (b *ExecutionReportBuilder) SetYield(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagYield, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldCalcDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagYieldCalcDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldCalcDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagYieldCalcDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldRedemptionDate(v time.Time) *ExecutionReportBuilder {
-	b.SetString(TagYieldRedemptionDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldRedemptionDateWithFormat(v time.Time, f fix2.TimeFormat) *ExecutionReportBuilder {
-	b.SetString(TagYieldRedemptionDate, v.UTC().Format(f))
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldRedemptionPrice(v float64) *ExecutionReportBuilder {
-	b.SetFloat(TagYieldRedemptionPrice, v)
-	return b
-}
-func (b *ExecutionReportBuilder) SetYieldRedemptionPriceType(v int) *ExecutionReportBuilder {
-	b.SetInt(TagYieldRedemptionPriceType, v)
-	return b
-}
 func (b *ExecutionReportBuilder) SetTriggerType(v TriggerType) *ExecutionReportBuilder {
 	b.SetString(TagTriggerType, string(v))
 	return b
@@ -3578,6 +3254,22 @@ func (b *ExecutionReportBuilder) SetTriggerTradingSessionSubID(v string) *Execut
 	b.SetString(TagTriggerTradingSessionSubID, v)
 	return b
 }
+func (b *ExecutionReportBuilder) SetPeggedRefPrice(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagPeggedRefPrice, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPreTradeAnonymity(v bool) *ExecutionReportBuilder {
+	b.SetBool(TagPreTradeAnonymity, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetMatchIncrement(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagMatchIncrement, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetMaxPriceLevels(v int) *ExecutionReportBuilder {
+	b.SetInt(TagMaxPriceLevels, v)
+	return b
+}
 func (b *ExecutionReportBuilder) SetSecondaryDisplayQty(v float64) *ExecutionReportBuilder {
 	b.SetFloat(TagSecondaryDisplayQty, v)
 	return b
@@ -3608,6 +3300,42 @@ func (b *ExecutionReportBuilder) SetRefreshQty(v float64) *ExecutionReportBuilde
 }
 func (b *ExecutionReportBuilder) SetDisplayQty(v float64) *ExecutionReportBuilder {
 	b.SetFloat(TagDisplayQty, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetVolatility(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagVolatility, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetTimeToExpiration(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagTimeToExpiration, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetRiskFreeRate(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagRiskFreeRate, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetPriceDelta(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagPriceDelta, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetTrdMatchID(v string) *ExecutionReportBuilder {
+	b.SetString(TagTrdMatchID, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetAllocID(v string) *ExecutionReportBuilder {
+	b.SetString(TagAllocID, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetTotNoFills(v int) *ExecutionReportBuilder {
+	b.SetInt(TagTotNoFills, v)
+	return b
+}
+func (b *ExecutionReportBuilder) SetLastFragment(v LastFragment) *ExecutionReportBuilder {
+	b.SetString(TagLastFragment, string(v))
+	return b
+}
+func (b *ExecutionReportBuilder) SetDividendYield(v float64) *ExecutionReportBuilder {
+	b.SetFloat(TagDividendYield, v)
 	return b
 }
 func (b *ExecutionReportBuilder) SetApplID(v string) *ExecutionReportBuilder {
@@ -3649,6 +3377,74 @@ func (b *ExecutionReportBuilder) AddNoContraBrokersEntry(e *NoContraBrokersEntry
 	fields := e.fields
 	for i, f := range fields {
 		if f.Tag == TagContraBroker {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *ExecutionReportBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *ExecutionReportBuilder {
+	b.noSecurityAltIDCount++
+	b.SetInt(TagNoSecurityAltID, b.noSecurityAltIDCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagSecurityAltID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *ExecutionReportBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *ExecutionReportBuilder {
+	b.noEventsCount++
+	b.SetInt(TagNoEvents, b.noEventsCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagEventType {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *ExecutionReportBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *ExecutionReportBuilder {
+	b.noInstrumentPartiesCount++
+	b.SetInt(TagNoInstrumentParties, b.noInstrumentPartiesCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagInstrumentPartyID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *ExecutionReportBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *ExecutionReportBuilder {
+	b.noComplexEventsCount++
+	b.SetInt(TagNoComplexEvents, b.noComplexEventsCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagComplexEventType {
 			if i != 0 {
 				fields[0], fields[i] = fields[i], fields[0]
 			}
@@ -3716,7 +3512,7 @@ func (b *ExecutionReportBuilder) AddNoLegsEntry(e *NoLegsEntryBuilder) *Executio
 	b.SetInt(TagNoLegs, b.noLegsCount)
 	fields := e.fields
 	for i, f := range fields {
-		if f.Tag == TagLegQty {
+		if f.Tag == TagLegSymbol {
 			if i != 0 {
 				fields[0], fields[i] = fields[i], fields[0]
 			}

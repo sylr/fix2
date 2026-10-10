@@ -130,14 +130,6 @@ func (m *TestRequest) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *TestRequest) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *TestRequest) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *TestRequest) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *TestRequest) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *TestRequest) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *TestRequest) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *TestRequest) TestReqID() (string, bool) {
 	v := m.msg.Get(TagTestReqID)
@@ -278,14 +278,6 @@ func (b *TestRequestBuilder) SetLastMsgSeqNumProcessed(v int) *TestRequestBuilde
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *TestRequestBuilder) SetApplVerID(v ApplVerID) *TestRequestBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *TestRequestBuilder) SetCstmApplVerID(v string) *TestRequestBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *TestRequestBuilder) SetNoHops(v int) *TestRequestBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -304,6 +296,14 @@ func (b *TestRequestBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.Tim
 }
 func (b *TestRequestBuilder) SetHopRefID(v int) *TestRequestBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *TestRequestBuilder) SetApplVerID(v ApplVerID) *TestRequestBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *TestRequestBuilder) SetCstmApplVerID(v string) *TestRequestBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *TestRequestBuilder) SetTestReqID(v string) *TestRequestBuilder {

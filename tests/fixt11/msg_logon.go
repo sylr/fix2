@@ -130,14 +130,6 @@ func (m *Logon) LastMsgSeqNumProcessed() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (m *Logon) ApplVerID() (ApplVerID, bool) {
-	v := m.msg.Get(TagApplVerID)
-	return ApplVerID(v), v != nil
-}
-func (m *Logon) CstmApplVerID() (string, bool) {
-	v := m.msg.Get(TagCstmApplVerID)
-	return string(v), v != nil
-}
 func (m *Logon) NoHops() (int, bool, error) {
 	v := m.msg.Get(TagNoHops)
 	if v == nil {
@@ -165,6 +157,14 @@ func (m *Logon) HopRefID() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *Logon) ApplVerID() (ApplVerID, bool) {
+	v := m.msg.Get(TagApplVerID)
+	return ApplVerID(v), v != nil
+}
+func (m *Logon) CstmApplVerID() (string, bool) {
+	v := m.msg.Get(TagCstmApplVerID)
+	return string(v), v != nil
 }
 func (m *Logon) EncryptMethod() (EncryptMethod, bool) {
 	v := m.msg.Get(TagEncryptMethod)
@@ -351,14 +351,6 @@ func (b *LogonBuilder) SetLastMsgSeqNumProcessed(v int) *LogonBuilder {
 	b.SetInt(TagLastMsgSeqNumProcessed, v)
 	return b
 }
-func (b *LogonBuilder) SetApplVerID(v ApplVerID) *LogonBuilder {
-	b.SetString(TagApplVerID, string(v))
-	return b
-}
-func (b *LogonBuilder) SetCstmApplVerID(v string) *LogonBuilder {
-	b.SetString(TagCstmApplVerID, v)
-	return b
-}
 func (b *LogonBuilder) SetNoHops(v int) *LogonBuilder {
 	b.SetInt(TagNoHops, v)
 	return b
@@ -377,6 +369,14 @@ func (b *LogonBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeForma
 }
 func (b *LogonBuilder) SetHopRefID(v int) *LogonBuilder {
 	b.SetInt(TagHopRefID, v)
+	return b
+}
+func (b *LogonBuilder) SetApplVerID(v ApplVerID) *LogonBuilder {
+	b.SetString(TagApplVerID, string(v))
+	return b
+}
+func (b *LogonBuilder) SetCstmApplVerID(v string) *LogonBuilder {
+	b.SetString(TagCstmApplVerID, v)
 	return b
 }
 func (b *LogonBuilder) SetEncryptMethod(v EncryptMethod) *LogonBuilder {

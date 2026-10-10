@@ -31,20 +31,8 @@ func (e *NoFillsEntry) FillQty() (float64, bool, error) {
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
-func (e *NoFillsEntry) Nested4PartySubIDType() (int, bool, error) {
-	v := e.grp.Get(TagNested4PartySubIDType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoFillsEntry) Nested4PartySubID() (string, bool) {
-	v := e.grp.Get(TagNested4PartySubID)
-	return string(v), v != nil
-}
-func (e *NoFillsEntry) NoNested4PartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested4PartySubIDs)
+func (e *NoFillsEntry) FillLiquidityInd() (int, bool, error) {
+	v := e.grp.Get(TagFillLiquidityInd)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -59,35 +47,20 @@ func (e *NoFillsEntry) NoNested4PartyIDs() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (e *NoFillsEntry) Nested4PartyID() (string, bool) {
-	v := e.grp.Get(TagNested4PartyID)
-	return string(v), v != nil
-}
-func (e *NoFillsEntry) Nested4PartyIDSource() (string, bool) {
-	v := e.grp.Get(TagNested4PartyIDSource)
-	return string(v), v != nil
-}
-func (e *NoFillsEntry) Nested4PartyRole() (int, bool, error) {
-	v := e.grp.Get(TagNested4PartyRole)
-	if v == nil {
-		return 0, false, nil
+func (e *NoFillsEntry) NoNested4PartyIDsEntries() []NoNested4PartyIDsEntry {
+	groups := e.grp.Groups(TagNoNested4PartyIDs, noNested4PartyIDsChildTags)
+	entries := make([]NoNested4PartyIDsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoNested4PartyIDsEntry{grp: groups[i]}
 	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoFillsEntry) FillLiquidityInd() (int, bool, error) {
-	v := e.grp.Get(TagFillLiquidityInd)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
+	return entries
 }
 
-var noFillsChildTags = []int{TagFillExecID, TagFillPx, TagFillQty, TagNested4PartySubIDType, TagNested4PartySubID, TagNoNested4PartySubIDs, TagNoNested4PartyIDs, TagNested4PartyID, TagNested4PartyIDSource, TagNested4PartyRole, TagFillLiquidityInd}
+var noFillsChildTags = []int{TagFillExecID, TagFillPx, TagFillQty, TagFillLiquidityInd, TagNoNested4PartyIDs, TagNested4PartyID, TagNested4PartyIDSource, TagNested4PartyRole, TagNoNested4PartySubIDs, TagNested4PartySubID, TagNested4PartySubIDType}
 
 type NoFillsEntryBuilder struct {
-	fields []fix2.Field
+	fields                 []fix2.Field
+	noNested4PartyIDsCount int
 }
 
 func NewNoFillsEntry() *NoFillsEntryBuilder {
@@ -114,59 +87,39 @@ func (e *NoFillsEntryBuilder) SetFillQty(v float64) *NoFillsEntryBuilder {
 	})
 	return e
 }
-func (e *NoFillsEntryBuilder) SetNested4PartySubIDType(v int) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested4PartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoFillsEntryBuilder) SetNested4PartySubID(v string) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested4PartySubID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoFillsEntryBuilder) SetNoNested4PartySubIDs(v int) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNested4PartySubIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoFillsEntryBuilder) SetNoNested4PartyIDs(v int) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoNested4PartyIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoFillsEntryBuilder) SetNested4PartyID(v string) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested4PartyID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoFillsEntryBuilder) SetNested4PartyIDSource(v string) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested4PartyIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoFillsEntryBuilder) SetNested4PartyRole(v int) *NoFillsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNested4PartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
 func (e *NoFillsEntryBuilder) SetFillLiquidityInd(v int) *NoFillsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagFillLiquidityInd,
 		Value: strconv.AppendInt(nil, int64(v), 10),
 	})
+	return e
+}
+func (e *NoFillsEntryBuilder) AddNoNested4PartyIDsEntry(ne *NoNested4PartyIDsEntryBuilder) *NoFillsEntryBuilder {
+	e.noNested4PartyIDsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noNested4PartyIDsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoNested4PartyIDs {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoNested4PartyIDs,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagNested4PartyID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
 	return e
 }

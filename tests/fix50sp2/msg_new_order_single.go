@@ -26,6 +26,14 @@ func (m *NewOrderSingle) ClOrdLinkID() (string, bool) {
 	v := m.msg.Get(TagClOrdLinkID)
 	return string(v), v != nil
 }
+func (m *NewOrderSingle) NoPartyIDs() (int, bool, error) {
+	v := m.msg.Get(TagNoPartyIDs)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *NewOrderSingle) TradeOriginationDate() (time.Time, bool, error) {
 	v := m.msg.Get(TagTradeOriginationDate)
 	if v == nil {
@@ -69,6 +77,14 @@ func (m *NewOrderSingle) PreallocMethod() (PreallocMethod, bool) {
 func (m *NewOrderSingle) AllocID() (string, bool) {
 	v := m.msg.Get(TagAllocID)
 	return string(v), v != nil
+}
+func (m *NewOrderSingle) NoAllocs() (int, bool, error) {
+	v := m.msg.Get(TagNoAllocs)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
 }
 func (m *NewOrderSingle) SettlType() (SettlType, bool) {
 	v := m.msg.Get(TagSettlType)
@@ -118,298 +134,6 @@ func (m *NewOrderSingle) ExDestination() (string, bool) {
 	v := m.msg.Get(TagExDestination)
 	return string(v), v != nil
 }
-func (m *NewOrderSingle) ProcessCode() (ProcessCode, bool) {
-	v := m.msg.Get(TagProcessCode)
-	return ProcessCode(v), v != nil
-}
-func (m *NewOrderSingle) PrevClosePx() (float64, bool, error) {
-	v := m.msg.Get(TagPrevClosePx)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) Side() (Side, bool) {
-	v := m.msg.Get(TagSide)
-	return Side(v), v != nil
-}
-func (m *NewOrderSingle) LocateReqd() (LocateReqd, bool) {
-	v := m.msg.Get(TagLocateReqd)
-	return LocateReqd(v), v != nil
-}
-func (m *NewOrderSingle) TransactTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagTransactTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) QtyType() (QtyType, bool) {
-	v := m.msg.Get(TagQtyType)
-	return QtyType(v), v != nil
-}
-func (m *NewOrderSingle) OrdType() (OrdType, bool) {
-	v := m.msg.Get(TagOrdType)
-	return OrdType(v), v != nil
-}
-func (m *NewOrderSingle) PriceType() (PriceType, bool) {
-	v := m.msg.Get(TagPriceType)
-	return PriceType(v), v != nil
-}
-func (m *NewOrderSingle) Price() (float64, bool, error) {
-	v := m.msg.Get(TagPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) StopPx() (float64, bool, error) {
-	v := m.msg.Get(TagStopPx)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) Currency() (string, bool) {
-	v := m.msg.Get(TagCurrency)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) ComplianceID() (string, bool) {
-	v := m.msg.Get(TagComplianceID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) SolicitedFlag() (SolicitedFlag, bool) {
-	v := m.msg.Get(TagSolicitedFlag)
-	return SolicitedFlag(v), v != nil
-}
-func (m *NewOrderSingle) IOIID() (string, bool) {
-	v := m.msg.Get(TagIOIID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) QuoteID() (string, bool) {
-	v := m.msg.Get(TagQuoteID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) TimeInForce() (TimeInForce, bool) {
-	v := m.msg.Get(TagTimeInForce)
-	return TimeInForce(v), v != nil
-}
-func (m *NewOrderSingle) EffectiveTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagEffectiveTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) ExpireDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagExpireDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) ExpireTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagExpireTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) GTBookingInst() (GTBookingInst, bool) {
-	v := m.msg.Get(TagGTBookingInst)
-	return GTBookingInst(v), v != nil
-}
-func (m *NewOrderSingle) OrderCapacity() (OrderCapacity, bool) {
-	v := m.msg.Get(TagOrderCapacity)
-	return OrderCapacity(v), v != nil
-}
-func (m *NewOrderSingle) OrderRestrictions() (OrderRestrictions, bool) {
-	v := m.msg.Get(TagOrderRestrictions)
-	return OrderRestrictions(v), v != nil
-}
-func (m *NewOrderSingle) CustOrderCapacity() (CustOrderCapacity, bool) {
-	v := m.msg.Get(TagCustOrderCapacity)
-	return CustOrderCapacity(v), v != nil
-}
-func (m *NewOrderSingle) ForexReq() (ForexReq, bool) {
-	v := m.msg.Get(TagForexReq)
-	return ForexReq(v), v != nil
-}
-func (m *NewOrderSingle) SettlCurrency() (string, bool) {
-	v := m.msg.Get(TagSettlCurrency)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) BookingType() (BookingType, bool) {
-	v := m.msg.Get(TagBookingType)
-	return BookingType(v), v != nil
-}
-func (m *NewOrderSingle) Text() (string, bool) {
-	v := m.msg.Get(TagText)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) EncodedTextLen() (int, bool, error) {
-	v := m.msg.Get(TagEncodedTextLen)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) EncodedText() ([]byte, bool) {
-	v := m.msg.Get(TagEncodedText)
-	return v, v != nil
-}
-func (m *NewOrderSingle) SettlDate2() (time.Time, bool, error) {
-	v := m.msg.Get(TagSettlDate2)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) OrderQty2() (float64, bool, error) {
-	v := m.msg.Get(TagOrderQty2)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) Price2() (float64, bool, error) {
-	v := m.msg.Get(TagPrice2)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) PositionEffect() (PositionEffect, bool) {
-	v := m.msg.Get(TagPositionEffect)
-	return PositionEffect(v), v != nil
-}
-func (m *NewOrderSingle) CoveredOrUncovered() (CoveredOrUncovered, bool) {
-	v := m.msg.Get(TagCoveredOrUncovered)
-	return CoveredOrUncovered(v), v != nil
-}
-func (m *NewOrderSingle) MaxShow() (float64, bool, error) {
-	v := m.msg.Get(TagMaxShow)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) TargetStrategy() (TargetStrategy, bool) {
-	v := m.msg.Get(TagTargetStrategy)
-	return TargetStrategy(v), v != nil
-}
-func (m *NewOrderSingle) TargetStrategyParameters() (string, bool) {
-	v := m.msg.Get(TagTargetStrategyParameters)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) ParticipationRate() (float64, bool, error) {
-	v := m.msg.Get(TagParticipationRate)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) CancellationRights() (CancellationRights, bool) {
-	v := m.msg.Get(TagCancellationRights)
-	return CancellationRights(v), v != nil
-}
-func (m *NewOrderSingle) MoneyLaunderingStatus() (MoneyLaunderingStatus, bool) {
-	v := m.msg.Get(TagMoneyLaunderingStatus)
-	return MoneyLaunderingStatus(v), v != nil
-}
-func (m *NewOrderSingle) RegistID() (string, bool) {
-	v := m.msg.Get(TagRegistID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) Designation() (string, bool) {
-	v := m.msg.Get(TagDesignation)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) ManualOrderIndicator() (bool, bool) {
-	v := m.msg.Get(TagManualOrderIndicator)
-	return len(v) == 1 && v[0] == 'Y', v != nil
-}
-func (m *NewOrderSingle) CustDirectedOrder() (bool, bool) {
-	v := m.msg.Get(TagCustDirectedOrder)
-	return len(v) == 1 && v[0] == 'Y', v != nil
-}
-func (m *NewOrderSingle) ReceivedDeptID() (string, bool) {
-	v := m.msg.Get(TagReceivedDeptID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) CustOrderHandlingInst() (CustOrderHandlingInst, bool) {
-	v := m.msg.Get(TagCustOrderHandlingInst)
-	return CustOrderHandlingInst(v), v != nil
-}
-func (m *NewOrderSingle) OrderHandlingInstSource() (OrderHandlingInstSource, bool) {
-	v := m.msg.Get(TagOrderHandlingInstSource)
-	return OrderHandlingInstSource(v), v != nil
-}
-func (m *NewOrderSingle) MatchIncrement() (float64, bool, error) {
-	v := m.msg.Get(TagMatchIncrement)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) MaxPriceLevels() (int, bool, error) {
-	v := m.msg.Get(TagMaxPriceLevels)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) PriceProtectionScope() (PriceProtectionScope, bool) {
-	v := m.msg.Get(TagPriceProtectionScope)
-	return PriceProtectionScope(v), v != nil
-}
-func (m *NewOrderSingle) PreTradeAnonymity() (bool, bool) {
-	v := m.msg.Get(TagPreTradeAnonymity)
-	return len(v) == 1 && v[0] == 'Y', v != nil
-}
-func (m *NewOrderSingle) RefOrderID() (string, bool) {
-	v := m.msg.Get(TagRefOrderID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) RefOrderIDSource() (RefOrderIDSource, bool) {
-	v := m.msg.Get(TagRefOrderIDSource)
-	return RefOrderIDSource(v), v != nil
-}
-func (m *NewOrderSingle) ExDestinationIDSource() (ExDestinationIDSource, bool) {
-	v := m.msg.Get(TagExDestinationIDSource)
-	return ExDestinationIDSource(v), v != nil
-}
-func (m *NewOrderSingle) NoPartyIDs() (int, bool, error) {
-	v := m.msg.Get(TagNoPartyIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) NoAllocs() (int, bool, error) {
-	v := m.msg.Get(TagNoAllocs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
 func (m *NewOrderSingle) NoTradingSessions() (int, bool, error) {
 	v := m.msg.Get(TagNoTradingSessions)
 	if v == nil {
@@ -417,6 +141,10 @@ func (m *NewOrderSingle) NoTradingSessions() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *NewOrderSingle) ProcessCode() (ProcessCode, bool) {
+	v := m.msg.Get(TagProcessCode)
+	return ProcessCode(v), v != nil
 }
 func (m *NewOrderSingle) Symbol() (string, bool) {
 	v := m.msg.Get(TagSymbol)
@@ -433,6 +161,14 @@ func (m *NewOrderSingle) SecurityID() (string, bool) {
 func (m *NewOrderSingle) SecurityIDSource() (SecurityIDSource, bool) {
 	v := m.msg.Get(TagSecurityIDSource)
 	return SecurityIDSource(v), v != nil
+}
+func (m *NewOrderSingle) NoSecurityAltID() (int, bool, error) {
+	v := m.msg.Get(TagNoSecurityAltID)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
 }
 func (m *NewOrderSingle) Product() (Product, bool) {
 	v := m.msg.Get(TagProduct)
@@ -622,6 +358,14 @@ func (m *NewOrderSingle) CPRegType() (string, bool) {
 	v := m.msg.Get(TagCPRegType)
 	return string(v), v != nil
 }
+func (m *NewOrderSingle) NoEvents() (int, bool, error) {
+	v := m.msg.Get(TagNoEvents)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *NewOrderSingle) DatedDate() (time.Time, bool, error) {
 	v := m.msg.Get(TagDatedDate)
 	if v == nil {
@@ -690,6 +434,14 @@ func (m *NewOrderSingle) NTPositionLimit() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *NewOrderSingle) NoInstrumentParties() (int, bool, error) {
+	v := m.msg.Get(TagNoInstrumentParties)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
 func (m *NewOrderSingle) UnitOfMeasure() (UnitOfMeasure, bool) {
 	v := m.msg.Get(TagUnitOfMeasure)
 	return UnitOfMeasure(v), v != nil
@@ -721,6 +473,22 @@ func (m *NewOrderSingle) UnitOfMeasureQty() (float64, bool, error) {
 	}
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
+}
+func (m *NewOrderSingle) SecurityXMLLen() (int, bool, error) {
+	v := m.msg.Get(TagSecurityXMLLen)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *NewOrderSingle) SecurityXML() (string, bool) {
+	v := m.msg.Get(TagSecurityXML)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) SecurityXMLSchema() (string, bool) {
+	v := m.msg.Get(TagSecurityXMLSchema)
+	return string(v), v != nil
 }
 func (m *NewOrderSingle) ProductComplex() (string, bool) {
 	v := m.msg.Get(TagProductComplex)
@@ -866,122 +634,6 @@ func (m *NewOrderSingle) OptPayoutType() (OptPayoutType, bool) {
 	v := m.msg.Get(TagOptPayoutType)
 	return OptPayoutType(v), v != nil
 }
-func (m *NewOrderSingle) NoSecurityAltID() (int, bool, error) {
-	v := m.msg.Get(TagNoSecurityAltID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) SecurityAltID() (string, bool) {
-	v := m.msg.Get(TagSecurityAltID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) SecurityAltIDSource() (string, bool) {
-	v := m.msg.Get(TagSecurityAltIDSource)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) NoEvents() (int, bool, error) {
-	v := m.msg.Get(TagNoEvents)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) EventType() (EventType, bool) {
-	v := m.msg.Get(TagEventType)
-	return EventType(v), v != nil
-}
-func (m *NewOrderSingle) EventDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagEventDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCDate(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) EventPx() (float64, bool, error) {
-	v := m.msg.Get(TagEventPx)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) EventText() (string, bool) {
-	v := m.msg.Get(TagEventText)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) EventTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagEventTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) NoInstrumentParties() (int, bool, error) {
-	v := m.msg.Get(TagNoInstrumentParties)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) InstrumentPartyID() (string, bool) {
-	v := m.msg.Get(TagInstrumentPartyID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) InstrumentPartyIDSource() (string, bool) {
-	v := m.msg.Get(TagInstrumentPartyIDSource)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) InstrumentPartyRole() (int, bool, error) {
-	v := m.msg.Get(TagInstrumentPartyRole)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) NoInstrumentPartySubIDs() (int, bool, error) {
-	v := m.msg.Get(TagNoInstrumentPartySubIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) InstrumentPartySubID() (string, bool) {
-	v := m.msg.Get(TagInstrumentPartySubID)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) InstrumentPartySubIDType() (int, bool, error) {
-	v := m.msg.Get(TagInstrumentPartySubIDType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) SecurityXMLLen() (int, bool, error) {
-	v := m.msg.Get(TagSecurityXMLLen)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) SecurityXML() (string, bool) {
-	v := m.msg.Get(TagSecurityXML)
-	return string(v), v != nil
-}
-func (m *NewOrderSingle) SecurityXMLSchema() (string, bool) {
-	v := m.msg.Get(TagSecurityXMLSchema)
-	return string(v), v != nil
-}
 func (m *NewOrderSingle) NoComplexEvents() (int, bool, error) {
 	v := m.msg.Get(TagNoComplexEvents)
 	if v == nil {
@@ -989,94 +641,6 @@ func (m *NewOrderSingle) NoComplexEvents() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
-}
-func (m *NewOrderSingle) ComplexEventType() (ComplexEventType, bool) {
-	v := m.msg.Get(TagComplexEventType)
-	return ComplexEventType(v), v != nil
-}
-func (m *NewOrderSingle) ComplexOptPayoutAmount() (float64, bool, error) {
-	v := m.msg.Get(TagComplexOptPayoutAmount)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) ComplexEventPrice() (float64, bool, error) {
-	v := m.msg.Get(TagComplexEventPrice)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) ComplexEventPriceBoundaryMethod() (ComplexEventPriceBoundaryMethod, bool) {
-	v := m.msg.Get(TagComplexEventPriceBoundaryMethod)
-	return ComplexEventPriceBoundaryMethod(v), v != nil
-}
-func (m *NewOrderSingle) ComplexEventPriceBoundaryPrecision() (float64, bool, error) {
-	v := m.msg.Get(TagComplexEventPriceBoundaryPrecision)
-	if v == nil {
-		return 0.0, false, nil
-	}
-	f, err := fix2.ParseFloat(v)
-	return f, true, err
-}
-func (m *NewOrderSingle) ComplexEventPriceTimeType() (ComplexEventPriceTimeType, bool) {
-	v := m.msg.Get(TagComplexEventPriceTimeType)
-	return ComplexEventPriceTimeType(v), v != nil
-}
-func (m *NewOrderSingle) ComplexEventCondition() (ComplexEventCondition, bool) {
-	v := m.msg.Get(TagComplexEventCondition)
-	return ComplexEventCondition(v), v != nil
-}
-func (m *NewOrderSingle) NoComplexEventDates() (int, bool, error) {
-	v := m.msg.Get(TagNoComplexEventDates)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) ComplexEventStartDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventStartDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) ComplexEventEndDate() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventEndDate)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimestamp(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) NoComplexEventTimes() (int, bool, error) {
-	v := m.msg.Get(TagNoComplexEventTimes)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (m *NewOrderSingle) ComplexEventStartTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventStartTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimeOnly(v)
-	return t, true, err
-}
-func (m *NewOrderSingle) ComplexEventEndTime() (time.Time, bool, error) {
-	v := m.msg.Get(TagComplexEventEndTime)
-	if v == nil {
-		return time.Time{}, false, nil
-	}
-	t, err := fix2.ParseUTCTimeOnly(v)
-	return t, true, err
 }
 func (m *NewOrderSingle) AgreementDesc() (string, bool) {
 	v := m.msg.Get(TagAgreementDesc)
@@ -1138,6 +702,30 @@ func (m *NewOrderSingle) NoUnderlyings() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *NewOrderSingle) PrevClosePx() (float64, bool, error) {
+	v := m.msg.Get(TagPrevClosePx)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) Side() (Side, bool) {
+	v := m.msg.Get(TagSide)
+	return Side(v), v != nil
+}
+func (m *NewOrderSingle) LocateReqd() (LocateReqd, bool) {
+	v := m.msg.Get(TagLocateReqd)
+	return LocateReqd(v), v != nil
+}
+func (m *NewOrderSingle) TransactTime() (time.Time, bool, error) {
+	v := m.msg.Get(TagTransactTime)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
+}
 func (m *NewOrderSingle) NoStipulations() (int, bool, error) {
 	v := m.msg.Get(TagNoStipulations)
 	if v == nil {
@@ -1145,6 +733,10 @@ func (m *NewOrderSingle) NoStipulations() (int, bool, error) {
 	}
 	n, err := fix2.ParseInt(v)
 	return n, true, err
+}
+func (m *NewOrderSingle) QtyType() (QtyType, bool) {
+	v := m.msg.Get(TagQtyType)
+	return QtyType(v), v != nil
 }
 func (m *NewOrderSingle) OrderQty() (float64, bool, error) {
 	v := m.msg.Get(TagOrderQty)
@@ -1176,6 +768,30 @@ func (m *NewOrderSingle) RoundingDirection() (RoundingDirection, bool) {
 }
 func (m *NewOrderSingle) RoundingModulus() (float64, bool, error) {
 	v := m.msg.Get(TagRoundingModulus)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) OrdType() (OrdType, bool) {
+	v := m.msg.Get(TagOrdType)
+	return OrdType(v), v != nil
+}
+func (m *NewOrderSingle) PriceType() (PriceType, bool) {
+	v := m.msg.Get(TagPriceType)
+	return PriceType(v), v != nil
+}
+func (m *NewOrderSingle) Price() (float64, bool, error) {
+	v := m.msg.Get(TagPrice)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) StopPx() (float64, bool, error) {
+	v := m.msg.Get(TagStopPx)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -1266,6 +882,58 @@ func (m *NewOrderSingle) YieldRedemptionPriceType() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *NewOrderSingle) Currency() (string, bool) {
+	v := m.msg.Get(TagCurrency)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) ComplianceID() (string, bool) {
+	v := m.msg.Get(TagComplianceID)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) SolicitedFlag() (SolicitedFlag, bool) {
+	v := m.msg.Get(TagSolicitedFlag)
+	return SolicitedFlag(v), v != nil
+}
+func (m *NewOrderSingle) IOIID() (string, bool) {
+	v := m.msg.Get(TagIOIID)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) QuoteID() (string, bool) {
+	v := m.msg.Get(TagQuoteID)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) TimeInForce() (TimeInForce, bool) {
+	v := m.msg.Get(TagTimeInForce)
+	return TimeInForce(v), v != nil
+}
+func (m *NewOrderSingle) EffectiveTime() (time.Time, bool, error) {
+	v := m.msg.Get(TagEffectiveTime)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
+}
+func (m *NewOrderSingle) ExpireDate() (time.Time, bool, error) {
+	v := m.msg.Get(TagExpireDate)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *NewOrderSingle) ExpireTime() (time.Time, bool, error) {
+	v := m.msg.Get(TagExpireTime)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCTimestamp(v)
+	return t, true, err
+}
+func (m *NewOrderSingle) GTBookingInst() (GTBookingInst, bool) {
+	v := m.msg.Get(TagGTBookingInst)
+	return GTBookingInst(v), v != nil
+}
 func (m *NewOrderSingle) Commission() (float64, bool, error) {
 	v := m.msg.Get(TagCommission)
 	if v == nil {
@@ -1285,6 +953,86 @@ func (m *NewOrderSingle) CommCurrency() (string, bool) {
 func (m *NewOrderSingle) FundRenewWaiv() (FundRenewWaiv, bool) {
 	v := m.msg.Get(TagFundRenewWaiv)
 	return FundRenewWaiv(v), v != nil
+}
+func (m *NewOrderSingle) OrderCapacity() (OrderCapacity, bool) {
+	v := m.msg.Get(TagOrderCapacity)
+	return OrderCapacity(v), v != nil
+}
+func (m *NewOrderSingle) OrderRestrictions() (OrderRestrictions, bool) {
+	v := m.msg.Get(TagOrderRestrictions)
+	return OrderRestrictions(v), v != nil
+}
+func (m *NewOrderSingle) CustOrderCapacity() (CustOrderCapacity, bool) {
+	v := m.msg.Get(TagCustOrderCapacity)
+	return CustOrderCapacity(v), v != nil
+}
+func (m *NewOrderSingle) ForexReq() (ForexReq, bool) {
+	v := m.msg.Get(TagForexReq)
+	return ForexReq(v), v != nil
+}
+func (m *NewOrderSingle) SettlCurrency() (string, bool) {
+	v := m.msg.Get(TagSettlCurrency)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) BookingType() (BookingType, bool) {
+	v := m.msg.Get(TagBookingType)
+	return BookingType(v), v != nil
+}
+func (m *NewOrderSingle) Text() (string, bool) {
+	v := m.msg.Get(TagText)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) EncodedTextLen() (int, bool, error) {
+	v := m.msg.Get(TagEncodedTextLen)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *NewOrderSingle) EncodedText() ([]byte, bool) {
+	v := m.msg.Get(TagEncodedText)
+	return v, v != nil
+}
+func (m *NewOrderSingle) SettlDate2() (time.Time, bool, error) {
+	v := m.msg.Get(TagSettlDate2)
+	if v == nil {
+		return time.Time{}, false, nil
+	}
+	t, err := fix2.ParseUTCDate(v)
+	return t, true, err
+}
+func (m *NewOrderSingle) OrderQty2() (float64, bool, error) {
+	v := m.msg.Get(TagOrderQty2)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) Price2() (float64, bool, error) {
+	v := m.msg.Get(TagPrice2)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) PositionEffect() (PositionEffect, bool) {
+	v := m.msg.Get(TagPositionEffect)
+	return PositionEffect(v), v != nil
+}
+func (m *NewOrderSingle) CoveredOrUncovered() (CoveredOrUncovered, bool) {
+	v := m.msg.Get(TagCoveredOrUncovered)
+	return CoveredOrUncovered(v), v != nil
+}
+func (m *NewOrderSingle) MaxShow() (float64, bool, error) {
+	v := m.msg.Get(TagMaxShow)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
 }
 func (m *NewOrderSingle) PegOffsetValue() (float64, bool, error) {
 	v := m.msg.Get(TagPegOffsetValue)
@@ -1366,6 +1114,38 @@ func (m *NewOrderSingle) DiscretionScope() (DiscretionScope, bool) {
 	v := m.msg.Get(TagDiscretionScope)
 	return DiscretionScope(v), v != nil
 }
+func (m *NewOrderSingle) TargetStrategy() (TargetStrategy, bool) {
+	v := m.msg.Get(TagTargetStrategy)
+	return TargetStrategy(v), v != nil
+}
+func (m *NewOrderSingle) TargetStrategyParameters() (string, bool) {
+	v := m.msg.Get(TagTargetStrategyParameters)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) ParticipationRate() (float64, bool, error) {
+	v := m.msg.Get(TagParticipationRate)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) CancellationRights() (CancellationRights, bool) {
+	v := m.msg.Get(TagCancellationRights)
+	return CancellationRights(v), v != nil
+}
+func (m *NewOrderSingle) MoneyLaunderingStatus() (MoneyLaunderingStatus, bool) {
+	v := m.msg.Get(TagMoneyLaunderingStatus)
+	return MoneyLaunderingStatus(v), v != nil
+}
+func (m *NewOrderSingle) RegistID() (string, bool) {
+	v := m.msg.Get(TagRegistID)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) Designation() (string, bool) {
+	v := m.msg.Get(TagDesignation)
+	return string(v), v != nil
+}
 func (m *NewOrderSingle) NoStrategyParameters() (int, bool, error) {
 	v := m.msg.Get(TagNoStrategyParameters)
 	if v == nil {
@@ -1374,8 +1154,44 @@ func (m *NewOrderSingle) NoStrategyParameters() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
+func (m *NewOrderSingle) ManualOrderIndicator() (bool, bool) {
+	v := m.msg.Get(TagManualOrderIndicator)
+	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *NewOrderSingle) CustDirectedOrder() (bool, bool) {
+	v := m.msg.Get(TagCustDirectedOrder)
+	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *NewOrderSingle) ReceivedDeptID() (string, bool) {
+	v := m.msg.Get(TagReceivedDeptID)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) CustOrderHandlingInst() (CustOrderHandlingInst, bool) {
+	v := m.msg.Get(TagCustOrderHandlingInst)
+	return CustOrderHandlingInst(v), v != nil
+}
+func (m *NewOrderSingle) OrderHandlingInstSource() (OrderHandlingInstSource, bool) {
+	v := m.msg.Get(TagOrderHandlingInstSource)
+	return OrderHandlingInstSource(v), v != nil
+}
 func (m *NewOrderSingle) NoTrdRegTimestamps() (int, bool, error) {
 	v := m.msg.Get(TagNoTrdRegTimestamps)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (m *NewOrderSingle) MatchIncrement() (float64, bool, error) {
+	v := m.msg.Get(TagMatchIncrement)
+	if v == nil {
+		return 0.0, false, nil
+	}
+	f, err := fix2.ParseFloat(v)
+	return f, true, err
+}
+func (m *NewOrderSingle) MaxPriceLevels() (int, bool, error) {
+	v := m.msg.Get(TagMaxPriceLevels)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -1437,6 +1253,10 @@ func (m *NewOrderSingle) DisplayQty() (float64, bool, error) {
 	}
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
+}
+func (m *NewOrderSingle) PriceProtectionScope() (PriceProtectionScope, bool) {
+	v := m.msg.Get(TagPriceProtectionScope)
+	return PriceProtectionScope(v), v != nil
 }
 func (m *NewOrderSingle) TriggerType() (TriggerType, bool) {
 	v := m.msg.Get(TagTriggerType)
@@ -1510,6 +1330,22 @@ func (m *NewOrderSingle) TriggerTradingSessionSubID() (string, bool) {
 	v := m.msg.Get(TagTriggerTradingSessionSubID)
 	return string(v), v != nil
 }
+func (m *NewOrderSingle) PreTradeAnonymity() (bool, bool) {
+	v := m.msg.Get(TagPreTradeAnonymity)
+	return len(v) == 1 && v[0] == 'Y', v != nil
+}
+func (m *NewOrderSingle) RefOrderID() (string, bool) {
+	v := m.msg.Get(TagRefOrderID)
+	return string(v), v != nil
+}
+func (m *NewOrderSingle) RefOrderIDSource() (RefOrderIDSource, bool) {
+	v := m.msg.Get(TagRefOrderIDSource)
+	return RefOrderIDSource(v), v != nil
+}
+func (m *NewOrderSingle) ExDestinationIDSource() (ExDestinationIDSource, bool) {
+	v := m.msg.Get(TagExDestinationIDSource)
+	return ExDestinationIDSource(v), v != nil
+}
 func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
 	groups := m.msg.Groups(TagNoPartyIDs, noPartyIDsChildTags)
 	entries := make([]NoPartyIDsEntry, len(groups))
@@ -1531,6 +1367,38 @@ func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
 	entries := make([]NoTradingSessionsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoTradingSessionsEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
+	groups := m.msg.Groups(TagNoSecurityAltID, noSecurityAltIDChildTags)
+	entries := make([]NoSecurityAltIDEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoSecurityAltIDEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
+	groups := m.msg.Groups(TagNoEvents, noEventsChildTags)
+	entries := make([]NoEventsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoEventsEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry {
+	groups := m.msg.Groups(TagNoInstrumentParties, noInstrumentPartiesChildTags)
+	entries := make([]NoInstrumentPartiesEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoInstrumentPartiesEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
+	groups := m.msg.Groups(TagNoComplexEvents, noComplexEventsChildTags)
+	entries := make([]NoComplexEventsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoComplexEventsEntry{grp: groups[i]}
 	}
 	return entries
 }
@@ -1572,6 +1440,10 @@ type NewOrderSingleBuilder struct {
 	noPartyIDsCount           int
 	noAllocsCount             int
 	noTradingSessionsCount    int
+	noSecurityAltIDCount      int
+	noEventsCount             int
+	noInstrumentPartiesCount  int
+	noComplexEventsCount      int
 	noUnderlyingsCount        int
 	noStipulationsCount       int
 	noStrategyParametersCount int
@@ -1679,238 +1551,6 @@ func (b *NewOrderSingleBuilder) SetExDestination(v string) *NewOrderSingleBuilde
 }
 func (b *NewOrderSingleBuilder) SetProcessCode(v ProcessCode) *NewOrderSingleBuilder {
 	b.SetString(TagProcessCode, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPrevClosePx(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagPrevClosePx, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSide(v Side) *NewOrderSingleBuilder {
-	b.SetString(TagSide, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetLocateReqd(v LocateReqd) *NewOrderSingleBuilder {
-	b.SetString(TagLocateReqd, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetTransactTime(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagTransactTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetTransactTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagTransactTime, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetQtyType(v QtyType) *NewOrderSingleBuilder {
-	b.SetString(TagQtyType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetOrdType(v OrdType) *NewOrderSingleBuilder {
-	b.SetString(TagOrdType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPriceType(v PriceType) *NewOrderSingleBuilder {
-	b.SetString(TagPriceType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPrice(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagPrice, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetStopPx(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagStopPx, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetCurrency(v string) *NewOrderSingleBuilder {
-	b.SetString(TagCurrency, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplianceID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagComplianceID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSolicitedFlag(v SolicitedFlag) *NewOrderSingleBuilder {
-	b.SetString(TagSolicitedFlag, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetIOIID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagIOIID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetQuoteID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagQuoteID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetTimeInForce(v TimeInForce) *NewOrderSingleBuilder {
-	b.SetString(TagTimeInForce, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEffectiveTime(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagEffectiveTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEffectiveTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagEffectiveTime, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetExpireDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagExpireDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetExpireDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagExpireDate, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetExpireTime(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagExpireTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetExpireTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagExpireTime, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetGTBookingInst(v GTBookingInst) *NewOrderSingleBuilder {
-	b.SetString(TagGTBookingInst, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetOrderCapacity(v OrderCapacity) *NewOrderSingleBuilder {
-	b.SetString(TagOrderCapacity, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetOrderRestrictions(v OrderRestrictions) *NewOrderSingleBuilder {
-	b.SetString(TagOrderRestrictions, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetCustOrderCapacity(v CustOrderCapacity) *NewOrderSingleBuilder {
-	b.SetString(TagCustOrderCapacity, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetForexReq(v ForexReq) *NewOrderSingleBuilder {
-	b.SetString(TagForexReq, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSettlCurrency(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSettlCurrency, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetBookingType(v BookingType) *NewOrderSingleBuilder {
-	b.SetString(TagBookingType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetText(v string) *NewOrderSingleBuilder {
-	b.SetString(TagText, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEncodedTextLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagEncodedTextLen, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEncodedText(v []byte) *NewOrderSingleBuilder {
-	b.Set(TagEncodedText, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSettlDate2(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagSettlDate2, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSettlDate2WithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagSettlDate2, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetOrderQty2(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagOrderQty2, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPrice2(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagPrice2, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPositionEffect(v PositionEffect) *NewOrderSingleBuilder {
-	b.SetString(TagPositionEffect, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetCoveredOrUncovered(v CoveredOrUncovered) *NewOrderSingleBuilder {
-	b.SetString(TagCoveredOrUncovered, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetMaxShow(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagMaxShow, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetTargetStrategy(v TargetStrategy) *NewOrderSingleBuilder {
-	b.SetString(TagTargetStrategy, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetTargetStrategyParameters(v string) *NewOrderSingleBuilder {
-	b.SetString(TagTargetStrategyParameters, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetParticipationRate(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagParticipationRate, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetCancellationRights(v CancellationRights) *NewOrderSingleBuilder {
-	b.SetString(TagCancellationRights, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetMoneyLaunderingStatus(v MoneyLaunderingStatus) *NewOrderSingleBuilder {
-	b.SetString(TagMoneyLaunderingStatus, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetRegistID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagRegistID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetDesignation(v string) *NewOrderSingleBuilder {
-	b.SetString(TagDesignation, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetManualOrderIndicator(v bool) *NewOrderSingleBuilder {
-	b.SetBool(TagManualOrderIndicator, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetCustDirectedOrder(v bool) *NewOrderSingleBuilder {
-	b.SetBool(TagCustDirectedOrder, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetReceivedDeptID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagReceivedDeptID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetCustOrderHandlingInst(v CustOrderHandlingInst) *NewOrderSingleBuilder {
-	b.SetString(TagCustOrderHandlingInst, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetOrderHandlingInstSource(v OrderHandlingInstSource) *NewOrderSingleBuilder {
-	b.SetString(TagOrderHandlingInstSource, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetMatchIncrement(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagMatchIncrement, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetMaxPriceLevels(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagMaxPriceLevels, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPriceProtectionScope(v PriceProtectionScope) *NewOrderSingleBuilder {
-	b.SetString(TagPriceProtectionScope, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetPreTradeAnonymity(v bool) *NewOrderSingleBuilder {
-	b.SetBool(TagPreTradeAnonymity, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetRefOrderID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagRefOrderID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetRefOrderIDSource(v RefOrderIDSource) *NewOrderSingleBuilder {
-	b.SetString(TagRefOrderIDSource, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetExDestinationIDSource(v ExDestinationIDSource) *NewOrderSingleBuilder {
-	b.SetString(TagExDestinationIDSource, string(v))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSymbol(v string) *NewOrderSingleBuilder {
@@ -2153,6 +1793,18 @@ func (b *NewOrderSingleBuilder) SetUnitOfMeasureQty(v float64) *NewOrderSingleBu
 	b.SetFloat(TagUnitOfMeasureQty, v)
 	return b
 }
+func (b *NewOrderSingleBuilder) SetSecurityXMLLen(v int) *NewOrderSingleBuilder {
+	b.SetInt(TagSecurityXMLLen, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSecurityXML(v string) *NewOrderSingleBuilder {
+	b.SetString(TagSecurityXML, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSecurityXMLSchema(v string) *NewOrderSingleBuilder {
+	b.SetString(TagSecurityXMLSchema, v)
+	return b
+}
 func (b *NewOrderSingleBuilder) SetProductComplex(v string) *NewOrderSingleBuilder {
 	b.SetString(TagProductComplex, v)
 	return b
@@ -2261,162 +1913,6 @@ func (b *NewOrderSingleBuilder) SetOptPayoutType(v OptPayoutType) *NewOrderSingl
 	b.SetString(TagOptPayoutType, string(v))
 	return b
 }
-func (b *NewOrderSingleBuilder) SetNoSecurityAltID(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoSecurityAltID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSecurityAltID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSecurityAltID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSecurityAltIDSource(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSecurityAltIDSource, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetNoEvents(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoEvents, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventType(v EventType) *NewOrderSingleBuilder {
-	b.SetString(TagEventType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagEventDate, v.UTC().Format(fix2.TimeFormatDate))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagEventDate, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventPx(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagEventPx, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventText(v string) *NewOrderSingleBuilder {
-	b.SetString(TagEventText, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventTime(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagEventTime, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetEventTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagEventTime, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetNoInstrumentParties(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoInstrumentParties, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetInstrumentPartyID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagInstrumentPartyID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetInstrumentPartyIDSource(v string) *NewOrderSingleBuilder {
-	b.SetString(TagInstrumentPartyIDSource, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetInstrumentPartyRole(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagInstrumentPartyRole, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetNoInstrumentPartySubIDs(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoInstrumentPartySubIDs, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetInstrumentPartySubID(v string) *NewOrderSingleBuilder {
-	b.SetString(TagInstrumentPartySubID, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetInstrumentPartySubIDType(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagInstrumentPartySubIDType, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSecurityXMLLen(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagSecurityXMLLen, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSecurityXML(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSecurityXML, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetSecurityXMLSchema(v string) *NewOrderSingleBuilder {
-	b.SetString(TagSecurityXMLSchema, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetNoComplexEvents(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoComplexEvents, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventType(v ComplexEventType) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexOptPayoutAmount(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagComplexOptPayoutAmount, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventPrice(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagComplexEventPrice, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventPriceBoundaryMethod(v ComplexEventPriceBoundaryMethod) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventPriceBoundaryMethod, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventPriceBoundaryPrecision(v float64) *NewOrderSingleBuilder {
-	b.SetFloat(TagComplexEventPriceBoundaryPrecision, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventPriceTimeType(v ComplexEventPriceTimeType) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventPriceTimeType, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventCondition(v ComplexEventCondition) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventCondition, string(v))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetNoComplexEventDates(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoComplexEventDates, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventStartDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventStartDate, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventStartDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventStartDate, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventEndDate(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventEndDate, v.UTC().Format(fix2.TimeFormatTimestamp))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventEndDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventEndDate, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetNoComplexEventTimes(v int) *NewOrderSingleBuilder {
-	b.SetInt(TagNoComplexEventTimes, v)
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventStartTime(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventStartTime, v.UTC().Format(fix2.TimeFormatTimeOnly))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventStartTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventStartTime, v.UTC().Format(f))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventEndTime(v time.Time) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventEndTime, v.UTC().Format(fix2.TimeFormatTimeOnly))
-	return b
-}
-func (b *NewOrderSingleBuilder) SetComplexEventEndTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
-	b.SetString(TagComplexEventEndTime, v.UTC().Format(f))
-	return b
-}
 func (b *NewOrderSingleBuilder) SetAgreementDesc(v string) *NewOrderSingleBuilder {
 	b.SetString(TagAgreementDesc, v)
 	return b
@@ -2465,6 +1961,30 @@ func (b *NewOrderSingleBuilder) SetMarginRatio(v float64) *NewOrderSingleBuilder
 	b.SetFloat(TagMarginRatio, v)
 	return b
 }
+func (b *NewOrderSingleBuilder) SetPrevClosePx(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagPrevClosePx, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSide(v Side) *NewOrderSingleBuilder {
+	b.SetString(TagSide, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetLocateReqd(v LocateReqd) *NewOrderSingleBuilder {
+	b.SetString(TagLocateReqd, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetTransactTime(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagTransactTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetTransactTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagTransactTime, v.UTC().Format(f))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetQtyType(v QtyType) *NewOrderSingleBuilder {
+	b.SetString(TagQtyType, string(v))
+	return b
+}
 func (b *NewOrderSingleBuilder) SetOrderQty(v float64) *NewOrderSingleBuilder {
 	b.SetFloat(TagOrderQty, v)
 	return b
@@ -2483,6 +2003,22 @@ func (b *NewOrderSingleBuilder) SetRoundingDirection(v RoundingDirection) *NewOr
 }
 func (b *NewOrderSingleBuilder) SetRoundingModulus(v float64) *NewOrderSingleBuilder {
 	b.SetFloat(TagRoundingModulus, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrdType(v OrdType) *NewOrderSingleBuilder {
+	b.SetString(TagOrdType, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetPriceType(v PriceType) *NewOrderSingleBuilder {
+	b.SetString(TagPriceType, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetPrice(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagPrice, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetStopPx(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagStopPx, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetSpread(v string) *NewOrderSingleBuilder {
@@ -2549,6 +2085,58 @@ func (b *NewOrderSingleBuilder) SetYieldRedemptionPriceType(v int) *NewOrderSing
 	b.SetInt(TagYieldRedemptionPriceType, v)
 	return b
 }
+func (b *NewOrderSingleBuilder) SetCurrency(v string) *NewOrderSingleBuilder {
+	b.SetString(TagCurrency, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetComplianceID(v string) *NewOrderSingleBuilder {
+	b.SetString(TagComplianceID, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSolicitedFlag(v SolicitedFlag) *NewOrderSingleBuilder {
+	b.SetString(TagSolicitedFlag, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetIOIID(v string) *NewOrderSingleBuilder {
+	b.SetString(TagIOIID, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetQuoteID(v string) *NewOrderSingleBuilder {
+	b.SetString(TagQuoteID, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetTimeInForce(v TimeInForce) *NewOrderSingleBuilder {
+	b.SetString(TagTimeInForce, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetEffectiveTime(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagEffectiveTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetEffectiveTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagEffectiveTime, v.UTC().Format(f))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetExpireDate(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagExpireDate, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetExpireDateWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagExpireDate, v.UTC().Format(f))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetExpireTime(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagExpireTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetExpireTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagExpireTime, v.UTC().Format(f))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetGTBookingInst(v GTBookingInst) *NewOrderSingleBuilder {
+	b.SetString(TagGTBookingInst, string(v))
+	return b
+}
 func (b *NewOrderSingleBuilder) SetCommission(v float64) *NewOrderSingleBuilder {
 	b.SetFloat(TagCommission, v)
 	return b
@@ -2563,6 +2151,70 @@ func (b *NewOrderSingleBuilder) SetCommCurrency(v string) *NewOrderSingleBuilder
 }
 func (b *NewOrderSingleBuilder) SetFundRenewWaiv(v FundRenewWaiv) *NewOrderSingleBuilder {
 	b.SetString(TagFundRenewWaiv, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrderCapacity(v OrderCapacity) *NewOrderSingleBuilder {
+	b.SetString(TagOrderCapacity, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrderRestrictions(v OrderRestrictions) *NewOrderSingleBuilder {
+	b.SetString(TagOrderRestrictions, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetCustOrderCapacity(v CustOrderCapacity) *NewOrderSingleBuilder {
+	b.SetString(TagCustOrderCapacity, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetForexReq(v ForexReq) *NewOrderSingleBuilder {
+	b.SetString(TagForexReq, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSettlCurrency(v string) *NewOrderSingleBuilder {
+	b.SetString(TagSettlCurrency, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetBookingType(v BookingType) *NewOrderSingleBuilder {
+	b.SetString(TagBookingType, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetText(v string) *NewOrderSingleBuilder {
+	b.SetString(TagText, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetEncodedTextLen(v int) *NewOrderSingleBuilder {
+	b.SetInt(TagEncodedTextLen, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetEncodedText(v []byte) *NewOrderSingleBuilder {
+	b.Set(TagEncodedText, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSettlDate2(v time.Time) *NewOrderSingleBuilder {
+	b.SetString(TagSettlDate2, v.UTC().Format(fix2.TimeFormatDate))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetSettlDate2WithFormat(v time.Time, f fix2.TimeFormat) *NewOrderSingleBuilder {
+	b.SetString(TagSettlDate2, v.UTC().Format(f))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrderQty2(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagOrderQty2, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetPrice2(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagPrice2, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetPositionEffect(v PositionEffect) *NewOrderSingleBuilder {
+	b.SetString(TagPositionEffect, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetCoveredOrUncovered(v CoveredOrUncovered) *NewOrderSingleBuilder {
+	b.SetString(TagCoveredOrUncovered, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetMaxShow(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagMaxShow, v)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetPegOffsetValue(v float64) *NewOrderSingleBuilder {
@@ -2637,6 +2289,62 @@ func (b *NewOrderSingleBuilder) SetDiscretionScope(v DiscretionScope) *NewOrderS
 	b.SetString(TagDiscretionScope, string(v))
 	return b
 }
+func (b *NewOrderSingleBuilder) SetTargetStrategy(v TargetStrategy) *NewOrderSingleBuilder {
+	b.SetString(TagTargetStrategy, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetTargetStrategyParameters(v string) *NewOrderSingleBuilder {
+	b.SetString(TagTargetStrategyParameters, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetParticipationRate(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagParticipationRate, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetCancellationRights(v CancellationRights) *NewOrderSingleBuilder {
+	b.SetString(TagCancellationRights, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetMoneyLaunderingStatus(v MoneyLaunderingStatus) *NewOrderSingleBuilder {
+	b.SetString(TagMoneyLaunderingStatus, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetRegistID(v string) *NewOrderSingleBuilder {
+	b.SetString(TagRegistID, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetDesignation(v string) *NewOrderSingleBuilder {
+	b.SetString(TagDesignation, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetManualOrderIndicator(v bool) *NewOrderSingleBuilder {
+	b.SetBool(TagManualOrderIndicator, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetCustDirectedOrder(v bool) *NewOrderSingleBuilder {
+	b.SetBool(TagCustDirectedOrder, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetReceivedDeptID(v string) *NewOrderSingleBuilder {
+	b.SetString(TagReceivedDeptID, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetCustOrderHandlingInst(v CustOrderHandlingInst) *NewOrderSingleBuilder {
+	b.SetString(TagCustOrderHandlingInst, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetOrderHandlingInstSource(v OrderHandlingInstSource) *NewOrderSingleBuilder {
+	b.SetString(TagOrderHandlingInstSource, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetMatchIncrement(v float64) *NewOrderSingleBuilder {
+	b.SetFloat(TagMatchIncrement, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetMaxPriceLevels(v int) *NewOrderSingleBuilder {
+	b.SetInt(TagMaxPriceLevels, v)
+	return b
+}
 func (b *NewOrderSingleBuilder) SetSecondaryDisplayQty(v float64) *NewOrderSingleBuilder {
 	b.SetFloat(TagSecondaryDisplayQty, v)
 	return b
@@ -2667,6 +2375,10 @@ func (b *NewOrderSingleBuilder) SetRefreshQty(v float64) *NewOrderSingleBuilder 
 }
 func (b *NewOrderSingleBuilder) SetDisplayQty(v float64) *NewOrderSingleBuilder {
 	b.SetFloat(TagDisplayQty, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetPriceProtectionScope(v PriceProtectionScope) *NewOrderSingleBuilder {
+	b.SetString(TagPriceProtectionScope, string(v))
 	return b
 }
 func (b *NewOrderSingleBuilder) SetTriggerType(v TriggerType) *NewOrderSingleBuilder {
@@ -2729,6 +2441,22 @@ func (b *NewOrderSingleBuilder) SetTriggerTradingSessionSubID(v string) *NewOrde
 	b.SetString(TagTriggerTradingSessionSubID, v)
 	return b
 }
+func (b *NewOrderSingleBuilder) SetPreTradeAnonymity(v bool) *NewOrderSingleBuilder {
+	b.SetBool(TagPreTradeAnonymity, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetRefOrderID(v string) *NewOrderSingleBuilder {
+	b.SetString(TagRefOrderID, v)
+	return b
+}
+func (b *NewOrderSingleBuilder) SetRefOrderIDSource(v RefOrderIDSource) *NewOrderSingleBuilder {
+	b.SetString(TagRefOrderIDSource, string(v))
+	return b
+}
+func (b *NewOrderSingleBuilder) SetExDestinationIDSource(v ExDestinationIDSource) *NewOrderSingleBuilder {
+	b.SetString(TagExDestinationIDSource, string(v))
+	return b
+}
 func (b *NewOrderSingleBuilder) AddNoPartyIDsEntry(e *NoPartyIDsEntryBuilder) *NewOrderSingleBuilder {
 	b.noPartyIDsCount++
 	b.SetInt(TagNoPartyIDs, b.noPartyIDsCount)
@@ -2769,6 +2497,74 @@ func (b *NewOrderSingleBuilder) AddNoTradingSessionsEntry(e *NoTradingSessionsEn
 	fields := e.fields
 	for i, f := range fields {
 		if f.Tag == TagTradingSessionID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *NewOrderSingleBuilder) AddNoSecurityAltIDEntry(e *NoSecurityAltIDEntryBuilder) *NewOrderSingleBuilder {
+	b.noSecurityAltIDCount++
+	b.SetInt(TagNoSecurityAltID, b.noSecurityAltIDCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagSecurityAltID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *NewOrderSingleBuilder) AddNoEventsEntry(e *NoEventsEntryBuilder) *NewOrderSingleBuilder {
+	b.noEventsCount++
+	b.SetInt(TagNoEvents, b.noEventsCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagEventType {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *NewOrderSingleBuilder) AddNoInstrumentPartiesEntry(e *NoInstrumentPartiesEntryBuilder) *NewOrderSingleBuilder {
+	b.noInstrumentPartiesCount++
+	b.SetInt(TagNoInstrumentParties, b.noInstrumentPartiesCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagInstrumentPartyID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	for _, f := range fields {
+		b.Append(f.Tag, f.Value)
+	}
+	return b
+}
+func (b *NewOrderSingleBuilder) AddNoComplexEventsEntry(e *NoComplexEventsEntryBuilder) *NewOrderSingleBuilder {
+	b.noComplexEventsCount++
+	b.SetInt(TagNoComplexEvents, b.noComplexEventsCount)
+	fields := e.fields
+	for i, f := range fields {
+		if f.Tag == TagComplexEventType {
 			if i != 0 {
 				fields[0], fields[i] = fields[i], fields[0]
 			}

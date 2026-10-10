@@ -23,10 +23,6 @@ func (e *NoPartyIDsEntry) PartyRole() (PartyRole, bool) {
 	v := e.grp.Get(TagPartyRole)
 	return PartyRole(v), v != nil
 }
-func (e *NoPartyIDsEntry) PartySubID() (string, bool) {
-	v := e.grp.Get(TagPartySubID)
-	return string(v), v != nil
-}
 func (e *NoPartyIDsEntry) NoPartySubIDs() (int, bool, error) {
 	v := e.grp.Get(TagNoPartySubIDs)
 	if v == nil {
@@ -35,15 +31,20 @@ func (e *NoPartyIDsEntry) NoPartySubIDs() (int, bool, error) {
 	n, err := fix2.ParseInt(v)
 	return n, true, err
 }
-func (e *NoPartyIDsEntry) PartySubIDType() (PartySubIDType, bool) {
-	v := e.grp.Get(TagPartySubIDType)
-	return PartySubIDType(v), v != nil
+func (e *NoPartyIDsEntry) NoPartySubIDsEntries() []NoPartySubIDsEntry {
+	groups := e.grp.Groups(TagNoPartySubIDs, noPartySubIDsChildTags)
+	entries := make([]NoPartySubIDsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoPartySubIDsEntry{grp: groups[i]}
+	}
+	return entries
 }
 
-var noPartyIDsChildTags = []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagPartySubID, TagNoPartySubIDs, TagPartySubIDType}
+var noPartyIDsChildTags = []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagNoPartySubIDs, TagPartySubID, TagPartySubIDType}
 
 type NoPartyIDsEntryBuilder struct {
-	fields []fix2.Field
+	fields             []fix2.Field
+	noPartySubIDsCount int
 }
 
 func NewNoPartyIDsEntry() *NoPartyIDsEntryBuilder {
@@ -70,24 +71,32 @@ func (e *NoPartyIDsEntryBuilder) SetPartyRole(v PartyRole) *NoPartyIDsEntryBuild
 	})
 	return e
 }
-func (e *NoPartyIDsEntryBuilder) SetPartySubID(v string) *NoPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagPartySubID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoPartyIDsEntryBuilder) SetNoPartySubIDs(v int) *NoPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoPartySubIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoPartyIDsEntryBuilder) SetPartySubIDType(v PartySubIDType) *NoPartyIDsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagPartySubIDType,
-		Value: []byte(string(v)),
-	})
+func (e *NoPartyIDsEntryBuilder) AddNoPartySubIDsEntry(ne *NoPartySubIDsEntryBuilder) *NoPartyIDsEntryBuilder {
+	e.noPartySubIDsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noPartySubIDsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoPartySubIDs {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoPartySubIDs,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagPartySubID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
 	return e
 }

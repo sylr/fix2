@@ -172,22 +172,6 @@ func (e *NoUnderlyingsEntry) UnderlyingContractMultiplier() (float64, bool, erro
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
-func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltID() (int, bool, error) {
-	v := e.grp.Get(TagNoUnderlyingSecurityAltID)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoUnderlyingsEntry) UnderlyingSecurityAltID() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityAltID)
-	return string(v), v != nil
-}
-func (e *NoUnderlyingsEntry) UnderlyingSecurityAltIDSource() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityAltIDSource)
-	return string(v), v != nil
-}
 func (e *NoUnderlyingsEntry) UnderlyingProduct() (int, bool, error) {
 	v := e.grp.Get(TagUnderlyingProduct)
 	if v == nil {
@@ -292,22 +276,6 @@ func (e *NoUnderlyingsEntry) UnderlyingEndValue() (float64, bool, error) {
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
-func (e *NoUnderlyingsEntry) NoUnderlyingStips() (int, bool, error) {
-	v := e.grp.Get(TagNoUnderlyingStips)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoUnderlyingsEntry) UnderlyingStipType() (string, bool) {
-	v := e.grp.Get(TagUnderlyingStipType)
-	return string(v), v != nil
-}
-func (e *NoUnderlyingsEntry) UnderlyingStipValue() (string, bool) {
-	v := e.grp.Get(TagUnderlyingStipValue)
-	return string(v), v != nil
-}
 func (e *NoUnderlyingsEntry) UnderlyingStrikeCurrency() (string, bool) {
 	v := e.grp.Get(TagUnderlyingStrikeCurrency)
 	return string(v), v != nil
@@ -375,50 +343,6 @@ func (e *NoUnderlyingsEntry) UnderlyingFXRate() (float64, bool, error) {
 func (e *NoUnderlyingsEntry) UnderlyingFXRateCalc() (UnderlyingFXRateCalc, bool) {
 	v := e.grp.Get(TagUnderlyingFXRateCalc)
 	return UnderlyingFXRateCalc(v), v != nil
-}
-func (e *NoUnderlyingsEntry) NoUndlyInstrumentParties() (int, bool, error) {
-	v := e.grp.Get(TagNoUndlyInstrumentParties)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoUnderlyingsEntry) UnderlyingInstrumentPartyID() (string, bool) {
-	v := e.grp.Get(TagUnderlyingInstrumentPartyID)
-	return string(v), v != nil
-}
-func (e *NoUnderlyingsEntry) UnderlyingInstrumentPartyIDSource() (string, bool) {
-	v := e.grp.Get(TagUnderlyingInstrumentPartyIDSource)
-	return string(v), v != nil
-}
-func (e *NoUnderlyingsEntry) UnderlyingInstrumentPartyRole() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingInstrumentPartyRole)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoUndlyInstrumentPartySubIDs)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
-}
-func (e *NoUnderlyingsEntry) UnderlyingInstrumentPartySubID() (string, bool) {
-	v := e.grp.Get(TagUnderlyingInstrumentPartySubID)
-	return string(v), v != nil
-}
-func (e *NoUnderlyingsEntry) UnderlyingInstrumentPartySubIDType() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingInstrumentPartySubIDType)
-	if v == nil {
-		return 0, false, nil
-	}
-	n, err := fix2.ParseInt(v)
-	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingMaturityTime() (string, bool) {
 	v := e.grp.Get(TagUnderlyingMaturityTime)
@@ -508,11 +432,62 @@ func (e *NoUnderlyingsEntry) UnderlyingDetachmentPoint() (float64, bool, error) 
 	f, err := fix2.ParseFloat(v)
 	return f, true, err
 }
+func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltID() (int, bool, error) {
+	v := e.grp.Get(TagNoUnderlyingSecurityAltID)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltIDEntries() []NoUnderlyingSecurityAltIDEntry {
+	groups := e.grp.Groups(TagNoUnderlyingSecurityAltID, noUnderlyingSecurityAltIDChildTags)
+	entries := make([]NoUnderlyingSecurityAltIDEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoUnderlyingSecurityAltIDEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (e *NoUnderlyingsEntry) NoUnderlyingStips() (int, bool, error) {
+	v := e.grp.Get(TagNoUnderlyingStips)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoUnderlyingsEntry) NoUnderlyingStipsEntries() []NoUnderlyingStipsEntry {
+	groups := e.grp.Groups(TagNoUnderlyingStips, noUnderlyingStipsChildTags)
+	entries := make([]NoUnderlyingStipsEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoUnderlyingStipsEntry{grp: groups[i]}
+	}
+	return entries
+}
+func (e *NoUnderlyingsEntry) NoUndlyInstrumentParties() (int, bool, error) {
+	v := e.grp.Get(TagNoUndlyInstrumentParties)
+	if v == nil {
+		return 0, false, nil
+	}
+	n, err := fix2.ParseInt(v)
+	return n, true, err
+}
+func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrumentPartiesEntry {
+	groups := e.grp.Groups(TagNoUndlyInstrumentParties, noUndlyInstrumentPartiesChildTags)
+	entries := make([]NoUndlyInstrumentPartiesEntry, len(groups))
+	for i := range groups {
+		entries[i] = NoUndlyInstrumentPartiesEntry{grp: groups[i]}
+	}
+	return entries
+}
 
-var noUnderlyingsChildTags = []int{TagUnderlyingSymbol, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingRedemptionDate, TagUnderlyingCreditRating, TagUnderlyingSecurityIDSource, TagUnderlyingIssuer, TagUnderlyingSecurityDesc, TagUnderlyingSecurityExchange, TagUnderlyingSecurityID, TagUnderlyingSecurityType, TagUnderlyingSymbolSfx, TagUnderlyingMaturityMonthYear, TagUnderlyingPutOrCall, TagUnderlyingStrikePrice, TagUnderlyingOptAttribute, TagUnderlyingCurrency, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCouponRate, TagUnderlyingContractMultiplier, TagNoUnderlyingSecurityAltID, TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingMaturityDate, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingInstrRegistry, TagUnderlyingSecuritySubType, TagUnderlyingPx, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingQty, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagNoUnderlyingStips, TagUnderlyingStipType, TagUnderlyingStipValue, TagUnderlyingStrikeCurrency, TagUnderlyingAllocationPercent, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingSettlementType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagNoUndlyInstrumentParties, TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs, TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType, TagUnderlyingMaturityTime, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint}
+var noUnderlyingsChildTags = []int{TagUnderlyingSymbol, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingRedemptionDate, TagUnderlyingCreditRating, TagUnderlyingSecurityIDSource, TagUnderlyingIssuer, TagUnderlyingSecurityDesc, TagUnderlyingSecurityExchange, TagUnderlyingSecurityID, TagUnderlyingSecurityType, TagUnderlyingSymbolSfx, TagUnderlyingMaturityMonthYear, TagUnderlyingPutOrCall, TagUnderlyingStrikePrice, TagUnderlyingOptAttribute, TagUnderlyingCurrency, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCouponRate, TagUnderlyingContractMultiplier, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingMaturityDate, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingInstrRegistry, TagUnderlyingSecuritySubType, TagUnderlyingPx, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingQty, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingStrikeCurrency, TagUnderlyingAllocationPercent, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingSettlementType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint, TagNoUnderlyingSecurityAltID, TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource, TagNoUnderlyingStips, TagUnderlyingStipType, TagUnderlyingStipValue, TagNoUndlyInstrumentParties, TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs, TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType}
 
 type NoUnderlyingsEntryBuilder struct {
-	fields []fix2.Field
+	fields                         []fix2.Field
+	noUnderlyingSecurityAltIDCount int
+	noUnderlyingStipsCount         int
+	noUndlyInstrumentPartiesCount  int
 }
 
 func NewNoUnderlyingsEntry() *NoUnderlyingsEntryBuilder {
@@ -728,27 +703,6 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingContractMultiplier(v float64) *
 	})
 	return e
 }
-func (e *NoUnderlyingsEntryBuilder) SetNoUnderlyingSecurityAltID(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoUnderlyingSecurityAltID,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityAltID(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityAltID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingSecurityAltIDSource(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingSecurityAltIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingProduct(v int) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingProduct,
@@ -875,27 +829,6 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingEndValue(v float64) *NoUnderlyi
 	})
 	return e
 }
-func (e *NoUnderlyingsEntryBuilder) SetNoUnderlyingStips(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoUnderlyingStips,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStipType(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStipType,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStipValue(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingStipValue,
-		Value: []byte(v),
-	})
-	return e
-}
 func (e *NoUnderlyingsEntryBuilder) SetUnderlyingStrikeCurrency(v string) *NoUnderlyingsEntryBuilder {
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingStrikeCurrency,
@@ -977,55 +910,6 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingFXRateCalc(v UnderlyingFXRateCa
 	e.fields = append(e.fields, fix2.Field{
 		Tag:   TagUnderlyingFXRateCalc,
 		Value: []byte(string(v)),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetNoUndlyInstrumentParties(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoUndlyInstrumentParties,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingInstrumentPartyID(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartyID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingInstrumentPartyIDSource(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartyIDSource,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingInstrumentPartyRole(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartyRole,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetNoUndlyInstrumentPartySubIDs(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagNoUndlyInstrumentPartySubIDs,
-		Value: strconv.AppendInt(nil, int64(v), 10),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingInstrumentPartySubID(v string) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartySubID,
-		Value: []byte(v),
-	})
-	return e
-}
-func (e *NoUnderlyingsEntryBuilder) SetUnderlyingInstrumentPartySubIDType(v int) *NoUnderlyingsEntryBuilder {
-	e.fields = append(e.fields, fix2.Field{
-		Tag:   TagUnderlyingInstrumentPartySubIDType,
-		Value: strconv.AppendInt(nil, int64(v), 10),
 	})
 	return e
 }
@@ -1118,5 +1002,92 @@ func (e *NoUnderlyingsEntryBuilder) SetUnderlyingDetachmentPoint(v float64) *NoU
 		Tag:   TagUnderlyingDetachmentPoint,
 		Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
 	})
+	return e
+}
+func (e *NoUnderlyingsEntryBuilder) AddNoUnderlyingSecurityAltIDEntry(ne *NoUnderlyingSecurityAltIDEntryBuilder) *NoUnderlyingsEntryBuilder {
+	e.noUnderlyingSecurityAltIDCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noUnderlyingSecurityAltIDCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoUnderlyingSecurityAltID {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoUnderlyingSecurityAltID,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagUnderlyingSecurityAltID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
+	return e
+}
+func (e *NoUnderlyingsEntryBuilder) AddNoUnderlyingStipsEntry(ne *NoUnderlyingStipsEntryBuilder) *NoUnderlyingsEntryBuilder {
+	e.noUnderlyingStipsCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noUnderlyingStipsCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoUnderlyingStips {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoUnderlyingStips,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagUnderlyingStipType {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
+	return e
+}
+func (e *NoUnderlyingsEntryBuilder) AddNoUndlyInstrumentPartiesEntry(ne *NoUndlyInstrumentPartiesEntryBuilder) *NoUnderlyingsEntryBuilder {
+	e.noUndlyInstrumentPartiesCount++
+	counterVal := strconv.AppendInt(nil, int64(e.noUndlyInstrumentPartiesCount), 10)
+	updated := false
+	for i := range e.fields {
+		if e.fields[i].Tag == TagNoUndlyInstrumentParties {
+			e.fields[i].Value = counterVal
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		e.fields = append(e.fields, fix2.Field{
+			Tag:   TagNoUndlyInstrumentParties,
+			Value: counterVal,
+		})
+	}
+	fields := ne.fields
+	for i, f := range fields {
+		if f.Tag == TagUnderlyingInstrumentPartyID {
+			if i != 0 {
+				fields[0], fields[i] = fields[i], fields[0]
+			}
+			break
+		}
+	}
+	e.fields = append(e.fields, fields...)
 	return e
 }
