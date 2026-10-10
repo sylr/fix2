@@ -178,11 +178,10 @@ func (d *Dict) FieldByName(name string) *FieldDef {
 const maxDictSize = 64 << 20
 
 // Load parses a QuickFIX XML dictionary from r. It reads at most 64 MiB,
-// counting what the XML decoder buffers ahead.
+// counting what the XML decoder buffers ahead, and at most 262,144 elements.
 func Load(r io.Reader) (*Dict, error) {
-	var xd xmlDict
 	lr := &io.LimitedReader{R: r, N: maxDictSize + 1}
-	err := xml.NewDecoder(lr).Decode(&xd)
+	xd, err := decode(lr)
 	// Reading the extra byte means the input is over the limit, whether or
 	// not the decoder managed to finish.
 	if lr.N <= 0 {
@@ -191,7 +190,7 @@ func Load(r io.Reader) (*Dict, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dictionary: %w", err)
 	}
-	return resolve(&xd)
+	return resolve(xd)
 }
 
 // LoadFile parses a QuickFIX XML dictionary from the file at path.

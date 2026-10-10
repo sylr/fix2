@@ -1084,3 +1084,80 @@ func TestLoad_HeaderGroups(t *testing.T) {
 		t.Errorf("got %d trailer groups, want 0", len(d.TrailerGroups))
 	}
 }
+
+func TestLoad_ReferenceChildrenRejected(t *testing.T) {
+	// Only groups have children. A million elements inside a field reference
+	// used to be decoded, then ignored by the resolver.
+	const fields = `<fields><field number="1" name="F" type="STRING"/></fields>`
+	dict := func(body string) string {
+		return `<fix major="4" minor="4"><header/><trailer/><messages><message name="M" msgtype="M">` +
+			body + `</message></messages><components><component name="C"><field name="F"/></component></components>` + fields + `</fix>`
+	}
+	for name, xml := range map[string]string{
+		"field":     dict(`<field name="F">` + strings.Repeat("<field/>", 1_000_000) + `</field>`),
+		"component": dict(`<component name="C"><group name="F"/></component>`),
+		"unknown":   dict(`<x name="F"><field name="F"/></x>`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var err error
+			allocs := testing.AllocsPerRun(1, func() { _, err = Load(strings.NewReader(xml)) })
+			if err == nil || !strings.Contains(err.Error(), "only groups have children") {
+				t.Fatalf("expected children error, got %v", err)
+			}
+			if allocs > 1000 {
+				t.Errorf("Load allocated %v times before rejecting the dictionary", allocs)
+			}
+		})
+	}
+	// Text inside a reference is not an element and stays accepted.
+	if _, err := Load(strings.NewReader(dict(`<field name="F"> </field>`))); err != nil {
+		t.Errorf("whitespace inside a reference: %v", err)
+	}
+}
+
+func TestLoad_ElementLimit(t *testing.T) {
+	// Unknown elements are skipped, but still counted.
+	dict := func(elements int) string {
+		return `<fix major="4" minor="4">` + strings.Repeat("<x/>", elements-1) + `</fix>`
+	}
+	if _, err := Load(strings.NewReader(dict(maxElements))); err != nil {
+		t.Errorf("maxElements elements: %v", err)
+	}
+	if _, err := Load(strings.NewReader(dict(maxElements + 1))); err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Errorf("maxElements+1 elements: got %v, want element limit error", err)
+	}
+	// Nested unknown elements are skipped without recursion.
+	nested := `<fix>` + strings.Repeat("<x>", maxElements) + strings.Repeat("</x>", maxElements) + `</fix>`
+	if _, err := Load(strings.NewReader(nested)); err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Errorf("nested elements: got %v, want element limit error", err)
+	}
+}
+
+func TestLoad_GroupNestingLimit(t *testing.T) {
+	// Groups nested in the XML itself are limited while decoding.
+	dict := func(levels int) string {
+		return `<fix major="4" minor="4"><header/><trailer/><messages><message name="M" msgtype="M">` +
+			strings.Repeat(`<group name="NoG">`, levels) + `<field name="F"/>` + strings.Repeat(`</group>`, levels) +
+			`</message></messages><components/><fields><field number="1" name="F" type="STRING"/>` +
+			`<field number="2" name="NoG" type="NUMINGROUP"/></fields></fix>`
+	}
+	if _, err := Load(strings.NewReader(dict(maxDepth + 1))); err == nil || !strings.Contains(err.Error(), "nested deeper than") {
+		t.Errorf("maxDepth+1 groups: got %v, want depth error", err)
+	}
+	if _, err := Load(strings.NewReader(dict(100_000))); err == nil || !strings.Contains(err.Error(), "nested deeper than") {
+		t.Errorf("100,000 groups: got %v, want depth error", err)
+	}
+}
+
+func TestLoad_MalformedXML(t *testing.T) {
+	for name, xml := range map[string]string{
+		"empty":         ``,
+		"unclosed root": `<fix major="4" minor="4"><header/>`,
+		"mismatched":    `<fix><header></trailer></fix>`,
+		"bad number":    `<fix><fields><field number="x" name="F" type="STRING"/></fields></fix>`,
+	} {
+		if _, err := Load(strings.NewReader(xml)); err == nil {
+			t.Errorf("%s: Load succeeded", name)
+		}
+	}
+}
