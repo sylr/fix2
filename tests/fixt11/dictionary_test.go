@@ -1,0 +1,23 @@
+package fixt11
+
+import (
+	"testing"
+
+	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/internal/dicttest"
+)
+
+// TestDictionaryMatchesXML checks that the generated dictionary is the one
+// dictionary.Load reads from the XML it was generated from.
+func TestDictionaryMatchesXML(t *testing.T) {
+	want, err := dictionary.LoadFile("../../cmd/fixgen/testdata/FIXT11.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := dicttest.Diff(Dictionary(), want); diff != "" {
+		t.Error(diff)
+	}
+	if Dictionary() != Dictionary() {
+		t.Error("Dictionary returned two dictionaries")
+	}
+}

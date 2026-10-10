@@ -1556,3 +1556,137 @@ func TestAdjacent(t *testing.T) {
 }
 `)
 }
+
+// dictionaryTestXML exercises every part of a generated dictionary literal.
+const dictionaryTestXML = `<fix type="FIXT" major="1" minor="1">
+  <header>
+    <field name="MsgType" required="Y"/>
+    <field name="SenderCompID" required="Y"/>
+    <group name="NoHops" required="N"><field name="HopCompID" required="N"/><field name="HopRefID" required="N"/></group>
+    <component name="HdrOpt" required="N"/>
+  </header>
+  <trailer>
+    <component name="Sig" required="N"/>
+    <field name="CheckSum" required="Y"/>
+  </trailer>
+  <messages>
+    <message name="Order" msgtype="D" msgcat="app">
+      <field name="Side" required="Y"/>
+      <group name="NoParties" required="Y">
+        <field name="PartyID" required="N"/>
+        <group name="NoSubs" required="N"><field name="SubID" required="N"/></group>
+        <field name="Text" required="N"/>
+      </group>
+      <component name="Opt" required="N"/>
+    </message>
+    <message name="Ping" msgtype="0"/>
+  </messages>
+  <components>
+    <component name="HdrOpt"><field name="OnBehalfOfCompID" required="Y"/><field name="OnBehalfOfSubID" required="N"/></component>
+    <component name="Sig"><field name="SignatureLength" required="Y"/><field name="Signature" required="N"/></component>
+    <component name="Opt"><field name="OptA" required="Y"/><field name="OptB" required="N"/></component>
+  </components>
+  <fields>
+    <field number="10" name="CheckSum" type="STRING"/>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="49" name="SenderCompID" type="STRING"/>
+    <field number="54" name="Side" type="CHAR"><value enum="1" description="BUY"/><value enum="2" description="SELL &quot;quoted&quot; \ back"/></field>
+    <field number="58" name="Text" type="STRING"/>
+    <field number="89" name="Signature" type="DATA"/>
+    <field number="93" name="SignatureLength" type="LENGTH"/>
+    <field number="115" name="OnBehalfOfCompID" type="STRING"/>
+    <field number="116" name="OnBehalfOfSubID" type="STRING"/>
+    <field number="448" name="PartyID" type="STRING"/>
+    <field number="453" name="NoParties" type="NUMINGROUP"/>
+    <field number="627" name="NoHops" type="NUMINGROUP"/>
+    <field number="628" name="HopCompID" type="STRING"/>
+    <field number="630" name="HopRefID" type="SEQNUM"/>
+    <field number="5000" name="NoSubs" type="NUMINGROUP"/>
+    <field number="5001" name="SubID" type="MULTIPLESTRINGVALUE"><value enum="AB" description="ab"/><value enum="C" description="c"/></field>
+    <field number="5002" name="OptA" type="STRING"/>
+    <field number="5003" name="OptB" type="STRING"/>
+  </fields>
+</fix>`
+
+// TestGenerateDictionary checks that the generated Dictionary is the one
+// dictionary.Load reads from the same XML, and validates with it.
+func TestGenerateDictionary(t *testing.T) {
+	runGenerated(t, dictionaryTestXML, "gendict", `package gendict
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
+)
+
+const xml = `+"`"+strings.ReplaceAll(dictionaryTestXML, "`", "")+"`"+`
+
+func TestDictionary(t *testing.T) {
+	want, err := dictionary.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := Dictionary()
+	for name, pair := range map[string][2]any{
+		"Type": {got.Type, want.Type}, "Major": {got.Major, want.Major}, "Minor": {got.Minor, want.Minor},
+		"Fields": {got.Fields, want.Fields}, "Header": {got.Header, want.Header}, "Trailer": {got.Trailer, want.Trailer},
+		"HeaderGroups": {got.HeaderGroups, want.HeaderGroups}, "TrailerGroups": {got.TrailerGroups, want.TrailerGroups},
+		"HeaderConditions": {got.HeaderConditions, want.HeaderConditions}, "TrailerConditions": {got.TrailerConditions, want.TrailerConditions},
+	} {
+		if !reflect.DeepEqual(pair[0], pair[1]) {
+			t.Errorf("%s:\n%#v\n%#v", name, pair[0], pair[1])
+		}
+	}
+	if len(want.HeaderConditions) == 0 || len(want.TrailerConditions) == 0 || len(want.HeaderGroups) == 0 {
+		t.Error("the test dictionary should have header conditions, trailer conditions and header groups")
+	}
+	if len(got.Messages) != len(want.Messages) {
+		t.Fatalf("%d messages, want %d", len(got.Messages), len(want.Messages))
+	}
+	for mt, w := range want.Messages {
+		g := got.Messages[mt]
+		if g == nil || g.Name != w.Name || g.MsgType != w.MsgType || g.MsgCat != w.MsgCat ||
+			!reflect.DeepEqual(g.Fields, w.Fields) || !reflect.DeepEqual(g.Groups, w.Groups) || !reflect.DeepEqual(g.Conditions, w.Conditions) {
+			t.Errorf("message %s:\n%#v\n%#v", mt, g, w)
+		}
+	}
+	if got.FieldByName("Side") == nil || got.FieldByName("Side").Tag != TagSide {
+		t.Error("FieldByName(Side)")
+	}
+
+	for body, valid := range map[string]bool{
+		"35=D\x0149=S\x0154=1\x01453=1\x01448=P\x0110=000\x01":         true,
+		"35=D\x0149=S\x0154=3\x01453=1\x01448=P\x0110=000\x01":         false, // invalid Side
+		"35=D\x0149=S\x0154=1\x01453=1\x01448=P\x015002=a\x0110=000\x01": true,  // Opt complete
+		"35=D\x0149=S\x0154=1\x01453=1\x01448=P\x015003=b\x0110=000\x01": false, // Opt without OptA
+	} {
+		body = strings.TrimSuffix(body, "10=000\x01")
+		raw := []byte("8=FIXT.1.1\x019=" + itoa(len(body)) + "\x01" + body)
+		sum := 0
+		for _, c := range raw {
+			sum += int(c)
+		}
+		raw = append(raw, []byte("10="+pad(sum%256)+"\x01")...)
+		msg, err := fix2.Parse(raw)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", raw, err)
+		}
+		if err := got.Validate(&msg); (err == nil) != valid {
+			t.Errorf("%q: Validate = %v, want valid=%v", body, err, valid)
+		}
+	}
+}
+
+func itoa(n int) string {
+	if n < 10 {
+		return string(rune('0' + n))
+	}
+	return itoa(n/10) + string(rune('0'+n%10))
+}
+
+func pad(n int) string { s := itoa(n); return strings.Repeat("0", 3-len(s)) + s }
+`)
+}

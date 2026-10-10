@@ -202,7 +202,7 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return err
 	}
-	written := map[string]bool{"doc.go": true, "fields.go": true}
+	written := map[string]bool{"doc.go": true, "fields.go": true, "dictionary.go": true}
 	if err := checkNames(dict); err != nil {
 		return err
 	}
@@ -213,6 +213,9 @@ func generate(dict *dictionary.Dict, pkg, outDir string) error {
 	}
 	if err := writeFields(dict, pkg, outDir); err != nil {
 		return fmt.Errorf("fields.go: %w", err)
+	}
+	if err := writeDictionary(dict, pkg, outDir); err != nil {
+		return fmt.Errorf("dictionary.go: %w", err)
 	}
 
 	// Merge group definitions across all messages and generate shared group files.
@@ -316,7 +319,8 @@ func hasPrefix(path string, prefix []byte) (bool, error) {
 func writeDoc(pkg, outDir string) error {
 	f := jen.NewFile(pkg)
 	f.HeaderComment(generatedHeader)
-	f.PackageComment(fmt.Sprintf("Package %s provides typed FIX message readers and builders.", pkg))
+	f.PackageComment(fmt.Sprintf("Package %s provides typed FIX message readers and builders, and the", pkg))
+	f.PackageComment("dictionary they were generated from, for validating messages (see Dictionary).")
 	return f.Save(filepath.Join(outDir, "doc.go"))
 }
 
