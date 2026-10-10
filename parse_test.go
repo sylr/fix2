@@ -839,6 +839,11 @@ func TestParseDataFieldsTable(t *testing.T) {
 		// Tags the FIX repository and QuickFIX FIX 5.0 SP2 disagree on are
 		// not treated as LENGTH/DATA (here: the official throttle group).
 		{name: "excluded tags parse as ordinary fields", body: "35=A\x011618=2\x011619=D\x011619=8\x01"},
+		{name: "excluded 1525/1527 parse as ordinary fields", body: "35=A\x011525=24\x011527=sub\x01"},
+		{name: "excluded 1578/1579 parse as ordinary fields", body: "35=A\x011578=3\x011579=1\x01"},
+		// Tags above the table and up to MaxInt are ordinary fields.
+		{name: "tag just above the table", body: fmt.Sprintf("35=A\x01%d=1\x01%d=x\x01", maxDataTag+1, maxDataTag+1)},
+		{name: "MaxInt tag", body: fmt.Sprintf("35=A\x01%d=x\x01", math.MaxInt)},
 	} {
 		raw := buildMsg("FIX.4.4", tt.body)
 		for name, parse := range parsers {
