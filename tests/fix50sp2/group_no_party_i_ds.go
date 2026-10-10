@@ -9,20 +9,28 @@ type NoPartyIDsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoPartyIDsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoPartyIDsEntry) PartyID() (string, bool) {
-	v := e.grp.Get(TagPartyID)
+	v := e.get(TagPartyID)
 	return string(v), v != nil
 }
 func (e *NoPartyIDsEntry) PartyIDSource() (PartyIDSource, bool) {
-	v := e.grp.Get(TagPartyIDSource)
+	v := e.get(TagPartyIDSource)
 	return PartyIDSource(v), v != nil
 }
 func (e *NoPartyIDsEntry) PartyRole() (PartyRole, bool) {
-	v := e.grp.Get(TagPartyRole)
+	v := e.get(TagPartyRole)
 	return PartyRole(v), v != nil
 }
 func (e *NoPartyIDsEntry) NoPartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoPartySubIDs)
+	v := e.get(TagNoPartySubIDs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -34,7 +42,7 @@ func (e *NoPartyIDsEntry) NoPartySubIDsEntries() []NoPartySubIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoPartySubIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoPartySubIDsEntry{

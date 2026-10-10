@@ -583,6 +583,19 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 	)
 
 	// --- Getters for child fields ---
+	// With nested groups, a field is read skipping their entries, which can
+	// hold the same tag.
+	if len(mg.Groups) > 0 {
+		f.Comment("get returns the value of the entry's field with the given tag, outside its")
+		f.Comment("nested groups.")
+		f.Func().Params(jen.Id("e").Op("*").Id(entryName)).Id("get").Params(jen.Id("tag").Int()).Index().Byte().Block(
+			jen.If(jen.Id("e").Dot("spec").Op("==").Nil()).Block(
+				jen.Return(jen.Id("e").Dot("grp").Dot("Get").Call(jen.Id("tag"))),
+			),
+			jen.Return(jen.Id("e").Dot("grp").Dot("GetTopLevel").Call(jen.Id("tag"), jen.Id("e").Dot("spec").Dot("Nested").Op("..."))),
+		)
+	}
+	scoped := len(mg.Groups) > 0
 	for _, fr := range mg.Fields {
 		fd := dict.Fields[fr.Tag]
 		if fd == nil {
@@ -590,14 +603,14 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		}
 		info := lookupType(fd.Type)
 		hasEnums := len(fd.Enums) > 0
-		addEntryGetter(f, entryName, fr.Tag, fd.Name, fd.Type, info, hasEnums)
+		addEntryGetter(f, entryName, fr.Tag, fd.Name, fd.Type, info, hasEnums, scoped)
 	}
 
 	// --- Nested groups: counter getter + iteration method on parent entry ---
 	for _, nestedMg := range mg.Groups {
 		globalNested := allMerged[nestedMg.Name]
-		addEntryGetter(f, entryName, globalNested.CounterTag, globalNested.Name, "NUMINGROUP", lookupType("NUMINGROUP"), false)
-		writeIterationMethod(f, entryName, "e", "grp", globalNested.Name, jen.Id("e").Dot("spec").Dot("Child").Call(tagID(globalNested.Name)))
+		addEntryGetter(f, entryName, globalNested.CounterTag, globalNested.Name, "NUMINGROUP", lookupType("NUMINGROUP"), false, true)
+		writeIterationMethod(f, entryName, "e", "grp", globalNested.Name, jen.Id("e").Dot("spec").Dot("Child").Call(tagID(globalNested.Name)), jen.Id("e").Dot("spec").Dot("Nested"))
 	}
 
 	// --- Entry builder struct ---
@@ -743,6 +756,17 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		})),
 	)
 
+	// specsVar lists the message's group specs: reading a group, or a field
+	// outside the groups, skips the others' entries.
+	specsVar := unexport(name) + "_specs"
+	if len(groups) > 0 {
+		var specs []jen.Code
+		for _, gd := range groups {
+			specs = append(specs, jen.Id(unexport(name)+"_"+gd.Name+"_spec"))
+		}
+		f.Var().Id(specsVar).Op("=").Index().Op("*").Qual(fix2Pkg, "GroupSpec").Values(specs...)
+	}
+
 	// Getters — skip group child tags
 	for _, fi := range allFields {
 		if groupChildTags[fi.tag] {
@@ -750,11 +774,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		}
 		var get *jen.Statement
 		if topLevel[fi.tag] {
-			args := []jen.Code{tagID(fi.name)}
-			for _, gd := range groups {
-				args = append(args, jen.Id(unexport(name)+"_"+gd.Name+"_spec"))
-			}
-			get = jen.Id("m").Dot("msg").Dot("GetTopLevel").Call(args...)
+			get = jen.Id("m").Dot("msg").Dot("GetTopLevel").Call(tagID(fi.name), jen.Id(specsVar).Op("..."))
 		}
 		addGetter(f, name, fi.tag, fi.name, fi.fixType, fi.goInfo, fi.hasEnums, get)
 	}
@@ -765,7 +785,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	for _, gd := range groups {
 		v := unexport(name) + "_" + gd.Name + "_spec"
 		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd))
-		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v))
+		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v), jen.Id(specsVar))
 	}
 
 	// --- Builder struct with counter fields ---
@@ -948,15 +968,17 @@ func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
 
 // writeIterationMethod generates <groupName>Entries on an owner (a message
 // reader or a group entry). spec is the expression of the group's spec in
-// that owner's context; entries keep it for their own nested groups.
-func writeIterationMethod(f *jen.File, ownerName, ownerRecv, ownerField, groupName string, spec jen.Code) {
+// that owner's context; entries keep it for their own nested groups. others
+// is the expression of the owner's group specs, whose entries are skipped
+// while looking for the group's counter.
+func writeIterationMethod(f *jen.File, ownerName, ownerRecv, ownerField, groupName string, spec, others jen.Code) {
 	entryName := groupName + "Entry"
 	f.Func().Params(
 		jen.Id(ownerRecv).Op("*").Id(ownerName),
 	).Id(groupName+"Entries").Params().Index().Id(entryName).Block(
 		jen.Id("spec").Op(":=").Add(spec),
 		jen.If(jen.Id("spec").Op("==").Nil()).Block(jen.Return(jen.Nil())),
-		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("GroupsOf").Call(jen.Id("spec")),
+		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("GroupsOf").Call(jen.Id("spec"), jen.Add(others).Op("...")),
 		jen.Id("entries").Op(":=").Make(jen.Index().Id(entryName), jen.Len(jen.Id("groups"))),
 		jen.For(jen.Id("i").Op(":=").Range().Id("groups")).Block(
 			jen.Id("entries").Index(jen.Id("i")).Op("=").Id(entryName).Values(jen.Dict{
@@ -972,10 +994,15 @@ func writeIterationMethod(f *jen.File, ownerName, ownerRecv, ownerField, groupNa
 // group entry getters (target e.grp.Get(tag) instead of m.msg.Get(tag))
 // ---------------------------------------------------------------------------
 
-func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums bool) {
+// addEntryGetter generates a getter on a group entry; scoped getters read
+// through e.get, skipping the entry's nested groups.
+func addEntryGetter(f *jen.File, entryName string, tag int, fieldName, fixType string, info goTypeInfo, hasEnums, scoped bool) {
 	recv := jen.Id("e").Op("*").Id(entryName)
 	tid := tagID(fieldName)
 	getCall := jen.Id("e").Dot("grp").Dot("Get").Call(tid)
+	if scoped {
+		getCall = jen.Id("e").Dot("get").Call(tid)
+	}
 
 	switch {
 	case hasEnums:

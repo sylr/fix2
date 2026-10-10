@@ -14,6 +14,9 @@ type ResendRequest struct {
 func WrapResendRequest(msg *fix2.Message) *ResendRequest {
 	return &ResendRequest{msg: msg}
 }
+
+var resendRequest_specs = []*fix2.GroupSpec{resendRequest_NoHops_spec}
+
 func (m *ResendRequest) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -174,7 +177,7 @@ func (m *ResendRequest) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, resendRequest_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{

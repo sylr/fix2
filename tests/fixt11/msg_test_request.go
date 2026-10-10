@@ -14,6 +14,9 @@ type TestRequest struct {
 func WrapTestRequest(msg *fix2.Message) *TestRequest {
 	return &TestRequest{msg: msg}
 }
+
+var testRequest_specs = []*fix2.GroupSpec{testRequest_NoHops_spec}
+
 func (m *TestRequest) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -162,7 +165,7 @@ func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, testRequest_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{

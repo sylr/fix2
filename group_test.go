@@ -458,3 +458,50 @@ func TestTopLevelFields(t *testing.T) {
 		break
 	}
 }
+
+func TestGroupsOfSkipsOtherGroups(t *testing.T) {
+	// Shared(200) is nested in Outer(900) entries and also a group of the
+	// message after Outer: looking for the message's own skips Outer.
+	shared := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201}}
+	outer := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}, Nested: []*GroupSpec{shared}}
+	m := fieldsMsg(t, "900=1", "100=p", "200=1", "201=nested", "200=1", "201=top")
+	if got := m.GroupsOf(shared, outer, shared); len(got) != 1 || string(got[0].Get(201)) != "top" {
+		t.Errorf("GroupsOf(shared, outer) = %v", entryTags(got))
+	}
+	if got := m.GroupsOf(shared); len(got) != 1 || string(got[0].Get(201)) != "nested" {
+		t.Errorf("GroupsOf(shared) without others = %v, want the first counter's entries", entryTags(got))
+	}
+	// Inside an entry, siblings are skipped the same way.
+	a := &GroupSpec{Counter: 300, Delim: 301, Tags: []int{301}, Nested: []*GroupSpec{shared}}
+	parent := &GroupSpec{Counter: 800, Delim: 102, Tags: []int{102}, Nested: []*GroupSpec{a, shared}}
+	m = fieldsMsg(t, "800=1", "102=x", "300=1", "301=a", "200=1", "201=in-a", "200=1", "201=sibling")
+	entry := m.GroupsOf(parent)[0]
+	if got := entry.GroupsOf(shared, parent.Nested...); len(got) != 1 || string(got[0].Get(201)) != "sibling" {
+		t.Errorf("Group.GroupsOf(shared, siblings) = %v", entryTags(got))
+	}
+}
+
+func TestGroupGetTopLevel(t *testing.T) {
+	// Q(101) is in NoChildren entries and in the parent entry after them.
+	child := &GroupSpec{Counter: 502, Delim: 102, Tags: []int{102, 101}}
+	parent := &GroupSpec{Counter: 501, Delim: 100, Tags: []int{100, 101}, Nested: []*GroupSpec{child}}
+	m := fieldsMsg(t, "501=1", "100=p", "502=1", "102=r", "101=child", "101=parent")
+	e := m.GroupsOf(parent)[0]
+	if got := string(e.GetTopLevel(101, parent.Nested...)); got != "parent" {
+		t.Errorf("GetTopLevel(101) = %q, want parent", got)
+	}
+	if got := string(e.Get(101)); got != "child" {
+		t.Errorf("Get(101) = %q, want child (first occurrence)", got)
+	}
+	var tags []int
+	for f := range e.TopLevelFields(parent.Nested...) {
+		tags = append(tags, f.Tag)
+	}
+	if want := []int{100, 502, 101}; !reflect.DeepEqual(tags, want) {
+		t.Errorf("TopLevelFields = %v, want %v", tags, want)
+	}
+	m = fieldsMsg(t, "501=1", "100=p", "502=1", "102=r", "101=child")
+	if got := m.GroupsOf(parent)[0].GetTopLevel(101, parent.Nested...); got != nil {
+		t.Errorf("absent parent value = %q", got)
+	}
+}

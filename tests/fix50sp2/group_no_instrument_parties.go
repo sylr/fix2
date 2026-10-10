@@ -12,16 +12,24 @@ type NoInstrumentPartiesEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoInstrumentPartiesEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoInstrumentPartiesEntry) InstrumentPartyID() (string, bool) {
-	v := e.grp.Get(TagInstrumentPartyID)
+	v := e.get(TagInstrumentPartyID)
 	return string(v), v != nil
 }
 func (e *NoInstrumentPartiesEntry) InstrumentPartyIDSource() (string, bool) {
-	v := e.grp.Get(TagInstrumentPartyIDSource)
+	v := e.get(TagInstrumentPartyIDSource)
 	return string(v), v != nil
 }
 func (e *NoInstrumentPartiesEntry) InstrumentPartyRole() (int, bool, error) {
-	v := e.grp.Get(TagInstrumentPartyRole)
+	v := e.get(TagInstrumentPartyRole)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -29,7 +37,7 @@ func (e *NoInstrumentPartiesEntry) InstrumentPartyRole() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoInstrumentPartiesEntry) NoInstrumentPartySubIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoInstrumentPartySubIDs)
+	v := e.get(TagNoInstrumentPartySubIDs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -41,7 +49,7 @@ func (e *NoInstrumentPartiesEntry) NoInstrumentPartySubIDsEntries() []NoInstrume
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoInstrumentPartySubIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoInstrumentPartySubIDsEntry{

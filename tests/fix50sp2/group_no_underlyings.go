@@ -14,12 +14,20 @@ type NoUnderlyingsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoUnderlyingsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoUnderlyingsEntry) UnderlyingSymbol() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSymbol)
+	v := e.get(TagUnderlyingSymbol)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingCouponPaymentDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagUnderlyingCouponPaymentDate)
+	v := e.get(TagUnderlyingCouponPaymentDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -27,7 +35,7 @@ func (e *NoUnderlyingsEntry) UnderlyingCouponPaymentDate() (time.Time, bool, err
 	return t, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingIssueDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagUnderlyingIssueDate)
+	v := e.get(TagUnderlyingIssueDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -35,7 +43,7 @@ func (e *NoUnderlyingsEntry) UnderlyingIssueDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingRepoCollateralSecurityType() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingRepoCollateralSecurityType)
+	v := e.get(TagUnderlyingRepoCollateralSecurityType)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -43,7 +51,7 @@ func (e *NoUnderlyingsEntry) UnderlyingRepoCollateralSecurityType() (int, bool, 
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingRepurchaseTerm() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingRepurchaseTerm)
+	v := e.get(TagUnderlyingRepurchaseTerm)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -51,7 +59,7 @@ func (e *NoUnderlyingsEntry) UnderlyingRepurchaseTerm() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingRepurchaseRate() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingRepurchaseRate)
+	v := e.get(TagUnderlyingRepurchaseRate)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -59,7 +67,7 @@ func (e *NoUnderlyingsEntry) UnderlyingRepurchaseRate() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingFactor() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingFactor)
+	v := e.get(TagUnderlyingFactor)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -67,7 +75,7 @@ func (e *NoUnderlyingsEntry) UnderlyingFactor() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingRedemptionDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagUnderlyingRedemptionDate)
+	v := e.get(TagUnderlyingRedemptionDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -75,43 +83,43 @@ func (e *NoUnderlyingsEntry) UnderlyingRedemptionDate() (time.Time, bool, error)
 	return t, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCreditRating() (string, bool) {
-	v := e.grp.Get(TagUnderlyingCreditRating)
+	v := e.get(TagUnderlyingCreditRating)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSecurityIDSource() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityIDSource)
+	v := e.get(TagUnderlyingSecurityIDSource)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingIssuer() (string, bool) {
-	v := e.grp.Get(TagUnderlyingIssuer)
+	v := e.get(TagUnderlyingIssuer)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSecurityDesc() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityDesc)
+	v := e.get(TagUnderlyingSecurityDesc)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSecurityExchange() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityExchange)
+	v := e.get(TagUnderlyingSecurityExchange)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSecurityID() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityID)
+	v := e.get(TagUnderlyingSecurityID)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSecurityType() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecurityType)
+	v := e.get(TagUnderlyingSecurityType)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSymbolSfx() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSymbolSfx)
+	v := e.get(TagUnderlyingSymbolSfx)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingMaturityMonthYear() (string, bool) {
-	v := e.grp.Get(TagUnderlyingMaturityMonthYear)
+	v := e.get(TagUnderlyingMaturityMonthYear)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingPutOrCall() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingPutOrCall)
+	v := e.get(TagUnderlyingPutOrCall)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -119,7 +127,7 @@ func (e *NoUnderlyingsEntry) UnderlyingPutOrCall() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingStrikePrice() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingStrikePrice)
+	v := e.get(TagUnderlyingStrikePrice)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -127,15 +135,15 @@ func (e *NoUnderlyingsEntry) UnderlyingStrikePrice() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingOptAttribute() (string, bool) {
-	v := e.grp.Get(TagUnderlyingOptAttribute)
+	v := e.get(TagUnderlyingOptAttribute)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingCurrency() (string, bool) {
-	v := e.grp.Get(TagUnderlyingCurrency)
+	v := e.get(TagUnderlyingCurrency)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) EncodedUnderlyingIssuerLen() (int, bool, error) {
-	v := e.grp.Get(TagEncodedUnderlyingIssuerLen)
+	v := e.get(TagEncodedUnderlyingIssuerLen)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -143,11 +151,11 @@ func (e *NoUnderlyingsEntry) EncodedUnderlyingIssuerLen() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) EncodedUnderlyingIssuer() ([]byte, bool) {
-	v := e.grp.Get(TagEncodedUnderlyingIssuer)
+	v := e.get(TagEncodedUnderlyingIssuer)
 	return v, v != nil
 }
 func (e *NoUnderlyingsEntry) EncodedUnderlyingSecurityDescLen() (int, bool, error) {
-	v := e.grp.Get(TagEncodedUnderlyingSecurityDescLen)
+	v := e.get(TagEncodedUnderlyingSecurityDescLen)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -155,11 +163,11 @@ func (e *NoUnderlyingsEntry) EncodedUnderlyingSecurityDescLen() (int, bool, erro
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) EncodedUnderlyingSecurityDesc() ([]byte, bool) {
-	v := e.grp.Get(TagEncodedUnderlyingSecurityDesc)
+	v := e.get(TagEncodedUnderlyingSecurityDesc)
 	return v, v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingCouponRate() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingCouponRate)
+	v := e.get(TagUnderlyingCouponRate)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -167,7 +175,7 @@ func (e *NoUnderlyingsEntry) UnderlyingCouponRate() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingContractMultiplier() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingContractMultiplier)
+	v := e.get(TagUnderlyingContractMultiplier)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -175,7 +183,7 @@ func (e *NoUnderlyingsEntry) UnderlyingContractMultiplier() (float64, bool, erro
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingProduct() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingProduct)
+	v := e.get(TagUnderlyingProduct)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -183,11 +191,11 @@ func (e *NoUnderlyingsEntry) UnderlyingProduct() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCFICode() (string, bool) {
-	v := e.grp.Get(TagUnderlyingCFICode)
+	v := e.get(TagUnderlyingCFICode)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingMaturityDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagUnderlyingMaturityDate)
+	v := e.get(TagUnderlyingMaturityDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -195,27 +203,27 @@ func (e *NoUnderlyingsEntry) UnderlyingMaturityDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCountryOfIssue() (string, bool) {
-	v := e.grp.Get(TagUnderlyingCountryOfIssue)
+	v := e.get(TagUnderlyingCountryOfIssue)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingStateOrProvinceOfIssue() (string, bool) {
-	v := e.grp.Get(TagUnderlyingStateOrProvinceOfIssue)
+	v := e.get(TagUnderlyingStateOrProvinceOfIssue)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingLocaleOfIssue() (string, bool) {
-	v := e.grp.Get(TagUnderlyingLocaleOfIssue)
+	v := e.get(TagUnderlyingLocaleOfIssue)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingInstrRegistry() (string, bool) {
-	v := e.grp.Get(TagUnderlyingInstrRegistry)
+	v := e.get(TagUnderlyingInstrRegistry)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSecuritySubType() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSecuritySubType)
+	v := e.get(TagUnderlyingSecuritySubType)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingPx() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingPx)
+	v := e.get(TagUnderlyingPx)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -223,15 +231,15 @@ func (e *NoUnderlyingsEntry) UnderlyingPx() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCPProgram() (string, bool) {
-	v := e.grp.Get(TagUnderlyingCPProgram)
+	v := e.get(TagUnderlyingCPProgram)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingCPRegType() (string, bool) {
-	v := e.grp.Get(TagUnderlyingCPRegType)
+	v := e.get(TagUnderlyingCPRegType)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingQty() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingQty)
+	v := e.get(TagUnderlyingQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -239,7 +247,7 @@ func (e *NoUnderlyingsEntry) UnderlyingQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingDirtyPrice() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingDirtyPrice)
+	v := e.get(TagUnderlyingDirtyPrice)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -247,7 +255,7 @@ func (e *NoUnderlyingsEntry) UnderlyingDirtyPrice() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingEndPrice() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingEndPrice)
+	v := e.get(TagUnderlyingEndPrice)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -255,7 +263,7 @@ func (e *NoUnderlyingsEntry) UnderlyingEndPrice() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingStartValue() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingStartValue)
+	v := e.get(TagUnderlyingStartValue)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -263,7 +271,7 @@ func (e *NoUnderlyingsEntry) UnderlyingStartValue() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCurrentValue() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingCurrentValue)
+	v := e.get(TagUnderlyingCurrentValue)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -271,7 +279,7 @@ func (e *NoUnderlyingsEntry) UnderlyingCurrentValue() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingEndValue() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingEndValue)
+	v := e.get(TagUnderlyingEndValue)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -279,11 +287,11 @@ func (e *NoUnderlyingsEntry) UnderlyingEndValue() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingStrikeCurrency() (string, bool) {
-	v := e.grp.Get(TagUnderlyingStrikeCurrency)
+	v := e.get(TagUnderlyingStrikeCurrency)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingAllocationPercent() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingAllocationPercent)
+	v := e.get(TagUnderlyingAllocationPercent)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -291,7 +299,7 @@ func (e *NoUnderlyingsEntry) UnderlyingAllocationPercent() (float64, bool, error
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCashAmount() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingCashAmount)
+	v := e.get(TagUnderlyingCashAmount)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -299,23 +307,23 @@ func (e *NoUnderlyingsEntry) UnderlyingCashAmount() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingCashType() (UnderlyingCashType, bool) {
-	v := e.grp.Get(TagUnderlyingCashType)
+	v := e.get(TagUnderlyingCashType)
 	return UnderlyingCashType(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSettlementType() (UnderlyingSettlementType, bool) {
-	v := e.grp.Get(TagUnderlyingSettlementType)
+	v := e.get(TagUnderlyingSettlementType)
 	return UnderlyingSettlementType(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingUnitOfMeasure() (string, bool) {
-	v := e.grp.Get(TagUnderlyingUnitOfMeasure)
+	v := e.get(TagUnderlyingUnitOfMeasure)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingTimeUnit() (string, bool) {
-	v := e.grp.Get(TagUnderlyingTimeUnit)
+	v := e.get(TagUnderlyingTimeUnit)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingCapValue() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingCapValue)
+	v := e.get(TagUnderlyingCapValue)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -323,11 +331,11 @@ func (e *NoUnderlyingsEntry) UnderlyingCapValue() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingSettlMethod() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSettlMethod)
+	v := e.get(TagUnderlyingSettlMethod)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingAdjustedQuantity() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingAdjustedQuantity)
+	v := e.get(TagUnderlyingAdjustedQuantity)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -335,7 +343,7 @@ func (e *NoUnderlyingsEntry) UnderlyingAdjustedQuantity() (float64, bool, error)
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingFXRate() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingFXRate)
+	v := e.get(TagUnderlyingFXRate)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -343,15 +351,15 @@ func (e *NoUnderlyingsEntry) UnderlyingFXRate() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingFXRateCalc() (UnderlyingFXRateCalc, bool) {
-	v := e.grp.Get(TagUnderlyingFXRateCalc)
+	v := e.get(TagUnderlyingFXRateCalc)
 	return UnderlyingFXRateCalc(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingMaturityTime() (string, bool) {
-	v := e.grp.Get(TagUnderlyingMaturityTime)
+	v := e.get(TagUnderlyingMaturityTime)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingExerciseStyle() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingExerciseStyle)
+	v := e.get(TagUnderlyingExerciseStyle)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -359,7 +367,7 @@ func (e *NoUnderlyingsEntry) UnderlyingExerciseStyle() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingUnitOfMeasureQty() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingUnitOfMeasureQty)
+	v := e.get(TagUnderlyingUnitOfMeasureQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -367,11 +375,11 @@ func (e *NoUnderlyingsEntry) UnderlyingUnitOfMeasureQty() (float64, bool, error)
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingPriceUnitOfMeasure() (string, bool) {
-	v := e.grp.Get(TagUnderlyingPriceUnitOfMeasure)
+	v := e.get(TagUnderlyingPriceUnitOfMeasure)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingPriceUnitOfMeasureQty() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingPriceUnitOfMeasureQty)
+	v := e.get(TagUnderlyingPriceUnitOfMeasureQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -379,7 +387,7 @@ func (e *NoUnderlyingsEntry) UnderlyingPriceUnitOfMeasureQty() (float64, bool, e
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingContractMultiplierUnit() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingContractMultiplierUnit)
+	v := e.get(TagUnderlyingContractMultiplierUnit)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -387,7 +395,7 @@ func (e *NoUnderlyingsEntry) UnderlyingContractMultiplierUnit() (int, bool, erro
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingFlowScheduleType() (int, bool, error) {
-	v := e.grp.Get(TagUnderlyingFlowScheduleType)
+	v := e.get(TagUnderlyingFlowScheduleType)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -395,15 +403,15 @@ func (e *NoUnderlyingsEntry) UnderlyingFlowScheduleType() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingRestructuringType() (string, bool) {
-	v := e.grp.Get(TagUnderlyingRestructuringType)
+	v := e.get(TagUnderlyingRestructuringType)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingSeniority() (string, bool) {
-	v := e.grp.Get(TagUnderlyingSeniority)
+	v := e.get(TagUnderlyingSeniority)
 	return string(v), v != nil
 }
 func (e *NoUnderlyingsEntry) UnderlyingNotionalPercentageOutstanding() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingNotionalPercentageOutstanding)
+	v := e.get(TagUnderlyingNotionalPercentageOutstanding)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -411,7 +419,7 @@ func (e *NoUnderlyingsEntry) UnderlyingNotionalPercentageOutstanding() (float64,
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingOriginalNotionalPercentageOutstanding() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingOriginalNotionalPercentageOutstanding)
+	v := e.get(TagUnderlyingOriginalNotionalPercentageOutstanding)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -419,7 +427,7 @@ func (e *NoUnderlyingsEntry) UnderlyingOriginalNotionalPercentageOutstanding() (
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingAttachmentPoint() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingAttachmentPoint)
+	v := e.get(TagUnderlyingAttachmentPoint)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -427,7 +435,7 @@ func (e *NoUnderlyingsEntry) UnderlyingAttachmentPoint() (float64, bool, error) 
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) UnderlyingDetachmentPoint() (float64, bool, error) {
-	v := e.grp.Get(TagUnderlyingDetachmentPoint)
+	v := e.get(TagUnderlyingDetachmentPoint)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -435,7 +443,7 @@ func (e *NoUnderlyingsEntry) UnderlyingDetachmentPoint() (float64, bool, error) 
 	return f, true, err
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltID() (int, bool, error) {
-	v := e.grp.Get(TagNoUnderlyingSecurityAltID)
+	v := e.get(TagNoUnderlyingSecurityAltID)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -447,7 +455,7 @@ func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltIDEntries() []NoUnderlyingSe
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoUnderlyingSecurityAltIDEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUnderlyingSecurityAltIDEntry{
@@ -458,7 +466,7 @@ func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltIDEntries() []NoUnderlyingSe
 	return entries
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingStips() (int, bool, error) {
-	v := e.grp.Get(TagNoUnderlyingStips)
+	v := e.get(TagNoUnderlyingStips)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -470,7 +478,7 @@ func (e *NoUnderlyingsEntry) NoUnderlyingStipsEntries() []NoUnderlyingStipsEntry
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoUnderlyingStipsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUnderlyingStipsEntry{
@@ -481,7 +489,7 @@ func (e *NoUnderlyingsEntry) NoUnderlyingStipsEntries() []NoUnderlyingStipsEntry
 	return entries
 }
 func (e *NoUnderlyingsEntry) NoUndlyInstrumentParties() (int, bool, error) {
-	v := e.grp.Get(TagNoUndlyInstrumentParties)
+	v := e.get(TagNoUndlyInstrumentParties)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -493,7 +501,7 @@ func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrume
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoUndlyInstrumentPartiesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUndlyInstrumentPartiesEntry{

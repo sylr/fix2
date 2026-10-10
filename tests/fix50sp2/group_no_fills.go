@@ -12,12 +12,20 @@ type NoFillsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoFillsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoFillsEntry) FillExecID() (string, bool) {
-	v := e.grp.Get(TagFillExecID)
+	v := e.get(TagFillExecID)
 	return string(v), v != nil
 }
 func (e *NoFillsEntry) FillPx() (float64, bool, error) {
-	v := e.grp.Get(TagFillPx)
+	v := e.get(TagFillPx)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -25,7 +33,7 @@ func (e *NoFillsEntry) FillPx() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoFillsEntry) FillQty() (float64, bool, error) {
-	v := e.grp.Get(TagFillQty)
+	v := e.get(TagFillQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -33,7 +41,7 @@ func (e *NoFillsEntry) FillQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoFillsEntry) FillLiquidityInd() (int, bool, error) {
-	v := e.grp.Get(TagFillLiquidityInd)
+	v := e.get(TagFillLiquidityInd)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -41,7 +49,7 @@ func (e *NoFillsEntry) FillLiquidityInd() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoFillsEntry) NoNested4PartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested4PartyIDs)
+	v := e.get(TagNoNested4PartyIDs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -53,7 +61,7 @@ func (e *NoFillsEntry) NoNested4PartyIDsEntries() []NoNested4PartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoNested4PartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNested4PartyIDsEntry{

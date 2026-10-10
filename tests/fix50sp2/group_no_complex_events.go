@@ -12,12 +12,20 @@ type NoComplexEventsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoComplexEventsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoComplexEventsEntry) ComplexEventType() (ComplexEventType, bool) {
-	v := e.grp.Get(TagComplexEventType)
+	v := e.get(TagComplexEventType)
 	return ComplexEventType(v), v != nil
 }
 func (e *NoComplexEventsEntry) ComplexOptPayoutAmount() (float64, bool, error) {
-	v := e.grp.Get(TagComplexOptPayoutAmount)
+	v := e.get(TagComplexOptPayoutAmount)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -25,7 +33,7 @@ func (e *NoComplexEventsEntry) ComplexOptPayoutAmount() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoComplexEventsEntry) ComplexEventPrice() (float64, bool, error) {
-	v := e.grp.Get(TagComplexEventPrice)
+	v := e.get(TagComplexEventPrice)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -33,11 +41,11 @@ func (e *NoComplexEventsEntry) ComplexEventPrice() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoComplexEventsEntry) ComplexEventPriceBoundaryMethod() (ComplexEventPriceBoundaryMethod, bool) {
-	v := e.grp.Get(TagComplexEventPriceBoundaryMethod)
+	v := e.get(TagComplexEventPriceBoundaryMethod)
 	return ComplexEventPriceBoundaryMethod(v), v != nil
 }
 func (e *NoComplexEventsEntry) ComplexEventPriceBoundaryPrecision() (float64, bool, error) {
-	v := e.grp.Get(TagComplexEventPriceBoundaryPrecision)
+	v := e.get(TagComplexEventPriceBoundaryPrecision)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -45,15 +53,15 @@ func (e *NoComplexEventsEntry) ComplexEventPriceBoundaryPrecision() (float64, bo
 	return f, true, err
 }
 func (e *NoComplexEventsEntry) ComplexEventPriceTimeType() (ComplexEventPriceTimeType, bool) {
-	v := e.grp.Get(TagComplexEventPriceTimeType)
+	v := e.get(TagComplexEventPriceTimeType)
 	return ComplexEventPriceTimeType(v), v != nil
 }
 func (e *NoComplexEventsEntry) ComplexEventCondition() (ComplexEventCondition, bool) {
-	v := e.grp.Get(TagComplexEventCondition)
+	v := e.get(TagComplexEventCondition)
 	return ComplexEventCondition(v), v != nil
 }
 func (e *NoComplexEventsEntry) NoComplexEventDates() (int, bool, error) {
-	v := e.grp.Get(TagNoComplexEventDates)
+	v := e.get(TagNoComplexEventDates)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -65,7 +73,7 @@ func (e *NoComplexEventsEntry) NoComplexEventDatesEntries() []NoComplexEventDate
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoComplexEventDatesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoComplexEventDatesEntry{

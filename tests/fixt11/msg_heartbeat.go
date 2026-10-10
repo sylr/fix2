@@ -14,6 +14,9 @@ type Heartbeat struct {
 func WrapHeartbeat(msg *fix2.Message) *Heartbeat {
 	return &Heartbeat{msg: msg}
 }
+
+var heartbeat_specs = []*fix2.GroupSpec{heartbeat_NoHops_spec}
+
 func (m *Heartbeat) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -162,7 +165,7 @@ func (m *Heartbeat) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, heartbeat_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{

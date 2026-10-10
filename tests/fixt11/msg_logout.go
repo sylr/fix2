@@ -14,6 +14,9 @@ type Logout struct {
 func WrapLogout(msg *fix2.Message) *Logout {
 	return &Logout{msg: msg}
 }
+
+var logout_specs = []*fix2.GroupSpec{logout_NoHops_spec}
+
 func (m *Logout) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -174,7 +177,7 @@ func (m *Logout) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, logout_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{

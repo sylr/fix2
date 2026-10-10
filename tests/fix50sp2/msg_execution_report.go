@@ -14,6 +14,9 @@ type ExecutionReport struct {
 func WrapExecutionReport(msg *fix2.Message) *ExecutionReport {
 	return &ExecutionReport{msg: msg}
 }
+
+var executionReport_specs = []*fix2.GroupSpec{executionReport_NoPartyIDs_spec, executionReport_NoContraBrokers_spec, executionReport_NoSecurityAltID_spec, executionReport_NoEvents_spec, executionReport_NoInstrumentParties_spec, executionReport_NoComplexEvents_spec, executionReport_NoUnderlyings_spec, executionReport_NoStipulations_spec, executionReport_NoContAmts_spec, executionReport_NoLegs_spec, executionReport_NoMiscFees_spec, executionReport_NoStrategyParameters_spec, executionReport_NoTrdRegTimestamps_spec, executionReport_NoAllocs_spec, executionReport_NoFills_spec, executionReport_NoRateSources_spec}
+
 func (m *ExecutionReport) OrderID() (string, bool) {
 	v := m.msg.Get(TagOrderID)
 	return string(v), v != nil
@@ -1887,7 +1890,7 @@ func (m *ExecutionReport) NoPartyIDsEntries() []NoPartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoPartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoPartyIDsEntry{
@@ -1909,7 +1912,7 @@ func (m *ExecutionReport) NoContraBrokersEntries() []NoContraBrokersEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoContraBrokersEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoContraBrokersEntry{
@@ -1931,7 +1934,7 @@ func (m *ExecutionReport) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoSecurityAltIDEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoSecurityAltIDEntry{
@@ -1953,7 +1956,7 @@ func (m *ExecutionReport) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoEventsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoEventsEntry{
@@ -1980,7 +1983,7 @@ func (m *ExecutionReport) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntr
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoInstrumentPartiesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoInstrumentPartiesEntry{
@@ -2012,7 +2015,7 @@ func (m *ExecutionReport) NoComplexEventsEntries() []NoComplexEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoComplexEventsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoComplexEventsEntry{
@@ -2052,7 +2055,7 @@ func (m *ExecutionReport) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoUnderlyingsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoUnderlyingsEntry{
@@ -2074,7 +2077,7 @@ func (m *ExecutionReport) NoStipulationsEntries() []NoStipulationsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoStipulationsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoStipulationsEntry{
@@ -2096,7 +2099,7 @@ func (m *ExecutionReport) NoContAmtsEntries() []NoContAmtsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoContAmtsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoContAmtsEntry{
@@ -2150,7 +2153,7 @@ func (m *ExecutionReport) NoLegsEntries() []NoLegsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoLegsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegsEntry{
@@ -2172,7 +2175,7 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoMiscFeesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoMiscFeesEntry{
@@ -2194,7 +2197,7 @@ func (m *ExecutionReport) NoStrategyParametersEntries() []NoStrategyParametersEn
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoStrategyParametersEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoStrategyParametersEntry{
@@ -2216,7 +2219,7 @@ func (m *ExecutionReport) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry 
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoTrdRegTimestampsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoTrdRegTimestampsEntry{
@@ -2248,7 +2251,7 @@ func (m *ExecutionReport) NoAllocsEntries() []NoAllocsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoAllocsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoAllocsEntry{
@@ -2280,7 +2283,7 @@ func (m *ExecutionReport) NoFillsEntries() []NoFillsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoFillsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoFillsEntry{
@@ -2302,7 +2305,7 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoRateSourcesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoRateSourcesEntry{

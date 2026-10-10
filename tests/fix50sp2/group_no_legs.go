@@ -14,12 +14,20 @@ type NoLegsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoLegsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoLegsEntry) LegSymbol() (string, bool) {
-	v := e.grp.Get(TagLegSymbol)
+	v := e.get(TagLegSymbol)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegCouponPaymentDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegCouponPaymentDate)
+	v := e.get(TagLegCouponPaymentDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -27,7 +35,7 @@ func (e *NoLegsEntry) LegCouponPaymentDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegIssueDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegIssueDate)
+	v := e.get(TagLegIssueDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -35,7 +43,7 @@ func (e *NoLegsEntry) LegIssueDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegRepoCollateralSecurityType() (int, bool, error) {
-	v := e.grp.Get(TagLegRepoCollateralSecurityType)
+	v := e.get(TagLegRepoCollateralSecurityType)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -43,7 +51,7 @@ func (e *NoLegsEntry) LegRepoCollateralSecurityType() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegRepurchaseTerm() (int, bool, error) {
-	v := e.grp.Get(TagLegRepurchaseTerm)
+	v := e.get(TagLegRepurchaseTerm)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -51,7 +59,7 @@ func (e *NoLegsEntry) LegRepurchaseTerm() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegRepurchaseRate() (float64, bool, error) {
-	v := e.grp.Get(TagLegRepurchaseRate)
+	v := e.get(TagLegRepurchaseRate)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -59,7 +67,7 @@ func (e *NoLegsEntry) LegRepurchaseRate() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegFactor() (float64, bool, error) {
-	v := e.grp.Get(TagLegFactor)
+	v := e.get(TagLegFactor)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -67,7 +75,7 @@ func (e *NoLegsEntry) LegFactor() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegRedemptionDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegRedemptionDate)
+	v := e.get(TagLegRedemptionDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -75,19 +83,19 @@ func (e *NoLegsEntry) LegRedemptionDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegCreditRating() (string, bool) {
-	v := e.grp.Get(TagLegCreditRating)
+	v := e.get(TagLegCreditRating)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegCurrency() (string, bool) {
-	v := e.grp.Get(TagLegCurrency)
+	v := e.get(TagLegCurrency)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegPositionEffect() (string, bool) {
-	v := e.grp.Get(TagLegPositionEffect)
+	v := e.get(TagLegPositionEffect)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegCoveredOrUncovered() (int, bool, error) {
-	v := e.grp.Get(TagLegCoveredOrUncovered)
+	v := e.get(TagLegCoveredOrUncovered)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -95,7 +103,7 @@ func (e *NoLegsEntry) LegCoveredOrUncovered() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegPrice() (float64, bool, error) {
-	v := e.grp.Get(TagLegPrice)
+	v := e.get(TagLegPrice)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -103,11 +111,11 @@ func (e *NoLegsEntry) LegPrice() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegSettlType() (string, bool) {
-	v := e.grp.Get(TagLegSettlType)
+	v := e.get(TagLegSettlType)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSettlDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegSettlDate)
+	v := e.get(TagLegSettlDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -115,35 +123,35 @@ func (e *NoLegsEntry) LegSettlDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegCountryOfIssue() (string, bool) {
-	v := e.grp.Get(TagLegCountryOfIssue)
+	v := e.get(TagLegCountryOfIssue)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegStateOrProvinceOfIssue() (string, bool) {
-	v := e.grp.Get(TagLegStateOrProvinceOfIssue)
+	v := e.get(TagLegStateOrProvinceOfIssue)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegLocaleOfIssue() (string, bool) {
-	v := e.grp.Get(TagLegLocaleOfIssue)
+	v := e.get(TagLegLocaleOfIssue)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegInstrRegistry() (string, bool) {
-	v := e.grp.Get(TagLegInstrRegistry)
+	v := e.get(TagLegInstrRegistry)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSymbolSfx() (string, bool) {
-	v := e.grp.Get(TagLegSymbolSfx)
+	v := e.get(TagLegSymbolSfx)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSecurityID() (string, bool) {
-	v := e.grp.Get(TagLegSecurityID)
+	v := e.get(TagLegSecurityID)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSecurityIDSource() (string, bool) {
-	v := e.grp.Get(TagLegSecurityIDSource)
+	v := e.get(TagLegSecurityIDSource)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegProduct() (int, bool, error) {
-	v := e.grp.Get(TagLegProduct)
+	v := e.get(TagLegProduct)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -151,19 +159,19 @@ func (e *NoLegsEntry) LegProduct() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegCFICode() (string, bool) {
-	v := e.grp.Get(TagLegCFICode)
+	v := e.get(TagLegCFICode)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSecurityType() (string, bool) {
-	v := e.grp.Get(TagLegSecurityType)
+	v := e.get(TagLegSecurityType)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegMaturityMonthYear() (string, bool) {
-	v := e.grp.Get(TagLegMaturityMonthYear)
+	v := e.get(TagLegMaturityMonthYear)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegMaturityDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegMaturityDate)
+	v := e.get(TagLegMaturityDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -171,7 +179,7 @@ func (e *NoLegsEntry) LegMaturityDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegStrikePrice() (float64, bool, error) {
-	v := e.grp.Get(TagLegStrikePrice)
+	v := e.get(TagLegStrikePrice)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -179,11 +187,11 @@ func (e *NoLegsEntry) LegStrikePrice() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegOptAttribute() (string, bool) {
-	v := e.grp.Get(TagLegOptAttribute)
+	v := e.get(TagLegOptAttribute)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegContractMultiplier() (float64, bool, error) {
-	v := e.grp.Get(TagLegContractMultiplier)
+	v := e.get(TagLegContractMultiplier)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -191,7 +199,7 @@ func (e *NoLegsEntry) LegContractMultiplier() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegCouponRate() (float64, bool, error) {
-	v := e.grp.Get(TagLegCouponRate)
+	v := e.get(TagLegCouponRate)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -199,15 +207,15 @@ func (e *NoLegsEntry) LegCouponRate() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegSecurityExchange() (string, bool) {
-	v := e.grp.Get(TagLegSecurityExchange)
+	v := e.get(TagLegSecurityExchange)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegIssuer() (string, bool) {
-	v := e.grp.Get(TagLegIssuer)
+	v := e.get(TagLegIssuer)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) EncodedLegIssuerLen() (int, bool, error) {
-	v := e.grp.Get(TagEncodedLegIssuerLen)
+	v := e.get(TagEncodedLegIssuerLen)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -215,15 +223,15 @@ func (e *NoLegsEntry) EncodedLegIssuerLen() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) EncodedLegIssuer() ([]byte, bool) {
-	v := e.grp.Get(TagEncodedLegIssuer)
+	v := e.get(TagEncodedLegIssuer)
 	return v, v != nil
 }
 func (e *NoLegsEntry) LegSecurityDesc() (string, bool) {
-	v := e.grp.Get(TagLegSecurityDesc)
+	v := e.get(TagLegSecurityDesc)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) EncodedLegSecurityDescLen() (int, bool, error) {
-	v := e.grp.Get(TagEncodedLegSecurityDescLen)
+	v := e.get(TagEncodedLegSecurityDescLen)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -231,11 +239,11 @@ func (e *NoLegsEntry) EncodedLegSecurityDescLen() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) EncodedLegSecurityDesc() ([]byte, bool) {
-	v := e.grp.Get(TagEncodedLegSecurityDesc)
+	v := e.get(TagEncodedLegSecurityDesc)
 	return v, v != nil
 }
 func (e *NoLegsEntry) LegRatioQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegRatioQty)
+	v := e.get(TagLegRatioQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -243,11 +251,11 @@ func (e *NoLegsEntry) LegRatioQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegSide() (string, bool) {
-	v := e.grp.Get(TagLegSide)
+	v := e.get(TagLegSide)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegLastPx() (float64, bool, error) {
-	v := e.grp.Get(TagLegLastPx)
+	v := e.get(TagLegLastPx)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -255,15 +263,15 @@ func (e *NoLegsEntry) LegLastPx() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegRefID() (string, bool) {
-	v := e.grp.Get(TagLegRefID)
+	v := e.get(TagLegRefID)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSettlCurrency() (string, bool) {
-	v := e.grp.Get(TagLegSettlCurrency)
+	v := e.get(TagLegSettlCurrency)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegOrderQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegOrderQty)
+	v := e.get(TagLegOrderQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -271,7 +279,7 @@ func (e *NoLegsEntry) LegOrderQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegQty)
+	v := e.get(TagLegQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -279,11 +287,11 @@ func (e *NoLegsEntry) LegQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegSwapType() (LegSwapType, bool) {
-	v := e.grp.Get(TagLegSwapType)
+	v := e.get(TagLegSwapType)
 	return LegSwapType(v), v != nil
 }
 func (e *NoLegsEntry) LegDatedDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegDatedDate)
+	v := e.get(TagLegDatedDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -291,23 +299,23 @@ func (e *NoLegsEntry) LegDatedDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegPool() (string, bool) {
-	v := e.grp.Get(TagLegPool)
+	v := e.get(TagLegPool)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegSecuritySubType() (string, bool) {
-	v := e.grp.Get(TagLegSecuritySubType)
+	v := e.get(TagLegSecuritySubType)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegStrikeCurrency() (string, bool) {
-	v := e.grp.Get(TagLegStrikeCurrency)
+	v := e.get(TagLegStrikeCurrency)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegContractSettlMonth() (string, bool) {
-	v := e.grp.Get(TagLegContractSettlMonth)
+	v := e.get(TagLegContractSettlMonth)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegInterestAccrualDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagLegInterestAccrualDate)
+	v := e.get(TagLegInterestAccrualDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -315,15 +323,15 @@ func (e *NoLegsEntry) LegInterestAccrualDate() (time.Time, bool, error) {
 	return t, true, err
 }
 func (e *NoLegsEntry) LegUnitOfMeasure() (string, bool) {
-	v := e.grp.Get(TagLegUnitOfMeasure)
+	v := e.get(TagLegUnitOfMeasure)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegTimeUnit() (string, bool) {
-	v := e.grp.Get(TagLegTimeUnit)
+	v := e.get(TagLegTimeUnit)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegOptionRatio() (float64, bool, error) {
-	v := e.grp.Get(TagLegOptionRatio)
+	v := e.get(TagLegOptionRatio)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -331,11 +339,11 @@ func (e *NoLegsEntry) LegOptionRatio() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegLastForwardPoints() (string, bool) {
-	v := e.grp.Get(TagLegLastForwardPoints)
+	v := e.get(TagLegLastForwardPoints)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegCalculatedCcyLastQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegCalculatedCcyLastQty)
+	v := e.get(TagLegCalculatedCcyLastQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -343,7 +351,7 @@ func (e *NoLegsEntry) LegCalculatedCcyLastQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegGrossTradeAmt() (float64, bool, error) {
-	v := e.grp.Get(TagLegGrossTradeAmt)
+	v := e.get(TagLegGrossTradeAmt)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -351,11 +359,11 @@ func (e *NoLegsEntry) LegGrossTradeAmt() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegMaturityTime() (string, bool) {
-	v := e.grp.Get(TagLegMaturityTime)
+	v := e.get(TagLegMaturityTime)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegUnitOfMeasureQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegUnitOfMeasureQty)
+	v := e.get(TagLegUnitOfMeasureQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -363,7 +371,7 @@ func (e *NoLegsEntry) LegUnitOfMeasureQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegPutOrCall() (int, bool, error) {
-	v := e.grp.Get(TagLegPutOrCall)
+	v := e.get(TagLegPutOrCall)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -371,11 +379,11 @@ func (e *NoLegsEntry) LegPutOrCall() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegAllocID() (string, bool) {
-	v := e.grp.Get(TagLegAllocID)
+	v := e.get(TagLegAllocID)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegVolatility() (float64, bool, error) {
-	v := e.grp.Get(TagLegVolatility)
+	v := e.get(TagLegVolatility)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -383,7 +391,7 @@ func (e *NoLegsEntry) LegVolatility() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegDividendYield() (float64, bool, error) {
-	v := e.grp.Get(TagLegDividendYield)
+	v := e.get(TagLegDividendYield)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -391,7 +399,7 @@ func (e *NoLegsEntry) LegDividendYield() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegCurrencyRatio() (float64, bool, error) {
-	v := e.grp.Get(TagLegCurrencyRatio)
+	v := e.get(TagLegCurrencyRatio)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -399,11 +407,11 @@ func (e *NoLegsEntry) LegCurrencyRatio() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegExecInst() (string, bool) {
-	v := e.grp.Get(TagLegExecInst)
+	v := e.get(TagLegExecInst)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegLastQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegLastQty)
+	v := e.get(TagLegLastQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -411,7 +419,7 @@ func (e *NoLegsEntry) LegLastQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegExerciseStyle() (int, bool, error) {
-	v := e.grp.Get(TagLegExerciseStyle)
+	v := e.get(TagLegExerciseStyle)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -419,11 +427,11 @@ func (e *NoLegsEntry) LegExerciseStyle() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegPriceUnitOfMeasure() (string, bool) {
-	v := e.grp.Get(TagLegPriceUnitOfMeasure)
+	v := e.get(TagLegPriceUnitOfMeasure)
 	return string(v), v != nil
 }
 func (e *NoLegsEntry) LegPriceUnitOfMeasureQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegPriceUnitOfMeasureQty)
+	v := e.get(TagLegPriceUnitOfMeasureQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -431,7 +439,7 @@ func (e *NoLegsEntry) LegPriceUnitOfMeasureQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegsEntry) LegContractMultiplierUnit() (int, bool, error) {
-	v := e.grp.Get(TagLegContractMultiplierUnit)
+	v := e.get(TagLegContractMultiplierUnit)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -439,7 +447,7 @@ func (e *NoLegsEntry) LegContractMultiplierUnit() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) LegFlowScheduleType() (int, bool, error) {
-	v := e.grp.Get(TagLegFlowScheduleType)
+	v := e.get(TagLegFlowScheduleType)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -447,7 +455,7 @@ func (e *NoLegsEntry) LegFlowScheduleType() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoLegsEntry) NoLegAllocs() (int, bool, error) {
-	v := e.grp.Get(TagNoLegAllocs)
+	v := e.get(TagNoLegAllocs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -459,7 +467,7 @@ func (e *NoLegsEntry) NoLegAllocsEntries() []NoLegAllocsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoLegAllocsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegAllocsEntry{
@@ -470,7 +478,7 @@ func (e *NoLegsEntry) NoLegAllocsEntries() []NoLegAllocsEntry {
 	return entries
 }
 func (e *NoLegsEntry) NoLegSecurityAltID() (int, bool, error) {
-	v := e.grp.Get(TagNoLegSecurityAltID)
+	v := e.get(TagNoLegSecurityAltID)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -482,7 +490,7 @@ func (e *NoLegsEntry) NoLegSecurityAltIDEntries() []NoLegSecurityAltIDEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoLegSecurityAltIDEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegSecurityAltIDEntry{
@@ -493,7 +501,7 @@ func (e *NoLegsEntry) NoLegSecurityAltIDEntries() []NoLegSecurityAltIDEntry {
 	return entries
 }
 func (e *NoLegsEntry) NoLegStipulations() (int, bool, error) {
-	v := e.grp.Get(TagNoLegStipulations)
+	v := e.get(TagNoLegStipulations)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -505,7 +513,7 @@ func (e *NoLegsEntry) NoLegStipulationsEntries() []NoLegStipulationsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoLegStipulationsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoLegStipulationsEntry{
@@ -516,7 +524,7 @@ func (e *NoLegsEntry) NoLegStipulationsEntries() []NoLegStipulationsEntry {
 	return entries
 }
 func (e *NoLegsEntry) NoNested3PartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested3PartyIDs)
+	v := e.get(TagNoNested3PartyIDs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -528,7 +536,7 @@ func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoNested3PartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNested3PartyIDsEntry{

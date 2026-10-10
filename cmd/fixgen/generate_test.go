@@ -546,7 +546,8 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 		"Delim:   TagAllocAccount,",
 		"Counter: TagNoDlvyInst,",
 		"spec := newOrderSingle_NoAllocs_spec",
-		"m.msg.GroupsOf(spec)",
+		"m.msg.GroupsOf(spec, newOrderSingle_specs...)",
+		"var newOrderSingle_specs = []*fix2.GroupSpec{",
 	} {
 		if !strings.Contains(nos, want) {
 			t.Errorf("msg_new_order_single.go missing %q", want)
@@ -555,6 +556,11 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 	allocs := read("group_no_allocs.go")
 	if !strings.Contains(allocs, "spec := e.spec.Child(TagNoDlvyInst)") {
 		t.Error("NoAllocsEntry does not look up NoDlvyInst in its own spec")
+	}
+	for _, want := range []string{"e.grp.GroupsOf(spec, e.spec.Nested...)", "e.grp.GetTopLevel(tag, e.spec.Nested...)"} {
+		if !strings.Contains(allocs, want) {
+			t.Errorf("group_no_allocs.go missing %q", want)
+		}
 	}
 	if strings.Contains(allocs, "GroupSpec{") {
 		t.Error("group files should not declare shared specs")
@@ -1253,4 +1259,133 @@ func TestGenerateClashCases(t *testing.T) {
 		 <message name="C" msgtype="U2" msgcat="app"><field name="NoXEntries" required="N"/></message>`,
 		field(5001, "NoX", "NUMINGROUP")+field(5002, "B", "STRING")+field(5003, "NoXEntries", "STRING")),
 		"noxentries", "package noxentries\n")
+}
+
+// TestGenerateScopedGroupReads covers tags and groups reused across nesting
+// levels: Q is in NoChildren entries and in their parent NoParents entry
+// after them, and NoShared is nested in NoOuter entries and also a group of
+// the message after NoOuter. Readers must return each level's own.
+func TestGenerateScopedGroupReads(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="Msg" msgtype="U1" msgcat="app">
+      <group name="NoParents" required="N">
+        <field name="P" required="N"/>
+        <group name="NoChildren" required="N"><field name="R" required="N"/><field name="Q" required="N"/></group>
+        <field name="Q" required="N"/>
+      </group>
+      <group name="NoOuter" required="N">
+        <field name="O" required="N"/>
+        <component name="Shared" required="N"/>
+      </group>
+      <component name="Shared" required="N"/>
+    </message>
+  </messages>
+  <components>
+    <component name="Shared"><group name="NoShared" required="N"><field name="S" required="N"/></group></component>
+  </components>
+  <fields>
+    <field number="100" name="P" type="STRING"/>
+    <field number="101" name="Q" type="STRING"/>
+    <field number="102" name="R" type="STRING"/>
+    <field number="103" name="O" type="STRING"/>
+    <field number="104" name="S" type="STRING"/>
+    <field number="501" name="NoParents" type="NUMINGROUP"/>
+    <field number="502" name="NoChildren" type="NUMINGROUP"/>
+    <field number="900" name="NoOuter" type="NUMINGROUP"/>
+    <field number="200" name="NoShared" type="NUMINGROUP"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "scoped", `package scoped
+
+import (
+	"bytes"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func parse(t *testing.T, raw []byte) *Msg {
+	t.Helper()
+	m, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	return WrapMsg(&m)
+}
+
+func TestParentValueAfterChildren(t *testing.T) {
+	raw := BuildMsg("FIX.4.4").
+		AddNoParentsEntry(NewNoParentsEntry().SetP("p").SetQ("parent").
+			AddNoChildrenEntry(NewNoChildrenEntry().SetR("r").SetQ("child"))).
+		Build()
+	if !bytes.Contains(raw, []byte("\x01501=1\x01100=p\x01502=1\x01102=r\x01101=child\x01101=parent\x01")) {
+		t.Fatalf("unexpected layout %q", raw)
+	}
+	parents := parse(t, raw).NoParentsEntries()
+	if len(parents) != 1 {
+		t.Fatalf("got %d parents", len(parents))
+	}
+	if q, ok := parents[0].Q(); !ok || q != "parent" {
+		t.Errorf("parent Q = %q, %v; want parent", q, ok)
+	}
+	children := parents[0].NoChildrenEntries()
+	if len(children) != 1 {
+		t.Fatalf("got %d children", len(children))
+	}
+	if q, ok := children[0].Q(); !ok || q != "child" {
+		t.Errorf("child Q = %q, %v; want child", q, ok)
+	}
+	if n, ok, err := parents[0].NoChildren(); !ok || err != nil || n != 1 {
+		t.Errorf("NoChildren = %d, %v, %v", n, ok, err)
+	}
+
+	// Without the parent's own Q.
+	raw = BuildMsg("FIX.4.4").
+		AddNoParentsEntry(NewNoParentsEntry().SetP("p").
+			AddNoChildrenEntry(NewNoChildrenEntry().SetR("r").SetQ("child"))).
+		Build()
+	if q, ok := parse(t, raw).NoParentsEntries()[0].Q(); ok {
+		t.Errorf("absent parent Q = %q, true", q)
+	}
+}
+
+func TestGroupNestedAndDirect(t *testing.T) {
+	raw := BuildMsg("FIX.4.4").
+		AddNoOuterEntry(NewNoOuterEntry().SetO("o").AddNoSharedEntry(NewNoSharedEntry().SetS("nested"))).
+		AddNoSharedEntry(NewNoSharedEntry().SetS("top")).
+		Build()
+	if !bytes.Contains(raw, []byte("\x01900=1\x01103=o\x01200=1\x01104=nested\x01200=1\x01104=top\x01")) {
+		t.Fatalf("unexpected layout %q", raw)
+	}
+	m := parse(t, raw)
+	top := m.NoSharedEntries()
+	if len(top) != 1 {
+		t.Fatalf("got %d top-level NoShared entries", len(top))
+	}
+	if s, _ := top[0].S(); s != "top" {
+		t.Errorf("top-level NoShared S = %q, want top", s)
+	}
+	outer := m.NoOuterEntries()
+	if len(outer) != 1 {
+		t.Fatalf("got %d NoOuter entries", len(outer))
+	}
+	nested := outer[0].NoSharedEntries()
+	if len(nested) != 1 {
+		t.Fatalf("got %d nested NoShared entries", len(nested))
+	}
+	if s, _ := nested[0].S(); s != "nested" {
+		t.Errorf("nested NoShared S = %q, want nested", s)
+	}
+
+	// Only nested: the message has no NoShared group of its own.
+	raw = BuildMsg("FIX.4.4").
+		AddNoOuterEntry(NewNoOuterEntry().SetO("o").AddNoSharedEntry(NewNoSharedEntry().SetS("nested"))).
+		Build()
+	if got := parse(t, raw).NoSharedEntries(); len(got) != 0 {
+		t.Errorf("got %d top-level NoShared entries, want 0", len(got))
+	}
+}
+`)
 }

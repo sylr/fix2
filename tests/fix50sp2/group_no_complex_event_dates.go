@@ -12,8 +12,16 @@ type NoComplexEventDatesEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoComplexEventDatesEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoComplexEventDatesEntry) ComplexEventStartDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagComplexEventStartDate)
+	v := e.get(TagComplexEventStartDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -21,7 +29,7 @@ func (e *NoComplexEventDatesEntry) ComplexEventStartDate() (time.Time, bool, err
 	return t, true, err
 }
 func (e *NoComplexEventDatesEntry) ComplexEventEndDate() (time.Time, bool, error) {
-	v := e.grp.Get(TagComplexEventEndDate)
+	v := e.get(TagComplexEventEndDate)
 	if v == nil {
 		return time.Time{}, false, nil
 	}
@@ -29,7 +37,7 @@ func (e *NoComplexEventDatesEntry) ComplexEventEndDate() (time.Time, bool, error
 	return t, true, err
 }
 func (e *NoComplexEventDatesEntry) NoComplexEventTimes() (int, bool, error) {
-	v := e.grp.Get(TagNoComplexEventTimes)
+	v := e.get(TagNoComplexEventTimes)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -41,7 +49,7 @@ func (e *NoComplexEventDatesEntry) NoComplexEventTimesEntries() []NoComplexEvent
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoComplexEventTimesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoComplexEventTimesEntry{

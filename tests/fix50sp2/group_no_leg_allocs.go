@@ -12,16 +12,24 @@ type NoLegAllocsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoLegAllocsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoLegAllocsEntry) LegAllocAccount() (string, bool) {
-	v := e.grp.Get(TagLegAllocAccount)
+	v := e.get(TagLegAllocAccount)
 	return string(v), v != nil
 }
 func (e *NoLegAllocsEntry) LegIndividualAllocID() (string, bool) {
-	v := e.grp.Get(TagLegIndividualAllocID)
+	v := e.get(TagLegIndividualAllocID)
 	return string(v), v != nil
 }
 func (e *NoLegAllocsEntry) LegAllocQty() (float64, bool, error) {
-	v := e.grp.Get(TagLegAllocQty)
+	v := e.get(TagLegAllocQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -29,15 +37,15 @@ func (e *NoLegAllocsEntry) LegAllocQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoLegAllocsEntry) LegAllocAcctIDSource() (string, bool) {
-	v := e.grp.Get(TagLegAllocAcctIDSource)
+	v := e.get(TagLegAllocAcctIDSource)
 	return string(v), v != nil
 }
 func (e *NoLegAllocsEntry) LegAllocSettlCurrency() (string, bool) {
-	v := e.grp.Get(TagLegAllocSettlCurrency)
+	v := e.get(TagLegAllocSettlCurrency)
 	return string(v), v != nil
 }
 func (e *NoLegAllocsEntry) NoNested2PartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNested2PartyIDs)
+	v := e.get(TagNoNested2PartyIDs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -49,7 +57,7 @@ func (e *NoLegAllocsEntry) NoNested2PartyIDsEntries() []NoNested2PartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoNested2PartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNested2PartyIDsEntry{

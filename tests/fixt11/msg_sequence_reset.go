@@ -14,6 +14,9 @@ type SequenceReset struct {
 func WrapSequenceReset(msg *fix2.Message) *SequenceReset {
 	return &SequenceReset{msg: msg}
 }
+
+var sequenceReset_specs = []*fix2.GroupSpec{sequenceReset_NoHops_spec}
+
 func (m *SequenceReset) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -170,7 +173,7 @@ func (m *SequenceReset) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, sequenceReset_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{

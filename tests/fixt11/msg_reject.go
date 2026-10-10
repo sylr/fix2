@@ -14,6 +14,9 @@ type Reject struct {
 func WrapReject(msg *fix2.Message) *Reject {
 	return &Reject{msg: msg}
 }
+
+var reject_specs = []*fix2.GroupSpec{reject_NoHops_spec}
+
 func (m *Reject) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -198,7 +201,7 @@ func (m *Reject) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, reject_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{

@@ -86,27 +86,38 @@ type GroupSpec struct {
 // of exactly as many entries as its counter says, so tags it shares with the
 // enclosing group cannot end an entry early. Entries are sub-slices of the
 // message's fields.
-func (m *Message) GroupsOf(spec *GroupSpec) []Group {
-	return groupsOf(m.fields, spec)
+//
+// others are the message's other groups: their entries are skipped while
+// looking for spec's counter, which one of them may also hold in a nested
+// group of the same name.
+func (m *Message) GroupsOf(spec *GroupSpec, others ...*GroupSpec) []Group {
+	return groupsOf(m.fields, spec, others)
 }
 
 // GroupsOf extracts the entries of a group nested in this entry; see
-// Message.GroupsOf.
-func (g *Group) GroupsOf(spec *GroupSpec) []Group {
-	return groupsOf(g.fields, spec)
+// Message.GroupsOf. others are typically the entry spec's other Nested
+// groups.
+func (g *Group) GroupsOf(spec *GroupSpec, others ...*GroupSpec) []Group {
+	return groupsOf(g.fields, spec, others)
 }
 
-func groupsOf(fields []Field, spec *GroupSpec) []Group {
-	for i := range fields {
-		if fields[i].Tag != spec.Counter {
+func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
+	for i := 0; i < len(fields); {
+		f := fields[i]
+		if f.Tag == spec.Counter {
+			count, err := ParseInt(f.Value)
+			if err != nil || count <= 0 {
+				return nil
+			}
+			groups, _ := spec.entries(fields, i+1, count)
+			return groups
+		}
+		if o := groupSpecFor(others, f.Tag); o != nil {
+			count, _ := ParseInt(f.Value)
+			i = o.skip(fields, i+1, count)
 			continue
 		}
-		count, err := ParseInt(fields[i].Value)
-		if err != nil || count <= 0 {
-			return nil
-		}
-		groups, _ := spec.entries(fields, i+1, count)
-		return groups
+		i++
 	}
 	return nil
 }
@@ -209,7 +220,18 @@ func (s *GroupSpec) Child(counter int) *GroupSpec {
 // that a message holds both directly and inside a repeating group: Get would
 // return whichever occurrence comes first.
 func (m *Message) GetTopLevel(tag int, specs ...*GroupSpec) []byte {
-	for f := range m.TopLevelFields(specs...) {
+	return getTopLevel(m.fields, tag, specs)
+}
+
+// GetTopLevel returns the value of the first field with the given tag in this
+// entry that is not inside one of the nested groups described by specs, or
+// nil; see Message.GetTopLevel.
+func (g *Group) GetTopLevel(tag int, specs ...*GroupSpec) []byte {
+	return getTopLevel(g.fields, tag, specs)
+}
+
+func getTopLevel(fields []Field, tag int, specs []*GroupSpec) []byte {
+	for f := range topLevelFields(fields, specs) {
 		if f.Tag == tag {
 			return f.Value
 		}
@@ -221,8 +243,18 @@ func (m *Message) GetTopLevel(tag int, specs ...*GroupSpec) []byte {
 // inside one of the groups described by specs. Group counters are top level;
 // the entries they announce are skipped as blocks, as GroupsOf reads them.
 func (m *Message) TopLevelFields(specs ...*GroupSpec) iter.Seq[Field] {
+	return topLevelFields(m.fields, specs)
+}
+
+// TopLevelFields returns an iterator over the entry's fields that are not
+// inside one of the nested groups described by specs; see
+// Message.TopLevelFields.
+func (g *Group) TopLevelFields(specs ...*GroupSpec) iter.Seq[Field] {
+	return topLevelFields(g.fields, specs)
+}
+
+func topLevelFields(fields []Field, specs []*GroupSpec) iter.Seq[Field] {
 	return func(yield func(Field) bool) {
-		fields := m.fields
 		for i := 0; i < len(fields); {
 			f := fields[i]
 			if !yield(f) {

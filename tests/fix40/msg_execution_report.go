@@ -14,6 +14,9 @@ type ExecutionReport struct {
 func WrapExecutionReport(msg *fix2.Message) *ExecutionReport {
 	return &ExecutionReport{msg: msg}
 }
+
+var executionReport_specs = []*fix2.GroupSpec{executionReport_NoMiscFees_spec}
+
 func (m *ExecutionReport) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -350,7 +353,7 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, executionReport_specs...)
 	entries := make([]NoMiscFeesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoMiscFeesEntry{

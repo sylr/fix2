@@ -12,12 +12,20 @@ type NoAllocsEntry struct {
 	spec *fix2.GroupSpec
 }
 
+// get returns the value of the entry's field with the given tag, outside its
+// nested groups.
+func (e *NoAllocsEntry) get(tag int) []byte {
+	if e.spec == nil {
+		return e.grp.Get(tag)
+	}
+	return e.grp.GetTopLevel(tag, e.spec.Nested...)
+}
 func (e *NoAllocsEntry) AllocAccount() (string, bool) {
-	v := e.grp.Get(TagAllocAccount)
+	v := e.get(TagAllocAccount)
 	return string(v), v != nil
 }
 func (e *NoAllocsEntry) AllocQty() (float64, bool, error) {
-	v := e.grp.Get(TagAllocQty)
+	v := e.get(TagAllocQty)
 	if v == nil {
 		return 0.0, false, nil
 	}
@@ -25,11 +33,11 @@ func (e *NoAllocsEntry) AllocQty() (float64, bool, error) {
 	return f, true, err
 }
 func (e *NoAllocsEntry) IndividualAllocID() (string, bool) {
-	v := e.grp.Get(TagIndividualAllocID)
+	v := e.get(TagIndividualAllocID)
 	return string(v), v != nil
 }
 func (e *NoAllocsEntry) AllocAcctIDSource() (int, bool, error) {
-	v := e.grp.Get(TagAllocAcctIDSource)
+	v := e.get(TagAllocAcctIDSource)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -37,11 +45,11 @@ func (e *NoAllocsEntry) AllocAcctIDSource() (int, bool, error) {
 	return n, true, err
 }
 func (e *NoAllocsEntry) AllocSettlCurrency() (string, bool) {
-	v := e.grp.Get(TagAllocSettlCurrency)
+	v := e.get(TagAllocSettlCurrency)
 	return string(v), v != nil
 }
 func (e *NoAllocsEntry) NoNestedPartyIDs() (int, bool, error) {
-	v := e.grp.Get(TagNoNestedPartyIDs)
+	v := e.get(TagNoNestedPartyIDs)
 	if v == nil {
 		return 0, false, nil
 	}
@@ -53,7 +61,7 @@ func (e *NoAllocsEntry) NoNestedPartyIDsEntries() []NoNestedPartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec)
+	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
 	entries := make([]NoNestedPartyIDsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoNestedPartyIDsEntry{

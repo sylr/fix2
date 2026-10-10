@@ -14,6 +14,9 @@ type Logon struct {
 func WrapLogon(msg *fix2.Message) *Logon {
 	return &Logon{msg: msg}
 }
+
+var logon_specs = []*fix2.GroupSpec{logon_NoHops_spec, logon_NoMsgTypes_spec}
+
 func (m *Logon) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
 	return string(v), v != nil
@@ -226,7 +229,7 @@ func (m *Logon) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, logon_specs...)
 	entries := make([]NoHopsEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoHopsEntry{
@@ -248,7 +251,7 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec)
+	groups := m.msg.GroupsOf(spec, logon_specs...)
 	entries := make([]NoMsgTypesEntry, len(groups))
 	for i := range groups {
 		entries[i] = NoMsgTypesEntry{
