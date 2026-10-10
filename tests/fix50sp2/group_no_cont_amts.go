@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"slices"
 	"strconv"
 )
 
@@ -50,27 +49,15 @@ func (e *NoContAmtsEntryBuilder) SetContAmtCurr(v string) *NoContAmtsEntryBuilde
 	return e
 }
 
-// noContAmts_layout is the layout of a NoContAmts entry merged across messages, for
-// entries written without a message's own.
-var noContAmts_layout = &groupLayout{tags: []int{TagContAmtType, TagContAmtValue, TagContAmtCurr}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoContAmtsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noContAmts_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noContAmts_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
 		}
 	}
 	return dst

@@ -2,10 +2,7 @@
 
 package fixt11
 
-import (
-	fix2 "github.com/sylr/fix2"
-	"slices"
-)
+import fix2 "github.com/sylr/fix2"
 
 type NoMsgTypesEntry struct {
 	grp  fix2.Group
@@ -53,27 +50,15 @@ func (e *NoMsgTypesEntryBuilder) SetRefCstmApplVerID(v string) *NoMsgTypesEntryB
 	return e
 }
 
-// noMsgTypes_layout is the layout of a NoMsgTypes entry merged across messages, for
-// entries written without a message's own.
-var noMsgTypes_layout = &groupLayout{tags: []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noMsgTypes_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noMsgTypes_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
 		}
 	}
 	return dst

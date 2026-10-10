@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"slices"
 	"strconv"
 )
 
@@ -129,16 +128,11 @@ func (e *NoComplexEventsEntryBuilder) AddNoComplexEventDatesEntry(ne *NoComplexE
 	return e
 }
 
-// noComplexEvents_layout is the layout of a NoComplexEvents entry merged across messages, for
-// entries written without a message's own.
-var noComplexEvents_layout = &groupLayout{tags: []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition, TagNoComplexEventDates}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoComplexEventsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noComplexEvents_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		case TagNoComplexEventDates:
@@ -150,21 +144,6 @@ func (e *NoComplexEventsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout)
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noComplexEvents_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
-		}
-		if !slices.Contains(l.tags, TagNoComplexEventDates) {
-			if len(e.noComplexEventDatesEntries) > 0 {
-				dst = fix2.AppendCount(dst, TagNoComplexEventDates, len(e.noComplexEventDatesEntries))
-				for _, entry := range e.noComplexEventDatesEntries {
-					dst = entry.appendTo(dst, nil)
-				}
-			}
 		}
 	}
 	return dst

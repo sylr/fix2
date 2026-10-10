@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"slices"
 	"strconv"
 )
 
@@ -89,16 +88,11 @@ func (e *NoUndlyInstrumentPartiesEntryBuilder) AddNoUndlyInstrumentPartySubIDsEn
 	return e
 }
 
-// noUndlyInstrumentParties_layout is the layout of a NoUndlyInstrumentParties entry merged across messages, for
-// entries written without a message's own.
-var noUndlyInstrumentParties_layout = &groupLayout{tags: []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole, TagNoUndlyInstrumentPartySubIDs}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoUndlyInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noUndlyInstrumentParties_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		case TagNoUndlyInstrumentPartySubIDs:
@@ -110,21 +104,6 @@ func (e *NoUndlyInstrumentPartiesEntryBuilder) appendTo(dst []fix2.Field, l *gro
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noUndlyInstrumentParties_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
-		}
-		if !slices.Contains(l.tags, TagNoUndlyInstrumentPartySubIDs) {
-			if len(e.noUndlyInstrumentPartySubIDsEntries) > 0 {
-				dst = fix2.AppendCount(dst, TagNoUndlyInstrumentPartySubIDs, len(e.noUndlyInstrumentPartySubIDsEntries))
-				for _, entry := range e.noUndlyInstrumentPartySubIDsEntries {
-					dst = entry.appendTo(dst, nil)
-				}
-			}
 		}
 	}
 	return dst

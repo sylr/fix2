@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"slices"
 	"time"
 )
 
@@ -78,27 +77,15 @@ func (e *NoTrdRegTimestampsEntryBuilder) SetDeskOrderHandlingInst(v DeskOrderHan
 	return e
 }
 
-// noTrdRegTimestamps_layout is the layout of a NoTrdRegTimestamps entry merged across messages, for
-// entries written without a message's own.
-var noTrdRegTimestamps_layout = &groupLayout{tags: []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoTrdRegTimestampsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noTrdRegTimestamps_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noTrdRegTimestamps_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
 		}
 	}
 	return dst

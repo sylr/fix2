@@ -493,17 +493,6 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 		mg.Fields = append(mg.Fields, dictionary.FieldRef{Tag: tag})
 	}
 
-	var layouts [][]int
-	for _, d := range defs {
-		layouts = append(layouts, d.Layout)
-	}
-	mg.Layout = mergeLayouts(layouts)
-	// Definitions starting with different tags could leave another tag
-	// first: the entry must start with the delimiter the readers expect.
-	if i := slices.Index(mg.Layout, mg.DelimTag); i > 0 {
-		mg.Layout = slices.Insert(slices.Delete(mg.Layout, i, i+1), 0, mg.DelimTag)
-	}
-
 	// Union nested groups (recursively merge by name).
 	nestedByName := map[string][]dictionary.GroupDef{}
 	for _, d := range defs {
@@ -521,57 +510,6 @@ func mergeGroupDefs(defs []dictionary.GroupDef) dictionary.GroupDef {
 	}
 
 	return mg
-}
-
-// mergeLayouts merges the entry layouts of a group defined in several
-// messages into one order that respects every layout where they agree: each
-// layout adds "comes before" constraints between consecutive tags, and the
-// merge is a stable topological sort taking, among the tags whose
-// predecessors are all placed, the one seen first. Conflicting layouts form
-// a cycle, broken by taking the remaining tag seen first, so the earliest
-// definition (lowest MsgType) wins.
-func mergeLayouts(layouts [][]int) []int {
-	var tags []int // in order of first appearance
-	seen := map[int]bool{}
-	succ := map[int][]int{}
-	indeg := map[int]int{}
-	for _, layout := range layouts {
-		for i, tag := range layout {
-			if !seen[tag] {
-				seen[tag] = true
-				tags = append(tags, tag)
-			}
-			if i > 0 && !slices.Contains(succ[layout[i-1]], tag) {
-				succ[layout[i-1]] = append(succ[layout[i-1]], tag)
-				indeg[tag]++
-			}
-		}
-	}
-	var out []int
-	placed := map[int]bool{}
-	for len(out) < len(tags) {
-		next := -1
-		for _, tag := range tags {
-			if !placed[tag] && indeg[tag] == 0 {
-				next = tag
-				break
-			}
-		}
-		if next < 0 { // conflicting orders
-			for _, tag := range tags {
-				if !placed[tag] {
-					next = tag
-					break
-				}
-			}
-		}
-		placed[next] = true
-		out = append(out, next)
-		for _, s := range succ[next] {
-			indeg[s]--
-		}
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -664,7 +602,7 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		writeEntryGroupAddMethod(f, dict, entryBuilderName, globalNested)
 	}
 
-	writeEntryAppendTo(f, dict, entryBuilderName, mg)
+	writeEntryAppendTo(f, entryBuilderName, mg)
 
 	return f.Save(filepath.Join(outDir, groupFileName(mg.Name)))
 }
@@ -955,12 +893,16 @@ func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
 		}
 	}
 	for _, fr := range gd.Fields {
-		// DATA setters also write the LENGTH field (see pairDataLengths),
-		// even when the group does not declare it: readers must accept it.
+		// DATA setters write the LENGTH and DATA fields together (see
+		// pairDataLengths), even when the group declares only one of them:
+		// readers must accept both.
 		if l := fix2.DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
 			addTag(l)
 		}
 		addTag(fr.Tag)
+		if d := fix2.DataTag(fr.Tag); d != 0 && dict.Fields[d] != nil {
+			addTag(d)
+		}
 	}
 	values := jen.Dict{
 		jen.Id("Counter"): tagID(gd.Name),
@@ -1180,9 +1122,8 @@ func writeGroupAddMethod(f *jen.File, dict *dictionary.Dict, builderName string,
 }
 
 // groupBlock returns the code appending a group's counter and entries to dst,
-// laid out by layout (an expression yielding a *groupLayout, nil for the
-// merged one), when owner (an expression yielding the entry slice) is not
-// empty.
+// laid out by layout (an expression yielding a *groupLayout), when owner (an
+// expression yielding the entry slice) is not empty.
 func groupBlock(dst string, owner func() *jen.Statement, gd dictionary.GroupDef, layout jen.Code) jen.Code {
 	return jen.If(jen.Len(owner()).Op(">").Lit(0)).Block(groupWrite(dst, owner, gd, layout)...)
 }
@@ -1217,68 +1158,54 @@ func layoutLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement
 	return jen.Op("&").Id("groupLayout").Values(values)
 }
 
-// writeEntryAppendTo generates the entry's merged layout variable and
-// appendTo, which serializes an entry in the order of a message's layout:
-// each layout tag is either one of the entry's fields, written if set, or a
-// nested group's counter, written with the group's entries in their own
-// layout. The delimiter comes first; when it is a nested group's counter, it
-// is written even with no entries. Fields and nested groups the layout does
-// not list come after, so nothing set is dropped.
-func writeEntryAppendTo(f *jen.File, dict *dictionary.Dict, entryBuilderName string, mg dictionary.GroupDef) {
-	layoutVar := unexport(mg.Name) + "_layout"
-	var tags []jen.Code
-	for _, tag := range pairDataLengths(dict, mg.Layout) {
-		tags = append(tags, tagID(dict.Fields[tag].Name))
-	}
-	f.Comment(layoutVar + " is the layout of a " + mg.Name + " entry merged across messages, for")
-	f.Comment("entries written without a message's own.")
-	f.Var().Id(layoutVar).Op("=").Op("&").Id("groupLayout").Values(jen.Dict{jen.Id("tags"): jen.Index().Int().Values(tags...)})
-
-	var cases, extraGroups []jen.Code
+// writeEntryAppendTo generates appendTo, which serializes an entry in the
+// order of its layout in the message being built: each layout tag is either
+// one of the entry's fields, written if set, or a nested group's counter,
+// written with the group's entries in their own layout. The delimiter comes
+// first; when it is a nested group's counter, it is written even with no
+// entries.
+func writeEntryAppendTo(f *jen.File, entryBuilderName string, mg dictionary.GroupDef) {
+	var cases []jen.Code
 	for _, gd := range mg.Groups {
 		name := gd.Name
 		owner := func() *jen.Statement { return jen.Id("e").Dot(entriesField(name)) }
-		nested := jen.Id("l").Dot("nested").Index(tagID(name))
 		cases = append(cases, jen.Case(tagID(name)).Block(
 			jen.If(jen.Len(owner()).Op(">").Lit(0).Op("||").Id("tag").Op("==").Id("l").Dot("tags").Index(jen.Lit(0))).Block(
-				groupWrite("dst", owner, gd, nested)...,
+				groupWrite("dst", owner, gd, jen.Id("l").Dot("nested").Index(tagID(name)))...,
 			),
-		))
-		extraGroups = append(extraGroups, jen.If(jen.Op("!").Qual("slices", "Contains").Call(jen.Id("l").Dot("tags"), tagID(name))).Block(
-			groupBlock("dst", owner, gd, jen.Nil()),
 		))
 	}
 	cases = append(cases, jen.Default().Block(
 		jen.Id("dst").Op("=").Qual(fix2Pkg, "AppendField").Call(jen.Id("dst"), jen.Id("e").Dot("fields"), jen.Id("tag")),
 	))
-	extra := []jen.Code{
-		jen.For(jen.List(jen.Id("_"), jen.Id("fld")).Op(":=").Range().Id("e").Dot("fields")).Block(
-			jen.If(jen.Op("!").Qual("slices", "Contains").Call(jen.Id("l").Dot("tags"), jen.Id("fld").Dot("Tag"))).Block(
-				jen.Id("dst").Op("=").Append(jen.Id("dst"), jen.Id("fld")),
-			),
-		),
-	}
-	extra = append(extra, extraGroups...)
 	f.Comment("appendTo appends the entry's fields to dst in the order of l, the entry's")
-	f.Comment("layout in the message being built, or the merged layout if l is nil.")
+	f.Comment("layout in the message being built. Fields and nested groups l does not list")
+	f.Comment("are not written: that message's readers could not find them, nor the entries")
+	f.Comment("after them.")
 	f.Func().Params(jen.Id("e").Op("*").Id(entryBuilderName)).Id("appendTo").Params(
 		jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
 		jen.Id("l").Op("*").Id("groupLayout"),
 	).Index().Qual(fix2Pkg, "Field").Block(
-		jen.If(jen.Id("l").Op("==").Nil()).Block(jen.Id("l").Op("=").Id(layoutVar)),
 		jen.For(jen.List(jen.Id("_"), jen.Id("tag")).Op(":=").Range().Id("l").Dot("tags")).Block(
 			jen.Switch(jen.Id("tag")).Block(cases...),
 		),
-		jen.If(jen.Id("l").Op("!=").Id(layoutVar)).Block(extra...),
 		jen.Return(jen.Id("dst")),
 	)
 }
 
 // pairDataLengths returns layout with the LENGTH tag of every DATA tag the
 // parser reads by length placed right before it, as the parser requires,
-// whatever order the dictionary or the layout merge produced.
+// whatever order the dictionary produced. A LENGTH tag listed without its
+// DATA tag gets it right after: the shared entry setter writes both, and
+// LENGTH alone would not parse.
 func pairDataLengths(dict *dictionary.Dict, layout []int) []int {
 	out := slices.Clone(layout)
+	for i := 0; i < len(out); i++ {
+		if d := fix2.DataTag(out[i]); d != 0 && dict.Fields[d] != nil && !slices.Contains(out, d) {
+			out = slices.Insert(out, i+1, d)
+		}
+	}
+	layout = slices.Clone(out)
 	for _, tag := range layout {
 		l := fix2.DataLengthTag(tag)
 		if l == 0 || dict.Fields[l] == nil || len(out) == 0 {

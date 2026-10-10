@@ -1452,3 +1452,36 @@ func TestValidate_MalformedCounts(t *testing.T) {
 		t.Errorf("undercounted: %v", err)
 	}
 }
+
+func TestValidate_GroupWithLengthOnly(t *testing.T) {
+	// NoL entries declare RawDataLength(95) but not RawData(96): builders
+	// write both, so RawData does not end the entry and F inside stays in it.
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="F" required="Y"/>
+      <group name="NoL" required="N"><field name="D" required="N"/><field name="RawDataLength" required="N"/><field name="F" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="95" name="RawDataLength" type="LENGTH"/>
+    <field number="96" name="RawData" type="DATA"/>
+    <field number="100" name="F" type="STRING"/>
+    <field number="101" name="NoL" type="NUMINGROUP"/>
+    <field number="102" name="D" type="STRING"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	msg := parseMsg(t, buildFIXMsg("35=M\x01101=1\x01102=d\x0195=2\x0196=ab\x01100=in\x01"))
+	var ve *ValidationError
+	if err := d.Validate(&msg); !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != 100 {
+		t.Errorf("got %v, want required tag 100 missing", err)
+	}
+}

@@ -757,29 +757,6 @@ func TestPerMessageSpec(t *testing.T) {
 `)
 }
 
-func TestMergeLayouts(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		layouts [][]int
-		want    []int
-	}{
-		{"identical", [][]int{{1, 2, 3}, {1, 2, 3}}, []int{1, 2, 3}},
-		// B (5) only in the second layout goes where that layout puts it.
-		{"field only in a later layout", [][]int{{1, 2, 9}, {1, 5, 2, 9}}, []int{1, 5, 2, 9}},
-		{"subset", [][]int{{1, 2}, {1, 2, 3}}, []int{1, 2, 3}},
-		// Never ahead of the delimiter, even without a known predecessor.
-		{"no known predecessor", [][]int{{1, 2}, {7, 2}}, []int{1, 7, 2}},
-		// A later layout orders tags an earlier one placed independently.
-		{"compatible constraints", [][]int{{1, 2, 9}, {1, 3, 9}, {1, 2, 3, 9}}, []int{1, 2, 3, 9}},
-		// Conflicting orders: the first layout wins.
-		{"conflict", [][]int{{1, 2, 3}, {1, 3, 2}}, []int{1, 2, 3}},
-	} {
-		if got := mergeLayouts(tc.layouts); !slices.Equal(got, tc.want) {
-			t.Errorf("%s: mergeLayouts = %v, want %v", tc.name, got, tc.want)
-		}
-	}
-}
-
 // TestGenerateDeterministic generates the same dictionary twice: the output
 // must not depend on map iteration order.
 func TestGenerateDeterministic(t *testing.T) {
@@ -825,6 +802,9 @@ func TestPairDataLengths(t *testing.T) {
 		// LENGTH as delimiter pulls DATA right behind it. (A DATA
 		// delimiter is rejected by checkNames.)
 		{[]int{618, 600, 619}, []int{618, 619, 600}},
+		// LENGTH without its DATA gets it right after.
+		{[]int{1, 618, 600}, []int{1, 618, 619, 600}},
+		{[]int{618, 600}, []int{618, 619, 600}},
 	} {
 		if got := pairDataLengths(dict, tc.in); !slices.Equal(got, tc.want) {
 			t.Errorf("pairDataLengths(%v) = %v, want %v", tc.in, got, tc.want)
@@ -887,17 +867,6 @@ func TestSharing(t *testing.T) {
 	}
 }
 `)
-}
-
-func TestMergeGroupDefsDelimiterFirst(t *testing.T) {
-	// The second definition puts another tag ahead of the delimiter.
-	mg := mergeGroupDefs([]dictionary.GroupDef{
-		{Name: "NoX", CounterTag: 1, DelimTag: 2, Fields: []dictionary.FieldRef{{Tag: 2}, {Tag: 3}}, Layout: []int{2, 3}},
-		{Name: "NoX", CounterTag: 1, DelimTag: 2, Fields: []dictionary.FieldRef{{Tag: 4}, {Tag: 2}, {Tag: 3}}, Layout: []int{4, 2, 3}},
-	})
-	if mg.Layout[0] != 2 {
-		t.Errorf("merged layout %v does not start with the delimiter", mg.Layout)
-	}
 }
 
 // TestGenerateGroupEdgeCases round-trips groups named like builder members,
@@ -1481,18 +1450,23 @@ func TestNestedDelimiterInOneMessage(t *testing.T) {
 	if p, _ := entries[1].P(); p != "p2" {
 		t.Errorf("C entry 1: P = %q", p)
 	}
-	// A defines no NoSub: entries set on it come after A's own fields.
+	// A defines no NoSub: entries set on it are not written.
 	a := BuildA("FIX.4.4").AddNoItemsEntry(NewNoItemsEntry().SetP("p").AddNoSubEntry(NewNoSubEntry().SetS("s"))).Build()
-	if !bytes.Contains(a, []byte("\x01500=1\x01100=p\x01501=1\x01103=s\x01")) {
+	if !bytes.Contains(a, []byte("\x01500=1\x01100=p\x0110=")) {
 		t.Errorf("A: unexpected layout %q", a)
 	}
 }
 
 func TestFieldsOutsideTheMessageDefinition(t *testing.T) {
-	// B defines no R: it is written after B's own fields, not dropped.
-	b := BuildB("FIX.4.4").AddNoItemsEntry(NewNoItemsEntry().SetP("p").SetQ("q").SetR("r")).Build()
-	if !bytes.Contains(b, []byte("\x01500=1\x01101=q\x01100=p\x01102=r\x01")) {
+	// B defines no R: writing it anywhere would end B's first entry for
+	// B's readers and hide the second, so it is not written.
+	item := func() *NoItemsEntryBuilder { return NewNoItemsEntry().SetP("p").SetQ("q").SetR("r") }
+	b := BuildB("FIX.4.4").AddNoItemsEntry(item()).AddNoItemsEntry(item()).Build()
+	if !bytes.Contains(b, []byte("\x01500=2\x01101=q\x01100=p\x01101=q\x01100=p\x0110=")) {
 		t.Errorf("B: unexpected layout %q", b)
+	}
+	if got := WrapB(parse(t, b)).NoItemsEntries(); len(got) != 2 {
+		t.Errorf("B: got %d entries, want 2", len(got))
 	}
 }
 
@@ -1505,6 +1479,58 @@ func TestZeroValueEntry(t *testing.T) {
 	}
 	if got := e.NoSubEntries(); got != nil {
 		t.Errorf("zero entry NoSubEntries = %v", got)
+	}
+}
+`)
+}
+
+// TestGenerateLengthWithoutData covers a message whose group lists a LENGTH
+// field without its DATA field, which another message's definition has:
+// the shared DATA setter writes both, and they must stay adjacent.
+func TestGenerateLengthWithoutData(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="A" msgtype="U1" msgcat="app">
+      <group name="NoItems" required="N"><field name="P" required="N"/><field name="RawDataLength" required="N"/><field name="RawData" required="N"/></group>
+    </message>
+    <message name="B" msgtype="U2" msgcat="app">
+      <group name="NoItems" required="N"><field name="P" required="N"/><field name="RawDataLength" required="N"/><field name="Q" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="95" name="RawDataLength" type="LENGTH"/>
+    <field number="96" name="RawData" type="DATA"/>
+    <field number="100" name="P" type="STRING"/>
+    <field number="101" name="Q" type="STRING"/>
+    <field number="500" name="NoItems" type="NUMINGROUP"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "lengthonly", `package lengthonly
+
+import (
+	"bytes"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestAdjacent(t *testing.T) {
+	raw := BuildB("FIX.4.4").AddNoItemsEntry(NewNoItemsEntry().SetP("p").SetRawData([]byte("a\x01")).SetQ("q")).Build()
+	if !bytes.Contains(raw, []byte("\x01500=1\x01100=p\x0195=2\x0196=a\x01\x01101=q\x01")) {
+		t.Errorf("unexpected layout %q", raw)
+	}
+	m, err := fix2.Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	entries := WrapB(&m).NoItemsEntries()
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries", len(entries))
+	}
+	if q, _ := entries[0].Q(); q != "q" {
+		t.Errorf("Q = %q, want q: the DATA field must not end the entry", q)
 	}
 }
 `)

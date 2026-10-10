@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"slices"
 	"strconv"
 )
 
@@ -105,16 +104,11 @@ func (e *NoFillsEntryBuilder) AddNoNested4PartyIDsEntry(ne *NoNested4PartyIDsEnt
 	return e
 }
 
-// noFills_layout is the layout of a NoFills entry merged across messages, for
-// entries written without a message's own.
-var noFills_layout = &groupLayout{tags: []int{TagFillExecID, TagFillPx, TagFillQty, TagNoNested4PartyIDs, TagFillLiquidityInd}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoFillsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noFills_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		case TagNoNested4PartyIDs:
@@ -126,21 +120,6 @@ func (e *NoFillsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noFills_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
-		}
-		if !slices.Contains(l.tags, TagNoNested4PartyIDs) {
-			if len(e.noNested4PartyIDsEntries) > 0 {
-				dst = fix2.AppendCount(dst, TagNoNested4PartyIDs, len(e.noNested4PartyIDsEntries))
-				for _, entry := range e.noNested4PartyIDsEntries {
-					dst = entry.appendTo(dst, nil)
-				}
-			}
 		}
 	}
 	return dst

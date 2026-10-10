@@ -229,8 +229,9 @@ func checkConditions(conds []condition, present, top map[int]bool, where string)
 }
 
 // groupSpecs returns the specs of groups. An entry may also hold the LENGTH
-// field of its DATA fields, which the parser requires right before them and
-// generated builders write, even when the dictionary does not declare it.
+// field of its DATA fields, which the parser requires right before them, and
+// the DATA field of its LENGTH fields: generated builders write both, even
+// when the dictionary declares only one.
 func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 	specs := make([]*fix2.GroupSpec, 0, len(groups))
 	for _, gd := range groups {
@@ -252,6 +253,9 @@ func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 				add(l)
 			}
 			add(fr.Tag)
+			if dt := fix2.DataTag(fr.Tag); dt != 0 {
+				add(dt)
+			}
 		}
 		s.Nested = d.groupSpecs(gd.Groups)
 		specs = append(specs, s)

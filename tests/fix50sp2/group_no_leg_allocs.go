@@ -4,7 +4,6 @@ package fix50sp2
 
 import (
 	fix2 "github.com/sylr/fix2"
-	"slices"
 	"strconv"
 )
 
@@ -105,16 +104,11 @@ func (e *NoLegAllocsEntryBuilder) AddNoNested2PartyIDsEntry(ne *NoNested2PartyID
 	return e
 }
 
-// noLegAllocs_layout is the layout of a NoLegAllocs entry merged across messages, for
-// entries written without a message's own.
-var noLegAllocs_layout = &groupLayout{tags: []int{TagLegAllocAccount, TagLegIndividualAllocID, TagLegAllocQty, TagLegAllocAcctIDSource, TagLegAllocSettlCurrency, TagNoNested2PartyIDs}}
-
 // appendTo appends the entry's fields to dst in the order of l, the entry's
-// layout in the message being built, or the merged layout if l is nil.
+// layout in the message being built. Fields and nested groups l does not list
+// are not written: that message's readers could not find them, nor the entries
+// after them.
 func (e *NoLegAllocsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
-	if l == nil {
-		l = noLegAllocs_layout
-	}
 	for _, tag := range l.tags {
 		switch tag {
 		case TagNoNested2PartyIDs:
@@ -126,21 +120,6 @@ func (e *NoLegAllocsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []f
 			}
 		default:
 			dst = fix2.AppendField(dst, e.fields, tag)
-		}
-	}
-	if l != noLegAllocs_layout {
-		for _, fld := range e.fields {
-			if !slices.Contains(l.tags, fld.Tag) {
-				dst = append(dst, fld)
-			}
-		}
-		if !slices.Contains(l.tags, TagNoNested2PartyIDs) {
-			if len(e.noNested2PartyIDsEntries) > 0 {
-				dst = fix2.AppendCount(dst, TagNoNested2PartyIDs, len(e.noNested2PartyIDsEntries))
-				for _, entry := range e.noNested2PartyIDsEntries {
-					dst = entry.appendTo(dst, nil)
-				}
-			}
 		}
 	}
 	return dst
