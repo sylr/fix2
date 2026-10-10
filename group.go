@@ -127,14 +127,14 @@ func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
 // repeated tag ends it: the field belongs to the next entry or to the
 // enclosing message.
 func (s *GroupSpec) entry(fields []Field, i int) int {
-	// Tags seen in this entry, as bits indexed by position in s.Tags: on the
-	// stack for groups of up to 256 tags.
+	// Tags seen in this entry, as bits indexed by position in s.Tags, then
+	// nested counters by position in s.Nested: on the stack for groups of up
+	// to 256 of them.
 	var small [4]uint64
 	seen := small[:]
-	if n := (len(s.Tags) + 63) / 64; n > len(small) {
+	if n := (len(s.Tags) + len(s.Nested) + 63) / 64; n > len(small) {
 		seen = make([]uint64, n)
 	}
-	var nestedSeen uint64 // nested counters seen, by index in s.Nested (first 64)
 	for first := true; i < len(fields); first = false {
 		tag := fields[i].Tag
 		if tag == s.Delim && !first {
@@ -143,12 +143,11 @@ func (s *GroupSpec) entry(fields []Field, i int) int {
 		if c := s.childIndex(tag); c >= 0 {
 			// A nested counter, possibly the delimiter itself: it cannot
 			// repeat within the entry either, then skip its entries by count.
-			if c < 64 {
-				if nestedSeen&(1<<c) != 0 {
-					return i
-				}
-				nestedSeen |= 1 << c
+			k := len(s.Tags) + c
+			if seen[k/64]&(1<<(k%64)) != 0 {
+				return i
 			}
+			seen[k/64] |= 1 << (k % 64)
 			count, _ := ParseInt(fields[i].Value)
 			i = s.Nested[c].skip(fields, i+1, count)
 			continue

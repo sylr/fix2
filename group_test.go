@@ -358,6 +358,65 @@ func TestGroupsOfRepeatedNestedCounterEndsEntry(t *testing.T) {
 	}
 }
 
+func TestGroupsOfRepeatedNestedCounterManyChildren(t *testing.T) {
+	// The repeated child sits at nested index n-1, past the first 64 and,
+	// with 200 tags, past the 256 bits kept on the stack.
+	for _, c := range []struct{ tags, nested int }{{1, 64}, {1, 65}, {1, 100}, {200, 55}, {200, 56}, {200, 57}, {200, 70}} {
+		tags := make([]int, c.tags)
+		for i := range tags {
+			tags[i] = 100 + i
+		}
+		parent := &GroupSpec{Counter: 900, Delim: 100, Tags: tags}
+		for i := range c.nested {
+			parent.Nested = append(parent.Nested, &GroupSpec{Counter: 2000 + 2*i, Delim: 2001 + 2*i, Tags: []int{2001 + 2*i}})
+		}
+		counter := 2000 + 2*(c.nested-1)
+		m := fieldsMsg(t, "900=1", "100=p",
+			fmt.Sprintf("%d=1", counter), fmt.Sprintf("%d=c", counter+1), fmt.Sprintf("%d=0", counter))
+		if got := entryTags(m.GroupsOf(parent)); !reflect.DeepEqual(got, [][]int{{100, counter, counter + 1}}) {
+			t.Errorf("%d tags, %d nested: entries = %v", c.tags, c.nested, got)
+		}
+		if got := string(m.GetTopLevel(counter, parent)); got != "0" {
+			t.Errorf("%d tags, %d nested: GetTopLevel(%d) = %q, want 0", c.tags, c.nested, counter, got)
+		}
+		if allocs := testing.AllocsPerRun(100, func() { m.GetTopLevel(counter, parent) }); c.tags+c.nested <= 256 && allocs != 0 {
+			t.Errorf("%d tags, %d nested: GetTopLevel allocated %v times", c.tags, c.nested, allocs)
+		}
+	}
+}
+
+func TestGroupsOfRepeatedZeroCountCounter(t *testing.T) {
+	// A first occurrence with count 0 still counts: the second ends the entry.
+	child := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201}}
+	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}, Nested: []*GroupSpec{child}}
+	m := fieldsMsg(t, "900=1", "100=p", "200=0", "200=0")
+	if got := entryTags(m.GroupsOf(parent)); !reflect.DeepEqual(got, [][]int{{100, 200}}) {
+		t.Errorf("entries = %v", got)
+	}
+	if got := string(m.GetTopLevel(200, parent)); got != "0" {
+		t.Errorf("GetTopLevel(200) = %q, want 0", got)
+	}
+}
+
+func TestGroupsOfRepeatedGrandchildCounter(t *testing.T) {
+	// The repeated 300 ends the child entry, then the parent entry (300 is
+	// not a parent tag), leaving it to the message.
+	grandchild := &GroupSpec{Counter: 300, Delim: 301, Tags: []int{301}}
+	child := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201}, Nested: []*GroupSpec{grandchild}}
+	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}, Nested: []*GroupSpec{child}}
+	m := fieldsMsg(t, "900=1", "100=p", "200=1", "201=c", "300=1", "301=g", "300=0")
+	if got := entryTags(m.GroupsOf(parent)); !reflect.DeepEqual(got, [][]int{{100, 200, 201, 300, 301}}) {
+		t.Errorf("entries = %v", got)
+	}
+	children := m.GroupsOf(parent)[0].GroupsOf(child)
+	if got := entryTags(children); !reflect.DeepEqual(got, [][]int{{201, 300, 301}}) {
+		t.Errorf("child entries = %v", got)
+	}
+	if got := string(m.GetTopLevel(300, parent)); got != "0" {
+		t.Errorf("GetTopLevel(300) = %q, want 0", got)
+	}
+}
+
 func TestGroupsOfLargeSpec(t *testing.T) {
 	// Specs above 256 tags use a heap bitset; repetition is still detected
 	// for tags beyond index 255.
