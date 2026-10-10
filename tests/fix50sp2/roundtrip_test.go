@@ -308,3 +308,29 @@ func TestBuilderCopySharesGroups(t *testing.T) {
 		t.Errorf("copy built %d legs, want 1", n)
 	}
 }
+
+// TestTimestampPrecision reads UTCTimestamp values written with each
+// fraction precision FIX allows, picoseconds being truncated.
+func TestTimestampPrecision(t *testing.T) {
+	ts := time.Date(2001, 12, 17, 9, 30, 47, 123_456_789, time.UTC)
+	for _, c := range []struct {
+		layout string
+		want   time.Time
+	}{
+		{fix2.TimeFormatTimestampSec, ts.Truncate(time.Second)},
+		{fix2.TimeFormatTimestamp, ts.Truncate(time.Millisecond)},
+		{fix2.TimeFormatTimestampMicro, ts.Truncate(time.Microsecond)},
+		{fix2.TimeFormatTimestampNano, ts},
+		{fix2.TimeFormatTimestampNano + "000", ts},
+	} {
+		raw := BuildExecutionReport("FIXT.1.1").SetTransactTimeWithFormat(ts, c.layout).Build()
+		msg, err := fix2.Parse(raw)
+		if err != nil {
+			t.Fatalf("%s: Parse: %v", c.layout, err)
+		}
+		got, ok, err := WrapExecutionReport(&msg).TransactTime()
+		if !ok || err != nil || !got.Equal(c.want) {
+			t.Errorf("%s: TransactTime = %v, %v, %v; want %v", c.layout, got, ok, err, c.want)
+		}
+	}
+}
