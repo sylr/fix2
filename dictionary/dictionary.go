@@ -113,8 +113,18 @@ type MessageDef struct {
 	Fields  []FieldRef // flattened (components/groups resolved)
 	Groups  []GroupDef // top-level groups in this message
 
-	fieldSet map[int]bool
-	required map[int]bool
+	fieldSet   map[int]bool
+	required   map[int]bool // tags required unconditionally
+	conditions []condition  // tags required only when an optional component is present
+}
+
+// condition records the required fields of an optional component: they must
+// be present only when the component is, i.e. when any of its tags is.
+type condition struct {
+	component string       // name of the optional component
+	parent    int          // index of the enclosing optional component's condition, or -1
+	tags      map[int]bool // tags whose presence means the component is present
+	required  []int        // tags required when the component is present
 }
 
 // Dict is a parsed QuickFIX XML data dictionary.
@@ -126,10 +136,12 @@ type Dict struct {
 	Header   []FieldRef
 	Trailer  []FieldRef
 
-	headerSet  map[int]bool
-	headerReq  map[int]bool
-	trailerSet map[int]bool
-	trailerReq map[int]bool
+	headerSet    map[int]bool
+	headerReq    map[int]bool
+	headerConds  []condition
+	trailerSet   map[int]bool
+	trailerReq   map[int]bool
+	trailerConds []condition
 
 	fieldsByName map[string]*FieldDef
 }
@@ -209,6 +221,7 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.Header = header.all
 	d.headerSet, d.headerReq = buildMaps(d.Header)
+	d.headerConds = header.conditions()
 
 	// 4. Flatten trailer.
 	trailer, err := r.resolve(xd.Trailer.Items)
@@ -217,6 +230,7 @@ func resolve(xd *xmlDict) (*Dict, error) {
 	}
 	d.Trailer = trailer.all
 	d.trailerSet, d.trailerReq = buildMaps(d.Trailer)
+	d.trailerConds = trailer.conditions()
 
 	// 5. Flatten each message and resolve its groups.
 	for _, xm := range xd.Messages.Messages {
@@ -226,13 +240,14 @@ func resolve(xd *xmlDict) (*Dict, error) {
 		}
 		fs, req := buildMaps(body.all)
 		d.Messages[xm.MsgType] = &MessageDef{
-			Name:     xm.Name,
-			MsgType:  xm.MsgType,
-			MsgCat:   xm.MsgCat,
-			Fields:   body.all,
-			Groups:   body.groups,
-			fieldSet: fs,
-			required: req,
+			Name:       xm.Name,
+			MsgType:    xm.MsgType,
+			MsgCat:     xm.MsgCat,
+			Fields:     body.all,
+			Groups:     body.groups,
+			fieldSet:   fs,
+			required:   req,
+			conditions: body.conditions(),
 		}
 	}
 
@@ -263,6 +278,38 @@ type resolvedBody struct {
 	direct []FieldRef // fields outside any group, components expanded
 	groups []GroupDef // groups at this level, components expanded
 	first  int        // first tag in XML order (field or group counter); 0 if none
+	conds  []condition
+}
+
+// markPresent records tag as part of the optional component at index ctx and
+// of every optional component enclosing it.
+func (b *resolvedBody) markPresent(ctx, tag int) {
+	for i := ctx; i >= 0; i = b.conds[i].parent {
+		b.conds[i].tags[tag] = true
+	}
+}
+
+// addField records a field or group counter seen in the optional component at
+// index ctx (-1 outside any) and returns its ref. A required field is
+// required unconditionally only outside optional components; inside one it
+// becomes a requirement of that component.
+func (b *resolvedBody) addField(ctx, tag int, required bool) FieldRef {
+	b.markPresent(ctx, tag)
+	if required && ctx >= 0 {
+		b.conds[ctx].required = append(b.conds[ctx].required, tag)
+	}
+	return FieldRef{Tag: tag, Required: required && ctx < 0}
+}
+
+// conditions returns the optional components that have required fields.
+func (b *resolvedBody) conditions() []condition {
+	var out []condition
+	for _, c := range b.conds {
+		if len(c.required) > 0 {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func (b *resolvedBody) setFirst(tag int) {
@@ -273,11 +320,13 @@ func (b *resolvedBody) setFirst(tag int) {
 
 func (r *resolver) resolve(items []xmlItem) (resolvedBody, error) {
 	var b resolvedBody
-	err := r.walk(items, &b)
+	err := r.walk(items, &b, -1)
 	return b, err
 }
 
-func (r *resolver) walk(items []xmlItem, b *resolvedBody) error {
+// walk resolves items into b. ctx is the index in b.conds of the innermost
+// optional component being expanded, or -1 outside any.
+func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 	for _, it := range items {
 		if r.visits++; r.visits > maxVisits {
 			return fmt.Errorf("expansion exceeds %d items: components are referenced too many times", maxVisits)
@@ -288,7 +337,7 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody) error {
 			if !ok {
 				return fmt.Errorf("unknown field %q", it.Name)
 			}
-			ref := FieldRef{Tag: fd.Tag, Required: it.Required == "Y"}
+			ref := b.addField(ctx, fd.Tag, it.Required == "Y")
 			b.all = append(b.all, ref)
 			b.direct = append(b.direct, ref)
 			b.setFirst(fd.Tag)
@@ -301,8 +350,15 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody) error {
 			if r.visiting[it.Name] {
 				return fmt.Errorf("cycle detected in component %q", it.Name)
 			}
+			// A required component keeps the enclosing context; an optional
+			// one opens a new condition nested in it.
+			child := ctx
+			if it.Required != "Y" {
+				b.conds = append(b.conds, condition{component: it.Name, parent: ctx, tags: map[int]bool{}})
+				child = len(b.conds) - 1
+			}
 			r.visiting[it.Name] = true
-			err := r.walk(comp.Items, b)
+			err := r.walk(comp.Items, b, child)
 			delete(r.visiting, it.Name)
 			if err != nil {
 				return fmt.Errorf("component %s: %w", it.Name, err)
@@ -321,7 +377,7 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody) error {
 			if inner.first == 0 {
 				return fmt.Errorf("group %s: no child fields", it.Name)
 			}
-			b.all = append(b.all, FieldRef{Tag: fd.Tag, Required: it.Required == "Y"})
+			b.all = append(b.all, b.addField(ctx, fd.Tag, it.Required == "Y"))
 			// Group children are never required at this level since group
 			// instance validation is out of scope.
 			for _, ref := range inner.all {

@@ -49,7 +49,9 @@ var structuralTags = map[int]bool{
 //  1. MsgType is known
 //  2. All required header tags are present
 //  3. All required trailer tags are present
-//  4. All required message-body tags are present
+//  4. All required message-body tags are present; required fields of an
+//     optional component only when the component is present (any of its
+//     tags is)
 //  5. Every tag is allowed (header + trailer + message fields + structural)
 //  6. Enum values are valid for fields that define enums
 func (d *Dict) Validate(msg *fix2.Message) error {
@@ -100,6 +102,20 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 				Tag: tag,
 				Msg: fmt.Sprintf("required tag %d missing for message %s", tag, mdef.Name),
 			}
+		}
+	}
+
+	// 4b. Required fields of optional components that are present.
+	for _, cc := range []struct {
+		conds []condition
+		where string
+	}{
+		{d.headerConds, "header"},
+		{d.trailerConds, "trailer"},
+		{mdef.conditions, "message " + mdef.Name},
+	} {
+		if err := checkConditions(cc.conds, present, cc.where); err != nil {
+			return err
 		}
 	}
 
@@ -160,4 +176,31 @@ func isMultipleValue(fixType string) bool {
 		return true
 	}
 	return false
+}
+
+// checkConditions returns an error if an optional component is present (any
+// of its tags is) but one of its required tags is missing.
+func checkConditions(conds []condition, present map[int]bool, where string) error {
+	for _, c := range conds {
+		active := false
+		for tag := range c.tags {
+			if present[tag] {
+				active = true
+				break
+			}
+		}
+		if !active {
+			continue
+		}
+		for _, tag := range c.required {
+			if !present[tag] {
+				return &ValidationError{
+					Err: ErrRequiredTag,
+					Tag: tag,
+					Msg: fmt.Sprintf("required tag %d missing for component %s in %s", tag, c.component, where),
+				}
+			}
+		}
+	}
+	return nil
 }

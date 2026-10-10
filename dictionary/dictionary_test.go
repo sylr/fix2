@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -582,5 +583,87 @@ func testExponentialExpansion(t *testing.T, c0 string) {
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("Load took %v, want it to stop early", d)
+	}
+}
+
+func TestValidate_OptionalComponentRequiredFields(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="A" required="Y"/>
+      <component name="Req" required="Y"/>
+      <component name="Opt" required="N"/>
+      <component name="OptWrap" required="N"/>
+    </message>
+  </messages>
+  <components>
+    <component name="Req"><field name="E" required="Y"/></component>
+    <component name="Opt">
+      <field name="B" required="Y"/>
+      <field name="C" required="N"/>
+      <component name="Inner" required="N"/>
+    </component>
+    <component name="Inner"><field name="D" required="Y"/><field name="H" required="N"/></component>
+    <component name="OptWrap">
+      <component name="ReqIn" required="Y"/>
+      <field name="G" required="N"/>
+    </component>
+    <component name="ReqIn"><field name="F" required="Y"/></component>
+  </components>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="101" name="A" type="STRING"/>
+    <field number="102" name="B" type="STRING"/>
+    <field number="103" name="C" type="STRING"/>
+    <field number="104" name="D" type="STRING"/>
+    <field number="105" name="E" type="STRING"/>
+    <field number="106" name="F" type="STRING"/>
+    <field number="107" name="G" type="STRING"/>
+    <field number="108" name="H" type="STRING"/>
+  </fields>
+</fix>`
+	d, err := Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got, want := slices.Sorted(maps.Keys(d.Messages["M"].required)), []int{101, 105}; !slices.Equal(got, want) {
+		t.Errorf("unconditionally required = %v, want %v", got, want)
+	}
+
+	tests := []struct {
+		name    string
+		tags    []int
+		missing int // 0 when valid
+	}{
+		{"optional components absent", []int{101, 105}, 0},
+		{"Opt present through C, B missing", []int{101, 105, 103}, 102},
+		{"Opt complete", []int{101, 105, 102, 103}, 0},
+		{"Inner present, Opt complete", []int{101, 105, 102, 104}, 0},
+		{"Inner present makes Opt present, B missing", []int{101, 105, 104}, 102},
+		{"Inner present through H, D missing", []int{101, 105, 102, 108}, 104},
+		{"required component field missing", []int{101}, 105},
+		{"OptWrap present through G, F missing", []int{101, 105, 107}, 106},
+		{"OptWrap complete", []int{101, 105, 107, 106}, 0},
+	}
+	for _, tt := range tests {
+		var body strings.Builder
+		body.WriteString("35=M\x01")
+		for _, tag := range tt.tags {
+			fmt.Fprintf(&body, "%d=x\x01", tag)
+		}
+		msg := parseMsg(t, buildFIXMsg(body.String()))
+		err := d.Validate(&msg)
+		if tt.missing == 0 {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tt.name, err)
+			}
+			continue
+		}
+		var ve *ValidationError
+		if !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != tt.missing {
+			t.Errorf("%s: got %v, want required tag %d missing", tt.name, err, tt.missing)
+		}
 	}
 }
