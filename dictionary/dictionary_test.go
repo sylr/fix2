@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -839,5 +840,51 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
 		if !errors.As(err, &ve) || !errors.Is(err, ErrRequiredTag) || ve.Tag != tt.missing {
 			t.Errorf("%s: got %v, want required tag %d missing", tt.name, err, tt.missing)
 		}
+	}
+}
+
+// endless yields 'a' forever.
+type endless struct{}
+
+func (endless) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'a'
+	}
+	return len(p), nil
+}
+
+func TestLoad_TooLarge(t *testing.T) {
+	// An XML comment that never ends: Load must stop after maxDictSize bytes.
+	r := io.MultiReader(strings.NewReader("<fix><!--"), endless{})
+	_, err := Load(r)
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("expected size error, got %v", err)
+	}
+}
+
+func TestLoad_ConditionTrackingCharged(t *testing.T) {
+	// 60 nested optional components around 20,000 fields: few items are
+	// visited, but each field is recorded in all 60 enclosing conditions.
+	const fields, levels = 20_000, 60
+	var defs, c0, comps strings.Builder
+	c0.WriteString(`<component name="C0"><field name="R" required="Y"/>`)
+	defs.WriteString(`<field number="999" name="R" type="STRING"/>`)
+	for i := range fields {
+		fmt.Fprintf(&defs, `<field number="%d" name="F%d" type="STRING"/>`, 1000+i, i)
+		fmt.Fprintf(&c0, `<field name="F%d" required="N"/>`, i)
+	}
+	c0.WriteString(`</component>`)
+	for i := 1; i <= levels; i++ {
+		fmt.Fprintf(&comps, `<component name="C%d"><component name="C%d" required="N"/></component>`, i, i-1)
+	}
+	xml := fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="N"/></message></messages>
+  <components>%s%s</components>
+  <fields>%s</fields>
+</fix>`, levels, c0.String(), comps.String(), defs.String())
+
+	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+		t.Fatalf("expected expansion error, got %v", err)
 	}
 }

@@ -164,10 +164,19 @@ func (d *Dict) FieldByName(name string) *FieldDef {
 // Load
 // ---------------------------------------------------------------------------
 
-// Load parses a QuickFIX XML dictionary from r.
+// maxDictSize bounds the XML Load reads, and so the memory decoding can use
+// before any resolver limit applies. The full FIX 5.0 SP2 dictionary is about
+// 1.5 MB.
+const maxDictSize = 64 << 20
+
+// Load parses a QuickFIX XML dictionary from r. It reads at most 64 MiB.
 func Load(r io.Reader) (*Dict, error) {
 	var xd xmlDict
-	if err := xml.NewDecoder(r).Decode(&xd); err != nil {
+	lr := &io.LimitedReader{R: r, N: maxDictSize + 1}
+	if err := xml.NewDecoder(lr).Decode(&xd); err != nil {
+		if lr.N <= 0 {
+			return nil, fmt.Errorf("dictionary: larger than %d bytes", maxDictSize)
+		}
 		return nil, fmt.Errorf("dictionary: %w", err)
 	}
 	return resolve(&xd)
@@ -336,23 +345,27 @@ type resolvedBody struct {
 }
 
 // markPresent records tag as part of the optional component at index ctx and
-// of every optional component enclosing it.
-func (b *resolvedBody) markPresent(ctx, tag int) {
+// of every optional component enclosing it. It returns the number of
+// components updated, which the resolver charges as work.
+func (b *resolvedBody) markPresent(ctx, tag int) int {
+	n := 0
 	for i := ctx; i >= 0; i = b.conds[i].parent {
 		b.conds[i].counts[tag]++
+		n++
 	}
+	return n
 }
 
 // addField records a field or group counter seen in the optional component at
 // index ctx (-1 outside any) and returns its ref. A required field is
 // required unconditionally only outside optional components; inside one it
 // becomes a requirement of that component.
-func (b *resolvedBody) addField(ctx, tag int, required bool) FieldRef {
-	b.markPresent(ctx, tag)
+func (b *resolvedBody) addField(ctx, tag int, required bool) (FieldRef, int) {
+	n := b.markPresent(ctx, tag)
 	if required && ctx >= 0 {
 		b.conds[ctx].required = append(b.conds[ctx].required, tag)
 	}
-	return FieldRef{Tag: tag, Required: required && ctx < 0}
+	return FieldRef{Tag: tag, Required: required && ctx < 0}, n
 }
 
 // conditions turns the optional components that have required fields into
@@ -407,7 +420,10 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			if !ok {
 				return fmt.Errorf("unknown field %q", it.Name)
 			}
-			ref := b.addField(ctx, fd.Tag, it.Required == "Y")
+			ref, work := b.addField(ctx, fd.Tag, it.Required == "Y")
+			if err := r.spend(work); err != nil {
+				return err
+			}
 			b.all = append(b.all, ref)
 			b.direct = append(b.direct, ref)
 			b.setFirst(fd.Tag)
@@ -460,12 +476,17 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			if inner.first == 0 {
 				return fmt.Errorf("group %s: no child fields", it.Name)
 			}
-			b.all = append(b.all, b.addField(ctx, fd.Tag, it.Required == "Y"))
+			counter, work := b.addField(ctx, fd.Tag, it.Required == "Y")
+			b.all = append(b.all, counter)
 			// Group children are never required at this level since group
-			// instance validation is out of scope.
+			// instance validation is out of scope. They do show that their
+			// optional component is present.
 			for _, ref := range inner.all {
-				b.markPresent(ctx, ref.Tag) // group contents show their component is present
+				work += b.markPresent(ctx, ref.Tag)
 				b.all = append(b.all, FieldRef{Tag: ref.Tag})
+			}
+			if err := r.spend(work); err != nil {
+				return err
 			}
 			b.groups = append(b.groups, GroupDef{
 				CounterTag: fd.Tag,
