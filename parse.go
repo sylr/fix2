@@ -101,8 +101,12 @@ func Parse(data []byte) (Message, error) {
 		if err != nil {
 			return msg, err
 		}
-		if next.tag != 0 && tag == next.tag {
-			if sohPos, err = next.end(data, cursor, eqPos+1, bodyEnd); err != nil {
+		kind := 0
+		if tag < len(dataTagFor) {
+			kind = int(dataTagFor[tag])
+		}
+		if next.tag != 0 || kind == isDataTag {
+			if sohPos, err = next.end(data, tag, cursor, eqPos+1, bodyEnd); err != nil {
 				return msg, err
 			}
 		} else {
@@ -113,8 +117,8 @@ func Parse(data []byte) (Message, error) {
 		}
 		value := data[eqPos+1 : sohPos]
 		next.tag = 0
-		if tag < len(dataTagFor) && dataTagFor[tag] != 0 {
-			if next, err = announceData(tag, value, cursor); err != nil {
+		if kind > 0 {
+			if next, err = announceData(tag, kind, value, cursor); err != nil {
 				return msg, err
 			}
 		}
@@ -122,6 +126,9 @@ func Parse(data []byte) (Message, error) {
 		cursor = sohPos + 1
 		csum += checksumRange(data, csumPos, cursor)
 		csumPos = cursor
+	}
+	if next.tag != 0 {
+		return msg, next.missing(cursor)
 	}
 
 	// Verify tag 35 (MsgType) is the third field (index 2).
@@ -254,8 +261,12 @@ func ParseFromReader(r io.Reader) (Message, error) {
 		if err != nil {
 			return msg, withOffset(err, len(header))
 		}
-		if next.tag != 0 && tag == next.tag {
-			if sohPos, err = next.end(rest, cursor, eqPos+1, bodyEnd); err != nil {
+		kind := 0
+		if tag < len(dataTagFor) {
+			kind = int(dataTagFor[tag])
+		}
+		if next.tag != 0 || kind == isDataTag {
+			if sohPos, err = next.end(rest, tag, cursor, eqPos+1, bodyEnd); err != nil {
 				return msg, withOffset(err, len(header))
 			}
 		} else {
@@ -266,14 +277,17 @@ func ParseFromReader(r io.Reader) (Message, error) {
 		}
 		value := rest[eqPos+1 : sohPos]
 		next.tag = 0
-		if tag < len(dataTagFor) && dataTagFor[tag] != 0 {
-			if next, err = announceData(tag, value, cursor); err != nil {
+		if kind > 0 {
+			if next, err = announceData(tag, kind, value, cursor); err != nil {
 				return msg, withOffset(err, len(header))
 			}
 		}
 		msg.append(Field{Tag: tag, Value: value})
 		csum += checksumRange(rest, cursor, sohPos+1)
 		cursor = sohPos + 1
+	}
+	if next.tag != 0 {
+		return msg, withOffset(next.missing(cursor), len(header))
 	}
 
 	// Verify tag 35 (MsgType) is the third field (index 2).
@@ -313,32 +327,45 @@ func ParseFromReader(r io.Reader) (Message, error) {
 }
 
 // dataField is the DATA field announced by the LENGTH field just parsed (see
-// dataFields). If it comes next, its value is read as exactly length bytes,
-// which may include SOH; otherwise fields end at the next SOH.
+// dataFields). FIX requires it to come next; its value is read as exactly
+// length bytes, which may include SOH. Other fields end at the next SOH.
 type dataField struct {
-	tag    int // expected DATA tag, 0 if none
-	length int // its size in bytes
+	lengthTag int // the announcing LENGTH tag
+	tag       int // expected DATA tag, 0 if none
+	length    int // its size in bytes
 }
 
-// end returns the index of the SOH ending the announced DATA value, which
-// starts at valStart and must fit, with its SOH, before bodyEnd. The length
-// comes from the peer, so it is compared by subtraction. cursor is the start
-// of the field, for the error offset.
-func (d dataField) end(data []byte, cursor, valStart, bodyEnd int) (int, error) {
+// end returns the index of the SOH ending the value of field tag, which
+// starts at valStart, when a DATA field is involved: tag must be the announced
+// DATA tag, and a DATA tag must have been announced. The value must fit, with
+// its SOH, before bodyEnd; the length comes from the peer, so it is compared
+// by subtraction. cursor is the start of the field, for the error offset.
+func (d dataField) end(data []byte, tag, cursor, valStart, bodyEnd int) (int, error) {
+	if d.tag == 0 {
+		return 0, &ParseError{Err: fmt.Errorf("%w: DATA tag %d without its LENGTH field right before it", ErrMalformedField, tag), Offset: cursor}
+	}
+	if tag != d.tag {
+		return 0, d.missing(cursor)
+	}
 	if d.length >= bodyEnd-valStart || data[valStart+d.length] != soh {
 		return 0, &ParseError{Err: fmt.Errorf("%w: DATA tag %d does not end after its declared %d bytes", ErrMalformedField, d.tag, d.length), Offset: cursor}
 	}
 	return valStart + d.length, nil
 }
 
-// announceData parses the value of LENGTH tag, which announces the DATA field
-// that must follow it.
-func announceData(tag int, value []byte, cursor int) (dataField, error) {
+// missing reports that the announced DATA field does not come next.
+func (d dataField) missing(cursor int) error {
+	return &ParseError{Err: fmt.Errorf("%w: LENGTH tag %d not followed by DATA tag %d", ErrMalformedField, d.lengthTag, d.tag), Offset: cursor}
+}
+
+// announceData parses the value of LENGTH tag, which announces DATA tag
+// dataTag that must follow it.
+func announceData(tag, dataTag int, value []byte, cursor int) (dataField, error) {
 	n, ok := parseUint(value)
 	if !ok {
 		return dataField{}, &ParseError{Err: fmt.Errorf("%w: invalid length %q in tag %d", ErrMalformedField, value, tag), Offset: cursor}
 	}
-	return dataField{tag: int(dataTagFor[tag]), length: n}, nil
+	return dataField{lengthTag: tag, tag: dataTag, length: n}, nil
 }
 
 // withOffset shifts the offset of a *ParseError by delta, e.g. from the body

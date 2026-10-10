@@ -35,11 +35,16 @@ var dataFields = []struct{ length, data int }{
 	{1620, 1621}, // RiskEncodedSecurityDescLen, RiskEncodedSecurityDesc
 }
 
-// dataTagFor maps a LENGTH tag to the DATA tag it announces, 0 if tag is not a
-// LENGTH tag. An array keeps the per-field lookup in the parser cheap.
-var dataTagFor = func() (t [1621]uint16) {
+// isDataTag marks DATA tags in dataTagFor.
+const isDataTag = -1
+
+// dataTagFor classifies tags for the parser with a single array lookup: a
+// LENGTH tag maps to the DATA tag it announces, a DATA tag to isDataTag, any
+// other tag to 0.
+var dataTagFor = func() (t [1622]int16) {
 	for _, p := range dataFields {
-		t[p.length] = uint16(p.data)
+		t[p.length] = int16(p.data)
+		t[p.data] = isDataTag
 	}
 	return t
 }()

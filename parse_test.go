@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -677,9 +678,34 @@ func TestParseDataFields(t *testing.T) {
 			want: map[int]string{96: "", 58: "t"},
 		},
 		{
-			name: "DATA not right after its LENGTH is SOH-terminated",
-			body: "35=A\x0195=6\x0158=t\x0196=AB\x01",
-			want: map[int]string{96: "AB", 58: "t"},
+			name: "SecureData",
+			body: "35=A\x0190=3\x0191=\x01=\x01\x0158=t\x01",
+			want: map[int]string{91: "\x01=\x01", 58: "t"},
+		},
+		{
+			name: "Signature in the trailer, inside BodyLength",
+			body: "35=A\x0158=t\x0193=2\x0189=\x01\x01\x01",
+			want: map[int]string{89: "\x01\x01"},
+		},
+		{
+			name: "DATA not right after its LENGTH",
+			body: "35=A\x0195=6\x0158=t\x0196=A\x0155=X\x01",
+			err:  ErrMalformedField,
+		},
+		{
+			name: "DATA without its LENGTH",
+			body: "35=A\x0196=AB\x01",
+			err:  ErrMalformedField,
+		},
+		{
+			name: "LENGTH at the end of the body",
+			body: "35=A\x0195=2\x01",
+			err:  ErrMalformedField,
+		},
+		{
+			name: "MaxInt length",
+			body: "35=A\x0195=9223372036854775807\x0196=A\x01",
+			err:  ErrMalformedField,
 		},
 		{
 			name: "declared length longer than the body",
@@ -728,5 +754,52 @@ func TestParseDataFields(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestParseDataFieldsRepeated checks repeated LENGTH/DATA pairs with different
+// lengths (as in a repeating group), checksum coverage of DATA bytes, and
+// error offsets from both parsers.
+func TestParseDataFieldsRepeated(t *testing.T) {
+	raw := buildMsg("FIX.4.4", "35=A\x0178=2\x0195=1\x0196=\x01\x0195=3\x0196=a\x01b\x01")
+	for name, parse := range map[string]func([]byte) (Message, error){
+		"Parse":           Parse,
+		"ParseFromReader": func(b []byte) (Message, error) { return ParseFromReader(bytes.NewReader(b)) },
+	} {
+		msg, err := parse(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var got []string
+		for _, f := range msg.Fields() {
+			if f.Tag == 96 {
+				got = append(got, string(f.Value))
+			}
+		}
+		if want := []string{"\x01", "a\x01b"}; !slices.Equal(got, want) {
+			t.Errorf("%s: RawData values = %q, want %q", name, got, want)
+		}
+
+		// Corrupting a byte inside a DATA value must break the checksum.
+		bad := bytes.Clone(raw)
+		i := bytes.Index(bad, []byte("a\x01b"))
+		bad[i] = 'c'
+		if _, err := parse(bad); !errors.Is(err, ErrChecksumMismatch) {
+			t.Errorf("%s: corrupted DATA: got %v, want ErrChecksumMismatch", name, err)
+		}
+	}
+
+	// The error offset is the start of the offending field in the message.
+	bad := buildMsg("FIX.4.4", "35=A\x0158=t\x0196=AB\x01")
+	want := bytes.Index(bad, []byte("96=AB"))
+	for name, parse := range map[string]func([]byte) (Message, error){
+		"Parse":           Parse,
+		"ParseFromReader": func(b []byte) (Message, error) { return ParseFromReader(bytes.NewReader(b)) },
+	} {
+		_, err := parse(bad)
+		var pe *ParseError
+		if !errors.As(err, &pe) || pe.Offset != want {
+			t.Errorf("%s: got %v (offset %v), want offset %d", name, err, pe, want)
+		}
 	}
 }
