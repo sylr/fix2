@@ -12,6 +12,8 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport/mem"
 )
 
@@ -330,6 +332,78 @@ func TestDynamicSessionRace(t *testing.T) {
 	})
 	// The session's store is the one Resolve gave, still open.
 	r, err := a.Session(dynAccID).Send(context.Background(), fix2.NewBuilder(session.FIX44, "8").SetString(11, "EXEC-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.Wait(wctx, session.Acknowledged); err != nil {
+		t.Fatalf("Wait(Acknowledged): %v", err)
+	}
+}
+
+// A session added with Acceptor.Add while Resolve creates it for a Logon
+// is the one the Logon gets, at once: Resolve's is dropped, its store
+// closed, and the Logon is not refused for the session being added
+// already.
+func TestDynamicSessionRaceAdd(t *testing.T) {
+	added, resolved := newRecorder(), newRecorder()
+	entered, release := make(chan struct{}), make(chan struct{})
+	resolvedStore := memstore.New()
+	a, l, log := dynamic(t, session.AcceptorOptions{
+		Resolve: func(ctx context.Context, req *session.LogonRequest) (*session.Config, error) {
+			close(entered)
+			// Or the acceptor stops, should the test fail first.
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			return &session.Config{ID: req.ID, Handler: resolved, Store: resolvedStore}, nil
+		},
+	})
+	irs, _ := initiate(t, l, 1)
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Resolve not called")
+	}
+	acc, err := a.Add(session.Config{ID: dynAccID, Handler: added})
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	added.wait(t, func() bool { return added.logons == 1 })
+	ir := irs[0]
+	ir.wait(t, func() bool { return ir.logons == 1 })
+
+	if s := a.Session(dynAccID); s != acc {
+		t.Errorf("session %v is not the one added", dynAccID)
+	}
+	if n := len(a.Sessions()); n != 1 {
+		t.Errorf("%d sessions, want 1", n)
+	}
+	resolved.mu.Lock()
+	if resolved.logons != 0 {
+		t.Errorf("Resolve's session logged on %d times", resolved.logons)
+	}
+	resolved.mu.Unlock()
+	if _, err := resolvedStore.Open(context.Background()); !errors.Is(err, store.ErrClosed) {
+		t.Errorf("Resolve's store reopened: %v, want %v", err, store.ErrClosed)
+	}
+	// The Logon was served by its first connection.
+	for done := false; !done; {
+		select {
+		case msg := <-log:
+			if strings.Contains(msg, "connection refused") {
+				t.Errorf("acceptor logged %q", msg)
+			}
+		default:
+			done = true
+		}
+	}
+	// The added session's store is open.
+	r, err := acc.Send(context.Background(), fix2.NewBuilder(session.FIX44, "8").SetString(11, "EXEC-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
