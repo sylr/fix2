@@ -130,11 +130,12 @@ func LoadFile(path string) (*dictionary.Dict, error) {
 
 func resolve(xd *xmlDict) (*dictionary.Dict, error) {
 	d := &dictionary.Dict{
-		Type:     xd.Type,
-		Major:    xd.Major,
-		Minor:    xd.Minor,
-		Fields:   make(map[int]*dictionary.FieldDef, len(xd.Fields.Fields)),
-		Messages: make(map[string]*dictionary.MessageDef, len(xd.Messages.Messages)),
+		Type:        xd.Type,
+		Major:       xd.Major,
+		Minor:       xd.Minor,
+		ServicePack: xd.ServicePack,
+		Fields:      make(map[int]*dictionary.FieldDef, len(xd.Fields.Fields)),
+		Messages:    make(map[string]*dictionary.MessageDef, len(xd.Messages.Messages)),
 	}
 
 	// 1. Build Fields map and the index by name references are resolved with.

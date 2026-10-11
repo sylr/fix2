@@ -790,7 +790,8 @@ var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 				Name:    "NewOrderSingle",
 			},
 		},
-		Minor: "0",
+		Minor:       "0",
+		ServicePack: "0",
 		Trailer: []dictionary.FieldRef{
 			{Tag: TagSignatureLength}, {Tag: TagSignature}, {Tag: TagCheckSum, Required: true},
 		},

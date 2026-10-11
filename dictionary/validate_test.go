@@ -817,17 +817,35 @@ func TestValidate_GroupWithLengthOnly(t *testing.T) {
 
 func TestValidate_ErrorMessages(t *testing.T) {
 	d := loadTestDict(t)
+	const header = "49=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01"
 	const order = "11=ORD1\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01"
-	for _, tc := range []struct{ body, want string }{
-		{"35=D\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01" + order, "fix2: required header tag 49 missing"},
-		{"35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01", "fix2: required tag 11 missing for message NewOrderSingle"},
-		{"35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01" + order + "999=x\x01", "fix2: tag 999 not allowed in message NewOrderSingle"},
-		{"35=Z\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01", `fix2: unknown MsgType "Z"`},
+	for _, tc := range []struct {
+		body, want string
+		tag        int
+		reason     dictionary.RejectReason
+	}{
+		{"35=D\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01" + order, "fix2: required header tag 49 missing", 49, dictionary.ReasonRequiredTagMissing},
+		{"35=D\x01" + header + "54=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01", "fix2: required tag 11 missing for message NewOrderSingle", 11, dictionary.ReasonRequiredTagMissing},
+		{"35=D\x01" + header + order + "999=x\x01", "fix2: tag 999 not defined by the dictionary, in message NewOrderSingle", 999, dictionary.ReasonUndefinedTag},
+		{"35=D\x01" + header + order + "112=x\x01", "fix2: tag 112 (TestReqID) not allowed in message NewOrderSingle", 112, dictionary.ReasonTagNotDefinedForMessageType},
+		{"35=D\x01" + header + "11=ORD1\x0154=9\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01", `fix2: invalid value "9" for tag 54 (Side)`, 54, dictionary.ReasonValueIsIncorrect},
+		{"35=Z\x01" + header, `fix2: unknown MsgType "Z"`, 35, dictionary.ReasonInvalidMsgType},
 	} {
 		msg := parseMsg(t, buildFIXMsg(tc.body))
-		if err := d.Validate(&msg); err == nil || err.Error() != tc.want {
-			t.Errorf("got %v, want %q", err, tc.want)
+		err := d.Validate(&msg)
+		var ve *dictionary.ValidationError
+		if !errors.As(err, &ve) || err.Error() != tc.want || ve.Tag != tc.tag || ve.Reason != tc.reason {
+			t.Errorf("got %v (%+v), want %q, tag %d, reason %d", err, ve, tc.want, tc.tag, tc.reason)
 		}
+	}
+}
+
+func TestRejectReason_String(t *testing.T) {
+	if got := dictionary.ReasonRequiredTagMissing.String(); got != "Required tag missing" {
+		t.Errorf("String = %q", got)
+	}
+	if got := dictionary.RejectReason(1234).String(); got != "Other" {
+		t.Errorf("unknown reason String = %q", got)
 	}
 }
 

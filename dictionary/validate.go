@@ -20,12 +20,14 @@ var (
 	ErrInvalidEnumValue = fmt.Errorf("%w: invalid enum value", ErrValidation)
 )
 
-// ValidationError wraps a sentinel error with the offending tag and a message.
-// Its Error text is the message prefixed with "fix2: ".
+// ValidationError wraps a sentinel error with the offending tag, the
+// SessionRejectReason a session Reject would carry for it, and a message. Its
+// Error text is the message prefixed with "fix2: ".
 type ValidationError struct {
-	Err error
-	Tag int
-	Msg string
+	Err    error
+	Tag    int // the offending tag: 35 for an unknown MsgType
+	Reason RejectReason
+	Msg    string
 }
 
 func (e *ValidationError) Error() string {
@@ -56,8 +58,10 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 	mdef, ok := d.Messages[string(msg.MsgType())]
 	if !ok {
 		return &ValidationError{
-			Err: ErrUnknownMsgType,
-			Msg: fmt.Sprintf("unknown MsgType %q", msg.MsgType()),
+			Err:    ErrUnknownMsgType,
+			Tag:    35,
+			Reason: ReasonInvalidMsgType,
+			Msg:    fmt.Sprintf("unknown MsgType %q", msg.MsgType()),
 		}
 	}
 
@@ -78,11 +82,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		e := d.lookup(mdef, f.Tag)
 		if e == nil {
 			if fieldErr == nil {
-				fieldErr = &ValidationError{
-					Err: ErrUnexpectedTag,
-					Tag: f.Tag,
-					Msg: fmt.Sprintf("tag %d not allowed in message %s", f.Tag, mdef.Name),
-				}
+				fieldErr = d.unexpected(mdef, f.Tag)
 			}
 			continue
 		}
@@ -126,7 +126,7 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 				default:
 					msg = fmt.Sprintf("required tag %d missing for message %s", t.tag, mdef.Name)
 				}
-				return &ValidationError{Err: ErrRequiredTag, Tag: t.tag, Msg: msg}
+				return &ValidationError{Err: ErrRequiredTag, Tag: t.tag, Reason: ReasonRequiredTagMissing, Msg: msg}
 			}
 		}
 	}
@@ -155,9 +155,10 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 				if !has(top, t.slot) {
 					where := [...]string{"header", "trailer", "message " + mdef.Name}[i]
 					return &ValidationError{
-						Err: ErrRequiredTag,
-						Tag: t.tag,
-						Msg: fmt.Sprintf("required tag %d missing for component %s in %s", t.tag, c.component, where),
+						Err:    ErrRequiredTag,
+						Tag:    t.tag,
+						Reason: ReasonRequiredTagMissing,
+						Msg:    fmt.Sprintf("required tag %d missing for component %s in %s", t.tag, c.component, where),
 					}
 				}
 			}
@@ -165,6 +166,26 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 	}
 
 	return fieldErr
+}
+
+// unexpected reports tag, which mdef does not allow: an undefined tag if the
+// dictionary does not define it at all, a tag not defined for the message
+// type otherwise.
+func (d *Dict) unexpected(mdef *MessageDef, tag int) *ValidationError {
+	if fd := d.Fields[tag]; fd != nil {
+		return &ValidationError{
+			Err:    ErrUnexpectedTag,
+			Tag:    tag,
+			Reason: ReasonTagNotDefinedForMessageType,
+			Msg:    fmt.Sprintf("tag %d (%s) not allowed in message %s", tag, fd.Name, mdef.Name),
+		}
+	}
+	return &ValidationError{
+		Err:    ErrUnexpectedTag,
+		Tag:    tag,
+		Reason: ReasonUndefinedTag,
+		Msg:    fmt.Sprintf("tag %d not defined by the dictionary, in message %s", tag, mdef.Name),
+	}
 }
 
 // lookup returns what the message, then the envelope, knows of tag, or nil
@@ -194,17 +215,19 @@ func (d *Dict) checkEnum(f fix2.Field) error {
 			return nil
 		}
 		return &ValidationError{
-			Err: ErrInvalidEnumValue,
-			Tag: f.Tag,
-			Msg: fmt.Sprintf("invalid value %q for tag %d (%s)", f.Value, f.Tag, ec.name),
+			Err:    ErrInvalidEnumValue,
+			Tag:    f.Tag,
+			Reason: ReasonValueIsIncorrect,
+			Msg:    fmt.Sprintf("invalid value %q for tag %d (%s)", f.Value, f.Tag, ec.name),
 		}
 	}
 	for item := range bytes.SplitSeq(f.Value, space) {
 		if !ec.valid(item) {
 			return &ValidationError{
-				Err: ErrInvalidEnumValue,
-				Tag: f.Tag,
-				Msg: fmt.Sprintf("invalid value %q in %q for tag %d (%s)", item, f.Value, f.Tag, ec.name),
+				Err:    ErrInvalidEnumValue,
+				Tag:    f.Tag,
+				Reason: ReasonValueIsIncorrect,
+				Msg:    fmt.Sprintf("invalid value %q in %q for tag %d (%s)", item, f.Value, f.Tag, ec.name),
 			}
 		}
 	}
@@ -234,7 +257,7 @@ func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 		s := &fix2.GroupSpec{Counter: gd.CounterTag, Delim: gd.DelimTag}
 		// LENGTH comes right before its DATA field, declared or not, so an
 		// entry whose first field is DATA starts with LENGTH.
-		if l := fix2.DataLengthTag(gd.DelimTag); l != 0 {
+		if l := d.profile.DataLengthTag(gd.DelimTag); l != 0 {
 			s.Delim = l
 		}
 		added := make(map[int]bool, len(gd.Fields))
@@ -245,11 +268,11 @@ func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 			}
 		}
 		for _, fr := range gd.Fields {
-			if l := fix2.DataLengthTag(fr.Tag); l != 0 {
+			if l := d.profile.DataLengthTag(fr.Tag); l != 0 {
 				add(l)
 			}
 			add(fr.Tag)
-			if dt := fix2.DataTag(fr.Tag); dt != 0 {
+			if dt := d.profile.DataTag(fr.Tag); dt != 0 {
 				add(dt)
 			}
 		}

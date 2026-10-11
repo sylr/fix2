@@ -171,7 +171,7 @@ func (d *Dict) compile() {
 	envCounters := specsByCounter(slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups)))
 	envEntries := map[int]tagEntry{}
 	for _, refs := range [][]FieldRef{d.Header, d.Trailer} {
-		addAllowed(envEntries, refs, env.of, nil, envCounters, nil)
+		addAllowed(d.profile, envEntries, refs, env.of, nil, envCounters, nil)
 	}
 	for _, tag := range []int{8, 9, 10} {
 		if _, ok := envEntries[tag]; !ok {
@@ -211,7 +211,7 @@ func (d *Dict) compile() {
 		m.slots = env.n + body.n
 
 		entries := map[int]tagEntry{}
-		addAllowed(entries, m.Fields, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
+		addAllowed(d.profile, entries, m.Fields, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
 		m.body = newTagTable(entries)
 	}
 }
@@ -251,7 +251,7 @@ func compileConds(conds []Condition, s *slots) []compiledCond {
 // one. A tag's slot comes from own, else from shared, else it has none; it
 // is a group counter if sharedCounters, the envelope's, or counters has its
 // spec, in that order.
-func addAllowed(entries map[int]tagEntry, refs []FieldRef, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
+func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
 	add := func(tag int) {
 		if _, ok := entries[tag]; ok {
 			return
@@ -276,7 +276,7 @@ func addAllowed(entries map[int]tagEntry, refs []FieldRef, own, shared map[int]i
 	}
 	// Partners after declared tags, so a declared tag keeps its own entry.
 	for _, ref := range refs {
-		for _, p := range []int{fix2.DataTag(ref.Tag), fix2.DataLengthTag(ref.Tag)} {
+		for _, p := range []int{profile.DataTag(ref.Tag), profile.DataLengthTag(ref.Tag)} {
 			if p != 0 {
 				add(p)
 			}

@@ -21,6 +21,7 @@ func Diff(a, b *dictionary.Dict) string {
 		{"Type", a.Type, b.Type},
 		{"Major", a.Major, b.Major},
 		{"Minor", a.Minor, b.Minor},
+		{"ServicePack", a.ServicePack, b.ServicePack},
 		{"Fields", a.Fields, b.Fields},
 		{"Header", a.Header, b.Header},
 		{"Trailer", a.Trailer, b.Trailer},

@@ -38,6 +38,9 @@ func writeDictionary(dict *dictionary.Dict, pkg, outDir string) error {
 		jen.Id("Fields"):   fieldsLiteral(dict, tag),
 		jen.Id("Messages"): messagesLiteral(dict, tag),
 	}
+	if dict.ServicePack != "" {
+		values[jen.Id("ServicePack")] = jen.Lit(dict.ServicePack)
+	}
 	for name, refs := range map[string][]dictionary.FieldRef{"Header": dict.Header, "Trailer": dict.Trailer} {
 		if len(refs) > 0 {
 			values[jen.Id(name)] = refsLiteral(refs, tag)

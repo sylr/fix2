@@ -5501,7 +5501,8 @@ var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 				Name:    "NewOrderSingle",
 			},
 		},
-		Minor: "0",
-		Type:  "FIX",
+		Minor:       "0",
+		ServicePack: "2",
+		Type:        "FIX",
 	})
 })

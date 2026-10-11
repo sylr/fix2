@@ -9,6 +9,8 @@ package dictionary
 import (
 	"maps"
 	"slices"
+
+	fix2 "github.com/sylr/fix2"
 )
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,9 @@ type Condition struct {
 // Validate accepts. A Dict is safe for concurrent use by Validate.
 type Dict struct {
 	Type, Major, Minor string
+	// ServicePack is the service pack of the version, "" or "0" for none
+	// (e.g. "2" for FIX 5.0 SP2).
+	ServicePack string
 
 	Fields   map[int]*FieldDef
 	Messages map[string]*MessageDef // keyed by MsgType (e.g. "D")
@@ -102,6 +107,7 @@ type Dict struct {
 	enumChecks   []enumCheck
 
 	fieldsByName map[string]*FieldDef
+	profile      *fix2.Profile // DATA fields, see Profile
 }
 
 // FieldByName returns the field definition with the given name, or nil if not found.
@@ -119,6 +125,11 @@ func New(d *Dict) *Dict {
 			d.fieldsByName[fd.Name] = fd
 		}
 	}
+	d.profile = d.dataProfile()
 	d.compile()
 	return d
 }
+
+// Profile returns the parsing profile of the dictionary's DATA fields:
+// messages validated with d must be parsed with it (see fix2.ParseInto).
+func (d *Dict) Profile() *fix2.Profile { return d.profile }
