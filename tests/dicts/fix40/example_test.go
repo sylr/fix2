@@ -7,7 +7,7 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
-	"github.com/sylr/fix2/tests/fix40"
+	"github.com/sylr/fix2/tests/dicts/fix40"
 )
 
 // This example validates FIX 4.0 NewOrderSingle messages with the dictionary

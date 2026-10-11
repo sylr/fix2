@@ -8,8 +8,8 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
-	"github.com/sylr/fix2/tests/fix50sp2"
-	"github.com/sylr/fix2/tests/fixt11"
+	"github.com/sylr/fix2/tests/dicts/fix50sp2"
+	"github.com/sylr/fix2/tests/dicts/fixt11"
 )
 
 // buildFIXT builds a FIXT.1.1 message from body fields.
