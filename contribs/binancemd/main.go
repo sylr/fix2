@@ -3,19 +3,19 @@
 //
 // Usage:
 //
-//	binancemd [flags] <command> [flags] [SYMBOL...]
+//	binancemd <command> [flags] [SYMBOL...]
 //
 // Commands:
 //
-//	trades SYMBOL...       trades, as they happen
-//	ticker SYMBOL...       best bid and offer, as they change
-//	depth SYMBOL...        order book snapshot, then its changes every 100ms
-//	book SYMBOL...         order book kept up to date, its best levels shown
+//	trades SYMBOL...        trades, as they happen
+//	ticker SYMBOL...        best bid and offer, as they change
+//	depth SYMBOL...         order book snapshot, then its changes every 100ms
+//	book SYMBOL...          order book kept up to date, its best levels shown
 //	instruments [SYMBOL...] instruments' trading rules, all if none is given
-//	limits                 message and subscription limits of the connection
+//	limits                  message and subscription limits of the connection
 //
-// The FIX API authenticates with an Ed25519 API key: -api-key (or
-// BINANCE_API_KEY) is the key, -key (or BINANCE_PRIVATE_KEY) the PEM file
+// The FIX API authenticates with an Ed25519 API key: --api-key (or
+// BINANCE_API_KEY) is the key, --key (or BINANCE_PRIVATE_KEY) the PEM file
 // of its private key. Market data needs the FIX_API or FIX_API_READ_ONLY
 // permission.
 package main
@@ -23,7 +23,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -32,7 +31,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 )
+
+// Version is the version of binancemd, set when built by the Makefile.
+var Version = "dev"
 
 const (
 	prodEndpoint    = "fix-md.binance.com:9000"
@@ -56,100 +61,119 @@ type options struct {
 	show   int // book: levels shown
 }
 
-func (o *options) global(fs *flag.FlagSet) {
-	fs.StringVar(&o.apiKey, "api-key", o.apiKey, "API key (default $BINANCE_API_KEY)")
-	fs.StringVar(&o.keyFile, "key", o.keyFile, "PEM file of the API key's Ed25519 private key (default $BINANCE_PRIVATE_KEY)")
-	fs.StringVar(&o.sender, "sender", o.sender, "SenderCompID, 1 to 8 letters, digits, - or _ (default random)")
-	fs.StringVar(&o.endpoint, "endpoint", o.endpoint, "FIX market data endpoint, host:port (default "+prodEndpoint+")")
-	fs.BoolVar(&o.testnet, "testnet", o.testnet, "use the Spot testnet, "+testnetEndpoint)
-	fs.DurationVar(&o.heartbeat, "heartbeat", o.heartbeat, "heartbeat interval, 5s to 60s")
-	fs.BoolVar(&o.json, "json", o.json, "write JSON lines")
-	fs.BoolVar(&o.validate, "validate", o.validate, "validate received messages against Binance's dictionary: invalid ones are rejected, not shown")
-	fs.BoolVar(&o.verbose, "v", o.verbose, "log the session's events in detail")
-	fs.BoolVar(&o.trace, "trace", o.trace, "log every FIX message, credentials redacted")
-}
-
-const usage = `Usage: binancemd [flags] <command> [flags] [SYMBOL...]
-
-Streams Binance Spot market data over the FIX API.
-
-Commands:
-  trades SYMBOL...         trades, as they happen
-  ticker SYMBOL...         best bid and offer, as they change
-  depth [-levels N] SYMBOL...
-                           order book snapshot of N levels, then its changes every 100ms
-  book [-levels N] [-show K] SYMBOL...
-                           order book kept up to date from a snapshot of N levels,
-                           its K best levels shown on every change
-  instruments [SYMBOL...]  instruments' trading rules, all if none is given
-  limits                   message and subscription limits of the connection
-
-Flags (before or after the command):
-`
-
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-// run runs the command line args and returns the exit code.
+// runError is an error of a command that ran, as opposed to a usage error.
+type runError struct{ err error }
+
+func (e runError) Error() string { return e.err.Error() }
+func (e runError) Unwrap() error { return e.err }
+
+// run runs the command line args and returns the exit code: 2 for a usage
+// error, 1 for a command that failed.
 func run(args []string, stdout, stderr io.Writer) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	root := newCommand(stdout, stderr)
+	root.SetArgs(args)
+	err := root.ExecuteContext(ctx)
+	if err == nil {
+		return 0
+	}
+	fmt.Fprintf(stderr, "binancemd: %v\n", err)
+	if errors.As(err, new(runError)) {
+		return 1
+	}
+	fmt.Fprintf(stderr, "Run 'binancemd --help' for usage.\n")
+	return 2
+}
+
+// newCommand returns the binancemd command, writing data to stdout and logs
+// to stderr.
+func newCommand(stdout, stderr io.Writer) *cobra.Command {
 	o := &options{heartbeat: 30 * time.Second, levels: 100, show: 10}
-	root := flag.NewFlagSet("binancemd", flag.ContinueOnError)
-	root.SetOutput(stderr)
-	o.global(root)
-	root.Usage = func() {
-		fmt.Fprint(stderr, usage)
-		root.PrintDefaults()
+	root := &cobra.Command{
+		Use:   "binancemd",
+		Short: "Stream Binance Spot market data over the FIX API",
+		Long: `Stream Binance Spot market data over the Binance FIX API.
+
+The FIX API authenticates with an Ed25519 API key: --api-key (or
+BINANCE_API_KEY) is the key, --key (or BINANCE_PRIVATE_KEY) the PEM file of
+its private key. Market data needs the FIX_API or FIX_API_READ_ONLY
+permission.`,
+		Version:       Version,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
-	if err := root.Parse(args); err != nil {
-		return 2
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	pf := root.PersistentFlags()
+	pf.StringVar(&o.apiKey, "api-key", "", "API key (default $BINANCE_API_KEY)")
+	pf.StringVar(&o.keyFile, "key", "", "PEM file of the API key's Ed25519 private key (default $BINANCE_PRIVATE_KEY)")
+	pf.StringVar(&o.sender, "sender", "", "SenderCompID, 1 to 8 letters, digits, - or _ (default random)")
+	pf.StringVar(&o.endpoint, "endpoint", "", "FIX market data endpoint, host:port (default "+prodEndpoint+")")
+	pf.BoolVar(&o.testnet, "testnet", false, "use the Spot testnet, "+testnetEndpoint)
+	pf.DurationVar(&o.heartbeat, "heartbeat", o.heartbeat, "heartbeat interval, 5s to 60s")
+	pf.BoolVar(&o.json, "json", false, "write JSON lines")
+	pf.BoolVar(&o.validate, "validate", false, "validate received messages against Binance's dictionary: invalid ones are rejected, not shown")
+	pf.BoolVarP(&o.verbose, "verbose", "v", false, "log the session's events in detail")
+	pf.BoolVar(&o.trace, "trace", false, "log every FIX message, credentials redacted")
+
+	add := func(use, short string, k kind, args cobra.PositionalArgs) *cobra.Command {
+		c := &cobra.Command{
+			Use:   use,
+			Short: short,
+			Args:  args,
+			RunE: func(c *cobra.Command, args []string) error {
+				return execute(c.Context(), o, command{k}, args, stdout, stderr)
+			},
+		}
+		root.AddCommand(c)
+		return c
 	}
-	if root.NArg() == 0 {
-		root.Usage()
-		return 2
-	}
-	name := root.Arg(0)
-	cmd, ok := commands[name]
-	if !ok {
-		fmt.Fprintf(stderr, "binancemd: unknown command %q\n\n", name)
-		root.Usage()
-		return 2
-	}
-	fs := flag.NewFlagSet("binancemd "+name, flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	o.global(fs)
-	if cmd.kind == kindDepth || cmd.kind == kindBook {
-		fs.IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
-	}
-	if cmd.kind == kindBook {
-		fs.IntVar(&o.show, "show", o.show, "levels of each side shown")
-	}
-	fs.Usage = root.Usage
-	if err := fs.Parse(root.Args()[1:]); err != nil {
-		return 2
-	}
-	symbols := make([]string, fs.NArg())
-	for i, s := range fs.Args() {
+	symbols := cobra.MinimumNArgs(1)
+	add("trades SYMBOL...", "Trades, as they happen", kindTrades, symbols)
+	add("ticker SYMBOL...", "Best bid and offer, as they change", kindTicker, symbols)
+	depth := add("depth SYMBOL...", "Order book snapshot, then its changes every 100ms", kindDepth, symbols)
+	depth.Flags().IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
+	book := add("book SYMBOL...", "Order book kept up to date, its best levels shown on every change", kindBook, symbols)
+	book.Flags().IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
+	book.Flags().IntVar(&o.show, "show", o.show, "levels of each side shown")
+	add("instruments [SYMBOL...]", "Instruments' trading rules, all if no symbol is given", kindInstruments, cobra.ArbitraryArgs)
+	add("limits", "Message and subscription limits of the connection", kindLimits, cobra.NoArgs)
+	return root
+}
+
+// execute runs command cmd for symbols.
+func execute(ctx context.Context, o *options, cmd command, args []string, stdout, stderr io.Writer) error {
+	symbols := make([]string, len(args))
+	for i, s := range args {
 		symbols[i] = strings.ToUpper(s)
 	}
 	if err := o.check(cmd, symbols); err != nil {
-		fmt.Fprintf(stderr, "binancemd: %v\n", err)
-		return 2
+		return err
 	}
+	log := newLogger(stderr, o.verbose || o.trace)
+	if err := stream(ctx, o, cmd, symbols, newOutput(stdout, o.json, isTerminal(stdout)), log); err != nil {
+		return runError{err}
+	}
+	return nil
+}
 
-	level := slog.LevelInfo
-	if o.verbose || o.trace {
-		level = slog.LevelDebug
+// newLogger returns a logger writing to w with zerolog's console writer, in
+// colour on a terminal.
+func newLogger(w io.Writer, debug bool) *slog.Logger {
+	level := zerolog.InfoLevel
+	if debug {
+		level = zerolog.DebugLevel
 	}
-	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	err := stream(ctx, o, cmd, symbols, newOutput(stdout, o.json, isTerminal(stdout)), logger)
-	if err != nil {
-		fmt.Fprintf(stderr, "binancemd: %v\n", err)
-		return 1
-	}
-	return 0
+	// Times keep their milliseconds, durations read as Go writes them.
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.DurationFieldFormat = zerolog.DurationFormatString
+	cw := zerolog.ConsoleWriter{Out: w, TimeFormat: "15:04:05.000", NoColor: !isTerminal(w)}
+	return slog.New(zerolog.NewSlogHandler(zerolog.New(cw).Level(level)))
 }
 
 // check completes o from the environment and checks it for cmd.
@@ -168,28 +192,22 @@ func (o *options) check(cmd command, symbols []string) error {
 	}
 	var errs []error
 	if o.apiKey == "" {
-		errs = append(errs, errors.New("no API key: set -api-key or BINANCE_API_KEY"))
+		errs = append(errs, errors.New("no API key: set --api-key or BINANCE_API_KEY"))
 	}
 	if o.keyFile == "" {
-		errs = append(errs, errors.New("no private key: set -key or BINANCE_PRIVATE_KEY to the PEM file of the API key's Ed25519 private key"))
+		errs = append(errs, errors.New("no private key: set --key or BINANCE_PRIVATE_KEY to the PEM file of the API key's Ed25519 private key"))
 	}
 	if o.sender != "" && !validID(o.sender, 8) {
-		errs = append(errs, fmt.Errorf("-sender %q: 1 to 8 letters, digits, - or _", o.sender))
+		errs = append(errs, fmt.Errorf("--sender %q: 1 to 8 letters, digits, - or _", o.sender))
 	}
 	if o.heartbeat < 5*time.Second || o.heartbeat > 60*time.Second || o.heartbeat%time.Second != 0 {
-		errs = append(errs, fmt.Errorf("-heartbeat %v: whole seconds from 5s to 60s", o.heartbeat))
+		errs = append(errs, fmt.Errorf("--heartbeat %v: whole seconds from 5s to 60s", o.heartbeat))
 	}
 	if o.levels < 2 || o.levels > 5000 {
-		errs = append(errs, fmt.Errorf("-levels %d: 2 to 5000", o.levels))
+		errs = append(errs, fmt.Errorf("--levels %d: 2 to 5000", o.levels))
 	}
 	if o.show < 1 {
-		errs = append(errs, fmt.Errorf("-show %d: at least 1", o.show))
-	}
-	switch {
-	case cmd.stream() && len(symbols) == 0:
-		errs = append(errs, errors.New("no symbol given"))
-	case cmd.kind == kindLimits && len(symbols) > 0:
-		errs = append(errs, errors.New("limits takes no symbol"))
+		errs = append(errs, fmt.Errorf("--show %d: at least 1", o.show))
 	}
 	for _, s := range symbols {
 		// Symbols end up in request IDs, of at most 36 characters.
@@ -207,7 +225,9 @@ func validID(id string, n int) bool {
 		return false
 	}
 	for _, c := range id {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-', c == '_':
+		default:
 			return false
 		}
 	}

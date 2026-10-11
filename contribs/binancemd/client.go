@@ -125,9 +125,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		return err
 	}
 	log.LogAttrs(ctx, slog.LevelInfo, "connecting", slog.String("endpoint", o.endpoint), slog.String("sender_comp_id", sender))
-	ini.Run(ctx)
+	runErr := ini.Run(ctx)
 	// What was received is written, even when the command fails.
 	endErr := out.end()
+	if runErr != nil {
+		return errors.Join(runErr, endErr)
+	}
 	if err := context.Cause(ctx); !errors.Is(err, errDone) && !errors.Is(err, context.Canceled) {
 		return errors.Join(err, endErr)
 	}
@@ -158,15 +161,9 @@ func loadKey(path string) (ed25519.PrivateKey, error) {
 	return ek, nil
 }
 
-// randomID returns n random letters and digits.
+// randomID returns n random letters and digits, n at most 26.
 func randomID(n int) string {
-	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, n)
-	rand.Read(b)
-	for i := range b {
-		b[i] = chars[int(b[i])%len(chars)]
-	}
-	return string(b)
+	return rand.Text()[:n]
 }
 
 // signature returns the RawData (96) of a Logon with header h: the base64
@@ -356,7 +353,7 @@ func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix2.Mess
 		text, _ := r.Text()
 		code, _ := r.ErrorCodeBytes()
 		if !c.connected && refMsgType == "A" {
-			c.refusedLocked(ctx, fmt.Errorf("Binance rejected the logon: %s (error code %s)", text, code))
+			c.refusedLocked(ctx, fmt.Errorf("logon rejected by Binance: %s (error code %s)", text, code))
 			return
 		}
 		id := c.sent[uint64(ref)]
@@ -365,7 +362,7 @@ func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix2.Mess
 		c.log.LogAttrs(ctx, slog.LevelError, "Binance rejected a request", slog.Int("ref_seq_num", ref), slog.String("request", id),
 			slog.String("ref_msg_type", refMsgType), slog.String("ref_tag_id", string(refTag)), slog.String("reason", string(reason)),
 			slog.String("error_code", string(code)), slog.String("text", text))
-		err := fmt.Errorf("Binance rejected %s: %s (error code %s)", id, text, code)
+		err := fmt.Errorf("%s rejected by Binance: %s (error code %s)", id, text, code)
 		if _, ok := c.queries[id]; ok {
 			c.finish(err)
 		}
@@ -378,7 +375,7 @@ func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix2.Mess
 	case "5":
 		text, _ := spotmd.WrapLogout(m).Text()
 		if !c.connected {
-			c.refusedLocked(ctx, fmt.Errorf("Binance refused the logon: %s", text))
+			c.refusedLocked(ctx, fmt.Errorf("logon refused by Binance: %s", text))
 			return
 		}
 		if c.ctx.Err() != nil || c.maintenance {
@@ -632,7 +629,7 @@ func (d *dispatcher) OnMarketDataRequestReject(y *spotmd.MarketDataRequestReject
 	c.log.LogAttrs(d.ctx, slog.LevelError, "Binance refused a subscription", slog.String("symbol", symbol), slog.String("md_req_id", id),
 		slog.String("reason", reason), slog.String("error_code", string(code)), slog.String("text", text))
 	if sb != nil && len(c.subs) == 0 {
-		c.finish(fmt.Errorf("no subscription left: Binance refused %s: %s (error code %s)", symbol, text, code))
+		c.finish(fmt.Errorf("no subscription left: %s refused by Binance: %s (error code %s)", symbol, text, code))
 	}
 	return nil
 }
@@ -725,7 +722,11 @@ func (d *dispatcher) OnNews(n *spotmd.News) error {
 	c.maintenance = true
 	c.log.LogAttrs(d.ctx, slog.LevelWarn, "server going into maintenance, reconnecting")
 	// Logout waits for the connection to end: not from a callback.
-	go d.s.Logout(context.Background(), "reconnecting for maintenance")
+	go func() {
+		if err := d.s.Logout(context.Background(), "reconnecting for maintenance"); err != nil {
+			c.log.LogAttrs(context.Background(), slog.LevelWarn, "logging out for maintenance", slog.Any("error", err))
+		}
+	}()
 	return nil
 }
 

@@ -58,7 +58,9 @@ func TestSignature(t *testing.T) {
 
 func TestLoadKey_NotEd25519(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "key.pem")
-	os.WriteFile(path, []byte("-----BEGIN EC PRIVATE KEY-----\nAAAA\n-----END EC PRIVATE KEY-----\n"), 0o600)
+	if err := os.WriteFile(path, []byte("-----BEGIN EC PRIVATE KEY-----\nAAAA\n-----END EC PRIVATE KEY-----\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := loadKey(path); err == nil || !strings.Contains(err.Error(), "PKCS #8") {
 		t.Errorf("loadKey = %v", err)
 	}
@@ -67,14 +69,14 @@ func TestLoadKey_NotEd25519(t *testing.T) {
 func TestRun_Usage(t *testing.T) {
 	var stderr bytes.Buffer
 	for _, args := range [][]string{
-		nil,
 		{"nope"},
 		{"trades"}, // no symbol
-		{"-heartbeat", "2s", "trades", "BTCUSDT"},         // too short
-		{"limits", "BTCUSDT"},                             // no symbol taken
-		{"book", "-levels", "1", "BTCUSDT"},               // too few levels
-		{"-sender", "TOO-LONG-ID", "ticker", "BTCUSDT"},   // CompID too long
-		{"trades", "-api-key", "k", "BTC/USDT", "ETHBTC"}, // invalid symbol
+		{"--heartbeat", "2s", "trades", "BTCUSDT"},         // too short
+		{"limits", "BTCUSDT"},                              // no symbol taken
+		{"book", "--levels", "1", "BTCUSDT"},               // too few levels
+		{"ticker", "--show", "3", "BTCUSDT"},               // a book flag
+		{"--sender", "TOO-LONG-ID", "ticker", "BTCUSDT"},   // CompID too long
+		{"trades", "--api-key", "k", "BTC/USDT", "ETHBTC"}, // invalid symbol
 	} {
 		stderr.Reset()
 		t.Setenv("BINANCE_API_KEY", "")
@@ -82,6 +84,45 @@ func TestRun_Usage(t *testing.T) {
 		if code := run(args, io.Discard, &stderr); code != 2 {
 			t.Errorf("run(%q) = %d, want 2; stderr: %s", args, code, stderr.String())
 		}
+	}
+}
+
+func TestRun_Help(t *testing.T) {
+	var stdout bytes.Buffer
+	if code := run([]string{"--help"}, &stdout, io.Discard); code != 0 {
+		t.Fatalf("--help: exit %d", code)
+	}
+	for _, want := range []string{"trades", "ticker", "depth", "book", "instruments", "limits", "--api-key", "--testnet"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("--help lacks %q:\n%s", want, stdout.String())
+		}
+	}
+	stdout.Reset()
+	if code := run([]string{"--version"}, &stdout, io.Discard); code != 0 || !strings.Contains(stdout.String(), Version) {
+		t.Errorf("--version: exit %d, %q", code, stdout.String())
+	}
+}
+
+// A failing command exits 1, with its error.
+func TestRun_Failure(t *testing.T) {
+	var stderr bytes.Buffer
+	missing := filepath.Join(t.TempDir(), "missing.pem")
+	if code := run([]string{"trades", "--api-key", "k", "--key", missing, "BTCUSDT"}, io.Discard, &stderr); code != 1 {
+		t.Errorf("exit %d, want 1; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "missing.pem") {
+		t.Errorf("stderr: %s", stderr.String())
+	}
+}
+
+func TestLogger(t *testing.T) {
+	var buf bytes.Buffer
+	newLogger(&buf, false).Info("logged on", "session", "FIX.4.4:A->SPOT", "in", 1500*time.Millisecond)
+	newLogger(&buf, false).Debug("hidden")
+	got := buf.String()
+	if !strings.Contains(got, "INF") || !strings.Contains(got, "logged on") || !strings.Contains(got, "session=FIX.4.4:A->SPOT") ||
+		!strings.Contains(got, "in=1.5s") || strings.Contains(got, "hidden") {
+		t.Errorf("console log %q", got)
 	}
 }
 
