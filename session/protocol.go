@@ -172,7 +172,7 @@ func (s *Session) authenticate(c *conn, m *fix2.Message) error {
 
 // callbackCtx returns the context passed to handler callbacks.
 func (s *Session) callbackCtx() context.Context {
-	return context.WithValue(context.Background(), callbackKey{}, s)
+	return s.cbCtx
 }
 
 func (s *Session) generation() uint64 {

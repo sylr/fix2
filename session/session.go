@@ -85,6 +85,8 @@ type Session struct {
 
 	// bodyPool holds the buffers Send encodes bodies into.
 	bodyPool sync.Pool
+	// cbCtx is the context handler callbacks get.
+	cbCtx context.Context
 
 	mu        sync.Mutex
 	st        store.State // generation, NextSender, and NextTarget: the next expected
@@ -154,6 +156,7 @@ func New(cfg Config) (*Session, error) {
 		heartBt: cfg.HeartBtInt,
 	}
 	s.log = cfg.Logger.With(slog.String("session", cfg.ID.String()))
+	s.cbCtx = context.WithValue(context.Background(), callbackKey{}, s)
 	if s.store == nil {
 		s.store = memstore.New()
 	}

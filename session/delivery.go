@@ -85,8 +85,17 @@ func (d *delivery) pending() int {
 
 // copyFrame returns a pooled copy of frame.
 func (d *delivery) copyFrame(frame []byte) []byte {
-	b, _ := d.pool.Get().([]byte)
+	var b []byte
+	if p, _ := d.pool.Get().(*[]byte); p != nil {
+		b = *p
+	}
 	return append(b[:0], frame...)
+}
+
+// releaseFrame returns frame, from copyFrame, to the pool.
+func (d *delivery) releaseFrame(frame []byte) {
+	frame = frame[:0]
+	d.pool.Put(&frame)
 }
 
 // roomSignal returns a channel closed once the queue has room.
@@ -232,7 +241,7 @@ func (d *delivery) process(it item) {
 		return
 	case itemApp:
 		d.deliver(ctx, it)
-		d.pool.Put(it.frame[:0]) //nolint:staticcheck // a slice header is small
+		d.releaseFrame(it.frame)
 	}
 	s.mu.Lock()
 	if it.gen == s.st.Generation && it.seq > s.committed {
