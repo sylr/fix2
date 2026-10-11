@@ -226,3 +226,9 @@ func isAdmin(msgType []byte) bool {
 	}
 	return false
 }
+
+// isReject reports whether msgType is a Reject (3) or a BusinessMessageReject
+// (j).
+func isReject(msgType []byte) bool {
+	return len(msgType) == 1 && (msgType[0] == '3' || msgType[0] == 'j')
+}

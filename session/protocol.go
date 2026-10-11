@@ -689,9 +689,16 @@ func (s *Session) validateLocked(m *fix2.Message, in *Inbound) *dictionary.Valid
 	return nil
 }
 
-// rejectValidationLocked rejects m for verr.
+// rejectValidationLocked rejects m for verr. A Reject or BusinessMessageReject
+// of a type the dictionaries do not support is not: a counterparty whose
+// dictionaries do not support ours either would reject it in turn, and the
+// two would loop.
 func (s *Session) rejectValidationLocked(m *fix2.Message, verr *dictionary.ValidationError) {
 	if verr.Reason == -1 {
+		if isReject(m.MsgType()) {
+			s.logUnanswered(m, "Unsupported Message Type")
+			return
+		}
 		s.businessRejectLocked(m, BusinessRejectUnsupportedMessageType, "", "Unsupported Message Type")
 		return
 	}
@@ -703,25 +710,17 @@ func (s *Session) rejectValidationLocked(m *fix2.Message, verr *dictionary.Valid
 	s.rejectLocked(m, verr.Reason, tag, rejectText(verr.Reason, detail))
 }
 
-// isRejectLocked reports whether m is a Reject (35=3) or a
-// BusinessMessageReject (35=j), logging why it would have been rejected: a
-// reject is never rejected, or the counterparty, rejecting our reject in
-// turn, would loop with us.
-func (s *Session) isRejectLocked(m *fix2.Message, text string) bool {
-	switch string(m.MsgType()) {
-	case "3", "j":
-		s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a reject",
-			slog.String("msg_type", string(m.MsgType())), slog.String("seq", string(m.Get(tagMsgSeqNum))),
-			slog.String("text", text))
-		return true
-	}
-	return false
+// logUnanswered logs why m, a Reject or BusinessMessageReject, would have been
+// rejected, had answering it not risked a loop with the counterparty.
+func (s *Session) logUnanswered(m *fix2.Message, text string) {
+	s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a reject",
+		slog.String("msg_type", string(m.MsgType())), slog.String("seq", string(m.Get(tagMsgSeqNum))),
+		slog.String("text", text))
 }
 
-// rejectLocked sends a Reject (35=3) of m about tag, noTag for none, unless m
-// is a reject itself.
+// rejectLocked sends a Reject (35=3) of m about tag, noTag for none.
 func (s *Session) rejectLocked(m *fix2.Message, reason dictionary.RejectReason, tag int, text string) {
-	if s.c == nil || s.isRejectLocked(m, text) {
+	if s.c == nil {
 		return
 	}
 	s.stats.RejectsSent.Add(1)
@@ -757,9 +756,9 @@ func (s *Session) rejectLocked(m *fix2.Message, reason dictionary.RejectReason, 
 }
 
 // businessRejectLocked sends a BusinessMessageReject (35=j) of m, or a
-// Reject before FIX 4.2, unless m is a reject itself.
+// Reject before FIX 4.2.
 func (s *Session) businessRejectLocked(m *fix2.Message, reason int, refID, text string) {
-	if s.c == nil || s.isRejectLocked(m, text) {
+	if s.c == nil {
 		return
 	}
 	if !s.prof.businessRej {

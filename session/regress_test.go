@@ -244,40 +244,65 @@ func (r refusingRejects) FromApp(ctx context.Context, s *session.Session, m *fix
 	return r.recorder.FromApp(ctx, s, m, in)
 }
 
-// A Reject or BusinessMessageReject, invalid or refused by the handler, is
-// not rejected in turn: the counterparty would reject our reject, and the
-// two would loop. A TestRequest sent after it is answered with nothing
-// before its Heartbeat.
-func TestRejectsAreNotRejected(t *testing.T) {
+// An invalid Reject or BusinessMessageReject is rejected, as FIX requires;
+// a valid one the handler refuses is not: a counterparty refusing ours alike
+// would reject it in turn, and the two would loop. Nothing else is sent
+// before the Heartbeat answering a TestRequest sent after it.
+func TestRejectingRejects(t *testing.T) {
+	withDictionary := func(c *session.Config) { c.Dictionaries.Session = fix44.Dictionary() }
 	for _, tc := range []struct {
 		name   string
 		change func(*session.Config)
 		send   []string // MsgType, then fields
+		reject []string // fields of the Reject it gets, none if nil
 	}{
-		{"invalid Reject", func(c *session.Config) {
-			c.Dictionaries.Session = fix44.Dictionary()
-		}, []string{"3", "58", "no RefSeqNum"}},
-		{"invalid BusinessMessageReject", func(c *session.Config) {
-			c.Dictionaries.Session = fix44.Dictionary()
-		}, []string{"j", "45", "1", "58", "no RefMsgType nor BusinessRejectReason"}},
-		{"BusinessMessageReject refused by the handler", func(c *session.Config) {
+		{"invalid Reject", withDictionary,
+			[]string{"3", "58", "no RefSeqNum"},
+			[]string{"45", "2", "371", "45", "372", "3", "373", "1"}},
+		{"invalid BusinessMessageReject", withDictionary,
+			[]string{"j", "45", "1", "58", "no RefMsgType nor BusinessRejectReason"},
+			[]string{"45", "2", "371", "372", "372", "j", "373", "1"}},
+		{"valid BusinessMessageReject refused by the handler", func(c *session.Config) {
 			c.Handler = refusingRejects{c.Handler.(*recorder)}
-		}, []string{"j", "45", "1", "372", "D", "380", "3"}},
+		}, []string{"j", "45", "1", "372", "D", "380", "3"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, rec, p := loggedOn(t, tc.change)
 			p.send(tc.send[0], 0, tc.send[1:]...)
+			if tc.reject != nil {
+				p.expect("3", tc.reject...)
+			}
 			// An order delivered after it: the handler is done with it.
 			p.send("D", 0, "11", "O1", "55", "X", "54", "1",
 				"60", string(fix2.AppendUTCTimestamp(nil, time.Now(), fix2.Milliseconds)), "38", "1", "40", "1")
 			rec.wait(t, func() bool { return len(rec.apps) == 1 })
 			p.send("1", 0, "112", "SYNC")
 			p.expect("0", "112", "SYNC")
-			if n := s.Stats().RejectsSent.Load(); n != 0 {
-				t.Errorf("%d rejects sent", n)
+			want := uint64(0)
+			if tc.reject != nil {
+				want = 1
+			}
+			if n := s.Stats().RejectsSent.Load(); n != want {
+				t.Errorf("%d rejects sent, want %d", n, want)
 			}
 		})
 	}
+}
+
+// A Reject whose SendingTime is inaccurate is rejected, then the session
+// logs out, as for any message.
+func TestRejectWithInaccurateSendingTime(t *testing.T) {
+	_, _, p := loggedOn(t, nil)
+	b := fix2.NewBuilder(session.FIX44, "3").
+		SetString(49, "ACC").SetString(56, "INI").SetInt(34, p.seq).
+		SetString(52, string(fix2.AppendUTCTimestamp(nil, time.Now().Add(-time.Hour), fix2.Milliseconds))).
+		SetString(45, "1")
+	p.seq++
+	if _, err := p.conn.Write(b.Build()); err != nil {
+		t.Fatal(err)
+	}
+	p.expect("3", "45", "2", "372", "3", "373", "10")
+	p.expect("5")
 }
 
 // Two FIXT sessions whose FIX 5.0 SP2 dictionary has no

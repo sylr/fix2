@@ -277,6 +277,13 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 			slog.Uint64("seq", it.seq), slog.Any("error", err))
 		return
 	}
+	if isReject(m.MsgType()) {
+		// A BusinessMessageReject the handler refuses, as a generated
+		// Dispatch without its handler does, is not rejected: a counterparty
+		// refusing ours alike would reject it in turn, and the two would loop.
+		s.logUnanswered(m, err.Error())
+		return
+	}
 	var rej *RejectError
 	var brej *BusinessRejectError
 	switch {
