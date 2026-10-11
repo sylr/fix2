@@ -29,8 +29,9 @@ type Builder struct {
 // SetSections registers the standard header and trailer: Build writes the
 // fields whose tags are in header first, then the header's repeating groups
 // (appended by headerGroups, which may be nil), then the other fields and
-// groups, and the fields whose tags are in trailer last, as FIX requires
-// whatever order they were set in. Counter tags of the header groups are
+// groups, and the fields whose tags are in trailer last. Header and body
+// fields keep the order they were set in; trailer fields, each expected
+// once, follow trailer's order, as FIX requires. Counter tags of the header groups are
 // registered with SetGroups. Generated message builders call it once, from
 // their constructor.
 func (b *Builder) SetSections(header, trailer []int, headerGroups func(dst []Field) []Field) {
@@ -357,6 +358,19 @@ func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) b
 		trailer
 	)
 	for _, section := range [...]int{header, body, trailer} {
+		if section == trailer {
+			// In the order registered, the standard trailer's, whatever
+			// the order the fields were set in: SignatureLength (93) must
+			// precede Signature (89).
+			for _, tag := range b.trailer {
+				for _, f := range b.fields {
+					if f.Tag == tag && b.section(tag) == trailer && !b.managedCounter(tag, b.scratch) {
+						dst = appendField(dst, f)
+					}
+				}
+			}
+			continue
+		}
 		for _, f := range b.fields {
 			// A raw counter is dropped when the groups carry their own.
 			if b.section(f.Tag) == section && !b.managedCounter(f.Tag, b.scratch) {

@@ -336,6 +336,25 @@ func TestSetSections(t *testing.T) {
 	}
 }
 
+// The trailer is written in the order registered: Signature set before
+// SignatureLength still follows it.
+func TestSetSectionsTrailerOrder(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "0")
+	b.SetSections(nil, []int{93, 89}, nil)
+	raw := b.SetString(89, "a\x01b").SetString(112, "T").SetInt(93, 3).Build()
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", raw, err)
+	}
+	var tags []int
+	for _, f := range msg.Fields() {
+		tags = append(tags, f.Tag)
+	}
+	if want := []int{8, 9, 35, 112, 93, 89, 10}; !slices.Equal(tags, want) {
+		t.Errorf("tags = %v, want %v", tags, want)
+	}
+}
+
 func TestSetSectionsTagInBoth(t *testing.T) {
 	b := NewBuilder("FIX.4.4", "0")
 	b.SetSections([]int{90, 91}, []int{90, 91}, nil)
