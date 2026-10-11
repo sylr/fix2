@@ -106,37 +106,14 @@ var dataFields = []struct{ length, data int }{
 // maxDataTag is the highest tag in dataFields.
 const maxDataTag = 43111
 
-// isDataTag marks DATA tags in dataTagFor.
+// isDataTag marks DATA tags in a Profile's lookup table.
 const isDataTag = -1
 
-// dataTagFor classifies tags for the parser with a single array lookup: a
-// LENGTH tag maps to the DATA tag it announces, a DATA tag to isDataTag, any
-// other tag to 0.
-var dataTagFor = func() (t [maxDataTag + 1]int32) {
-	for _, p := range dataFields {
-		t[p.length] = int32(p.data)
-		t[p.data] = isDataTag
-	}
-	return t
-}()
-
 // DataLengthTag returns the LENGTH tag that announces DATA tag dataTag in the
-// parser's table, or 0 if dataTag is not a DATA tag the parser reads by
+// default profile, or 0 if dataTag is not a DATA tag the parser reads by
 // length. Builders use it to emit the pair the way the parser expects.
-func DataLengthTag(dataTag int) int {
-	for _, p := range dataFields {
-		if p.data == dataTag {
-			return p.length
-		}
-	}
-	return 0
-}
+func DataLengthTag(dataTag int) int { return defaultProfile.DataLengthTag(dataTag) }
 
 // DataTag returns the DATA tag announced by LENGTH tag lengthTag in the
-// parser's table, or 0 if lengthTag is not such a LENGTH tag.
-func DataTag(lengthTag int) int {
-	if lengthTag < 0 || lengthTag >= len(dataTagFor) || dataTagFor[lengthTag] <= 0 {
-		return 0
-	}
-	return int(dataTagFor[lengthTag])
-}
+// default profile, or 0 if lengthTag is not such a LENGTH tag.
+func DataTag(lengthTag int) int { return defaultProfile.DataTag(lengthTag) }

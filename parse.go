@@ -30,17 +30,39 @@ const (
 // its input is already in memory.
 const MaxBodyLength = 1 << 20
 
-// Parse parses a FIX message from data. All field values are zero-copy slices
-// into data. The caller must not modify data while the returned Message is in use.
+// Parse parses a FIX message from data with the default profile (see
+// DefaultProfile). All field values are zero-copy slices into data. The
+// caller must not modify data while the returned Message is in use.
 // With SIMD, the checksum is one vector sum over the message after parsing
 // it, while its bytes are in cache; otherwise it is summed field by field as
 // the parser goes (see bulkChecksum).
 func Parse(data []byte) (Message, error) {
 	var msg Message
-	msg.init()
+	err := parseInto(&msg, data, defaultProfile.kinds)
+	return msg, err
+}
+
+// ParseInto parses a FIX message from data into m, reading DATA fields as p
+// defines them (the default profile if p is nil). m is reset first and its
+// field storage reused, so parsing into the same Message repeatedly does not
+// allocate. Field values are zero-copy slices into data, valid while data is
+// not modified and until m is parsed into again. A copy of m made after it
+// grew beyond 32 fields shares that storage, so parse into m only once such
+// copies are no longer used. On error, m holds the fields parsed so far.
+func ParseInto(m *Message, data []byte, p *Profile) error {
+	if p == nil {
+		p = defaultProfile
+	}
+	return parseInto(m, data, p.kinds)
+}
+
+// parseInto parses data into msg, classifying DATA fields with kinds (see
+// Profile).
+func parseInto(msg *Message, data []byte, kinds []int32) error {
+	msg.reset()
 
 	if len(data) < minMsgLen {
-		return msg, &ParseError{Err: ErrMessageTooShort, Offset: 0}
+		return &ParseError{Err: ErrMessageTooShort, Offset: 0}
 	}
 
 	cursor := 0
@@ -49,15 +71,15 @@ func Parse(data []byte) (Message, error) {
 
 	// --- Tag 8: BeginString ---
 	if data[0] != '8' || data[1] != '=' {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got %q", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr, data[:2]), Offset: 0}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got %q", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr, data[:2]), Offset: 0}
 	}
 	sohPos := findByte(data, 2, soh)
 	if sohPos < 0 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBeginTag, ErrInvalidTag), Offset: 0}
+		return &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBeginTag, ErrInvalidTag), Offset: 0}
 	}
 	beginVal := data[2:sohPos]
 	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\" got %q", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\" got %q", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 	cursor = sohPos + 1
@@ -69,19 +91,19 @@ func Parse(data []byte) (Message, error) {
 	// --- Tag 9: BodyLength ---
 	tag, eqPos, err := parseNextExpectedTag(data, cursor, tagBodyLenStr)
 	if err != nil {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidBodyLen, err), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidBodyLen, err), Offset: cursor}
 	}
 	if tag != tagBodyLen {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidBodyLen, ErrInvalidTag, tagBodyLen, tag), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidBodyLen, ErrInvalidTag, tagBodyLen, tag), Offset: cursor}
 	}
 	sohPos = findByte(data, eqPos+1, soh)
 	if sohPos < 0 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBodyLen, ErrInvalidTag), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidBodyLen, ErrInvalidTag), Offset: cursor}
 	}
 	bodyLenVal := data[eqPos+1 : sohPos]
 	bodyLen, ok := parseUint(bodyLenVal)
 	if !ok {
-		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
+		return &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
 	}
 	msg.append(Field{Tag: tagBodyLen, Value: bodyLenVal})
 	cursor = sohPos + 1
@@ -94,7 +116,7 @@ func Parse(data []byte) (Message, error) {
 	// overflow for a BodyLength close to MaxInt.
 	bodyStart := cursor
 	if bodyLen > len(data)-bodyStart {
-		return msg, &ParseError{Err: ErrBodyLenMismatch, Offset: cursor}
+		return &ParseError{Err: ErrBodyLenMismatch, Offset: cursor}
 	}
 	bodyEnd := bodyStart + bodyLen
 
@@ -103,27 +125,27 @@ func Parse(data []byte) (Message, error) {
 	for cursor < bodyEnd {
 		tag, eqPos, err = parseNextTag(data, cursor)
 		if err != nil {
-			return msg, err
+			return err
 		}
 		kind := 0
-		if tag < len(dataTagFor) {
-			kind = int(dataTagFor[tag])
+		if tag < len(kinds) {
+			kind = int(kinds[tag])
 		}
 		if next.tag != 0 || kind == isDataTag {
 			if sohPos, err = next.end(data, tag, cursor, eqPos+1, bodyEnd); err != nil {
-				return msg, err
+				return err
 			}
 		} else {
 			sohPos = findByte(data, eqPos+1, soh)
 			if sohPos < 0 || sohPos >= bodyEnd {
-				return msg, fieldEndError(sohPos, cursor)
+				return fieldEndError(sohPos, cursor)
 			}
 		}
 		value := data[eqPos+1 : sohPos]
 		next.tag = 0
 		if kind > 0 {
 			if next, err = announceData(tag, kind, value, cursor); err != nil {
-				return msg, err
+				return err
 			}
 		}
 		msg.append(Field{Tag: tag, Value: value})
@@ -134,33 +156,33 @@ func Parse(data []byte) (Message, error) {
 		}
 	}
 	if next.tag != 0 {
-		return msg, next.missing(cursor)
+		return next.missing(cursor)
 	}
 
 	// Verify tag 35 (MsgType) is the third field (index 2).
 	if msg.Count() < 3 || msg.fields[2].Tag != tagMsgType {
-		return msg, &ParseError{Err: ErrMissingMsgType, Offset: bodyStart}
+		return &ParseError{Err: ErrMissingMsgType, Offset: bodyStart}
 	}
 
 	// --- Tag 10: CheckSum (trailer) ---
 	tag, eqPos, err = parseNextExpectedTag(data, cursor, tagCheckSumStr)
 	if err != nil {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidCheckSum, err), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w", ErrInvalidCheckSum, err), Offset: cursor}
 	}
 	if tag != tagCheckSum {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidCheckSum, ErrInvalidTag, tagCheckSum, tag), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got \"%d=\"", ErrInvalidCheckSum, ErrInvalidTag, tagCheckSum, tag), Offset: cursor}
 	}
 	sohPos = findByte(data, eqPos+1, soh)
 	if sohPos < 0 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidCheckSum, ErrInvalidTag), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: SOH not found", ErrInvalidCheckSum, ErrInvalidTag), Offset: cursor}
 	}
 	csVal := data[eqPos+1 : sohPos]
 	if len(csVal) != 3 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 3 bytes, got %d", ErrInvalidCheckSum, ErrInvalidTag, len(csVal)), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected 3 bytes, got %d", ErrInvalidCheckSum, ErrInvalidTag, len(csVal)), Offset: cursor}
 	}
 	expected, ok := parseUint(csVal)
 	if !ok || expected > 255 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 0-255, got %d", ErrInvalidCheckSum, ErrInvalidTag, expected), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected 0-255, got %d", ErrInvalidCheckSum, ErrInvalidTag, expected), Offset: cursor}
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
 
@@ -170,10 +192,10 @@ func Parse(data []byte) (Message, error) {
 	}
 	computed := csum % 256
 	if int(computed) != expected {
-		return msg, &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(computed)), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(computed)), Offset: cursor}
 	}
 
-	return msg, nil
+	return nil
 }
 
 // checksumRange returns the sum of data[from:to] as uint32.
@@ -271,8 +293,8 @@ func ParseFromReader(r io.Reader) (Message, error) {
 			return msg, withOffset(err, len(header))
 		}
 		kind := 0
-		if tag < len(dataTagFor) {
-			kind = int(dataTagFor[tag])
+		if tag < len(defaultProfile.kinds) {
+			kind = int(defaultProfile.kinds[tag])
 		}
 		if next.tag != 0 || kind == isDataTag {
 			if sohPos, err = next.end(rest, tag, cursor, eqPos+1, bodyEnd); err != nil {

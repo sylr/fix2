@@ -13,6 +13,18 @@ func (m *Message) init() {
 	m.fields = m.buf[:0]
 }
 
+// reset empties m for parsing into it again, keeping a field slice grown
+// beyond the inline buffer so that large messages stop allocating too. A
+// slice pointing at another Message's inline buffer, as after a copy, is
+// dropped; a grown slice stays shared with any copy of m (see ParseInto).
+func (m *Message) reset() {
+	if cap(m.fields) > len(m.buf) {
+		m.fields = m.fields[:0]
+		return
+	}
+	m.init()
+}
+
 func (m *Message) append(f Field) {
 	m.fields = append(m.fields, f)
 }
