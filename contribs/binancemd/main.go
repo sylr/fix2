@@ -118,6 +118,8 @@ Market data needs the FIX_API or FIX_API_READ_ONLY permission.`,
 	pf.StringVar(&o.apiKey, "api-key", "", "API key (default $BINANCE_API_KEY)")
 	pf.StringVar(&o.apiKeyFile, "api-key-file", "", "file holding the API key, instead of --api-key")
 	pf.StringVar(&o.keyFile, "key-file", "", "PEM file of the API key's Ed25519 private key (default $BINANCE_PRIVATE_KEY)")
+	// Given at all, even empty: one or the other.
+	root.MarkFlagsMutuallyExclusive("api-key", "api-key-file")
 	pf.StringVar(&o.sender, "sender", "", "SenderCompID, 1 to 8 letters, digits, - or _ (default random)")
 	pf.StringVar(&o.endpoint, "endpoint", "", "FIX market data endpoint, host:port (default "+prodEndpoint+")")
 	pf.BoolVar(&o.testnet, "testnet", false, "use the Spot testnet, "+testnetEndpoint)
@@ -200,10 +202,7 @@ func (o *options) check(cmd command, symbols []string) error {
 		}
 	}
 	var errs []error
-	switch {
-	case o.apiKey != "" && o.apiKeyFile != "":
-		errs = append(errs, errors.New("--api-key and --api-key-file: give one"))
-	case o.apiKey == "" && o.apiKeyFile == "":
+	if o.apiKey == "" && o.apiKeyFile == "" {
 		errs = append(errs, errors.New("no API key: set --api-key, --api-key-file or BINANCE_API_KEY"))
 	}
 	if o.keyFile == "" {

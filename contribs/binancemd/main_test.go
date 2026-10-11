@@ -73,14 +73,16 @@ func TestRun_Usage(t *testing.T) {
 		{"--heartbeat", "2s"}, // no command
 		{"nope"},
 		{"trades"}, // no symbol
-		{"--heartbeat", "2s", "trades", "BTCUSDT"},                     // too short
-		{"limits", "BTCUSDT"},                                          // no symbol taken
-		{"book", "--levels", "1", "BTCUSDT"},                           // too few levels
-		{"ticker", "--show", "3", "BTCUSDT"},                           // a book flag
-		{"--sender", "TOO-LONG-ID", "ticker", "BTCUSDT"},               // CompID too long
-		{"trades", "--api-key", "k", "BTC/USDT", "ETHBTC"},             // invalid symbol
-		{"trades", "--api-key", "k", "--api-key-file", "f", "BTCUSDT"}, // both
-		{"trades", "--key", "k.pem", "BTCUSDT"},                        // renamed --key-file
+		{"--heartbeat", "2s", "trades", "BTCUSDT"},                                     // too short
+		{"limits", "BTCUSDT"},                                                          // no symbol taken
+		{"book", "--levels", "1", "BTCUSDT"},                                           // too few levels
+		{"ticker", "--show", "3", "BTCUSDT"},                                           // a book flag
+		{"--sender", "TOO-LONG-ID", "ticker", "BTCUSDT"},                               // CompID too long
+		{"trades", "--api-key", "k", "BTC/USDT", "ETHBTC"},                             // invalid symbol
+		{"trades", "--api-key", "k", "--api-key-file", "f", "BTCUSDT"},                 // both
+		{"limits", "--api-key=", "--api-key-file=/missing", "--key-file=/missing.pem"}, // both, one empty
+		{"limits", "--api-key=K", "--api-key-file=", "--key-file=/missing.pem"},        // both, one empty
+		{"trades", "--key", "k.pem", "BTCUSDT"},                                        // renamed --key-file
 	} {
 		stderr.Reset()
 		t.Setenv("BINANCE_API_KEY", "")
