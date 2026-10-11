@@ -31,6 +31,24 @@ typed code generation and a session engine.
   - Reject and Logout texts that start with the specification's wording and
     give the details: tags, names, values and what was expected.
 
+## Binance market data
+
+`cmd/binance-md` streams Binance Spot market data over the
+[Binance FIX API](https://developers.binance.com/en/docs/products/spot/fix-api):
+trades, best bid and offer, order book depth, or an order book kept up to
+date locally; it also lists instruments and limits. It needs an Ed25519 API
+key with the `FIX_API` or `FIX_API_READ_ONLY` permission:
+
+    go install github.com/sylr/fix2/cmd/binance-md@latest
+    export BINANCE_API_KEY=... BINANCE_PRIVATE_KEY=/path/to/ed25519-private.pem
+    binance-md trades BTCUSDT ETHUSDT
+    binance-md -json ticker BTCUSDT
+    binance-md book -levels 1000 -show 10 BTCUSDT
+    binance-md -testnet instruments BTCUSDT
+
+It signs its Logon with the session's `LogonSigner` hook, resubscribes after
+every reconnection, and reconnects when Binance announces maintenance.
+
 ## Conformance
 
 The session engine passes the 505 session acceptance test scripts of
