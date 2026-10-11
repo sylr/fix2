@@ -63,6 +63,10 @@ func TestRewriteForResend_Errors(t *testing.T) {
 		{"does not parse", []byte("garbage that is long enough to try"), ErrInvalidBeginTag},
 		{"no SendingTime", buildMsg("FIX.4.4", "35=D\x0134=5\x0111=ORD\x01"), ErrInvalidField},
 		{"SendingTime after a body field", buildMsg("FIX.4.4", "35=D\x0154=5\x0149=A\x0152=T\x01"), ErrInvalidField},
+		{"PossDupFlag twice", buildMsg("FIX.4.4", "35=D\x0134=1\x0143=N\x0143=N\x0149=A\x0152=T\x0156=B\x0111=O\x01"), ErrInvalidField},
+		{"OrigSendingTime twice", buildMsg("FIX.4.4", "35=D\x0134=1\x0152=T\x01122=A\x01122=B\x0111=O\x01"), ErrInvalidField},
+		{"SendingTime twice", buildMsg("FIX.4.4", "35=D\x0134=1\x0152=T\x0152=U\x0111=O\x01"), ErrInvalidField},
+		{"bytes after the CheckSum", append(buildMsg("FIX.4.4", "35=D\x0134=1\x0152=T\x0111=O\x01"), "GARBAGE"...), ErrBodyLenMismatch},
 		{"signed", buildMsg("FIX.4.4", "35=D\x0134=5\x0152=T\x0111=ORD\x0193=3\x0189=abc\x01"), ErrSignedMessage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
