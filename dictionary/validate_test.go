@@ -826,7 +826,7 @@ func TestValidate_ErrorMessages(t *testing.T) {
 	}{
 		{"35=D\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01" + order, "fix2: required header tag 49 missing", 49, dictionary.ReasonRequiredTagMissing},
 		{"35=D\x01" + header + "54=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01", "fix2: required tag 11 missing for message NewOrderSingle", 11, dictionary.ReasonRequiredTagMissing},
-		{"35=D\x01" + header + order + "999=x\x01", "fix2: tag 999 not defined by the dictionary, in message NewOrderSingle", 999, dictionary.ReasonUndefinedTag},
+		{"35=D\x01" + header + order + "999=x\x01", "fix2: tag 999 not defined by the dictionary, in message NewOrderSingle", 999, dictionary.ReasonInvalidTagNumber},
 		{"35=D\x01" + header + order + "112=x\x01", "fix2: tag 112 (TestReqID) not allowed in message NewOrderSingle", 112, dictionary.ReasonTagNotDefinedForMessageType},
 		{"35=D\x01" + header + "11=ORD1\x0154=9\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01", `fix2: invalid value "9" for tag 54 (Side)`, 54, dictionary.ReasonValueIsIncorrect},
 		{"35=Z\x01" + header, `fix2: unknown MsgType "Z"`, 35, dictionary.ReasonInvalidMsgType},

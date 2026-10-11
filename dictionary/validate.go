@@ -75,6 +75,14 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 		}
 	}
 
+	// Repeated tags and fields out of order first: QuickFIX engines find
+	// them while parsing, before validating against the dictionary.
+	if structure := checks & (CheckRepeatedTags | CheckOrder); structure != 0 {
+		if err := d.checkStructure(msg, mdef, structure); err != nil {
+			return err
+		}
+	}
+
 	// Presence of the tracked tags (required ones and those activating
 	// optional components), anywhere and at the top level.
 	var small [2][4]uint64
@@ -178,15 +186,16 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 		}
 	}
 
-	if fieldErr == nil && checks&(CheckRepeatedTags|CheckOrder|CheckGroupCounts) != 0 {
-		return d.checkStructure(msg, mdef, checks)
+	if fieldErr == nil && checks&CheckGroupCounts != 0 {
+		return d.checkStructure(msg, mdef, CheckGroupCounts)
 	}
 	return fieldErr
 }
 
-// unexpected reports tag, which mdef does not allow: an undefined tag if the
-// dictionary does not define it at all, a tag not defined for the message
-// type otherwise.
+// unexpected reports tag, which mdef does not allow: an invalid tag number if
+// the dictionary does not define it at all, as QuickFIX and its acceptance
+// tests have it (FIX's "undefined tag", reason 3, is less used), a tag not
+// defined for the message type otherwise.
 func (d *Dict) unexpected(mdef *MessageDef, tag int) *ValidationError {
 	if fd := d.Fields[tag]; fd != nil {
 		return &ValidationError{
@@ -199,7 +208,7 @@ func (d *Dict) unexpected(mdef *MessageDef, tag int) *ValidationError {
 	return &ValidationError{
 		Err:    ErrUnexpectedTag,
 		Tag:    tag,
-		Reason: ReasonUndefinedTag,
+		Reason: ReasonInvalidTagNumber,
 		Msg:    fmt.Sprintf("tag %d not defined by the dictionary, in message %s", tag, mdef.Name),
 	}
 }

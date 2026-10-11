@@ -32,10 +32,11 @@ const (
 	CheckAll = CheckEmptyValues | CheckFormats | CheckRepeatedTags | CheckOrder | CheckGroupCounts
 )
 
-// ValidateWith checks msg as Validate does, plus the checks selected. Field
-// errors are reported in message order, after missing required tags; repeated
-// tags, order and group counts after them. Unlike Validate, the extra checks
-// may allocate.
+// ValidateWith checks msg as Validate does, plus the checks selected. A
+// repeated tag or a field out of order is reported first, as QuickFIX
+// engines find them while parsing; then missing required tags; then field
+// errors in message order; then group counts. Unlike Validate, the extra
+// checks may allocate.
 func (d *Dict) ValidateWith(msg *fix2.Message, checks Checks) error {
 	return d.validate(msg, checks)
 }
