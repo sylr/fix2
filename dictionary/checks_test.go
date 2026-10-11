@@ -136,3 +136,88 @@ func TestValidateWith_CharBeforeFIX42(t *testing.T) {
 		t.Errorf("FIX 4.0 Reject with a Text: %v", err)
 	}
 }
+
+func TestValidateWith_StructureEdges(t *testing.T) {
+	d := loadTestDict(t)
+	const header = "49=S\x0156=T\x0134=1\x0152=20231001-12:00:00\x01"
+	const body = "11=ORD\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=A\x01"
+	for name, msg := range map[string]string{
+		"more entries than the count": "35=D\x01" + header + body + "78=1\x0179=A\x0179=B\x01",
+		"entries after a zero count":  "35=D\x01" + header + body + "78=0\x0179=A\x01",
+	} {
+		m := parseMsg(t, buildFIXMsg(msg))
+		var ve *dictionary.ValidationError
+		if err := d.ValidateWith(&m, dictionary.CheckGroupCounts); !errors.As(err, &ve) || ve.Reason != dictionary.ReasonIncorrectNumInGroupCount || ve.Tag != 78 {
+			t.Errorf("%s: got %v, want an incorrect NumInGroup for 78", name, err)
+		}
+	}
+
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header>
+    <field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/><field name="TargetCompID" required="Y"/>
+  </header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <field name="SenderCompID" required="N"/>
+      <field name="Symbol" required="N"/>
+      <group name="NoOuter" required="N">
+        <field name="Outer" required="N"/>
+        <group name="NoInner" required="N"><field name="Inner" required="N"/></group>
+      </group>
+    </message>
+    <message name="N" msgtype="N" msgcat="app">
+      <group name="NoInner" required="N"><field name="Inner" required="N"/></group>
+      <group name="NoOuter" required="N">
+        <field name="Outer" required="N"/>
+        <group name="NoInner" required="N"><field name="Inner" required="N"/></group>
+      </group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="49" name="SenderCompID" type="STRING"/>
+    <field number="56" name="TargetCompID" type="STRING"/>
+    <field number="55" name="Symbol" type="STRING"/>
+    <field number="100" name="NoOuter" type="NUMINGROUP"/>
+    <field number="101" name="Outer" type="STRING"/>
+    <field number="200" name="NoInner" type="NUMINGROUP"/>
+    <field number="201" name="Inner" type="STRING"/>
+  </fields>
+</fix>`
+	d2, err := xmldict.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, msg := range map[string]string{
+		"a tag of both the header and the body":  "35=M\x0149=S\x0156=T\x0155=A\x01",
+		"a nested counter also at the top level": "35=N\x0149=S\x0156=T\x01200=2\x01201=TOP1\x01201=TOP2\x01100=1\x01101=OUT\x01200=1\x01201=IN\x01",
+		"nested groups within entries":           "35=M\x0149=S\x0156=T\x01100=2\x01101=A\x01200=2\x01201=X\x01201=Y\x01101=B\x01",
+	} {
+		m := parseMsg(t, buildFIXMsg(msg))
+		if err := d2.ValidateWith(&m, dictionary.CheckAll); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	m := parseMsg(t, buildFIXMsg("35=M\x0149=S\x0156=T\x01100=1\x01101=A\x01200=2\x01201=X\x01"))
+	var ve *dictionary.ValidationError
+	if err := d2.ValidateWith(&m, dictionary.CheckGroupCounts); !errors.As(err, &ve) || ve.Tag != 200 {
+		t.Errorf("nested count off: got %v, want an incorrect NumInGroup for 200", err)
+	}
+}
+
+// FIX 4.0 timestamps have whole seconds.
+func TestValidateWith_FIX40Time(t *testing.T) {
+	d, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX40.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for v, ok := range map[string]bool{"20231001-12:00:00": true, "20231001-12:00:00.123": false} {
+		body := "35=0\x0149=S\x0156=T\x0134=1\x0152=" + v + "\x01"
+		m := parseMsg(t, fix2.AppendTrailer([]byte("8=FIX.4.0\x019="+strconv.Itoa(len(body))+"\x01"+body), 0))
+		if err := d.ValidateWith(&m, dictionary.CheckFormats); (err == nil) != ok {
+			t.Errorf("SendingTime %s: err = %v, want valid %v", v, err, ok)
+		}
+	}
+}

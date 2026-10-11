@@ -2,6 +2,7 @@ package dictionary
 
 import (
 	"fmt"
+	"slices"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -50,6 +51,7 @@ const (
 	formatChar
 	formatBool
 	formatTimestamp
+	formatTimestampSec
 	formatTimeOnly
 	formatDate
 	formatMonthYear
@@ -72,8 +74,11 @@ func formatOf(fixType, major, minor string) format {
 		return formatChar
 	case "BOOLEAN":
 		return formatBool
-	case "UTCTIMESTAMP", "TIME":
+	case "UTCTIMESTAMP":
 		return formatTimestamp
+	case "TIME":
+		// FIX 4.0 and 4.1 timestamps have whole seconds.
+		return formatTimestampSec
 	case "UTCTIMEONLY":
 		return formatTimeOnly
 	case "UTCDATEONLY", "UTCDATE", "LOCALMKTDATE", "DATE":
@@ -165,6 +170,9 @@ func validFormat(f format, v []byte) bool {
 	case formatTimestamp:
 		_, err := fix2.ParseUTCTimestamp(v)
 		return err == nil
+	case formatTimestampSec:
+		_, err := fix2.ParseUTCTimestamp(v)
+		return err == nil && len(v) == len(fix2.TimeFormatTimestampSec)
 	case formatTimeOnly:
 		_, err := fix2.ParseUTCTimeOnly(v)
 		return err == nil
@@ -204,31 +212,17 @@ func digits(v []byte) bool {
 }
 
 // checkStructure checks the top-level fields of msg, of message type mdef,
-// for repeated tags, order and group counts, as checks select. groups tells
-// whether msg holds a group counter.
-func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, groups bool, checks Checks) error {
-	lookup := func(tag int) *fix2.GroupSpec {
-		if e := d.lookup(mdef, tag); e != nil {
-			return e.spec
-		}
-		return nil
-	}
-	fields := msg.TopLevelFieldsFunc(lookup)
-	if !groups {
-		fields = func(yield func(fix2.Field) bool) {
-			for _, f := range msg.Fields() {
-				if !yield(f) {
-					return
-				}
-			}
-		}
-	}
+// for repeated tags, order and group counts, as checks select. Group entries
+// are skipped by walking each group from its counter, which counts them.
+func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks) error {
+	fields := msg.Fields()
 	var seen map[int]bool
 	if checks&CheckRepeatedTags != 0 {
-		seen = make(map[int]bool, msg.Count())
+		seen = make(map[int]bool, len(fields))
 	}
 	phase := sectionHeader
-	for f := range fields {
+	for i := 0; i < len(fields); i++ {
+		f := fields[i]
 		e := d.lookup(mdef, f.Tag)
 		if e == nil {
 			continue // reported by Validate
@@ -244,7 +238,7 @@ func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, groups bool, 
 			}
 			seen[f.Tag] = true
 		}
-		if checks&CheckOrder != 0 {
+		if checks&CheckOrder != 0 && e.section != sectionAny {
 			if e.section < phase {
 				where := [...]string{"standard header", "body", "standard trailer"}
 				return &ValidationError{
@@ -256,34 +250,50 @@ func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, groups bool, 
 			}
 			phase = e.section
 		}
-		if checks&CheckGroupCounts != 0 && e.spec != nil {
-			if err := d.checkCount(f.Value, msg.GroupsOf(e.spec), e.spec, mdef); err != nil {
+		if e.spec != nil {
+			next, err := d.walkGroup(fields, i, e.spec, mdef, checks&CheckGroupCounts != 0)
+			if err != nil {
 				return err
 			}
+			i = next - 1
 		}
 	}
 	return nil
 }
 
-// checkCount checks that entries, the entries of the group of spec, match
-// declared, its NumInGroup, and so do their nested groups.
-func (d *Dict) checkCount(declared []byte, entries []fix2.Group, spec *fix2.GroupSpec, mdef *MessageDef) error {
-	if n, err := fix2.ParseInt(declared); err != nil || n != len(entries) {
-		return &ValidationError{
-			Err:    ErrGroupCount,
-			Tag:    spec.Counter,
-			Reason: ReasonIncorrectNumInGroupCount,
-			Msg:    fmt.Sprintf("NumInGroup %d%s is %q but %d entries follow in message %s", spec.Counter, d.fieldName(spec.Counter), declared, len(entries), mdef.Name),
+// walkGroup walks the entries of the group whose counter is fields[at], of
+// spec, and returns the index of the first field after them. If check is
+// set, it returns an error when the counter does not match the number of
+// entries, or a nested group's counter its own.
+func (d *Dict) walkGroup(fields []fix2.Field, at int, spec *fix2.GroupSpec, mdef *MessageDef, check bool) (int, error) {
+	entries, i := 0, at+1
+	for i < len(fields) {
+		tag := fields[i].Tag
+		if tag == spec.Delim {
+			entries++
+		} else if entries == 0 || !slices.Contains(spec.Tags, tag) && spec.Child(tag) == nil {
+			break
 		}
+		// The delimiter itself may be a nested group's counter.
+		if child := spec.Child(tag); child != nil {
+			next, err := d.walkGroup(fields, i, child, mdef, check)
+			if err != nil {
+				return 0, err
+			}
+			i = next
+			continue
+		}
+		i++
 	}
-	for _, entry := range entries {
-		for _, nested := range spec.Nested {
-			if v := entry.GetTopLevel(nested.Counter, spec.Nested...); v != nil {
-				if err := d.checkCount(v, entry.GroupsOf(nested), nested, mdef); err != nil {
-					return err
-				}
+	if check {
+		if n, err := fix2.ParseInt(fields[at].Value); err != nil || n != entries {
+			return 0, &ValidationError{
+				Err:    ErrGroupCount,
+				Tag:    spec.Counter,
+				Reason: ReasonIncorrectNumInGroupCount,
+				Msg:    fmt.Sprintf("NumInGroup %d%s is %q but %d entries follow in message %s", spec.Counter, d.fieldName(spec.Counter), fields[at].Value, entries, mdef.Name),
 			}
 		}
 	}
-	return nil
+	return i, nil
 }

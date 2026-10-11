@@ -94,3 +94,34 @@ func TestDictProfile_GroupScope(t *testing.T) {
 		t.Errorf("DATA 50003 after a group paired with the group's LENGTH %d", got)
 	}
 }
+
+// A LENGTH field a group holds can still pair with a DATA field at the top
+// level, where it occurs too.
+func TestDictProfile_TopLevelPairBesideGroup(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <group name="NoX" required="N"><field name="X" required="N"/><field name="Size" required="N"/></group>
+      <field name="Size" required="N"/>
+      <field name="Payload" required="N"/>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="50000" name="NoX" type="NUMINGROUP"/>
+    <field number="50001" name="X" type="STRING"/>
+    <field number="50002" name="Size" type="LENGTH"/>
+    <field number="50003" name="Payload" type="DATA"/>
+  </fields>
+</fix>`
+	d, err := xmldict.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Profile().DataLengthTag(50003); got != 50002 {
+		t.Errorf("LENGTH of 50003 = %d, want 50002", got)
+	}
+}

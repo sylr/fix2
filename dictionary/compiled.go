@@ -52,6 +52,9 @@ const (
 	sectionHeader section = iota
 	sectionBody
 	sectionTrailer
+	// sectionAny is a body field the header or trailer declares too: it
+	// may be in either place.
+	sectionAny
 )
 
 // newTagTable returns a table holding entries, keyed by their tags.
@@ -226,6 +229,12 @@ func (d *Dict) compile() {
 
 		entries := map[int]tagEntry{}
 		addAllowed(d.profile, entries, m.Fields, sectionBody, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
+		for tag, e := range entries {
+			if env, ok := envEntries[tag]; ok && !env.structural {
+				e.section = sectionAny
+				entries[tag] = e
+			}
+		}
 		m.body = newTagTable(entries)
 	}
 }

@@ -179,7 +179,7 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	}
 
 	if fieldErr == nil && checks&(CheckRepeatedTags|CheckOrder|CheckGroupCounts) != 0 {
-		return d.checkStructure(msg, mdef, groups, checks)
+		return d.checkStructure(msg, mdef, checks)
 	}
 	return fieldErr
 }

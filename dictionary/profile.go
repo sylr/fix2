@@ -58,30 +58,38 @@ func (d *Dict) dataProfile() *fix2.Profile {
 			}
 		}
 	}
-	// By position, within one scope: a message's fields hold its groups'
-	// fields too, which are another scope.
-	walkRefs := func(refs []FieldRef, skip map[int]bool) {
+	// By position, within one scope. A group's fields are its own scope;
+	// the flattened fields of a message (or of the header or trailer) hold
+	// its groups' fields too, so a pair there counts only if its LENGTH
+	// field occurs at the top level (more often than in the groups) and its
+	// DATA field only there.
+	walkRefs := func(refs []FieldRef, inGroups map[int]int) {
+		counts := map[int]int{}
+		for _, r := range refs {
+			counts[r.Tag]++
+		}
+		top := func(tag int) bool { return counts[tag] > inGroups[tag] }
 		for i := 1; i < len(refs); i++ {
 			l, t := refs[i-1].Tag, refs[i].Tag
-			if !used[t] && isData(t) && !skip[l] && !skip[t] {
+			if !used[t] && isData(t) && inGroups[t] == 0 && top(l) {
 				pair(l, t, false)
 			}
 		}
 	}
-	// groupTags adds the tags of groups, nested ones included, to tags, and
-	// walks each group's own fields, without its nested groups' fields.
-	var walkGroups func(groups []GroupDef, tags map[int]bool)
-	walkGroups = func(groups []GroupDef, tags map[int]bool) {
+	// walkGroups walks each group's own fields and counts the tags of
+	// groups, nested ones included, into tags.
+	var walkGroups func(groups []GroupDef, tags map[int]int)
+	walkGroups = func(groups []GroupDef, tags map[int]int) {
 		for _, g := range groups {
-			nested := map[int]bool{}
+			nested := map[int]int{}
 			walkGroups(g.Groups, nested)
 			walkRefs(g.Fields, nested)
-			tags[g.CounterTag] = true
+			tags[g.CounterTag]++
 			for _, f := range g.Fields {
-				tags[f.Tag] = true
+				tags[f.Tag]++
 			}
-			for t := range nested {
-				tags[t] = true
+			for t, n := range nested {
+				tags[t] += n
 			}
 		}
 	}
@@ -89,12 +97,12 @@ func (d *Dict) dataProfile() *fix2.Profile {
 		refs   []FieldRef
 		groups []GroupDef
 	}{{d.Header, d.HeaderGroups}, {d.Trailer, d.TrailerGroups}} {
-		inGroups := map[int]bool{}
+		inGroups := map[int]int{}
 		walkGroups(scope.groups, inGroups)
 		walkRefs(scope.refs, inGroups)
 	}
 	for _, mt := range slices.Sorted(maps.Keys(d.Messages)) {
-		inGroups := map[int]bool{}
+		inGroups := map[int]int{}
 		walkGroups(d.Messages[mt].Groups, inGroups)
 		walkRefs(d.Messages[mt].Fields, inGroups)
 	}
