@@ -257,6 +257,10 @@ func (s *Session) fenceReset(c *conn) {
 	if c.closed || s.c != c {
 		return
 	}
+	// Whatever the old writer's last writes queued meanwhile belongs to the
+	// old generation too.
+	c.pending, c.frames = c.pending[:0], c.frames[:0]
+	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
 	s.resetStoreLocked("Logon with ResetSeqNumFlag on an established connection")
 	s.epoch++
 	c.epoch = s.epoch

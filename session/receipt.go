@@ -132,7 +132,7 @@ func (s *Session) receiptState(r Receipt, level Level, probe bool) (done bool, e
 		return true, ErrSkipped, nil
 	case !tracked && r.seq < t.oldest:
 		return true, ErrReceiptUntracked, nil
-	case s.stopped:
+	case s.stopped || s.halted != nil:
 		return true, ErrUnknownDelivery, nil
 	}
 	if level == Acknowledged && probe && s.cfg.AckProbe != AckProbeNever && s.c != nil && rec.epoch == s.c.epoch {
@@ -218,6 +218,15 @@ func (t *receipts) written(gen, seq, epoch uint64) {
 	if gen != t.gen {
 		return
 	}
+	if epoch < t.wqEpoch {
+		// A late write of a connection already replaced: written, but no
+		// probe of the new connection covers it.
+		rec := t.recs[seq]
+		rec.epoch, rec.wq = epoch, 0
+		t.recs[seq] = rec
+		t.notify()
+		return
+	}
 	t.tick(epoch)
 	rec := t.recs[seq]
 	rec.epoch, rec.wq = epoch, t.wq
@@ -228,8 +237,12 @@ func (t *receipts) written(gen, seq, epoch uint64) {
 	t.notify()
 }
 
-// tick counts a complete write on epoch.
+// tick counts a complete write on epoch; writes of earlier connections are
+// not counted.
 func (t *receipts) tick(epoch uint64) {
+	if epoch < t.wqEpoch {
+		return
+	}
 	if t.wqEpoch != epoch {
 		t.wq, t.wqEpoch = 0, epoch
 		clear(t.probes)
@@ -240,6 +253,9 @@ func (t *receipts) tick(epoch uint64) {
 // probeWritten records the complete write of probe id on epoch: if its
 // answer already came, the messages before it are acknowledged now.
 func (t *receipts) probeWritten(id string, epoch uint64) {
+	if epoch < t.wqEpoch {
+		return // a probe of a connection already replaced
+	}
 	t.tick(epoch)
 	if t.pending == id {
 		t.pending = ""
@@ -373,7 +389,7 @@ func (t *receipts) evict() {
 // AckProbeMinInterval ago, in which case the timer sends it when due.
 func (s *Session) probeLocked(c *conn) {
 	t := &s.receipts
-	if t.pending != "" || len(t.probes) > 0 || c.replaying() {
+	if t.pending != "" || len(t.probes) > 0 || c.replaying() || s.resetting || c.closed {
 		return
 	}
 	if min := s.cfg.AckProbeMinInterval; min > 0 && time.Since(t.lastAt) < min {

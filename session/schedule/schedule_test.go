@@ -113,3 +113,12 @@ func TestClockValidate(t *testing.T) {
 		t.Error("Validate does not bound clock times to 00:00:00-23:59:59")
 	}
 }
+
+// A holiday skipped is not open: the next window is, later.
+func TestHolidaysNotOpen(t *testing.T) {
+	s := Holidays{Schedule: Daily{Start: Clock(0, 0, 0), End: Clock(0, 0, 0)}, Dates: []string{"2026-12-25"}}
+	w, in, ok := s.Window(at(time.UTC, "2026-12-25 12:00"))
+	if !ok || in || !w.Start.Equal(at(time.UTC, "2026-12-26 00:00")) {
+		t.Errorf("Window on the holiday = %v in %v, want 26 December, not open", w.Start, in)
+	}
+}

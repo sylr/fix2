@@ -477,6 +477,11 @@ func (s *Session) sendResendRequestLocked() {
 // may advance further: a nested call only moves the expected MsgSeqNum, and
 // the outermost one goes on.
 func (s *Session) advanceLocked(c *conn, next uint64) {
+	if next > s.st.NextTarget+1 && !s.draining {
+		// A jump (a GapFill): what it skipped over is behind.
+		s.st.NextTarget = next
+		s.pruneStashLocked()
+	}
 	if next > s.st.NextTarget {
 		s.st.NextTarget = next
 	}
@@ -784,7 +789,11 @@ func (s *Session) sendLogoutLocked(c *conn, text string) {
 func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbound, now time.Time) {
 	text := string(m.Get(tagText))
 	if s.phase == phaseLogoutSent {
-		// The answer to ours.
+		// The answer to ours, if it comes from the counterparty.
+		if _, wrong := s.compIDProblem(m); wrong != "" {
+			s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logout answer with wrong identities ignored", slog.String("problem", wrong))
+			return
+		}
 		if in.Seq == s.st.NextTarget {
 			s.markLocked(in.Seq)
 			s.advanceLocked(c, in.Seq+1)

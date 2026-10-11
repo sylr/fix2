@@ -85,7 +85,8 @@ func (c *conn) runReplay(job *replayJob) {
 		buf, frames = buf[:0], frames[:0]
 	}
 	gapFill := func(next uint64) {
-		if gapStart == 0 {
+		if gapStart == 0 || next <= gapStart {
+			gapStart = 0
 			return
 		}
 		buf = s.appendFrame(buf, &header{msgType: "4", seq: gapStart, possDup: true, orig: sending, sendingTime: now},
@@ -148,8 +149,9 @@ func (c *conn) runReplay(job *replayJob) {
 	case errors.Is(err, errMissing):
 		gapFill(missing)
 	case writeErr == nil || !errors.Is(err, writeErr):
+		// Nothing more is covered: what was read is resent, not gap-filled.
 		readErr = err
-		gapFill(job.begin) // only what precedes is covered: nothing
+		gapStart = 0
 	}
 	flush()
 

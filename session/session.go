@@ -91,6 +91,7 @@ type Session struct {
 	phase     phase
 	epoch     uint64
 	c         *conn // the current connection, nil when disconnected
+	prev      *conn // the last connection, whose end a new one waits for
 	stopped   bool
 	stopping  bool  // Stop runs: no new connection
 	halted    error // a store failure left a sequence number uncertain: no new connection

@@ -181,14 +181,15 @@ func (h Holidays) String() string {
 // Window implements Schedule.
 func (h Holidays) Window(t time.Time) (Window, bool, bool) {
 	loc := location(h.Location)
+	asked := t
 	for range 1000 {
-		w, in, ok := h.Schedule.Window(t)
+		w, _, ok := h.Schedule.Window(t)
 		if !ok {
 			return Window{}, false, false
 		}
 		if !slices.Contains(h.Dates, w.Start.In(loc).Format(time.DateOnly)) {
 			w.ID = windowID(h, w.Start)
-			return w, in, true
+			return w, w.Contains(asked), true
 		}
 		t = w.End
 	}

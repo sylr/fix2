@@ -28,7 +28,9 @@ func waitUntil(ctx context.Context, t time.Time) bool {
 			return true
 		}
 		if d > precisionWindow {
-			timer := time.NewTimer(d - precisionWindow)
+			// At most a minute at a time: the wait runs on the monotonic
+			// clock, the boundary on the wall clock, which may step.
+			timer := time.NewTimer(min(d-precisionWindow, time.Minute))
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
@@ -99,10 +101,9 @@ func (s *Session) openWindow(w schedule.Window) {
 	if s.inWindow && s.window.ID == w.ID {
 		return
 	}
+	// The store starts the window's generation when the session next
+	// connects (attach), once the previous window's connection is done.
 	s.window, s.inWindow = w, true
-	if s.st.WindowID != w.ID {
-		s.resetStoreLocked("new session window "+w.Start.Format(time.RFC3339), w.ID)
-	}
 	if s.windowOpen != nil {
 		close(s.windowOpen)
 		s.windowOpen = nil

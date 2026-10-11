@@ -33,6 +33,7 @@ type Initiator struct {
 	mu       sync.Mutex
 	sessions map[SessionID]*initSession
 	ctx      context.Context // set while running
+	closing  bool            // Run is shutting down: no session added
 	wg       sync.WaitGroup
 }
 
@@ -76,6 +77,10 @@ func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 	s.initiator = true
 	i.mu.Lock()
 	defer i.mu.Unlock()
+	if i.closing {
+		s.store.Close()
+		return nil, fmt.Errorf("session %s: initiator shutting down", s.id)
+	}
 	if _, ok := i.sessions[s.id]; ok {
 		s.store.Close()
 		return nil, fmt.Errorf("session %s: already added", s.id)
@@ -156,6 +161,7 @@ func (i *Initiator) Run(ctx context.Context) error {
 
 	<-ctx.Done()
 	i.mu.Lock()
+	i.closing = true
 	sessions := make([]*Session, 0, len(i.sessions))
 	for _, is := range i.sessions {
 		sessions = append(sessions, is.s)
@@ -165,7 +171,7 @@ func (i *Initiator) Run(ctx context.Context) error {
 	cancel()
 	i.wg.Wait()
 	i.mu.Lock()
-	i.ctx = nil
+	i.ctx, i.closing = nil, false
 	i.mu.Unlock()
 	return nil
 }
@@ -218,9 +224,9 @@ func (s *Session) connect(tc transport.Conn) (bool, error) {
 		tc.Close()
 		return false, err
 	}
-	if err := s.logon(c); err != nil {
-		return false, err
-	}
+	// A Logon refused by the handler closed the connection: run still
+	// winds it down, so that the next one need not wait for it.
+	_ = s.logon(c)
 	reason := c.run()
 	s.mu.Lock()
 	loggedOn := c.loggedOn

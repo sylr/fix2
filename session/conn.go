@@ -68,6 +68,7 @@ type conn struct {
 	resetAfter string // reset the store, for this reason, once the writer is done
 	readerDone chan struct{}
 	closedCh   chan struct{} // closed when the connection closes
+	finished   chan struct{} // closed when run returns: nothing of it acts any more
 }
 
 // done returns a channel closed when the connection closes.
@@ -99,8 +100,22 @@ func (c *conn) wakeWriter() {
 
 // attach makes tc the session's connection and starts its writer. The
 // caller starts the reader with run once it has sent or awaits the Logon.
+// A new connection waits for the previous one to be completely done: its
+// writer joined and a reset on disconnection made, so that nothing of it
+// acts on its successor.
 func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) {
 	s.mu.Lock()
+	for prev := s.prev; prev != nil && s.c == nil; prev = s.prev {
+		select {
+		case <-prev.finished:
+		default:
+			s.mu.Unlock()
+			<-prev.finished
+			s.mu.Lock()
+			continue
+		}
+		break
+	}
 	defer s.mu.Unlock()
 	switch {
 	case s.stopped || s.stopping:
@@ -117,6 +132,10 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 	if s.deliv == nil {
 		s.deliv = newDelivery(s)
 	}
+	if s.cfg.Schedule != nil && s.st.WindowID != s.window.ID {
+		// A new window starts afresh; the previous connection is done.
+		s.resetStoreLocked("new session window "+s.window.Start.Format(time.RFC3339), s.window.ID)
+	}
 	s.epoch++
 	now := time.Now()
 	c := &conn{
@@ -127,6 +146,7 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 		wake:       make(chan struct{}, 1),
 		readerDone: make(chan struct{}),
 		closedCh:   make(chan struct{}),
+		finished:   make(chan struct{}),
 		lastRead:   now,
 		lastWrite:  now,
 	}
@@ -134,6 +154,7 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 		c.framer = fix2.NewFramer(tc, fix2.FramerOptions{})
 	}
 	s.c = c
+	s.prev = c
 	s.phase = phaseAwaitingLogon
 	if s.initiator {
 		s.phase = phaseLogonSent
@@ -163,6 +184,7 @@ var errAlreadyConnected = errors.New("session: already connected")
 // run reads and handles the connection's messages until it closes, then
 // waits for its writer and returns why it closed.
 func (c *conn) run() error {
+	defer close(c.finished)
 	defer close(c.readerDone)
 	for {
 		frame, err := c.framer.Next()
@@ -463,13 +485,13 @@ func (c *conn) removePendingLocked(begin, end uint64) {
 	out, kept := c.pending[:0], c.frames[:0]
 	start := 0
 	for _, f := range c.frames {
+		srcEnd := f.end
 		if f.seq < begin || f.seq > end {
-			n := len(out)
-			out = append(out, c.pending[start:f.end]...)
-			f.end = n + (f.end - start)
+			out = append(out, c.pending[start:srcEnd]...)
+			f.end = len(out)
 			kept = append(kept, f)
 		}
-		start = f.end
+		start = srcEnd
 	}
 	c.pending, c.frames = out, slices.Clip(kept)[:len(kept)]
 	c.signalRoomLocked()

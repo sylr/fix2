@@ -46,6 +46,7 @@ type Acceptor struct {
 	byWire    map[SessionID][]*Session // keyed by the counterparty's view of the wire identity
 	listeners []transport.Listener
 	ctx       context.Context // set while running
+	closing   bool            // Run is shutting down: no session added
 	wg        sync.WaitGroup
 	pending   chan struct{} // semaphore of connections before their Logon
 }
@@ -89,6 +90,9 @@ func (a *Acceptor) Add(cfg Config) (*Session, error) {
 func (a *Acceptor) add(s *Session) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.closing {
+		return fmt.Errorf("session %s: acceptor shutting down", s.id)
+	}
 	if _, ok := a.sessions[s.id]; ok {
 		return fmt.Errorf("session %s: already added", s.id)
 	}
@@ -181,6 +185,7 @@ func (a *Acceptor) Run(ctx context.Context) error {
 
 	<-runCtx.Done()
 	a.mu.Lock()
+	a.closing = true
 	for _, l := range a.listeners {
 		l.Close()
 	}
@@ -192,7 +197,7 @@ func (a *Acceptor) Run(ctx context.Context) error {
 	shutdown(sessions)
 	a.wg.Wait()
 	a.mu.Lock()
-	a.ctx = nil
+	a.ctx, a.closing = nil, false
 	a.mu.Unlock()
 	return nil
 }
