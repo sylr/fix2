@@ -274,8 +274,9 @@ func (b *Builder) BuildWith(extra []Field) []byte {
 }
 
 // AppendTo appends the message Build serializes to dst and returns the
-// extended slice. It does not allocate when dst has room and the groups
-// registered with SetGroups append without allocating.
+// extended slice. It does not allocate when dst has room for the message plus
+// 9 bytes (BodyLength is written in its widest form, then shrunk) and the
+// groups registered with SetGroups append without allocating.
 func (b *Builder) AppendTo(dst []byte) []byte {
 	return b.appendMessage(dst, nil)
 }
@@ -311,8 +312,9 @@ func (b *Builder) appendMessage(dst []byte, extra []Field) []byte {
 // CheckSum: the standard header fields, the header's repeating groups, the
 // other fields and groups, then the standard trailer fields (see
 // SetSections). It is what a session layer sends, around its own header
-// fields. A field of the builder whose tag reserved reports as true is an
-// error: the session layer writes those itself. reserved may be nil.
+// fields. A field, group fields included, whose tag reserved reports as true
+// is an error and nothing is appended: the session layer writes those
+// itself. reserved may be nil.
 func (b *Builder) AppendBody(dst []byte, reserved func(tag int) bool) ([]byte, error) {
 	return b.appendBody(dst, nil, reserved)
 }
@@ -330,13 +332,6 @@ func (e *ReservedTagError) Error() string {
 // appendBody appends the body fields after MsgType, with extra fields before
 // the trailer fields.
 func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) bool) ([]byte, error) {
-	if reserved != nil {
-		for _, f := range b.fields {
-			if reserved(f.Tag) {
-				return dst, &ReservedTagError{Tag: f.Tag}
-			}
-		}
-	}
 	// The header's groups, then the message's, in the scratch slice: the
 	// first n fields are the header's.
 	b.scratch = b.scratch[:0]
@@ -346,6 +341,15 @@ func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) b
 	n := len(b.scratch)
 	if b.groups != nil {
 		b.scratch = b.groups(b.scratch)
+	}
+	if reserved != nil {
+		for _, fields := range [][]Field{b.fields, b.scratch} {
+			for _, f := range fields {
+				if reserved(f.Tag) {
+					return dst, &ReservedTagError{Tag: f.Tag}
+				}
+			}
+		}
 	}
 	const (
 		header = iota
@@ -396,7 +400,8 @@ func appendField(dst []byte, f Field) []byte {
 	return append(dst, soh)
 }
 
-// AppendTagValue appends the field "tag=value\x01" to dst.
+// AppendTagValue appends the field "tag=value\x01" to dst. As with append,
+// value must not overlap the spare capacity of dst.
 func AppendTagValue[V []byte | string](dst []byte, tag int, value V) []byte {
 	dst = strconv.AppendInt(dst, int64(tag), 10)
 	dst = append(dst, '=')

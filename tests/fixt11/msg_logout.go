@@ -219,6 +219,7 @@ func BuildLogout(beginString string) *LogoutBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *LogoutBuilder) SetSenderCompID(v string) *LogoutBuilder {
@@ -347,6 +348,12 @@ func (b *LogoutBuilder) SetSignature(v []byte) *LogoutBuilder {
 func (b *LogoutBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogoutBuilder {
 	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *logout_groups) reset() {
+	clear(b.noHopsEntries)
+	b.noHopsEntries = b.noHopsEntries[:0]
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.

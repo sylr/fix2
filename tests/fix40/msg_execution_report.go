@@ -395,6 +395,7 @@ func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoMiscFees)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *ExecutionReportBuilder) SetSenderCompID(v string) *ExecutionReportBuilder {
@@ -667,6 +668,12 @@ func (b *ExecutionReportBuilder) SetSignature(v []byte) *ExecutionReportBuilder 
 func (b *ExecutionReportBuilder) AddNoMiscFeesEntry(e *NoMiscFeesEntryBuilder) *ExecutionReportBuilder {
 	b.groups.noMiscFeesEntries = append(b.groups.noMiscFeesEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *executionReport_groups) reset() {
+	clear(b.noMiscFeesEntries)
+	b.noMiscFeesEntries = b.noMiscFeesEntries[:0]
 }
 
 // appendTo appends the message's other repeating groups to dst.

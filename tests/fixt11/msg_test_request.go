@@ -207,6 +207,7 @@ func BuildTestRequest(beginString string) *TestRequestBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *TestRequestBuilder) SetSenderCompID(v string) *TestRequestBuilder {
@@ -329,6 +330,12 @@ func (b *TestRequestBuilder) SetSignature(v []byte) *TestRequestBuilder {
 func (b *TestRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *TestRequestBuilder {
 	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *testRequest_groups) reset() {
+	clear(b.noHopsEntries)
+	b.noHopsEntries = b.noHopsEntries[:0]
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.

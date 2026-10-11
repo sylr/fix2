@@ -468,3 +468,14 @@ func BenchmarkBuilderAppendTo(b *testing.B) {
 		buf = bl.AppendTo(buf[:0])
 	}
 }
+
+// Fields the groups write are checked against the reserved tags too.
+func TestBuilder_AppendBodyReservedInGroups(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D")
+	b.SetSections(nil, nil, func(dst []Field) []Field { return append(dst, Field{Tag: 34, Value: []byte("9")}) })
+	got, err := b.AppendBody([]byte("x"), func(tag int) bool { return tag == 34 })
+	var rerr *ReservedTagError
+	if !errors.As(err, &rerr) || rerr.Tag != 34 || string(got) != "x" {
+		t.Fatalf("AppendBody = %q, %v; want nothing appended and a ReservedTagError for 34", got, err)
+	}
+}

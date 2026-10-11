@@ -295,6 +295,7 @@ func BuildLogon(beginString string) *LogonBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(b.groups.appendTo, TagNoHops, TagNoMsgTypes)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *LogonBuilder) SetSenderCompID(v string) *LogonBuilder {
@@ -462,6 +463,14 @@ func (b *LogonBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *LogonBuilder {
 func (b *LogonBuilder) AddNoMsgTypesEntry(e *NoMsgTypesEntryBuilder) *LogonBuilder {
 	b.groups.noMsgTypesEntries = append(b.groups.noMsgTypesEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *logon_groups) reset() {
+	clear(b.noHopsEntries)
+	b.noHopsEntries = b.noHopsEntries[:0]
+	clear(b.noMsgTypesEntries)
+	b.noMsgTypesEntries = b.noMsgTypesEntries[:0]
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.

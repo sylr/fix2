@@ -219,6 +219,7 @@ func BuildResendRequest(beginString string) *ResendRequestBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *ResendRequestBuilder) SetSenderCompID(v string) *ResendRequestBuilder {
@@ -345,6 +346,12 @@ func (b *ResendRequestBuilder) SetSignature(v []byte) *ResendRequestBuilder {
 func (b *ResendRequestBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *ResendRequestBuilder {
 	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *resendRequest_groups) reset() {
+	clear(b.noHopsEntries)
+	b.noHopsEntries = b.noHopsEntries[:0]
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.

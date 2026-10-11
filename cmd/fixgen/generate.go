@@ -794,6 +794,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 			args = append(args, tagID(gd.Name))
 		}
 		ctor = append(ctor, jen.Id("b").Dot("SetGroups").Call(args...))
+		ctor = append(ctor, jen.Id("b").Dot("OnReset").Call(jen.Id("b").Dot("groups").Dot("reset")))
 	}
 	ctor = append(ctor, jen.Return(jen.Id("b")))
 	f.Func().Id("Build" + name).Params(
@@ -835,6 +836,19 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		f.Func().Params(jen.Id("b").Op("*").Id(groupsType)).Id(method).Params(
 			jen.Id("dst").Index().Qual(fix2Pkg, "Field"),
 		).Index().Qual(fix2Pkg, "Field").Block(body...)
+	}
+	if len(groups) > 0 {
+		// reset keeps the slices' storage for the next message.
+		var body []jen.Code
+		for _, gd := range groups {
+			field := jen.Id("b").Dot(entriesField(gd.Name))
+			body = append(body,
+				jen.Clear(field.Clone()),
+				field.Clone().Op("=").Add(field.Clone()).Index(jen.Empty(), jen.Lit(0)),
+			)
+		}
+		f.Comment("reset removes every group entry, for Builder.Reset.")
+		f.Func().Params(jen.Id("b").Op("*").Id(groupsType)).Id("reset").Params().Block(body...)
 	}
 	if len(headerGroups) > 0 {
 		writeGroupWriter("appendHeaderTo", "appendHeaderTo appends the standard header's repeating groups to dst.", headerGroups)

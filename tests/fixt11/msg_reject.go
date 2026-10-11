@@ -243,6 +243,7 @@ func BuildReject(beginString string) *RejectBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *RejectBuilder) SetSenderCompID(v string) *RejectBuilder {
@@ -387,6 +388,12 @@ func (b *RejectBuilder) SetSignature(v []byte) *RejectBuilder {
 func (b *RejectBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *RejectBuilder {
 	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *reject_groups) reset() {
+	clear(b.noHopsEntries)
+	b.noHopsEntries = b.noHopsEntries[:0]
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.

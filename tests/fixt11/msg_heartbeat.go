@@ -207,6 +207,7 @@ func BuildHeartbeat(beginString string) *HeartbeatBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
 	b.SetGroups(nil, TagNoHops)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *HeartbeatBuilder) SetSenderCompID(v string) *HeartbeatBuilder {
@@ -329,6 +330,12 @@ func (b *HeartbeatBuilder) SetSignature(v []byte) *HeartbeatBuilder {
 func (b *HeartbeatBuilder) AddNoHopsEntry(e *NoHopsEntryBuilder) *HeartbeatBuilder {
 	b.groups.noHopsEntries = append(b.groups.noHopsEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *heartbeat_groups) reset() {
+	clear(b.noHopsEntries)
+	b.noHopsEntries = b.noHopsEntries[:0]
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.

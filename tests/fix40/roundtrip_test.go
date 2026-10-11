@@ -121,3 +121,17 @@ func TestTrailerSignature(t *testing.T) {
 		t.Errorf("SignatureLength = %d, %v, %v", n, ok, err)
 	}
 }
+
+// Reset removes the repeating group entries of the previous message too.
+func TestBuilderResetClearsGroups(t *testing.T) {
+	b := BuildExecutionReport("FIX.4.0")
+	b.SetOrderID("O1").AddNoMiscFeesEntry(NewNoMiscFeesEntry().SetMiscFeeAmt(1))
+	if !bytes.Contains(b.Build(), []byte("\x01136=1\x01137=1\x01")) {
+		t.Fatal("first message lacks its group")
+	}
+	b.Reset()
+	b.SetOrderID("O2")
+	if got := b.Build(); bytes.Contains(got, []byte("136=")) {
+		t.Errorf("after Reset: %q still holds the previous message's group", got)
+	}
+}

@@ -1707,6 +1707,7 @@ func BuildNewOrderSingle(beginString string) *NewOrderSingleBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoAllocs, TagNoTradingSessions, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoStrategyParameters, TagNoTrdRegTimestamps)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *NewOrderSingleBuilder) SetClOrdID(v string) *NewOrderSingleBuilder {
@@ -2781,6 +2782,32 @@ func (b *NewOrderSingleBuilder) AddNoStrategyParametersEntry(e *NoStrategyParame
 func (b *NewOrderSingleBuilder) AddNoTrdRegTimestampsEntry(e *NoTrdRegTimestampsEntryBuilder) *NewOrderSingleBuilder {
 	b.groups.noTrdRegTimestampsEntries = append(b.groups.noTrdRegTimestampsEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *newOrderSingle_groups) reset() {
+	clear(b.noPartyIDsEntries)
+	b.noPartyIDsEntries = b.noPartyIDsEntries[:0]
+	clear(b.noAllocsEntries)
+	b.noAllocsEntries = b.noAllocsEntries[:0]
+	clear(b.noTradingSessionsEntries)
+	b.noTradingSessionsEntries = b.noTradingSessionsEntries[:0]
+	clear(b.noSecurityAltIDEntries)
+	b.noSecurityAltIDEntries = b.noSecurityAltIDEntries[:0]
+	clear(b.noEventsEntries)
+	b.noEventsEntries = b.noEventsEntries[:0]
+	clear(b.noInstrumentPartiesEntries)
+	b.noInstrumentPartiesEntries = b.noInstrumentPartiesEntries[:0]
+	clear(b.noComplexEventsEntries)
+	b.noComplexEventsEntries = b.noComplexEventsEntries[:0]
+	clear(b.noUnderlyingsEntries)
+	b.noUnderlyingsEntries = b.noUnderlyingsEntries[:0]
+	clear(b.noStipulationsEntries)
+	b.noStipulationsEntries = b.noStipulationsEntries[:0]
+	clear(b.noStrategyParametersEntries)
+	b.noStrategyParametersEntries = b.noStrategyParametersEntries[:0]
+	clear(b.noTrdRegTimestampsEntries)
+	b.noTrdRegTimestampsEntries = b.noTrdRegTimestampsEntries[:0]
 }
 
 // appendTo appends the message's other repeating groups to dst.

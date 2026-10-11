@@ -2416,6 +2416,7 @@ func BuildExecutionReport(beginString string) *ExecutionReportBuilder {
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	b.SetGroups(b.groups.appendTo, TagNoPartyIDs, TagNoContraBrokers, TagNoSecurityAltID, TagNoEvents, TagNoInstrumentParties, TagNoComplexEvents, TagNoUnderlyings, TagNoStipulations, TagNoContAmts, TagNoLegs, TagNoMiscFees, TagNoStrategyParameters, TagNoTrdRegTimestamps, TagNoAllocs, TagNoFills, TagNoRateSources)
+	b.OnReset(b.groups.reset)
 	return b
 }
 func (b *ExecutionReportBuilder) SetOrderID(v string) *ExecutionReportBuilder {
@@ -3853,6 +3854,42 @@ func (b *ExecutionReportBuilder) AddNoFillsEntry(e *NoFillsEntryBuilder) *Execut
 func (b *ExecutionReportBuilder) AddNoRateSourcesEntry(e *NoRateSourcesEntryBuilder) *ExecutionReportBuilder {
 	b.groups.noRateSourcesEntries = append(b.groups.noRateSourcesEntries, e)
 	return b
+}
+
+// reset removes every group entry, for Builder.Reset.
+func (b *executionReport_groups) reset() {
+	clear(b.noPartyIDsEntries)
+	b.noPartyIDsEntries = b.noPartyIDsEntries[:0]
+	clear(b.noContraBrokersEntries)
+	b.noContraBrokersEntries = b.noContraBrokersEntries[:0]
+	clear(b.noSecurityAltIDEntries)
+	b.noSecurityAltIDEntries = b.noSecurityAltIDEntries[:0]
+	clear(b.noEventsEntries)
+	b.noEventsEntries = b.noEventsEntries[:0]
+	clear(b.noInstrumentPartiesEntries)
+	b.noInstrumentPartiesEntries = b.noInstrumentPartiesEntries[:0]
+	clear(b.noComplexEventsEntries)
+	b.noComplexEventsEntries = b.noComplexEventsEntries[:0]
+	clear(b.noUnderlyingsEntries)
+	b.noUnderlyingsEntries = b.noUnderlyingsEntries[:0]
+	clear(b.noStipulationsEntries)
+	b.noStipulationsEntries = b.noStipulationsEntries[:0]
+	clear(b.noContAmtsEntries)
+	b.noContAmtsEntries = b.noContAmtsEntries[:0]
+	clear(b.noLegsEntries)
+	b.noLegsEntries = b.noLegsEntries[:0]
+	clear(b.noMiscFeesEntries)
+	b.noMiscFeesEntries = b.noMiscFeesEntries[:0]
+	clear(b.noStrategyParametersEntries)
+	b.noStrategyParametersEntries = b.noStrategyParametersEntries[:0]
+	clear(b.noTrdRegTimestampsEntries)
+	b.noTrdRegTimestampsEntries = b.noTrdRegTimestampsEntries[:0]
+	clear(b.noAllocsEntries)
+	b.noAllocsEntries = b.noAllocsEntries[:0]
+	clear(b.noFillsEntries)
+	b.noFillsEntries = b.noFillsEntries[:0]
+	clear(b.noRateSourcesEntries)
+	b.noRateSourcesEntries = b.noRateSourcesEntries[:0]
 }
 
 // appendTo appends the message's other repeating groups to dst.
