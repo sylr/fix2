@@ -311,3 +311,41 @@ func TestInitiator_LogonRejected(t *testing.T) {
 		t.Fatal("FromAdmin did not see the Reject")
 	}
 }
+
+// blockingSigner signs once release is closed.
+type blockingSigner struct {
+	*recorder
+	signing chan struct{}
+	release chan struct{}
+}
+
+func (s blockingSigner) SignLogon(_ context.Context, _ *session.Session, _ session.LogonHeader, b *fix2.Builder) error {
+	close(s.signing)
+	<-s.release
+	b.SetData(95, 96, []byte("sig"))
+	return nil
+}
+
+// A window ending while the Logon is signed disconnects: no Logout goes
+// out before the Logon.
+func TestInitiator_WindowEndsWhileSigning(t *testing.T) {
+	l := mem.Listen("acceptor")
+	now := time.Now()
+	signing, release := make(chan struct{}), make(chan struct{})
+	startInitiator(t, l, func(c *session.Config) {
+		c.Handler = blockingSigner{recorder: c.Handler.(*recorder), signing: signing, release: release}
+		c.Schedule = windows{{Start: now, End: now.Add(300 * time.Millisecond), ID: "w"}}
+	})
+	p := acceptPeer(t, l)
+	<-signing
+	time.Sleep(500 * time.Millisecond) // the window ends
+	close(release)
+	select {
+	case ev := <-p.frames:
+		if ev.err == nil {
+			t.Fatalf("sent %s, want a disconnection", visible(ev.frame))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("still connected after the window ended")
+	}
+}

@@ -765,12 +765,18 @@ func (s *Session) businessRejectLocked(m *fix2.Message, reason int, refID, text 
 }
 
 // logoutLocked sends a Logout with text and waits for the counterparty's,
-// at most LogoutTimeout, before disconnecting.
+// at most LogoutTimeout, before disconnecting; not logged on, it disconnects.
 func (s *Session) logoutLocked(c *conn, text string) {
 	if c.closed || s.c != c {
 		return
 	}
-	if s.phase == phaseLogoutSent {
+	switch s.phase {
+	case phaseLogoutSent:
+		return
+	case phaseAwaitingLogon, phaseLogonSent:
+		// Not logged on: a Logout could even precede our Logon, while a
+		// LogonSigner signs it. Disconnecting says enough.
+		s.disconnectLocked(c, &LogoutError{Text: text})
 		return
 	}
 	s.sendLogoutLocked(c, text)
