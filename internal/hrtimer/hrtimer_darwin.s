@@ -18,10 +18,15 @@ TEXT libc_mach_wait_until_trampoline<>(SB),NOSPLIT,$0-0
 GLOBL	·libc_mach_wait_until_trampoline_addr(SB), RODATA, $8
 DATA	·libc_mach_wait_until_trampoline_addr(SB)/8, $libc_mach_wait_until_trampoline<>(SB)
 
-TEXT libc_mach_thread_self_trampoline<>(SB),NOSPLIT,$0-0
-	JMP	libc_mach_thread_self(SB)
-GLOBL	·libc_mach_thread_self_trampoline_addr(SB), RODATA, $8
-DATA	·libc_mach_thread_self_trampoline_addr(SB)/8, $libc_mach_thread_self_trampoline<>(SB)
+TEXT libc_pthread_self_trampoline<>(SB),NOSPLIT,$0-0
+	JMP	libc_pthread_self(SB)
+GLOBL	·libc_pthread_self_trampoline_addr(SB), RODATA, $8
+DATA	·libc_pthread_self_trampoline_addr(SB)/8, $libc_pthread_self_trampoline<>(SB)
+
+TEXT libc_pthread_mach_thread_np_trampoline<>(SB),NOSPLIT,$0-0
+	JMP	libc_pthread_mach_thread_np(SB)
+GLOBL	·libc_pthread_mach_thread_np_trampoline_addr(SB), RODATA, $8
+DATA	·libc_pthread_mach_thread_np_trampoline_addr(SB)/8, $libc_pthread_mach_thread_np_trampoline<>(SB)
 
 TEXT libc_thread_policy_set_trampoline<>(SB),NOSPLIT,$0-0
 	JMP	libc_thread_policy_set(SB)

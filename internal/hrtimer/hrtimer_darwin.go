@@ -15,15 +15,17 @@ import (
 //go:cgo_import_dynamic libc_mach_absolute_time mach_absolute_time "/usr/lib/libSystem.B.dylib"
 //go:cgo_import_dynamic libc_mach_timebase_info mach_timebase_info "/usr/lib/libSystem.B.dylib"
 //go:cgo_import_dynamic libc_mach_wait_until mach_wait_until "/usr/lib/libSystem.B.dylib"
-//go:cgo_import_dynamic libc_mach_thread_self mach_thread_self "/usr/lib/libSystem.B.dylib"
+//go:cgo_import_dynamic libc_pthread_self pthread_self "/usr/lib/libSystem.B.dylib"
+//go:cgo_import_dynamic libc_pthread_mach_thread_np pthread_mach_thread_np "/usr/lib/libSystem.B.dylib"
 //go:cgo_import_dynamic libc_thread_policy_set thread_policy_set "/usr/lib/libSystem.B.dylib"
 
 var (
-	libc_mach_absolute_time_trampoline_addr uintptr
-	libc_mach_timebase_info_trampoline_addr uintptr
-	libc_mach_wait_until_trampoline_addr    uintptr
-	libc_mach_thread_self_trampoline_addr   uintptr
-	libc_thread_policy_set_trampoline_addr  uintptr
+	libc_mach_absolute_time_trampoline_addr     uintptr
+	libc_mach_timebase_info_trampoline_addr     uintptr
+	libc_mach_wait_until_trampoline_addr        uintptr
+	libc_pthread_self_trampoline_addr           uintptr
+	libc_pthread_mach_thread_np_trampoline_addr uintptr
+	libc_thread_policy_set_trampoline_addr      uintptr
 )
 
 //go:linkname syscall_syscall syscall.syscall
@@ -41,7 +43,6 @@ const (
 	// others, interrupted mach_wait_until.
 	kernAborted = 14
 
-	threadStandardPolicy            = 1
 	threadTimeConstraintPolicy      = 2
 	threadTimeConstraintPolicyCount = 4
 )
@@ -78,14 +79,12 @@ var machWaitUntil = func(deadline uint64) int {
 // reading of Go's monotonic clock, which on darwin is mach absolute time.
 // It never returns before deadline.
 //
-// It pins the goroutine to its thread, made a real-time one for the wait,
-// and gives it back the standard policy after: the thread then runs the
-// goroutines the wait wakes at once, instead of a thread of the scheduler's
-// being woken for them, some 50µs later. If the standard policy cannot be
-// restored, the goroutine stays pinned, and a goroutine that exits while
-// locked takes its thread down with it: no other goroutine ever runs on a
-// real-time thread. sleepUntil must therefore only run on a goroutine of
-// its own that exits right after.
+// It pins the goroutine to its thread and never unpins it. The thread is
+// made a real-time one below, and a goroutine that exits while locked takes
+// its thread down with it, so no other goroutine ever runs on a thread whose
+// policy this changed: going back to the standard policy would not restore
+// the thread's QoS, nor its priority. sleepUntil must therefore only run on a
+// goroutine of its own that exits right after.
 func sleepUntil(deadline time.Time) {
 	runtime.LockOSThread()
 	// macOS coalesces the timers of ordinary threads: their waits end
@@ -93,11 +92,8 @@ func sleepUntil(deadline time.Time) {
 	// time-constraint (real-time) thread are not coalesced, and end within
 	// tens of microseconds. A failure keeps the default policy: a less
 	// precise wait, not a wrong one.
-	rt := setTimeConstraint()
+	setTimeConstraint()
 	kernelSleep(deadline)
-	if !rt || setStandard() {
-		runtime.UnlockOSThread()
-	}
 	// Whatever the kernel wait did, refused or cut short, the wait must not
 	// fire early: the rest of it, if any, is waited out on a Go timer.
 	if rest := time.Until(deadline); rest > 0 {
@@ -105,11 +101,10 @@ func sleepUntil(deadline time.Time) {
 	}
 }
 
-// setTimeConstraint makes the calling thread a time-constraint one, and
-// reports whether it did: it asks for 100µs of computation within 1ms,
-// which a thread that only waits never exceeds, so the kernel never demotes
-// it.
-func setTimeConstraint() bool {
+// setTimeConstraint makes the calling thread a time-constraint one: it asks
+// for 100µs of computation within 1ms, which a thread that only waits never
+// exceeds, so the kernel never demotes it.
+func setTimeConstraint() {
 	policy := struct {
 		period, computation, constraint uint32
 		preemptible                     int32
@@ -118,20 +113,16 @@ func setTimeConstraint() bool {
 		constraint:  uint32(toAbs(time.Millisecond)),
 		preemptible: 1,
 	}
-	self, _, _ := syscall_rawSyscall(libc_mach_thread_self_trampoline_addr, 0, 0, 0)
-	r, _, _ := syscall_syscall6(libc_thread_policy_set_trampoline_addr, self, threadTimeConstraintPolicy,
+	syscall_syscall6(libc_thread_policy_set_trampoline_addr, threadPort(), threadTimeConstraintPolicy,
 		uintptr(unsafe.Pointer(&policy)), threadTimeConstraintPolicyCount, 0, 0)
-	return int32(r) == kernSuccess
 }
 
-// setStandard gives the calling thread back the standard policy, Go's
-// threads' own, and reports whether it did.
-func setStandard() bool {
-	var policy struct{ noData uint32 }
-	self, _, _ := syscall_rawSyscall(libc_mach_thread_self_trampoline_addr, 0, 0, 0)
-	r, _, _ := syscall_syscall6(libc_thread_policy_set_trampoline_addr, self, threadStandardPolicy,
-		uintptr(unsafe.Pointer(&policy)), 0, 0, 0)
-	return int32(r) == kernSuccess
+// threadPort returns the calling thread's Mach port. Unlike mach_thread_self,
+// pthread_mach_thread_np takes no reference on it: there is none to release.
+func threadPort() uintptr {
+	self, _, _ := syscall_rawSyscall(libc_pthread_self_trampoline_addr, 0, 0, 0)
+	port, _, _ := syscall_rawSyscall(libc_pthread_mach_thread_np_trampoline_addr, self, 0, 0)
+	return port
 }
 
 // kernelSleep waits in mach_wait_until until deadline, returning early only
