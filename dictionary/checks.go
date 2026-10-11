@@ -287,4 +287,3 @@ func (d *Dict) checkCount(declared []byte, entries []fix2.Group, spec *fix2.Grou
 	}
 	return nil
 }
-

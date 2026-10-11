@@ -58,29 +58,45 @@ func (d *Dict) dataProfile() *fix2.Profile {
 			}
 		}
 	}
-	// By position.
-	var walkRefs func(refs []FieldRef)
-	walkRefs = func(refs []FieldRef) {
+	// By position, within one scope: a message's fields hold its groups'
+	// fields too, which are another scope.
+	walkRefs := func(refs []FieldRef, skip map[int]bool) {
 		for i := 1; i < len(refs); i++ {
-			if t := refs[i].Tag; !used[t] && isData(t) {
-				pair(refs[i-1].Tag, t, false)
+			l, t := refs[i-1].Tag, refs[i].Tag
+			if !used[t] && isData(t) && !skip[l] && !skip[t] {
+				pair(l, t, false)
 			}
 		}
 	}
-	var walkGroups func(groups []GroupDef)
-	walkGroups = func(groups []GroupDef) {
+	// groupTags adds the tags of groups, nested ones included, to tags, and
+	// walks each group's own fields, without its nested groups' fields.
+	var walkGroups func(groups []GroupDef, tags map[int]bool)
+	walkGroups = func(groups []GroupDef, tags map[int]bool) {
 		for _, g := range groups {
-			walkRefs(g.Fields)
-			walkGroups(g.Groups)
+			nested := map[int]bool{}
+			walkGroups(g.Groups, nested)
+			walkRefs(g.Fields, nested)
+			tags[g.CounterTag] = true
+			for _, f := range g.Fields {
+				tags[f.Tag] = true
+			}
+			for t := range nested {
+				tags[t] = true
+			}
 		}
 	}
-	walkRefs(d.Header)
-	walkRefs(d.Trailer)
-	walkGroups(d.HeaderGroups)
-	walkGroups(d.TrailerGroups)
+	for _, scope := range []struct {
+		refs   []FieldRef
+		groups []GroupDef
+	}{{d.Header, d.HeaderGroups}, {d.Trailer, d.TrailerGroups}} {
+		inGroups := map[int]bool{}
+		walkGroups(scope.groups, inGroups)
+		walkRefs(scope.refs, inGroups)
+	}
 	for _, mt := range slices.Sorted(maps.Keys(d.Messages)) {
-		walkRefs(d.Messages[mt].Fields)
-		walkGroups(d.Messages[mt].Groups)
+		inGroups := map[int]bool{}
+		walkGroups(d.Messages[mt].Groups, inGroups)
+		walkRefs(d.Messages[mt].Fields, inGroups)
 	}
 
 	p, err := fix2.NewProfile(pairs)

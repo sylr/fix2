@@ -11,7 +11,7 @@ import "maps"
 // transport's own messages (Logon, Heartbeat...) are kept and win over app
 // messages of the same MsgType. Fields come from both; for a tag both define,
 // app's definition is used, with the enums of both (no restriction if either
-// has none). The result takes app's version. transport and app are not
+// has none, nil or empty). The result takes app's version. transport and app are not
 // changed.
 func Compose(transport, app *Dict) *Dict {
 	d := &Dict{
@@ -36,7 +36,7 @@ func Compose(transport, app *Dict) *Dict {
 			continue
 		}
 		merged := *fd
-		if fd.Enums != nil && t.Enums != nil {
+		if len(fd.Enums) > 0 && len(t.Enums) > 0 {
 			merged.Enums = maps.Clone(t.Enums)
 			maps.Copy(merged.Enums, fd.Enums)
 		} else {

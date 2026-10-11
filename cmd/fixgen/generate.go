@@ -17,7 +17,6 @@ import (
 	"unicode"
 
 	"github.com/dave/jennifer/jen"
-	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
 )
 
@@ -115,7 +114,7 @@ func checkNames(dict *dictionary.Dict) error {
 	var checkGroups func(gs []dictionary.GroupDef) error
 	checkGroups = func(gs []dictionary.GroupDef) error {
 		for _, gd := range gs {
-			if fix2.DataLengthTag(gd.DelimTag) != 0 {
+			if dict.Profile().DataLengthTag(gd.DelimTag) != 0 {
 				return fmt.Errorf("group %s starts with DATA field %s, which must follow its LENGTH field", gd.Name, dict.Fields[gd.DelimTag].Name)
 			}
 			if err := checkGroups(gd.Groups); err != nil {
@@ -398,11 +397,11 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 			// Keep both fields of a LENGTH/DATA pair in the section, even
 			// if the dictionary lists one of them elsewhere, so SetData's
 			// adjacent pair is not split between sections.
-			if l := fix2.DataLengthTag(ref.Tag); l != 0 {
+			if l := dict.Profile().DataLengthTag(ref.Tag); l != 0 {
 				add(l)
 			}
 			add(ref.Tag)
-			if d := fix2.DataTag(ref.Tag); d != 0 {
+			if d := dict.Profile().DataTag(ref.Tag); d != 0 {
 				add(d)
 			}
 		}
@@ -591,7 +590,7 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		if isDataLength(dict, fr.Tag) {
 			continue // computed by the DATA setter
 		}
-		if l := fix2.DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
+		if l := dict.Profile().DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
 			addEntryDataSetter(f, entryBuilderName, fd.Name, dict.Fields[l].Name)
 			continue
 		}
@@ -811,7 +810,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		if slices.Contains(builderMethods, "Set"+fi.name) {
 			return fmt.Errorf("field %s: its setter Set%s would shadow fix2.Builder.Set%s", fi.name, fi.name, fi.name)
 		}
-		if l := fix2.DataLengthTag(fi.tag); l != 0 && dict.Fields[l] != nil {
+		if l := dict.Profile().DataLengthTag(fi.tag); l != 0 && dict.Fields[l] != nil {
 			addDataSetter(f, builderName, fi.name, dict.Fields[l].Name)
 			continue
 		}
@@ -904,7 +903,7 @@ func groupFieldTags(dict *dictionary.Dict, gd dictionary.GroupDef) (declared, pa
 		declared = append(declared, fr.Tag)
 	}
 	for _, tag := range declared {
-		for _, p := range []int{fix2.DataLengthTag(tag), fix2.DataTag(tag)} {
+		for _, p := range []int{dict.Profile().DataLengthTag(tag), dict.Profile().DataTag(tag)} {
 			if p != 0 && dict.Fields[p] != nil && !slices.Contains(declared, p) && !slices.Contains(partners, p) {
 				partners = append(partners, p)
 			}
@@ -945,11 +944,11 @@ func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
 		// DATA setters write the LENGTH and DATA fields together (see
 		// pairDataLengths), even when the group declares only one of them:
 		// readers must accept both.
-		if l := fix2.DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
+		if l := dict.Profile().DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
 			addTag(l)
 		}
 		addTag(fr.Tag)
-		if d := fix2.DataTag(fr.Tag); d != 0 && dict.Fields[d] != nil {
+		if d := dict.Profile().DataTag(fr.Tag); d != 0 && dict.Fields[d] != nil {
 			addTag(d)
 		}
 	}
@@ -1250,13 +1249,13 @@ func writeEntryAppendTo(f *jen.File, entryBuilderName string, mg dictionary.Grou
 func pairDataLengths(dict *dictionary.Dict, layout []int) []int {
 	out := slices.Clone(layout)
 	for i := 0; i < len(out); i++ {
-		if d := fix2.DataTag(out[i]); d != 0 && dict.Fields[d] != nil && !slices.Contains(out, d) {
+		if d := dict.Profile().DataTag(out[i]); d != 0 && dict.Fields[d] != nil && !slices.Contains(out, d) {
 			out = slices.Insert(out, i+1, d)
 		}
 	}
 	layout = slices.Clone(out)
 	for _, tag := range layout {
-		l := fix2.DataLengthTag(tag)
+		l := dict.Profile().DataLengthTag(tag)
 		if l == 0 || dict.Fields[l] == nil || len(out) == 0 {
 			continue
 		}
@@ -1443,7 +1442,7 @@ func addSetter(f *jen.File, builderName string, tag int, fieldName, fixType stri
 // parser reads by length: its value is computed by the DATA setter, so it
 // gets no setter of its own.
 func isDataLength(dict *dictionary.Dict, tag int) bool {
-	data := fix2.DataTag(tag)
+	data := dict.Profile().DataTag(tag)
 	return data != 0 && dict.Fields[data] != nil
 }
 

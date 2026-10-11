@@ -2,6 +2,7 @@ package dictionary_test
 
 import (
 	"errors"
+	"maps"
 	"strconv"
 	"testing"
 
@@ -57,5 +58,23 @@ func TestCompose(t *testing.T) {
 	}
 	if err := app.Validate(&order); !errors.Is(err, dictionary.ErrUnexpectedTag) {
 		t.Errorf("app after Compose: got %v", err)
+	}
+}
+
+// An empty enum map restricts nothing, in Compose as in Validate.
+func TestCompose_EmptyEnums(t *testing.T) {
+	transport, app := fixt11.Dictionary(), fix50sp2.Dictionary()
+	tr := *transport
+	tr.Fields = maps.Clone(transport.Fields)
+	text := *tr.Fields[58]
+	text.Enums = map[string]string{}
+	tr.Fields[58] = &text
+	ap := *app
+	ap.Fields = maps.Clone(app.Fields)
+	appText := dictionary.FieldDef{Tag: 58, Name: "Text", Type: "STRING", Enums: map[string]string{"A": "A"}}
+	ap.Fields[58] = &appText
+	d := dictionary.Compose(&tr, &ap)
+	if fd := d.Fields[58]; len(fd.Enums) != 0 {
+		t.Errorf("composed Text enums = %v, want none", fd.Enums)
 	}
 }

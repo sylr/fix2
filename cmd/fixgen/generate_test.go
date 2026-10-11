@@ -1770,3 +1770,46 @@ func TestTrailerLength(t *testing.T) {
 }
 `)
 }
+
+// TestGenerateCustomDataPair covers a DATA field only the dictionary pairs
+// with its LENGTH field: the generated setter writes both, and messages parse
+// with the dictionary's profile.
+func TestGenerateCustomDataPair(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4" servicepack="0">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages>
+    <message name="Blob" msgtype="U1" msgcat="app">
+      <field name="CustomBlobLen" required="N"/>
+      <field name="CustomBlob" required="N"/>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="50001" name="CustomBlobLen" type="LENGTH"/>
+    <field number="50002" name="CustomBlob" type="DATA"/>
+  </fields>
+</fix>`
+	runGenerated(t, xml, "blob", `package blob
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestCustomPair(t *testing.T) {
+	raw := BuildBlob("FIX.4.4").SetCustomBlob([]byte("a\x01b")).Build()
+	var m fix2.Message
+	if err := fix2.ParseInto(&m, raw, Dictionary().Profile()); err != nil {
+		t.Fatalf("ParseInto(%q): %v", raw, err)
+	}
+	if got, _ := WrapBlob(&m).CustomBlob(); string(got) != "a\x01b" {
+		t.Errorf("CustomBlob = %q", got)
+	}
+	if err := Dictionary().Validate(&m); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+}
+`)
+}
