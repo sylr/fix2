@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -116,7 +117,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		Handler:      c,
 	}
 	if o.trace {
-		cfg.Observer = session.SlogObserver{Logger: log}
+		// Every message, field by field; Username (553) holds the API key.
+		cfg.Observer = session.SlogObserver{
+			Logger:     log,
+			Tags:       append(slices.Clone(session.SensitiveTags), spotmd.TagUsername),
+			Dictionary: spotmd.Dictionary(),
+		}
 	}
 	opts := initiatorOptions
 	opts.Logger = log
@@ -322,7 +328,13 @@ func (c *client) subscribeLocked(ctx context.Context, s *session.Session, symbol
 	}
 	c.sent[r.Seq()] = id
 	c.subs[id] = &sub{id: id, symbol: symbol}
-	c.log.LogAttrs(ctx, slog.LevelDebug, "subscribing", slog.String("symbol", symbol), slog.String("md_req_id", id))
+	// Binance acknowledges book subscriptions with a snapshot, trades with
+	// nothing: say what to wait for.
+	msg := "subscribed, waiting for the snapshot"
+	if c.cmd.kind == kindTrades {
+		msg = "subscribed, waiting for trades"
+	}
+	c.log.LogAttrs(ctx, slog.LevelInfo, msg, slog.String("symbol", symbol), slog.String("md_req_id", id))
 }
 
 // request returns a MarketDataRequest id of type typ at depth.

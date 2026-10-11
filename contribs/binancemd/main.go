@@ -127,7 +127,7 @@ Market data needs the FIX_API or FIX_API_READ_ONLY permission.`,
 	pf.BoolVar(&o.json, "json", false, "write JSON lines")
 	pf.BoolVar(&o.validate, "validate", false, "validate received messages against Binance's dictionary: invalid ones are rejected, not shown")
 	pf.BoolVarP(&o.verbose, "verbose", "v", false, "log the session's events in detail")
-	pf.BoolVar(&o.trace, "trace", false, "log every FIX message, credentials redacted")
+	pf.BoolVar(&o.trace, "trace", false, "log every FIX message, field by field, credentials redacted")
 
 	add := func(use, short string, k kind, args cobra.PositionalArgs) *cobra.Command {
 		c := &cobra.Command{
