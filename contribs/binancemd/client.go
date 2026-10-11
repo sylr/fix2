@@ -18,7 +18,7 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/cmd/binancemd/internal/spotmd"
+	"github.com/sylr/fix2/contribs/binancemd/internal/spotmd"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/transport"
 	"github.com/sylr/fix2/session/transport/tcp"
