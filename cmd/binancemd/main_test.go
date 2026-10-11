@@ -69,7 +69,7 @@ func TestRun_Usage(t *testing.T) {
 	for _, args := range [][]string{
 		nil,
 		{"nope"},
-		{"trades"},                                        // no symbol
+		{"trades"}, // no symbol
 		{"-heartbeat", "2s", "trades", "BTCUSDT"},         // too short
 		{"limits", "BTCUSDT"},                             // no symbol taken
 		{"book", "-levels", "1", "BTCUSDT"},               // too few levels
@@ -434,5 +434,93 @@ func TestLogonRejected(t *testing.T) {
 		done <- nil
 	case <-time.After(5 * time.Second):
 		t.Fatal("a rejected logon did not end the command")
+	}
+}
+
+// A long answer may come in several messages.
+func TestInstruments_SeveralMessages(t *testing.T) {
+	l := mem.Listen("binance")
+	out, _, done := startClient(t, l, nil, "instruments")
+	f := acceptBinance(t, l, pub(t))
+	f.logon()
+	x := f.expect("x")
+	if string(x.Get(559)) != "4" {
+		t.Errorf("InstrumentListRequestType %s, want 4 (all)", x.Get(559))
+	}
+	id := string(x.Get(320))
+	f.send("y", "320", id, "146", "1", "55", "BTCUSDT", "15", "USDT")
+	f.send("y", "320", id, "146", "1", "55", "ETHUSDT", "15", "USDT")
+	f.expect("5")
+	f.send("5")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	done <- nil
+	if lines := waitLines(t, out, 2); len(lines) != 2 {
+		t.Errorf("got %d instruments, want 2:\n%s", len(lines), out.String())
+	}
+}
+
+// Once logged on, a refused Logon is retried, maxRefusals times in a row.
+func TestLogonRefusedAfterReconnect(t *testing.T) {
+	saved := initiatorOptions
+	initiatorOptions.ReconnectMin, initiatorOptions.ReconnectMax = 10*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { initiatorOptions = saved })
+	l := mem.Listen("binance")
+	_, _, done := startClient(t, l, nil, "trades", "BTCUSDT")
+	f := acceptBinance(t, l, pub(t))
+	f.logon()
+	f.expect("V")
+	f.conn.Close()
+	for i := range maxRefusals {
+		f = acceptBinance(t, l, pub(t))
+		m := f.expect("A")
+		f.cid = string(m.Get(49))
+		if i%2 == 0 {
+			f.send("5", "58", "Invalid signature.")
+		} else {
+			f.send("3", "45", "1", "372", "A", "373", "8", "25016", "-1022", "58", "Signature for this request is not valid.")
+		}
+		select {
+		case err := <-done:
+			if i < maxRefusals-1 {
+				t.Fatalf("gave up after %d refusals: %v", i+1, err)
+			}
+			if err == nil || !strings.Contains(err.Error(), "Invalid signature.") {
+				t.Errorf("stream = %v", err)
+			}
+			done <- nil
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "Invalid signature.") {
+			t.Errorf("stream = %v", err)
+		}
+		done <- nil
+	case <-time.After(5 * time.Second):
+		t.Fatalf("still retrying after %d refusals", maxRefusals)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	l := mem.Listen("binance")
+	out, _, _ := startClient(t, l, func(o *options) { o.validate = true }, "depth", "BTCUSDT")
+	f := acceptBinance(t, l, pub(t))
+	f.logon()
+	id := string(f.expect("V").Get(262))
+	f.send("W", "262", id, "55", "BTCUSDT", "25044", "7", "268", "1", "269", "0", "270", "99.00", "271", "1.0")
+	// Invalid: rejected, not shown.
+	f.send("X", "262", id, "268", "1", "279", "9", "270", "99.10", "269", "0")
+	r := f.expect("3")
+	if string(r.Get(371)) != "279" {
+		t.Errorf("Reject RefTagID %s, want 279", r.Get(371))
+	}
+	f.send("X", "262", id, "268", "1", "279", "1", "270", "99.10", "271", "2", "269", "0", "25043", "8", "25044", "8")
+	lines := waitLines(t, out, 2)
+	if !strings.Contains(lines[0], `"type":"snapshot"`) || !strings.Contains(lines[1], `"first_update_id":8`) {
+		t.Errorf("output:\n%s", out.String())
 	}
 }

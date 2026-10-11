@@ -1,9 +1,9 @@
-// Command binance-md streams Binance Spot market data over the Binance FIX
+// Command binancemd streams Binance Spot market data over the Binance FIX
 // API: trades, best bid and offer, order book depth, instruments and limits.
 //
 // Usage:
 //
-//	binance-md [flags] <command> [flags] [SYMBOL...]
+//	binancemd [flags] <command> [flags] [SYMBOL...]
 //
 // Commands:
 //
@@ -48,7 +48,7 @@ type options struct {
 	testnet   bool
 	heartbeat time.Duration
 	json      bool
-	dict      string
+	validate  bool
 	verbose   bool
 	trace     bool
 	// Command flags.
@@ -64,12 +64,12 @@ func (o *options) global(fs *flag.FlagSet) {
 	fs.BoolVar(&o.testnet, "testnet", o.testnet, "use the Spot testnet, "+testnetEndpoint)
 	fs.DurationVar(&o.heartbeat, "heartbeat", o.heartbeat, "heartbeat interval, 5s to 60s")
 	fs.BoolVar(&o.json, "json", o.json, "write JSON lines")
-	fs.StringVar(&o.dict, "dict", o.dict, "validate received messages against this QuickFIX XML dictionary (such as Binance's spot-fix-md.xml)")
+	fs.BoolVar(&o.validate, "validate", o.validate, "validate received messages against Binance's dictionary: invalid ones are rejected, not shown")
 	fs.BoolVar(&o.verbose, "v", o.verbose, "log the session's events in detail")
 	fs.BoolVar(&o.trace, "trace", o.trace, "log every FIX message, credentials redacted")
 }
 
-const usage = `Usage: binance-md [flags] <command> [flags] [SYMBOL...]
+const usage = `Usage: binancemd [flags] <command> [flags] [SYMBOL...]
 
 Streams Binance Spot market data over the FIX API.
 
@@ -94,7 +94,7 @@ func main() {
 // run runs the command line args and returns the exit code.
 func run(args []string, stdout, stderr io.Writer) int {
 	o := &options{heartbeat: 30 * time.Second, levels: 100, show: 10}
-	root := flag.NewFlagSet("binance-md", flag.ContinueOnError)
+	root := flag.NewFlagSet("binancemd", flag.ContinueOnError)
 	root.SetOutput(stderr)
 	o.global(root)
 	root.Usage = func() {
@@ -111,11 +111,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	name := root.Arg(0)
 	cmd, ok := commands[name]
 	if !ok {
-		fmt.Fprintf(stderr, "binance-md: unknown command %q\n\n", name)
+		fmt.Fprintf(stderr, "binancemd: unknown command %q\n\n", name)
 		root.Usage()
 		return 2
 	}
-	fs := flag.NewFlagSet("binance-md "+name, flag.ContinueOnError)
+	fs := flag.NewFlagSet("binancemd "+name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	o.global(fs)
 	if cmd.kind == kindDepth || cmd.kind == kindBook {
@@ -133,7 +133,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		symbols[i] = strings.ToUpper(s)
 	}
 	if err := o.check(cmd, symbols); err != nil {
-		fmt.Fprintf(stderr, "binance-md: %v\n", err)
+		fmt.Fprintf(stderr, "binancemd: %v\n", err)
 		return 2
 	}
 
@@ -146,7 +146,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	defer stop()
 	err := stream(ctx, o, cmd, symbols, newOutput(stdout, o.json, isTerminal(stdout)), logger)
 	if err != nil {
-		fmt.Fprintf(stderr, "binance-md: %v\n", err)
+		fmt.Fprintf(stderr, "binancemd: %v\n", err)
 		return 1
 	}
 	return 0
