@@ -135,6 +135,7 @@ func TestSlogObserverDictionary(t *testing.T) {
 		SetString(11, "O1").SetString(54, "1").Build()
 	o.OnOutbound(s, Frame{Raw: order, Seq: 2})
 	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "A").SetString(554, "pw").Build(), Seq: 1})
+	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "5").SetString(58, "bye\nFORGED").Build(), Seq: 2})
 	got := buf.String()
 	for _, want := range []string{
 		`msg="-> Header:  8(BeginString)=FIX.4.4, 9(BodyLength)=`,
@@ -143,6 +144,7 @@ func TestSlogObserverDictionary(t *testing.T) {
 		`msg="-> Trailer: 10(CheckSum)=`,
 		`msg="<- Body:    554=***"`, // redacted; this dictionary has no Password
 		"session=FIX.4.4:A->B seq=2",
+		`msg="<- Body:    58=bye\\nFORGED"`, // escaped twice: by AppendField, then by the text handler
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log lacks %s:\n%s", want, got)

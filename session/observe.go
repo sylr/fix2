@@ -201,8 +201,9 @@ func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix2.Profile
 		return false
 	}
 	var parts [len(sectionLabels)][]byte
-	for _, f := range m.Fields() {
-		b := &parts[o.Dictionary.SectionOf(f.Tag)]
+	sections := o.Dictionary.Sections(&m)
+	for i, f := range m.Fields() {
+		b := &parts[sections[i]]
 		if len(*b) > 0 {
 			*b = append(*b, ", "...)
 		}
