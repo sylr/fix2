@@ -61,9 +61,9 @@ var (
 	dynIniID = session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
 )
 
-// dynamic runs an acceptor with no session, opts.Resolve creating them, and
-// returns it with its listener and log.
-func dynamic(t *testing.T, opts session.AcceptorOptions) (*session.Acceptor, *mem.Listener, logs) {
+// runAcceptor runs an acceptor with opts and no session, and returns it
+// with its listener and log.
+func runAcceptor(t *testing.T, opts session.AcceptorOptions) (*session.Acceptor, *mem.Listener, logs) {
 	t.Helper()
 	l := mem.Listen("acceptor")
 	log := make(logs, 100)
@@ -82,29 +82,43 @@ func dynamic(t *testing.T, opts session.AcceptorOptions) (*session.Acceptor, *me
 // sessions' log.
 func initiate(t *testing.T, l *mem.Listener, n int) ([]*recorder, logs) {
 	t.Helper()
+	rs := make([]*recorder, n)
+	hs := make([]session.Handler, n)
+	for i := range rs {
+		rs[i] = newRecorder()
+		hs[i] = rs[i]
+	}
+	_, log := initiateWith(t, l, hs...)
+	return rs, log
+}
+
+// initiateWith runs an initiator of session INI->ACC on l for each handler,
+// each its own Initiator, and returns their sessions and their log.
+func initiateWith(t *testing.T, l *mem.Listener, handlers ...session.Handler) ([]*session.Session, logs) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	t.Cleanup(func() { cancel(); wg.Wait() })
 	log := make(logs, 100)
-	var rs []*recorder
-	for range n {
+	var ss []*session.Session
+	for _, h := range handlers {
 		i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 20 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
-		r := newRecorder()
-		if _, err := i.Add(session.Config{ID: dynIniID, Handler: r, Logger: slog.New(log)}, l); err != nil {
+		s, err := i.Add(session.Config{ID: dynIniID, Handler: h, Logger: slog.New(log)}, l)
+		if err != nil {
 			t.Fatal(err)
 		}
 		wg.Add(1)
 		go func() { defer wg.Done(); i.Run(ctx) }()
-		rs = append(rs, r)
+		ss = append(ss, s)
 	}
-	return rs, log
+	return ss, log
 }
 
 func TestDynamicSession(t *testing.T) {
 	ar := newRecorder()
 	var calls atomic.Int32
 	var got session.LogonRequest
-	a, l, _ := dynamic(t, session.AcceptorOptions{
+	a, l, _ := runAcceptor(t, session.AcceptorOptions{
 		Resolve: func(_ context.Context, req *session.LogonRequest) (*session.Config, error) {
 			calls.Add(1)
 			got = *req
@@ -154,7 +168,7 @@ func TestDynamicSession(t *testing.T) {
 func TestDynamicSessionKeptAcrossConnections(t *testing.T) {
 	ar := newRecorder()
 	var calls atomic.Int32
-	a, l, _ := dynamic(t, session.AcceptorOptions{
+	a, l, _ := runAcceptor(t, session.AcceptorOptions{
 		Resolve: func(_ context.Context, req *session.LogonRequest) (*session.Config, error) {
 			calls.Add(1)
 			return &session.Config{ID: req.ID, Handler: ar}, nil
@@ -246,7 +260,7 @@ func TestDynamicSessionRefused(t *testing.T) {
 		created: true,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			a, l, log := dynamic(t, tc.opts)
+			a, l, log := runAcceptor(t, tc.opts)
 			irs, ilog := initiate(t, l, 1)
 			log.wait(t, tc.log)
 			// The connection is closed: the initiator tries again.
@@ -269,7 +283,7 @@ func TestDynamicSessionRefused(t *testing.T) {
 func TestDynamicSessionRouted(t *testing.T) {
 	ar := newRecorder()
 	routed := make(chan []session.SessionID, 10)
-	_, l, _ := dynamic(t, session.AcceptorOptions{
+	_, l, _ := runAcceptor(t, session.AcceptorOptions{
 		Resolve: func(_ context.Context, req *session.LogonRequest) (*session.Config, error) {
 			return &session.Config{ID: req.ID, Handler: ar}, nil
 		},
@@ -297,7 +311,7 @@ func TestDynamicSessionRace(t *testing.T) {
 	ar := newRecorder()
 	var calls atomic.Int32
 	release := make(chan struct{})
-	a, l, log := dynamic(t, session.AcceptorOptions{
+	a, l, log := runAcceptor(t, session.AcceptorOptions{
 		Resolve: func(ctx context.Context, req *session.LogonRequest) (*session.Config, error) {
 			calls.Add(1)
 			// Or the acceptor stops, should the test fail first.
@@ -350,7 +364,7 @@ func TestDynamicSessionRaceAdd(t *testing.T) {
 	added, resolved := newRecorder(), newRecorder()
 	entered, release := make(chan struct{}), make(chan struct{})
 	resolvedStore := memstore.New()
-	a, l, log := dynamic(t, session.AcceptorOptions{
+	a, l, log := runAcceptor(t, session.AcceptorOptions{
 		Resolve: func(ctx context.Context, req *session.LogonRequest) (*session.Config, error) {
 			close(entered)
 			// Or the acceptor stops, should the test fail first.
