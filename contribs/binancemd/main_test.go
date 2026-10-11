@@ -69,6 +69,8 @@ func TestLoadKey_NotEd25519(t *testing.T) {
 func TestRun_Usage(t *testing.T) {
 	var stderr bytes.Buffer
 	for _, args := range [][]string{
+		nil,                   // no command
+		{"--heartbeat", "2s"}, // no command
 		{"nope"},
 		{"trades"}, // no symbol
 		{"--heartbeat", "2s", "trades", "BTCUSDT"},         // too short

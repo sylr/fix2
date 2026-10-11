@@ -173,4 +173,4 @@ tools: $(GO_TOOLS_GOLANGCI_LINT)
 $(GO_TOOLS_GOLANGCI_LINT):
 	tmp=$$(mktemp -d) && \
 		GOBIN=$$tmp $(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GO_TOOLS_GOLANGCI_LINT_VERSION) && \
-		mv $$tmp/golangci-lint $@ && rmdir $$tmp
+		mkdir -p $(dir $@) && mv $$tmp/golangci-lint $@ && rmdir $$tmp

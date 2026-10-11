@@ -106,6 +106,10 @@ permission.`,
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Without a command, nothing asked for was done: a usage error.
+		RunE: func(*cobra.Command, []string) error {
+			return errors.New("no command given")
+		},
 	}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
