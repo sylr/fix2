@@ -107,6 +107,7 @@ var (
 	yes       = []byte("Y")
 	msgLogon  = []byte("A")
 	msgLogout = []byte("5")
+	msgReject = []byte("3")
 )
 
 // badTagNumber tells whether frame failed to parse only for a malformed tag
@@ -241,6 +242,13 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, now ti
 
 	switch s.phase {
 	case phaseAwaitingLogon, phaseLogonSent:
+		if bytes.Equal(msgType, msgLogout) || bytes.Equal(msgType, msgReject) {
+			// The counterparty refuses to log on, with a Logout or, as
+			// some venues do, a Reject of our Logon: the handler sees it,
+			// and the reason tells why.
+			s.disconnectLocked(c, &LogoutError{ByCounterparty: true, Text: logonRefusal(m)})
+			return in, true
+		}
 		if !bytes.Equal(msgType, msgLogon) {
 			s.disconnectLocked(c, &LogoutError{Text: fmt.Sprintf("first message is MsgType %s, not a Logon", msgType)})
 			return in, false
@@ -946,4 +954,23 @@ func handledMarker(beginString string, seq uint64) []byte {
 	b = fix2.AppendTagInt(b, 9, int64(len(body)))
 	b = append(b, body...)
 	return fix2.AppendTrailer(b, 0)
+}
+
+// logonRefusal describes m, a Logout or Reject refusing our Logon.
+func logonRefusal(m *fix2.Message) string {
+	text := "Logon refused"
+	if string(m.MsgType()) == "3" {
+		text = "Logon rejected"
+		if v := m.Get(tagSessionRejectReason); v != nil {
+			if n, err := fix2.ParseInt(v); err == nil {
+				text += fmt.Sprintf(" (SessionRejectReason %d: %s)", n, dictionary.RejectReason(n))
+			} else {
+				text += " (SessionRejectReason " + quoteValue(v) + ")"
+			}
+		}
+	}
+	if t := m.Get(tagText); len(t) > 0 {
+		text += ": " + string(t)
+	}
+	return text
 }

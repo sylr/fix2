@@ -51,12 +51,50 @@ func (s *Session) logon(c *conn) error {
 		s.resetStoreLocked("ResetOnLogon")
 		s.sentReset = true
 	}
+	h := &header{msgType: "A", sendingTime: time.Now()}
+	if signer, ok := s.handler.(LogonSigner); ok {
+		// The signature covers the MsgSeqNum and SendingTime: both are
+		// fixed before the handler signs, outside the lock, and the
+		// MsgSeqNum checked after. Nothing else sends before a Logon.
+		seq := s.st.NextSender
+		s.mu.Unlock()
+		sig, err := s.signLogon(signer, seq, h.sendingTime)
+		s.mu.Lock()
+		if c.closed || s.c != c {
+			return c.reason
+		}
+		if err == nil && s.st.NextSender != seq {
+			err = fmt.Errorf("MsgSeqNum changed from %d to %d while the Logon was signed", seq, s.st.NextSender)
+		}
+		if err != nil {
+			s.disconnectLocked(c, &LogoutError{Text: "Logon signature failed", Err: err})
+			return err
+		}
+		extra = append(extra, sig...)
+	}
 	b := s.logonBody(s.sentReset, s.st.NextTarget)
 	b = append(b, extra...)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "sending Logon",
 		slog.Uint64("seq", s.st.NextSender), slog.Bool("reset", s.sentReset))
-	s.sendAdminLocked(&header{msgType: "A"}, b)
+	s.sendAdminLocked(h, b)
 	return nil
+}
+
+// signLogon asks signer for the signature fields of the Logon with MsgSeqNum
+// seq sent at sendingTime.
+func (s *Session) signLogon(signer LogonSigner, seq uint64, sendingTime time.Time) ([]byte, error) {
+	h := LogonHeader{
+		BeginString:  s.id.BeginString,
+		SenderCompID: s.id.SenderCompID,
+		TargetCompID: s.id.TargetCompID,
+		MsgSeqNum:    seq,
+		SendingTime:  string(fix2.AppendUTCTimestamp(nil, sendingTime, s.prec)),
+	}
+	b := fix2.NewBuilder(s.id.BeginString, "A")
+	if err := signer.SignLogon(s.callbackCtx(), s, h, b); err != nil {
+		return nil, err
+	}
+	return b.AppendBody(nil, logonReserved)
 }
 
 // logonBody returns the fields of our Logon: next is the NextExpectedMsgSeqNum

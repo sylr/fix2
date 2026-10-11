@@ -61,7 +61,8 @@ type Handler interface {
 	// is sent, such as Username and Password. An error cancels a Logon: the
 	// connection is closed.
 	ToAdmin(ctx context.Context, s *Session, msgType string, b *fix2.Builder) error
-	// FromAdmin tells of an administrative message the session processed.
+	// FromAdmin tells of an administrative message the session processed,
+	// a Logout or Reject refusing our Logon included.
 	// It runs on the connection's reader goroutine and must return quickly.
 	FromAdmin(ctx context.Context, s *Session, m *fix2.Message, in Inbound)
 	// FromApp delivers an application message, in sequence order. An error
@@ -84,6 +85,28 @@ type Handler interface {
 	// session cannot tell administrative messages, which counterparties
 	// gap-fill, from application ones it no longer keeps.
 	OnRecoveryLoss(ctx context.Context, s *Session, begin, end uint64, cause error)
+}
+
+// LogonHeader is the header of a Logon an initiator is about to send, as
+// written on the wire, for a LogonSigner.
+type LogonHeader struct {
+	BeginString  string
+	SenderCompID string
+	TargetCompID string
+	MsgSeqNum    uint64
+	// SendingTime is the SendingTime (52) value.
+	SendingTime string
+}
+
+// LogonSigner is implemented by Handlers whose counterparty authenticates
+// the Logon with a signature of its header, as Binance does with Ed25519.
+// SignLogon runs after ToAdmin, once the Logon's MsgSeqNum and SendingTime
+// are fixed, outside the session's lock; the fields it sets on b, such as
+// RawDataLength (95) and RawData (96) with Builder.SetData, are added to
+// the Logon. An error cancels the Logon: the connection is closed. Only an
+// initiator's Logon is signed.
+type LogonSigner interface {
+	SignLogon(ctx context.Context, s *Session, h LogonHeader, b *fix2.Builder) error
 }
 
 // BaseHandler implements Handler with defaults: every Logon is accepted,

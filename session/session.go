@@ -305,7 +305,9 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 		return 0, ErrNotLoggedOn
 	}
 	h.seq = s.st.NextSender
-	h.sendingTime = time.Now()
+	if h.sendingTime.IsZero() {
+		h.sendingTime = time.Now()
+	}
 	if s.cfg.LastMsgSeqNumProcessed && s.prof.lastProc {
 		// The last message processed: the one answered, as QuickFIX
 		// sends it, if every message before it is processed.

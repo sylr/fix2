@@ -217,3 +217,97 @@ func TestInitiator_Liveness(t *testing.T) {
 		t.Errorf("logout reason %v", reason)
 	}
 }
+
+// signer signs Logons with their header fields joined by "|", or fails.
+type signer struct {
+	*recorder
+	fail error
+}
+
+func (s signer) SignLogon(_ context.Context, _ *session.Session, h session.LogonHeader, b *fix2.Builder) error {
+	if s.fail != nil {
+		return s.fail
+	}
+	sig := "A|" + h.SenderCompID + "|" + h.TargetCompID + "|" + strconv.FormatUint(h.MsgSeqNum, 10) + "|" + h.SendingTime
+	b.SetData(95, 96, []byte(sig))
+	return nil
+}
+
+func TestInitiator_SignsLogon(t *testing.T) {
+	l := mem.Listen("acceptor")
+	startInitiator(t, l, func(c *session.Config) {
+		c.Handler = signer{recorder: c.Handler.(*recorder)}
+		c.ResetOnLogon = true
+	})
+	p := acceptPeer(t, l)
+	m := p.expect("A", "34", "1", "141", "Y")
+	want := "A|INI|ACC|1|" + string(m.Get(52))
+	if got := string(m.Get(96)); got != want {
+		t.Errorf("RawData = %q, want %q", got, want)
+	}
+	if got := string(m.Get(95)); got != strconv.Itoa(len(want)) {
+		t.Errorf("RawDataLength = %s, want %d", got, len(want))
+	}
+}
+
+func TestInitiator_SignatureFailureCancelsLogon(t *testing.T) {
+	l := mem.Listen("acceptor")
+	startInitiator(t, l, func(c *session.Config) {
+		c.Handler = signer{recorder: c.Handler.(*recorder), fail: errors.New("no key")}
+	})
+	p := acceptPeer(t, l)
+	p.expectEnd(2 * time.Second)
+}
+
+// logoutWatcher records the Text of Logouts its FromAdmin sees.
+type logoutWatcher struct {
+	*recorder
+	texts chan string
+}
+
+func (w logoutWatcher) FromAdmin(_ context.Context, _ *session.Session, m *fix2.Message, _ session.Inbound) {
+	if t := string(m.MsgType()); t == "5" || t == "3" {
+		w.texts <- t + ":" + string(m.Get(58))
+	}
+}
+
+func TestInitiator_LogonRefusedByLogout(t *testing.T) {
+	l := mem.Listen("acceptor")
+	texts := make(chan string, 1)
+	startInitiator(t, l, func(c *session.Config) {
+		c.Handler = logoutWatcher{recorder: c.Handler.(*recorder), texts: texts}
+	})
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("5", 0, "58", "Invalid signature")
+	p.expectEnd(time.Second)
+	select {
+	case got := <-texts:
+		if got != "5:Invalid signature" {
+			t.Errorf("FromAdmin got Logout Text %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("FromAdmin did not see the Logout")
+	}
+}
+
+// As Binance does: a Reject of the Logon, then a Logout.
+func TestInitiator_LogonRejected(t *testing.T) {
+	l := mem.Listen("acceptor")
+	texts := make(chan string, 2)
+	startInitiator(t, l, func(c *session.Config) {
+		c.Handler = logoutWatcher{recorder: c.Handler.(*recorder), texts: texts}
+	})
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("3", 0, "45", "1", "372", "A", "373", "8", "58", "API-key format invalid.")
+	p.expectEnd(time.Second)
+	select {
+	case got := <-texts:
+		if got != "3:API-key format invalid." {
+			t.Errorf("FromAdmin got %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("FromAdmin did not see the Reject")
+	}
+}
