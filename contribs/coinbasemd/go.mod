@@ -1,12 +1,11 @@
 module github.com/sylr/fix2/contribs/coinbasemd
 
-go 1.26
-
-require github.com/sylr/fix2 v0.0.0
+go 1.27
 
 require (
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.10.2
+	github.com/sylr/fix2 v0.0.0
 )
 
 require (

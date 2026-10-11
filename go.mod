@@ -1,6 +1,6 @@
 module github.com/sylr/fix2
 
-go 1.26
+go 1.27
 
 require (
 	github.com/dave/jennifer v1.7.1

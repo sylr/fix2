@@ -1,6 +1,6 @@
 module github.com/sylr/fix2/contribs/binancemd
 
-go 1.26
+go 1.27
 
 require (
 	github.com/rs/zerolog v1.35.1

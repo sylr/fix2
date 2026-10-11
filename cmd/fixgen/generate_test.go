@@ -51,7 +51,7 @@ func TestGenerate(t *testing.T) {
 		t.Fatalf("Abs: %v", err)
 	}
 
-	goMod := "module testgen\ngo 1.26\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
+	goMod := "module testgen\ngo 1.27\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
 	if err := os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
@@ -591,7 +591,7 @@ func runGeneratedWith(t *testing.T, xml, pkg, testCode string, opts options) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goMod := "module testgen\ngo 1.26\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
+	goMod := "module testgen\ngo 1.27\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
 	if err := os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
 	}
