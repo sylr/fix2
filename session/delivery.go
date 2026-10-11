@@ -178,8 +178,14 @@ func (d *delivery) run() {
 		it := d.items[d.head]
 		d.items[d.head] = item{}
 		d.head++
-		if d.head == len(d.items) {
+		switch {
+		case d.head == len(d.items):
 			d.items, d.head = d.items[:0], 0
+		case d.head >= 1024 && 2*d.head >= len(d.items):
+			// Compact: the queue never stays empty under sustained traffic.
+			n := copy(d.items, d.items[d.head:])
+			clear(d.items[n:])
+			d.items, d.head = d.items[:n], 0
 		}
 		d.busy = true
 		if d.room != nil && len(d.items)-d.head < d.s.cfg.DeliveryQueue {
@@ -193,6 +199,18 @@ func (d *delivery) run() {
 		d.mu.Lock()
 		d.busy = false
 		d.mu.Unlock()
+		d.s.unstall()
+	}
+}
+
+// unstall lets a session stalled by a stuck callback connect again, now
+// that the callback returned.
+func (s *Session) unstall() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stalled {
+		s.stalled = false
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "handler unstalled: the session may connect again")
 	}
 }
 
@@ -266,9 +284,21 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 // persist records the processed prefix in the store: always if force, else
 // every 64 messages.
 func (d *delivery) persist(force bool) {
+	d.s.mu.Lock()
+	defer d.s.mu.Unlock()
+	d.persistLocked(force)
+}
+
+// idleNow reports whether nothing is queued nor being delivered.
+func (d *delivery) idleNow() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.items) == d.head && !d.busy
+}
+
+// persistLocked is persist with the session's lock held.
+func (d *delivery) persistLocked(force bool) {
 	s := d.s
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if d.persistedGen != s.st.Generation {
 		d.persisted, d.persistedGen = 0, s.st.Generation
 	}
@@ -298,4 +328,3 @@ func rejectInfo(m *fix2.Message) RejectInfo {
 	}
 	return r
 }
-

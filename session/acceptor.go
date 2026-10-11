@@ -80,6 +80,7 @@ func (a *Acceptor) Add(cfg Config) (*Session, error) {
 		return nil, err
 	}
 	if err := a.add(s); err != nil {
+		s.store.Close()
 		return nil, err
 	}
 	return s, nil
@@ -158,8 +159,8 @@ func (a *Acceptor) Listen(l transport.Listener) {
 	}
 }
 
-// Run serves the listeners until ctx is done, then logs every session out,
-// waiting up to their LogoutTimeout, closes the listeners and returns.
+// Run serves the listeners until ctx is done, then closes them and stops
+// every session (see Session.Stop): the sessions cannot be run again.
 func (a *Acceptor) Run(ctx context.Context) error {
 	a.mu.Lock()
 	if a.ctx != nil {
@@ -196,8 +197,9 @@ func (a *Acceptor) Run(ctx context.Context) error {
 	return nil
 }
 
-// shutdown logs sessions out, in parallel, each within its LogoutTimeout
-// plus a margin.
+// shutdown stops sessions, in parallel: each refuses new connections, logs
+// out within its LogoutTimeout plus a margin, delivers what it received and
+// closes its store.
 func shutdown(sessions []*Session) {
 	var wg sync.WaitGroup
 	for _, s := range sessions {
@@ -206,7 +208,7 @@ func shutdown(sessions []*Session) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), s.cfg.LogoutTimeout+time.Second)
 			defer cancel()
-			s.Logout(ctx, "shutting down")
+			s.stop(ctx, "shutting down")
 		}()
 	}
 	wg.Wait()
@@ -353,9 +355,11 @@ func (a *Acceptor) route(ctx context.Context, wire SessionID, req *LogonRequest)
 			return nil, err
 		}
 		if s.id.reversed() != wire {
+			s.store.Close()
 			return nil, fmt.Errorf("dynamic session %s does not match the Logon's identities", s.id)
 		}
 		if err := a.add(s); err != nil {
+			s.store.Close()
 			// Another connection created it meanwhile.
 			if existing := a.Session(s.id); existing != nil {
 				return existing, nil

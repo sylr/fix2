@@ -4,7 +4,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
 )
 
 // soon is a deadline inside the precise window, far enough out that every

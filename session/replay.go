@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -18,6 +19,9 @@ type replayJob struct {
 
 // maxQueuedReplays bounds the ResendRequests queued behind a running replay.
 const maxQueuedReplays = 16
+
+// errMissing stops a replay at a message missing from the store.
+var errMissing = errors.New("message missing from the store")
 
 // replayChunk is how many bytes a replay writes at once.
 const replayChunk = 64 << 10
@@ -86,12 +90,12 @@ func (c *conn) runReplay(job *replayJob) {
 		}
 		buf = s.appendFrame(buf, &header{msgType: "4", seq: gapStart, possDup: true, orig: sending, sendingTime: now},
 			adminBody(nil).int(tagNewSeqNo, next).str(tagGapFillFlag, "Y"))
-		frames = append(frames, pendingFrame{end: len(buf), seq: gapStart})
+		frames = append(frames, pendingFrame{end: len(buf), seq: gapStart, gapFill: true})
 		s.stats.GapFilled.Add(next - gapStart)
 		gaps = append(gaps, [2]uint64{gapStart, next})
 		gapStart = 0
 	}
-	var losses []item
+	var missing uint64 // a message missing from the store: the replay stops there
 	err := s.store.Range(context.Background(), gen, job.begin, job.end, func(seq uint64, raw []byte, hole store.Hole) error {
 		if writeErr != nil {
 			return writeErr
@@ -99,8 +103,10 @@ func (c *conn) runReplay(job *replayJob) {
 		skip := false
 		switch {
 		case hole == store.HoleMissing:
-			losses = append(losses, item{kind: itemLoss, seq: seq, end: seq, err: errors.New("our message is missing from the store")})
-			skip = true
+			// Not gap-filled: the counterparty would move past a message
+			// that may still exist somewhere.
+			missing = seq
+			return errMissing
 		case hole != store.HoleNone:
 			if hole == store.HoleRetention {
 				s.log.LogAttrs(context.Background(), slog.LevelWarn, "message beyond retention gap-filled", slog.Uint64("seq", seq))
@@ -135,22 +141,35 @@ func (c *conn) runReplay(job *replayJob) {
 		}
 		return nil
 	})
-	if err == nil {
+	readErr := error(nil)
+	switch {
+	case err == nil:
 		gapFill(job.end + 1)
-	} else if !errors.Is(err, writeErr) {
-		s.log.LogAttrs(context.Background(), slog.LevelError, "reading messages to resend failed", slog.Any("error", err))
-		if gapStart == 0 {
-			gapStart = job.begin
-		}
-		gapFill(job.end + 1)
+	case errors.Is(err, errMissing):
+		gapFill(missing)
+	case writeErr == nil || !errors.Is(err, writeErr):
+		readErr = err
+		gapFill(job.begin) // only what precedes is covered: nothing
 	}
 	flush()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, l := range losses {
-		l.gen = gen
-		s.deliv.push(l)
+	if (missing != 0 || readErr != nil) && writeErr == nil && !c.closed {
+		var text string
+		var cause error
+		if missing != 0 {
+			text = fmt.Sprintf("cannot resend message %d: missing from our store", missing)
+			cause = errors.New("our message is missing from the store")
+			s.deliv.push(item{kind: itemLoss, gen: gen, seq: missing, end: missing, err: cause})
+		} else {
+			text = "cannot read our messages to resend"
+			cause = readErr
+		}
+		s.log.LogAttrs(context.Background(), slog.LevelError, "resend aborted", slog.String("reason", text), slog.Any("error", cause))
+		c.replay, c.replayQueue = nil, nil
+		s.logoutLocked(c, text)
+		return
 	}
 	for _, g := range gaps {
 		s.receipts.gapFilled(gen, g[0], g[1])
@@ -182,6 +201,6 @@ func (c *conn) runReplay(job *replayJob) {
 		c.frames = append(c.frames, f)
 	}
 	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
+	c.signalRoomLocked()
 	c.wakeWriter()
 }
-

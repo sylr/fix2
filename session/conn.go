@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"sync"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
@@ -15,10 +16,11 @@ import (
 // pendingFrame is a message queued for writing: it ends at offset end of
 // its buffer.
 type pendingFrame struct {
-	end    int
-	seq    uint64
-	queued time.Time
-	probe  string // TestReqID, if the frame is an acknowledgement probe
+	end     int
+	seq     uint64
+	queued  time.Time
+	probe   string // TestReqID, if the frame is an acknowledgement probe
+	gapFill bool   // a SequenceReset-GapFill standing for messages seq..: not their write
 }
 
 // conn is one connection of a session: a reader goroutine and a writer
@@ -54,12 +56,16 @@ type conn struct {
 	logoutDeadline      time.Time
 	timer               *time.Timer
 	testReqs            uint64 // TestRequests sent, for their IDs
+	probeWanted         bool   // an acknowledgement probe waits for AckProbeMinInterval
 
 	logonExtra []byte // fields the handler added to the Logon we answer with
 	loggedOn   bool   // the connection got to log on
 
 	wake       chan struct{} // wakes the writer
-	writerDone chan struct{}
+	writers    sync.WaitGroup
+	writerStop bool   // the writer stops after its batch, for a reset fence
+	resetReq   bool   // a Logon with ResetSeqNumFlag waits for its fence
+	resetAfter string // reset the store, for this reason, once the writer is done
 	readerDone chan struct{}
 	closedCh   chan struct{} // closed when the connection closes
 }
@@ -97,8 +103,10 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
-	case s.stopped:
+	case s.stopped || s.stopping:
 		return nil, ErrStopped
+	case s.halted != nil:
+		return nil, s.halted
 	case s.stalled:
 		return nil, errors.New("session: a handler callback is stuck, see Config.MaxDeliveryStall")
 	case s.c != nil:
@@ -117,7 +125,6 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 		epoch:      s.epoch,
 		framer:     framer,
 		wake:       make(chan struct{}, 1),
-		writerDone: make(chan struct{}),
 		readerDone: make(chan struct{}),
 		closedCh:   make(chan struct{}),
 		lastRead:   now,
@@ -134,8 +141,21 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 	c.logonDeadline = now.Add(s.cfg.LogonTimeout)
 	c.timer = time.AfterFunc(s.cfg.LogonTimeout, func() { s.onTimer(c) })
 	s.stats.Connections.Add(1)
-	go c.writeLoop()
+	c.startWriterLocked()
 	return c, nil
+}
+
+// startWriterLocked starts a writer for c; the returned channel closes when
+// it exits.
+func (c *conn) startWriterLocked() <-chan struct{} {
+	done := make(chan struct{})
+	c.writers.Add(1)
+	go func() {
+		defer c.writers.Done()
+		defer close(done)
+		c.writeLoop()
+	}()
+	return done
 }
 
 var errAlreadyConnected = errors.New("session: already connected")
@@ -159,9 +179,14 @@ func (c *conn) run() error {
 		}
 		c.handleFrame(frame)
 	}
-	<-c.writerDone
+	c.writers.Wait()
 	c.s.mu.Lock()
 	defer c.s.mu.Unlock()
+	if c.resetAfter != "" {
+		// Once the writer is done: nothing of the old generation can be
+		// written after the reset.
+		c.s.resetStoreLocked(c.resetAfter)
+	}
 	return c.reason
 }
 
@@ -203,6 +228,7 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 	was := s.phase
 	s.c = nil
 	s.phase = phaseDisconnected
+	s.receipts.connectionLost()
 	s.recov = recovery{}
 	clear(s.stash)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "disconnected",
@@ -210,8 +236,11 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 	if was == phaseEstablished || was == phaseLogoutSent {
 		s.deliv.push(item{kind: itemLogout, err: reason})
 	}
-	if s.cfg.ResetOnDisconnect || s.cfg.ResetOnLogout && errors.As(reason, new(*LogoutError)) && was == phaseLogoutSent {
-		s.resetStoreLocked("reset on disconnect")
+	switch {
+	case s.cfg.ResetOnDisconnect:
+		c.resetAfter = "ResetOnDisconnect"
+	case s.cfg.ResetOnLogout && was == phaseLogoutSent:
+		c.resetAfter = "ResetOnLogout"
 	}
 }
 
@@ -229,15 +258,14 @@ func (s *Session) closeAfterFlushLocked(c *conn, reason error) {
 // writeLoop writes what is queued until the connection closes.
 func (c *conn) writeLoop() {
 	s := c.s
-	defer close(c.writerDone)
 	for {
 		s.mu.Lock()
-		for len(c.pending) == 0 && (c.replay == nil || c.replay.running) && !c.closed && !c.closing {
+		for len(c.pending) == 0 && (c.replay == nil || c.replay.running) && !c.closed && !c.closing && !c.writerStop {
 			s.mu.Unlock()
 			<-c.wake
 			s.mu.Lock()
 		}
-		if c.closed {
+		if c.closed || c.writerStop {
 			s.mu.Unlock()
 			return
 		}
@@ -257,10 +285,7 @@ func (c *conn) writeLoop() {
 		buf, frames := c.pending, c.frames
 		c.pending, c.frames = c.spare[:0], c.spareFrames[:0]
 		c.spare, c.spareFrames = nil, nil
-		if c.room != nil && c.hasRoom() {
-			close(c.room)
-			c.room = nil
-		}
+		c.signalRoomLocked()
 		gen, epoch := s.st.Generation, c.epoch
 		s.mu.Unlock()
 
@@ -301,14 +326,28 @@ func (c *conn) wrote(buf []byte, frames []pendingFrame, n int, gen, epoch uint64
 	defer s.mu.Unlock()
 	c.lastWrite = time.Now()
 	for _, f := range frames[:done] {
-		if f.probe != "" {
+		switch {
+		case f.probe != "":
 			s.receipts.probeWritten(f.probe, epoch)
-		} else {
+		case f.gapFill:
+			s.receipts.tick(epoch)
+		default:
 			s.receipts.written(gen, f.seq, epoch)
+		}
+		if f.end <= len(buf) && s.cfg.AckProbe == AckProbeEager && !f.gapFill && f.probe == "" && !c.closed {
+			s.probeLocked(c)
 		}
 	}
 	if !c.closed {
 		s.armLocked(c)
+	}
+}
+
+// signalRoomLocked wakes the Sends waiting for room, if there is some.
+func (c *conn) signalRoomLocked() {
+	if c.room != nil && c.hasRoom() {
+		close(c.room)
+		c.room = nil
 	}
 }
 
@@ -364,6 +403,9 @@ func (s *Session) onTimer(c *conn) {
 				s.sendAdminLocked(&header{msgType: "0"}, nil)
 			}
 		}
+		if c.probeWanted {
+			s.probeLocked(c)
+		}
 		if age := s.cfg.MaxPendingAge; age > 0 && len(c.frames) > 0 && now.Sub(c.frames[0].queued) >= age {
 			s.disconnectLocked(c, &LogoutError{Text: "counterparty not reading: a message waited " + now.Sub(c.frames[0].queued).String(), Err: ErrSlowConsumer})
 			return
@@ -404,6 +446,9 @@ func (s *Session) armLocked(c *conn) {
 	if age := s.cfg.MaxPendingAge; age > 0 && len(c.frames) > 0 {
 		at(c.frames[0].queued.Add(age))
 	}
+	if c.probeWanted {
+		at(s.receipts.lastAt.Add(s.cfg.AckProbeMinInterval))
+	}
 	c.timer.Reset(max(next.Sub(now), time.Millisecond))
 }
 
@@ -421,9 +466,11 @@ func (c *conn) removePendingLocked(begin, end uint64) {
 		if f.seq < begin || f.seq > end {
 			n := len(out)
 			out = append(out, c.pending[start:f.end]...)
-			kept = append(kept, pendingFrame{end: n + (f.end - start), seq: f.seq, queued: f.queued})
+			f.end = n + (f.end - start)
+			kept = append(kept, f)
 		}
 		start = f.end
 	}
 	c.pending, c.frames = out, slices.Clip(kept)[:len(kept)]
+	c.signalRoomLocked()
 }

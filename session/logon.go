@@ -152,10 +152,9 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 
 	// NextExpectedMsgSeqNum: what the counterparty expects of us, compared
 	// with what we sent before this Logon.
+	// What the counterparty may expect of us: our next MsgSeqNum, an
+	// initiator's own Logon included.
 	nextBefore := s.st.NextSender
-	if s.initiator {
-		nextBefore = s.st.NextSender - 1 // our Logon is already sent
-	}
 	peerNext := uint64(0)
 	if s.cfg.NextExpectedMsgSeqNum && s.prof.nextExpected && !reset {
 		if v, err := fix2.ParseInt(m.Get(tagNextExpectedMsgSeqNum)); err == nil && v > 0 {
@@ -214,13 +213,57 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 }
 
 // activeResetLocked handles a Logon with ResetSeqNumFlag on a logged on
-// connection: both sides restart at sequence number 1.
+// connection: both sides restart at sequence number 1, once the fence the
+// reader runs next (fenceReset) has made sure nothing of the old generation
+// is still being written or delivered. New messages are refused meanwhile.
 func (s *Session) activeResetLocked(c *conn, m *fix2.Message, in Inbound) {
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty resets the sequence numbers on the established connection")
+	s.resetting = true
+	c.resetReq = true
+	// What is not yet handed to the writer belongs to the old generation,
+	// which the counterparty is leaving: dropped, as is any replay.
+	c.replay, c.replayQueue = nil, nil
+	c.pending, c.frames = c.pending[:0], c.frames[:0]
+	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
+	c.signalRoomLocked()
+	s.recov = recovery{}
+	clear(s.stash)
+}
+
+// fenceReset completes a reset activeResetLocked started, from the reader
+// goroutine: it waits for the messages received before to be delivered (at
+// most ResetDrainTimeout, or the reset is refused), stops and joins the
+// writer, then resets the store and answers the Logon with a new writer.
+func (s *Session) fenceReset(c *conn) {
+	select {
+	case <-s.deliv.waitIdle():
+	case <-time.After(s.cfg.ResetDrainTimeout):
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		c.resetReq, s.resetting = false, false
+		s.logoutLocked(c, "sequence reset could not complete: messages received before are still being processed")
+		return
+	case <-c.done():
+	}
+	s.mu.Lock()
+	c.writerStop = true
+	c.wakeWriter()
+	s.mu.Unlock()
+	c.writers.Wait()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c.resetReq, s.resetting, c.writerStop = false, false, false
+	if c.closed || s.c != c {
+		return
+	}
 	s.resetStoreLocked("Logon with ResetSeqNumFlag on an established connection")
+	s.epoch++
+	c.epoch = s.epoch
 	s.sendAdminLocked(&header{msgType: "A"}, s.logonBody(true, 2))
 	s.markLocked(1)
 	s.advanceLocked(c, 2)
+	c.startWriterLocked()
 }
 
 // resetStoreLocked starts a new sequence number generation: both sides
@@ -248,6 +291,6 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) {
 	s.committed = 0
 	s.recov = recovery{}
 	clear(s.stash)
-	s.receipts.newGeneration(gen)
+	s.receipts.newGeneration(gen, st.Generation)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "sequence numbers reset", slog.String("why", why), slog.Uint64("generation", st.Generation))
 }

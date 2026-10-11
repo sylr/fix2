@@ -93,7 +93,11 @@ func (c *conn) handleFrame(frame []byte) {
 	if !c.closed {
 		s.armLocked(c)
 	}
+	fence := c.resetReq
 	s.mu.Unlock()
+	if fence {
+		s.fenceReset(c)
+	}
 	if fromAdmin {
 		s.handler.FromAdmin(s.callbackCtx(), s, m, in)
 	}
@@ -250,13 +254,13 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, now ti
 		s.onLogonLocked(c, m, in, now)
 		return in, true
 	case "5":
-		s.onLogoutLocked(c, m, in, now)
+		s.onLogoutLocked(c, m, frame, in, now)
 		return in, true
 	case "2":
 		s.onResendRequestLocked(c, m, in, now)
 		return in, true
 	case "4":
-		s.onSequenceResetLocked(c, m, in, now)
+		s.onSequenceResetLocked(c, m, frame, in, now)
 		return in, true
 	}
 	return s.onRegularLocked(c, m, frame, in, now)
@@ -375,6 +379,9 @@ const (
 func (s *Session) checkSeqLocked(c *conn, m *fix2.Message, in Inbound) seqVerdict {
 	switch {
 	case in.Seq == s.st.NextTarget:
+		if in.PossDup && !s.origTimeOK(c, m, true) {
+			return seqDone
+		}
 		return seqOK
 	case in.Seq > s.st.NextTarget:
 		return seqTooHigh
@@ -383,29 +390,48 @@ func (s *Session) checkSeqLocked(c *conn, m *fix2.Message, in Inbound) seqVerdic
 		s.logoutLocked(c, fmt.Sprintf("MsgSeqNum too low, expecting %d but received %d", s.st.NextTarget, in.Seq))
 		return seqDone
 	}
+	if !s.origTimeOK(c, m, false) {
+		return seqDone
+	}
+	return seqIgnore
+}
+
+// origTimeOK checks the OrigSendingTime of a PossDup message: missing, or
+// later than its SendingTime, it is rejected, the latter with a Logout. A
+// message in sequence then counts as received.
+func (s *Session) origTimeOK(c *conn, m *fix2.Message, inSequence bool) bool {
+	consumed := func() {
+		if inSequence {
+			seq, _ := fix2.ParseInt(m.Get(tagMsgSeqNum))
+			s.markLocked(uint64(seq))
+			s.advanceLocked(c, uint64(seq)+1)
+		}
+	}
 	orig := m.Get(tagOrigSendingTime)
 	if orig == nil {
 		if s.cfg.Leniency.SequenceResetWithoutOrigSendingTime && bytes.Equal(m.MsgType(), []byte("4")) {
-			return seqIgnore
+			return true
 		}
 		s.rejectLocked(m, dictionary.ReasonRequiredTagMissing, tagOrigSendingTime,
 			rejectText(dictionary.ReasonRequiredTagMissing, fieldDesc(nil, tagOrigSendingTime)+" on a PossDup message"))
-		return seqDone
+		consumed()
+		return false
 	}
 	ot, err1 := fix2.ParseUTCTimestamp(orig)
 	st, err2 := fix2.ParseUTCTimestamp(m.Get(tagSendingTime))
 	if err1 != nil || err2 != nil {
 		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagOrigSendingTime,
 			rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagOrigSendingTime)+" is "+quoteValue(orig)))
-		return seqDone
+		consumed()
+		return false
 	}
 	if st.Before(ot) {
 		s.rejectLocked(m, dictionary.ReasonSendingTimeAccuracyProblem, noTag, rejectText(dictionary.ReasonSendingTimeAccuracyProblem,
 			fmt.Sprintf("OrigSendingTime %s is after SendingTime %s", orig, m.Get(tagSendingTime))))
 		s.logoutLocked(c, "")
-		return seqDone
+		return false
 	}
-	return seqIgnore
+	return true
 }
 
 // tooHighLocked handles a message received ahead of a gap: it is kept, if
@@ -447,33 +473,53 @@ func (s *Session) sendResendRequestLocked() {
 }
 
 // advanceLocked records that the messages up to next-1 were received, then
-// handles the messages kept ahead of the gap that are now in sequence.
+// handles the messages kept ahead of the gap that are now in sequence. Those
+// may advance further: a nested call only moves the expected MsgSeqNum, and
+// the outermost one goes on.
 func (s *Session) advanceLocked(c *conn, next uint64) {
 	if next > s.st.NextTarget {
 		s.st.NextTarget = next
 	}
+	if s.draining {
+		return
+	}
+	s.draining = true
+	defer func() { s.draining = false }()
+	pruned := s.st.NextTarget
 	for {
-		frame, ok := s.stash[s.st.NextTarget]
-		for seq := range s.stash {
-			if seq < s.st.NextTarget {
-				delete(s.stash, seq)
-			}
-		}
 		if s.recov.active {
 			switch {
 			case s.st.NextTarget > s.recov.target:
 				s.recov = recovery{}
 			// The next chunk once this one is received, or once a GapFill
 			// ends at its last message, as QuickFIX asks for it.
-			case s.recov.chunkEnd != 0 && !ok && (s.st.NextTarget > s.recov.chunkEnd || s.gapFilling && s.st.NextTarget == s.recov.chunkEnd):
+			case s.recov.chunkEnd != 0 && s.stash[s.st.NextTarget] == nil && (s.st.NextTarget > s.recov.chunkEnd || s.gapFilling && s.st.NextTarget == s.recov.chunkEnd):
 				s.sendResendRequestLocked()
 			}
 		}
+		frame, ok := s.stash[s.st.NextTarget]
 		if !ok || s.c != c || c.closed {
-			return
+			break
 		}
 		delete(s.stash, s.st.NextTarget)
 		s.replayStashedLocked(c, frame)
+		if s.st.NextTarget > pruned+1 {
+			// A jump (a GapFill): drop what it skipped over.
+			s.pruneStashLocked()
+		}
+		pruned = s.st.NextTarget
+	}
+	if len(s.stash) > 0 && s.st.NextTarget > pruned {
+		s.pruneStashLocked()
+	}
+}
+
+// pruneStashLocked drops the messages kept that are now behind.
+func (s *Session) pruneStashLocked() {
+	for seq := range s.stash {
+		if seq < s.st.NextTarget {
+			delete(s.stash, seq)
+		}
 	}
 }
 
@@ -502,11 +548,11 @@ func (s *Session) replayStashedLocked(c *conn, frame []byte) {
 		s.markLocked(in.Seq)
 		s.advanceLocked(c, in.Seq+1)
 	case "5":
-		s.onLogoutLocked(c, m, in, in.Received)
+		s.onLogoutLocked(c, m, frame, in, in.Received)
 	case "2":
 		s.onResendRequestLocked(c, m, in, in.Received)
 	case "4":
-		s.onSequenceResetLocked(c, m, in, in.Received)
+		s.onSequenceResetLocked(c, m, frame, in, in.Received)
 	default:
 		s.onRegularLocked(c, m, frame, in, in.Received)
 	}
@@ -564,7 +610,7 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 			return in, false
 		}
 		s.sendAdminLocked(&header{msgType: "0"}, adminBody(nil).bytes(tagTestReqID, id))
-	case "3":
+	case "3", "j":
 		if ref, err := fix2.ParseInt(m.Get(tagRefSeqNum)); err == nil && ref > 0 {
 			s.receipts.rejected(s.st.Generation, uint64(ref), rejectInfo(m))
 		}
@@ -581,6 +627,14 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 // markLocked queues the processing of received message seq, which needs no
 // delivery, so that the processed prefix moves past it in order.
 func (s *Session) markLocked(seq uint64) {
+	if s.deliv.idleNow() {
+		// Nothing ahead of it to deliver: processed now.
+		if seq > s.committed {
+			s.committed = seq
+			s.deliv.persistLocked(false)
+		}
+		return
+	}
 	s.deliv.push(item{kind: itemMark, gen: s.st.Generation, seq: seq})
 }
 
@@ -724,8 +778,10 @@ func (s *Session) sendLogoutLocked(c *conn, text string) {
 	s.sendAdminLocked(&header{msgType: "5"}, b)
 }
 
-// onLogoutLocked handles a Logout.
-func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, in Inbound, now time.Time) {
+// onLogoutLocked handles a Logout: the answer to ours ends the connection;
+// the counterparty's is answered, once the messages before it are recovered
+// if some are missing.
+func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbound, now time.Time) {
 	text := string(m.Get(tagText))
 	if s.phase == phaseLogoutSent {
 		// The answer to ours.
@@ -736,6 +792,16 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, in Inbound, now time.
 		s.disconnectLocked(c, &LogoutError{ByCounterparty: false, Text: text})
 		return
 	}
+	if !s.checkHeaderLocked(c, m, in.Seq, now) {
+		return
+	}
+	if in.Seq > s.st.NextTarget && s.cfg.Compatibility == CompatStrict2020 {
+		// Recover the messages before it first: it is answered when its
+		// turn comes, if the counterparty waits that long. QuickFIX
+		// answers at once, and its acceptance tests expect it.
+		s.tooHighLocked(c, in, frame)
+		return
+	}
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty logged out", slog.String("text", text))
 	if in.Seq == s.st.NextTarget {
 		s.markLocked(in.Seq)
@@ -743,18 +809,13 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, in Inbound, now time.
 	}
 	s.sendLogoutLocked(c, "")
 	s.phase = phaseLogoutSent
-	reason := &LogoutError{ByCounterparty: true, Text: text}
-	if s.cfg.ResetOnLogout {
-		s.closeAfterFlushLocked(c, reason)
-		return
-	}
-	s.closeAfterFlushLocked(c, reason)
+	s.closeAfterFlushLocked(c, &LogoutError{ByCounterparty: true, Text: text})
 }
 
 // onSequenceResetLocked handles a SequenceReset: in GapFill mode it fills a
 // gap in sequence; in Reset mode it moves the expected MsgSeqNum forward
 // whatever its own.
-func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, in Inbound, now time.Time) {
+func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, in Inbound, now time.Time) {
 	gapFill := bytes.Equal(m.Get(tagGapFillFlag), yes)
 	if !s.checkHeaderLocked(c, m, in.Seq, now) {
 		return
@@ -762,7 +823,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, in Inbound, no
 	if gapFill {
 		switch s.checkSeqLocked(c, m, in) {
 		case seqTooHigh:
-			s.tooHighLocked(c, in, s.stashFrame(m))
+			s.tooHighLocked(c, in, frame)
 			return
 		case seqIgnore, seqDone:
 			return
@@ -808,16 +869,6 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, in Inbound, no
 			s.advanceLocked(c, in.Seq+1)
 		}
 	}
-}
-
-// stashFrame returns the bytes of m, the reader's message, rebuilt from its
-// fields: kept ahead of a gap, it is parsed again when its turn comes.
-func (s *Session) stashFrame(m *fix2.Message) []byte {
-	var b []byte
-	for _, f := range m.Fields() {
-		b = fix2.AppendTagValue(b, f.Tag, f.Value)
-	}
-	return b
 }
 
 // onResendRequestLocked handles a ResendRequest: it is served whatever its
@@ -873,7 +924,7 @@ func (s *Session) markAheadLocked(seq uint64) {
 	if s.stash == nil {
 		s.stash = make(map[uint64][]byte)
 	}
-	if _, ok := s.stash[seq]; !ok {
+	if _, ok := s.stash[seq]; !ok && len(s.stash) < s.cfg.MaxStash {
 		s.stash[seq] = handledMarker(s.id.BeginString, seq)
 	}
 }
@@ -887,6 +938,3 @@ func handledMarker(beginString string, seq uint64) []byte {
 	b = append(b, body...)
 	return fix2.AppendTrailer(b, 0)
 }
-
-// tooHighLocked with a nil frame records the gap without keeping a message.
-func init() { _ = handledMarker }

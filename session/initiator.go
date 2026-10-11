@@ -77,6 +77,7 @@ func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	if _, ok := i.sessions[s.id]; ok {
+		s.store.Close()
 		return nil, fmt.Errorf("session %s: already added", s.id)
 	}
 	is := &initSession{s: s, dialer: dialer}
@@ -138,7 +139,7 @@ func (i *Initiator) Sessions() []*Session {
 }
 
 // Run connects the sessions and keeps them connected until ctx is done,
-// then logs them out, waiting up to their LogoutTimeout, and returns.
+// then stops them (see Session.Stop): the sessions cannot be run again.
 func (i *Initiator) Run(ctx context.Context) error {
 	i.mu.Lock()
 	if i.ctx != nil {

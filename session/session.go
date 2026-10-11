@@ -35,11 +35,11 @@ import (
 type phase uint8
 
 const (
-	phaseDisconnected phase = iota
-	phaseAwaitingLogon        // acceptor: connected, waiting for the Logon
-	phaseLogonSent            // initiator: Logon sent, waiting for the answer
-	phaseEstablished          // logged on
-	phaseLogoutSent           // our Logout sent, waiting for the answer
+	phaseDisconnected  phase = iota
+	phaseAwaitingLogon       // acceptor: connected, waiting for the Logon
+	phaseLogonSent           // initiator: Logon sent, waiting for the answer
+	phaseEstablished         // logged on
+	phaseLogoutSent          // our Logout sent, waiting for the answer
 )
 
 func (p phase) String() string {
@@ -86,13 +86,15 @@ type Session struct {
 	// bodyPool holds the buffers Send encodes bodies into.
 	bodyPool sync.Pool
 
-	mu      sync.Mutex
-	st      store.State // generation, NextSender, and NextTarget: the next expected
-	phase   phase
-	epoch   uint64
-	c       *conn // the current connection, nil when disconnected
-	stopped bool
-	stalled bool // a handler callback is stuck, see Config.MaxDeliveryStall
+	mu        sync.Mutex
+	st        store.State // generation, NextSender, and NextTarget: the next expected
+	phase     phase
+	epoch     uint64
+	c         *conn // the current connection, nil when disconnected
+	stopped   bool
+	stopping  bool  // Stop runs: no new connection
+	halted    error // a store failure left a sequence number uncertain: no new connection
+	stalled   bool  // a handler callback is stuck, see Config.MaxDeliveryStall
 	resetting bool
 	heartBt   time.Duration
 	// peerApplVerID is the counterparty's DefaultApplVerID (FIXT).
@@ -113,6 +115,8 @@ type Session struct {
 	replyTo uint64
 	// gapFilling is set while a GapFill moves the expected MsgSeqNum.
 	gapFilling bool
+	// draining is set while advanceLocked handles messages kept ahead.
+	draining bool
 	// The schedule's window: whether the session is within one, which,
 	// a channel closed when one opens, and how to stop following it.
 	inWindow    bool
@@ -162,7 +166,7 @@ func New(cfg Config) (*Session, error) {
 	}
 	s.st = st
 	s.committed = st.NextTarget - 1
-	s.receipts.init(cfg.MaxTrackedReceipts)
+	s.receipts.init(cfg.MaxTrackedReceipts, st.Generation)
 	return s, nil
 }
 
@@ -177,7 +181,7 @@ func (s *Session) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
-	case s.stopped:
+	case s.stopped || s.halted != nil:
 		return StateStopped
 	case s.stalled:
 		return StateStalled
@@ -299,11 +303,11 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 	h.seq = s.st.NextSender
 	h.sendingTime = time.Now()
 	if s.cfg.LastMsgSeqNumProcessed && s.prof.lastProc {
-		// The message answered, as QuickFIX sends it, else the last one
-		// received in sequence.
-		h.lastProcessed = s.replyTo
-		if h.lastProcessed == 0 {
-			h.lastProcessed = s.st.NextTarget - 1
+		// The last message processed: the one answered, as QuickFIX
+		// sends it, if every message before it is processed.
+		h.lastProcessed = s.committed
+		if s.replyTo != 0 && s.committed+1 >= s.replyTo {
+			h.lastProcessed = s.replyTo
 		}
 	}
 	buf, frames := &c.pending, &c.frames
@@ -318,7 +322,9 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 		s.log.LogAttrs(context.Background(), slog.LevelError, "storing a message failed",
 			slog.Uint64("seq", h.seq), slog.String("msg_type", h.msgType), slog.Any("error", err))
 		if errors.Is(err, store.ErrUnknownOutcome) || errors.Is(err, store.ErrSeqMismatch) {
-			// The sequence number may be taken: never reuse it.
+			// The sequence number may be taken: never reuse it. The
+			// session stays down until the store is sorted out.
+			s.halted = fmt.Errorf("session %s halted: storing message %d failed with an uncertain outcome, check the store before restarting: %w", s.id, h.seq, err)
 			s.disconnectLocked(c, &LogoutError{Text: "store failure", Err: err})
 		}
 		return 0, fmt.Errorf("session %s: storing message %d: %w", s.id, h.seq, err)

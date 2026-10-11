@@ -2,7 +2,7 @@ package session
 
 import (
 	"context"
-	"sync"
+	"time"
 )
 
 // Level is how far a sent message got.
@@ -50,10 +50,10 @@ type RejectInfo struct {
 }
 
 // Wait waits until the message reaches level, or can never reach it, or ctx
-// is done. It returns nil once the level is reached; ErrSkipped,
-// ErrUnknownDelivery or ErrReceiptUntracked if it never will; ctx's error;
-// or ErrWaitInHandler, at once, with a handler callback's ctx. Waiting for
-// Acknowledged makes the session probe the counterparty (see
+// is done. It returns nil once the level is reached, and keeps doing so;
+// ErrSkipped, ErrUnknownDelivery or ErrReceiptUntracked if it never will;
+// ctx's error; or ErrWaitInHandler, at once, with a handler callback's ctx.
+// Waiting for Acknowledged makes the session probe the counterparty (see
 // Config.AckProbe).
 func (r Receipt) Wait(ctx context.Context, level Level) error {
 	if r.s == nil {
@@ -110,53 +110,49 @@ func (r Receipt) Rejection() (RejectInfo, bool) {
 
 // receiptState tells whether receipt r reached level: done reports whether
 // it is settled, err why it never will. Otherwise wake is closed on the next
-// change. probe asks for an acknowledgement probe.
+// change. probe asks for an acknowledgement probe. Evidence obtained always
+// wins: a level reached stays reached.
 func (s *Session) receiptState(r Receipt, level Level, probe bool) (done bool, err error, wake <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := &s.receipts
-	switch {
-	case r.gen < t.gen:
-		if rec, ok := t.oldAcked[r.gen]; ok && r.seq <= rec {
+	if r.gen != t.gen {
+		if acked, ok := t.oldAcked[r.gen]; ok && acked[r.seq] {
 			return true, nil, nil
 		}
 		return true, ErrUnknownDelivery, nil
+	}
+	rec, tracked := t.recs[r.seq]
+	switch {
+	case level == Written && rec.epoch != 0:
+		return true, nil, nil
+	case rec.acked:
+		return true, nil, nil
+	case t.skipped(r.seq):
+		return true, ErrSkipped, nil
+	case !tracked && r.seq < t.oldest:
+		return true, ErrReceiptUntracked, nil
 	case s.stopped:
 		return true, ErrUnknownDelivery, nil
 	}
-	rec, ok := t.recs[r.seq]
-	if !ok {
-		if r.seq < t.oldest {
-			return true, ErrReceiptUntracked, nil
-		}
-		rec = record{}
-	}
-	if rec.skipped && !rec.acked {
-		return true, ErrSkipped, nil
-	}
-	switch level {
-	case Written:
-		if rec.epoch != 0 {
-			return true, nil, nil
-		}
-	case Acknowledged:
-		if rec.acked {
-			return true, nil, nil
-		}
-		if probe && rec.epoch != 0 && s.c != nil && rec.epoch == s.c.epoch && s.cfg.AckProbe != AckProbeNever {
-			s.probeLocked(s.c)
-		}
+	if level == Acknowledged && probe && s.cfg.AckProbe != AckProbeNever && s.c != nil && rec.epoch == s.c.epoch {
+		s.probeLocked(s.c)
 	}
 	return false, nil, t.changed()
 }
 
 // record is what the session knows of a sent message.
 type record struct {
-	epoch   uint64 // connection its last complete write was on, 0 if not written
-	wq      uint64 // write counter of that write
-	acked   bool
-	skipped bool // gap-filled by us
+	epoch uint64 // connection its last complete write was on, 0 if not written
+	wq    uint64 // write counter of that write
+	acked bool
 }
+
+// span is a range of MsgSeqNums, end excluded.
+type span struct{ begin, end uint64 }
+
+// maxSkipped bounds the gap-filled spans remembered.
+const maxSkipped = 1024
 
 // receipts tracks sent messages for their Receipts.
 type receipts struct {
@@ -165,26 +161,30 @@ type receipts struct {
 	recs       map[uint64]record
 	oldest     uint64 // lowest MsgSeqNum still tracked
 	rejections map[uint64]RejectInfo
-	// wq counts complete writes on the current connection; probes maps the
-	// TestReqID of our probes to the write counter of their own write, and
-	// probeAt is the counter at which a probe was last queued.
+	skips      []span // gap-filled by us, in order
+	// wq counts complete writes on connection wqEpoch; probes maps the
+	// TestReqID of each probe written to the write counter of its own
+	// write. pending is the probe queued and not yet written, answered
+	// whether its answer came first.
 	wq       uint64
 	wqEpoch  uint64
 	probes   map[string]uint64
-	pending  string // TestReqID of the probe queued, not yet written
-	oldAcked map[uint64]uint64
+	pending  string
+	answered bool
+	lastAt   time.Time // when the last probe was queued
+	// oldAcked holds, by earlier generation, the messages acknowledged.
+	oldAcked map[uint64]map[uint64]bool
 	wake     chan struct{}
-	once     sync.Once
 }
 
-func (t *receipts) init(max int) {
+func (t *receipts) init(max int, gen uint64) {
 	t.max = max
+	t.gen = gen
 	t.recs = make(map[uint64]record)
 	t.rejections = make(map[uint64]RejectInfo)
 	t.probes = make(map[string]uint64)
-	t.oldAcked = make(map[uint64]uint64)
+	t.oldAcked = make(map[uint64]map[uint64]bool)
 	t.oldest = 1
-	t.gen = 1
 }
 
 // changed returns a channel closed on the next change.
@@ -202,16 +202,23 @@ func (t *receipts) notify() {
 	}
 }
 
+// skipped reports whether we gap-filled seq.
+func (t *receipts) skipped(seq uint64) bool {
+	for i := len(t.skips) - 1; i >= 0; i-- {
+		if s := t.skips[i]; seq >= s.begin && seq < s.end {
+			return true
+		}
+	}
+	return false
+}
+
 // written records the complete write of message seq of generation gen on
 // connection epoch.
 func (t *receipts) written(gen, seq, epoch uint64) {
 	if gen != t.gen {
 		return
 	}
-	if t.wqEpoch != epoch {
-		t.wq, t.wqEpoch = 0, epoch
-	}
-	t.wq++
+	t.tick(epoch)
 	rec := t.recs[seq]
 	rec.epoch, rec.wq = epoch, t.wq
 	t.recs[seq] = rec
@@ -221,32 +228,62 @@ func (t *receipts) written(gen, seq, epoch uint64) {
 	t.notify()
 }
 
-// probeWritten records the complete write of probe id on epoch.
-func (t *receipts) probeWritten(id string, epoch uint64) {
+// tick counts a complete write on epoch.
+func (t *receipts) tick(epoch uint64) {
 	if t.wqEpoch != epoch {
 		t.wq, t.wqEpoch = 0, epoch
+		clear(t.probes)
 	}
 	t.wq++
-	t.probes[id] = t.wq
+}
+
+// probeWritten records the complete write of probe id on epoch: if its
+// answer already came, the messages before it are acknowledged now.
+func (t *receipts) probeWritten(id string, epoch uint64) {
+	t.tick(epoch)
 	if t.pending == id {
 		t.pending = ""
+		if t.answered {
+			t.answered = false
+			t.ack(epoch, t.wq)
+			return
+		}
 	}
+	t.probes[id] = t.wq
 }
 
 // probeAnswered acknowledges the messages written before probe id on epoch,
-// if id is one of our probes.
+// if id is one of our probes; if its write is not accounted for yet, it is
+// once it is.
 func (t *receipts) probeAnswered(epoch uint64, id []byte) {
+	if string(id) == t.pending {
+		t.answered = true
+		return
+	}
 	wq, ok := t.probes[string(id)]
 	if !ok || epoch != t.wqEpoch {
 		return
 	}
 	delete(t.probes, string(id))
+	t.ack(epoch, wq)
+}
+
+// ack acknowledges the messages whose last complete write was on epoch
+// before write counter wq.
+func (t *receipts) ack(epoch, wq uint64) {
 	for seq, rec := range t.recs {
 		if rec.epoch == epoch && rec.wq < wq && !rec.acked {
 			rec.acked = true
 			t.recs[seq] = rec
 		}
 	}
+	t.notify()
+}
+
+// connectionLost forgets the probes of a connection that ended.
+func (t *receipts) connectionLost() {
+	clear(t.probes)
+	t.pending, t.answered = "", false
 	t.notify()
 }
 
@@ -258,7 +295,7 @@ func (t *receipts) rejected(gen, seq uint64, ri RejectInfo) {
 	t.rejections[seq] = ri
 	if len(t.rejections) > t.max {
 		for s := range t.rejections {
-			if s < seq-uint64(t.max) {
+			if s+uint64(t.max) < seq {
 				delete(t.rejections, s)
 			}
 		}
@@ -268,35 +305,52 @@ func (t *receipts) rejected(gen, seq uint64, ri RejectInfo) {
 
 // gapFilled records that we gap-filled messages begin to end-1.
 func (t *receipts) gapFilled(gen, begin, end uint64) {
-	if gen != t.gen {
+	if gen != t.gen || begin >= end {
 		return
 	}
-	for seq := begin; seq < end; seq++ {
-		if rec, ok := t.recs[seq]; ok {
-			rec.skipped = true
-			t.recs[seq] = rec
-		} else if seq >= t.oldest {
-			t.recs[seq] = record{skipped: true}
-		}
+	if n := len(t.skips); n > 0 && t.skips[n-1].end >= begin && t.skips[n-1].begin <= begin {
+		t.skips[n-1].end = max(t.skips[n-1].end, end)
+	} else {
+		t.skips = append(t.skips, span{begin, end})
+	}
+	if len(t.skips) > maxSkipped {
+		t.skips = append(t.skips[:0], t.skips[len(t.skips)-maxSkipped:]...)
 	}
 	t.notify()
 }
 
-// newGeneration ends generation gen: its receipts without evidence fail.
-func (t *receipts) newGeneration(gen uint64) {
-	var acked uint64
+// newGeneration ends generation gen, starting generation next: its
+// receipts acknowledged stay so, the others fail.
+func (t *receipts) newGeneration(gen, next uint64) {
+	acked := map[uint64]bool{}
 	for seq, rec := range t.recs {
-		if rec.acked && seq > acked {
-			acked = seq
+		if rec.acked {
+			acked[seq] = true
 		}
 	}
-	t.oldAcked[gen] = acked
-	t.gen = gen + 1
+	if len(acked) > 0 {
+		t.oldAcked[gen] = acked
+	}
+	// Bound what is kept of earlier generations.
+	total := 0
+	for _, a := range t.oldAcked {
+		total += len(a)
+	}
+	for g := range t.oldAcked {
+		if total <= t.max {
+			break
+		}
+		if g != gen {
+			total -= len(t.oldAcked[g])
+			delete(t.oldAcked, g)
+		}
+	}
+	t.gen = next
 	clear(t.recs)
 	clear(t.rejections)
-	clear(t.probes)
+	t.skips = t.skips[:0]
 	t.oldest = 1
-	t.notify()
+	t.connectionLost()
 }
 
 // evict drops the oldest records beyond max.
@@ -315,15 +369,22 @@ func (t *receipts) evict() {
 }
 
 // probeLocked queues a TestRequest probing for acknowledgements, unless one
-// is already queued or unanswered.
+// is queued or unanswered, or the last was queued less than
+// AckProbeMinInterval ago, in which case the timer sends it when due.
 func (s *Session) probeLocked(c *conn) {
 	t := &s.receipts
 	if t.pending != "" || len(t.probes) > 0 || c.replaying() {
 		return
 	}
+	if min := s.cfg.AckProbeMinInterval; min > 0 && time.Since(t.lastAt) < min {
+		c.probeWanted = true
+		s.armLocked(c)
+		return
+	}
+	c.probeWanted = false
 	c.testReqs++
 	id := "ACK-" + itoa(c.epoch) + "-" + itoa(c.testReqs)
-	t.pending = id
+	t.pending, t.answered, t.lastAt = id, false, time.Now()
 	if _, err := s.queueProbeLocked(id); err != nil {
 		t.pending = ""
 	}

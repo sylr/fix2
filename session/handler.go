@@ -77,8 +77,10 @@ type Handler interface {
 	// so it must neither block nor take locks a Send caller may hold.
 	OnResend(ctx context.Context, s *Session, seq uint64, m *fix2.Message) bool
 	// OnRecoveryLoss tells that messages begin to end may never be
-	// delivered: the counterparty gap-filled them, or we could not resend
-	// messages of ours.
+	// delivered: the counterparty reset its sequence numbers past them, or
+	// we could not resend messages of ours. A GapFill is not reported: the
+	// session cannot tell administrative messages, which counterparties
+	// gap-fill, from application ones it no longer keeps.
 	OnRecoveryLoss(ctx context.Context, s *Session, begin, end uint64, cause error)
 }
 

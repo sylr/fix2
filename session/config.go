@@ -54,7 +54,9 @@ const (
 	// CompatStrict2020 follows the 2020 FIX Session Layer specification
 	// where it differs, and refuses what QuickFIX lets through: a
 	// ResendRequest for messages already processed, without PossDup, logs
-	// out; a Logon whose DefaultApplVerID has no dictionary is refused.
+	// out; a Logout received ahead of a gap is answered once the gap is
+	// recovered; a Logon whose DefaultApplVerID has no dictionary is
+	// refused.
 	CompatStrict2020
 )
 

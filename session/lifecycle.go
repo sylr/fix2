@@ -40,7 +40,14 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 // delivery goroutine finishes delivering what it received, then its store is
 // closed. Initiators and acceptors stop the sessions they remove.
 func (s *Session) Stop(ctx context.Context) error {
-	err := s.Logout(ctx, "session stopped")
+	return s.stop(ctx, "session stopped")
+}
+
+func (s *Session) stop(ctx context.Context, text string) error {
+	s.mu.Lock()
+	s.stopping = true
+	s.mu.Unlock()
+	err := s.Logout(ctx, text)
 	s.mu.Lock()
 	if s.stopped {
 		s.mu.Unlock()
