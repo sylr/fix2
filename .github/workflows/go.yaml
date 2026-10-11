@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    name: Test (${{ matrix.os }}, Go ${{ matrix.go }}${{ matrix.simd && ', simd' || '' }})
+    name: Test (${{ matrix.os }}${{ matrix.simd && ', simd' || '' }})
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -28,25 +28,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # amd64 and arm64. With Go 1.26, GOEXPERIMENT=simd builds the
-        # generic checksum: the SIMD ones need Go 1.27's archsimd.
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
-        go: ["1.26", "1.27"]
+        # amd64 and arm64; darwin, which has its own hrtimer in assembly,
+        # on arm64.
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
         simd: [false, true]
-        include:
-          # darwin has its own hrtimer, in assembly: on arm64.
-          - {os: macos-15, go: "1.27", simd: false}
-          - {os: macos-15, go: "1.27", simd: true}
     env:
       GOEXPERIMENT: ${{ matrix.simd && 'simd' || '' }}
     steps:
       - name: Check out code
         uses: actions/checkout@v5
 
-      - name: Set up Go ${{ matrix.go }}
+      - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go }}
+          go-version: "1.27"
           cache-dependency-path: |
             go.sum
             contribs/*/go.sum
@@ -66,7 +61,7 @@ jobs:
           files: coverage.txt,contribs/binancemd/coverage.txt,contribs/coinbasemd/coverage.txt
           # Each platform covers code the others do not, SIMD checksums,
           # darwin's hrtimer: Codecov merges them.
-          flags: ${{ runner.os }}-${{ runner.arch }}-go${{ matrix.go }}${{ matrix.simd && '-simd' || '' }}
+          flags: ${{ runner.os }}-${{ runner.arch }}${{ matrix.simd && '-simd' || '' }}
           use_oidc: true
 
   fuzz:
