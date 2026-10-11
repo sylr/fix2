@@ -66,9 +66,11 @@ type Handler interface {
 	FromAdmin(ctx context.Context, s *Session, m *fix2.Message, in Inbound)
 	// FromApp delivers an application message, in sequence order. An error
 	// rejects it: a *RejectError with a Reject (35=3), a
-	// *BusinessRejectError with a BusinessMessageReject (35=j), and any
-	// other with a BusinessMessageReject whose reason is "other". Either
-	// way the message counts as processed.
+	// *BusinessRejectError with a BusinessMessageReject (35=j),
+	// fix2.ErrUnsupportedMessageType (as generated Dispatch functions
+	// return) with one whose reason is "unsupported message type", and any
+	// other with one whose reason is "other". Either way the message counts
+	// as processed.
 	FromApp(ctx context.Context, s *Session, m *fix2.Message, in Inbound) error
 
 	// OnResend tells whether a stored application message may be resent at

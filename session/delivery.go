@@ -276,6 +276,8 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 		s.rejectLocked(m, rej.Reason, tag, rejectText(rej.Reason, rej.Text))
 	case errors.As(err, &brej):
 		s.businessRejectLocked(m, brej.Reason, brej.RefID, brej.Text)
+	case errors.Is(err, fix2.ErrUnsupportedMessageType):
+		s.businessRejectLocked(m, BusinessRejectUnsupportedMessageType, "", "Unsupported Message Type: "+string(m.MsgType()))
 	default:
 		s.businessRejectLocked(m, BusinessRejectOther, "", err.Error())
 	}

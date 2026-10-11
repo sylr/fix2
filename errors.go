@@ -16,6 +16,10 @@ var (
 	ErrInvalidTag             = newError("invalid tag number")
 	ErrInvalidField           = newError("invalid field")
 	ErrFieldSeparatorNotFound = newError("field separator not found where expected")
+	// ErrUnsupportedMessageType reports a message type an application does
+	// not handle: a session answers it with a BusinessMessageReject
+	// ("Unsupported Message Type"). Generated Dispatch functions return it.
+	ErrUnsupportedMessageType = newError("unsupported message type")
 )
 
 // fix2Error is a sentinel that unwraps to ErrFix2. Its message has no "fix2: "

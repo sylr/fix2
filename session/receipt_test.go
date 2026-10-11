@@ -3,6 +3,7 @@ package session_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,23 @@ func TestHandlerReject(t *testing.T) {
 	p.send("D", 0, "11", "IN", "54", "7")
 	rej := p.expect("3", "45", "2", "371", "54", "372", "D", "373", "5")
 	if got := string(rej.Get(58)); !strings.HasPrefix(got, "Value is incorrect (out of range) for this tag: Side 7") {
+		t.Errorf("Text = %q", got)
+	}
+}
+
+// An application message type the handler does not support is answered
+// with a BusinessMessageReject.
+type unsupported struct{ *recorder }
+
+func (unsupported) FromApp(_ context.Context, _ *session.Session, m *fix2.Message, _ session.Inbound) error {
+	return fmt.Errorf("%w: %s", fix2.ErrUnsupportedMessageType, m.MsgType())
+}
+
+func TestUnsupportedMessageType(t *testing.T) {
+	_, _, p := loggedOn(t, func(c *session.Config) { c.Handler = unsupported{c.Handler.(*recorder)} })
+	p.send("8", 0, "11", "X")
+	rej := p.expect("j", "45", "2", "372", "8", "380", "3")
+	if got := string(rej.Get(58)); !strings.HasPrefix(got, "Unsupported Message Type") {
 		t.Errorf("Text = %q", got)
 	}
 }

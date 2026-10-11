@@ -2,7 +2,10 @@
 //
 // Usage:
 //
-//	fixgen -dict <xml-path> -pkg <package-name> [-out <dir>]
+//	fixgen -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch]
+//
+// With -dispatch, it also generates a typed Handler interface and a
+// Dispatch function routing messages to its methods.
 package main
 
 import (
@@ -17,6 +20,7 @@ func main() {
 	dictPath := flag.String("dict", "", "QuickFIX XML dictionary file (required)")
 	pkg := flag.String("pkg", "", "Go package name for output (required)")
 	outDir := flag.String("out", ".", "output directory")
+	dispatch := flag.Bool("dispatch", false, "generate a typed Handler interface and Dispatch")
 	flag.Parse()
 
 	if *dictPath == "" || *pkg == "" {
@@ -31,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := generate(dict, *pkg, *outDir); err != nil {
+	if err := generateWith(dict, *pkg, *outDir, options{dispatch: *dispatch}); err != nil {
 		fmt.Fprintf(os.Stderr, "fixgen: %v\n", err)
 		os.Exit(1)
 	}
