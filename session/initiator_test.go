@@ -349,3 +349,28 @@ func TestInitiator_WindowEndsWhileSigning(t *testing.T) {
 		t.Fatal("still connected after the window ended")
 	}
 }
+
+// blockingLogon blocks OnLogon until release is closed.
+type blockingLogon struct {
+	*recorder
+	release chan struct{}
+}
+
+func (b blockingLogon) OnLogon(context.Context, *session.Session) { <-b.release }
+
+// A Logon counts as processed at once: an OnLogon still running does not
+// hold back LastMsgSeqNumProcessed (369).
+func TestInitiator_LastProcessedWhileOnLogonRuns(t *testing.T) {
+	l := mem.Listen("acceptor")
+	release := make(chan struct{})
+	defer close(release)
+	startInitiator(t, l, func(c *session.Config) {
+		c.Handler = blockingLogon{recorder: c.Handler.(*recorder), release: release}
+		c.LastMsgSeqNumProcessed = true
+	})
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 0, "98", "0", "108", "30")
+	p.send("1", 0, "112", "PING")
+	p.expect("0", "112", "PING", "369", "2")
+}

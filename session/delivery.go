@@ -51,6 +51,9 @@ type delivery struct {
 	done  chan struct{}
 	idle  chan struct{} // closed when the queue is empty and nothing runs
 	busy  bool
+	// busyMsg tells the item running is a received message: an application
+	// message or a mark, not a notification such as OnLogon.
+	busyMsg bool
 
 	pool sync.Pool
 	msg  fix2.Message
@@ -196,7 +199,7 @@ func (d *delivery) run() {
 			clear(d.items[n:])
 			d.items, d.head = d.items[:n], 0
 		}
-		d.busy = true
+		d.busy, d.busyMsg = true, it.kind == itemApp || it.kind == itemMark
 		if d.room != nil && len(d.items)-d.head < d.s.cfg.DeliveryQueue {
 			close(d.room)
 			d.room = nil
@@ -206,7 +209,7 @@ func (d *delivery) run() {
 		d.process(it)
 
 		d.mu.Lock()
-		d.busy = false
+		d.busy, d.busyMsg = false, false
 		d.mu.Unlock()
 		d.s.unstall()
 	}
@@ -300,11 +303,21 @@ func (d *delivery) persist(force bool) {
 	d.persistLocked(force)
 }
 
-// idleNow reports whether nothing is queued nor being delivered.
-func (d *delivery) idleNow() bool {
+// messagesAhead reports whether a received message is queued or being
+// delivered: messages received after it are processed only once it is.
+// Notifications (OnLogon, OnLogout, OnRecoveryLoss) hold nothing back.
+func (d *delivery) messagesAhead() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return len(d.items) == d.head && !d.busy
+	if d.busyMsg {
+		return true
+	}
+	for _, it := range d.items[d.head:] {
+		if it.kind == itemApp || it.kind == itemMark {
+			return true
+		}
+	}
+	return false
 }
 
 // persistLocked is persist with the session's lock held.

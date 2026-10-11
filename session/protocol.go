@@ -640,8 +640,9 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 // markLocked queues the processing of received message seq, which needs no
 // delivery, so that the processed prefix moves past it in order.
 func (s *Session) markLocked(seq uint64) {
-	if s.deliv.idleNow() {
-		// Nothing ahead of it to deliver: processed now.
+	if !s.deliv.messagesAhead() {
+		// No message ahead of it to deliver: processed now. A Logon is,
+		// whether OnLogon ran yet or not: LastMsgSeqNumProcessed says so.
 		if seq > s.committed {
 			s.committed = seq
 			s.deliv.persistLocked(false)
