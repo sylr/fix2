@@ -115,10 +115,16 @@ func (f *Framer) Next() ([]byte, error) {
 func (f *Framer) next() (frame []byte, garbled *GarbledError, err error) {
 	// Find a frame start.
 	if err := f.fill(len(frameStart)); err != nil {
-		if f.end-f.start > 0 && bytes.HasPrefix(frameStart, f.buf[f.start:f.end]) {
-			return nil, nil, unexpected(err)
+		// The stream ended: skip garbage up to a partial frame start, which
+		// makes the end unexpected.
+		rest := f.buf[f.start:f.end]
+		for i := range rest {
+			if bytes.HasPrefix(frameStart, rest[i:]) {
+				f.skip(i)
+				return nil, nil, unexpected(err)
+			}
 		}
-		f.skip(f.end - f.start)
+		f.skip(len(rest))
 		return nil, nil, err
 	}
 	if !bytes.HasPrefix(f.buf[f.start:f.end], frameStart) {
@@ -182,6 +188,9 @@ func (f *Framer) header() (int, int, error) {
 			return 0, 0, fmt.Errorf("%w: BeginString longer than %d bytes", ErrInvalidBeginTag, maxBeginStringLen)
 		}
 		i++
+	}
+	if begin := f.buf[f.start+2 : f.start+i]; !bytes.HasPrefix(begin, []byte("FIX.")) && !bytes.HasPrefix(begin, []byte("FIXT.")) {
+		return 0, 0, fmt.Errorf("%w: BeginString %q is not FIX.x or FIXT.x", ErrInvalidBeginTag, begin)
 	}
 	i++ // past SOH
 	if f.fill(i+2) != nil {

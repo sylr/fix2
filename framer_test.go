@@ -79,6 +79,7 @@ func TestFramer_Garbled(t *testing.T) {
 		{"BodyLength too long", "8=FIX.4.4\x019=1234567890\x01", ErrInvalidBodyLen, 23},
 		{"BeginString too long", "8=FIX.4.4.4.4.4.4.4.4\x01", ErrInvalidBeginTag, 22},
 		{"BodyLength too large", "8=FIX.4.4\x019=99999\x01", ErrMessageTooLarge, 18},
+		{"BeginString not FIX.x", "8=FIXjunk\x019=40\x01", ErrInvalidBeginTag, 15}, // its BodyLength would swallow the good frame
 		{"BodyLength too short", "8=FIX.4.4\x019=5\x0135=0\x0149=A\x0110=000\x01", ErrBodyLenMismatch, 31},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -114,6 +115,7 @@ func TestFramer_EndOfStream(t *testing.T) {
 		{"inside the header", "8=FIX.4.4\x019=1", io.ErrUnexpectedEOF, 0},
 		{"inside the body", string(good[:len(good)-3]), io.ErrUnexpectedEOF, 0},
 		{"after garbage", "garbage!", io.EOF, 8},
+		{"garbage before a partial frame start", "x8=F", io.ErrUnexpectedEOF, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, skipped, _, err := frameAll(t, strings.NewReader(tc.stream), FramerOptions{})
