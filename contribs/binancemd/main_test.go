@@ -554,3 +554,29 @@ func TestLogoutRightAfterLogonIsNoRefusal(t *testing.T) {
 	default:
 	}
 }
+
+// A query failing after others were answered still writes their answers.
+func TestInstruments_PartialFailure(t *testing.T) {
+	l := mem.Listen("binance")
+	out, _, done := startClient(t, l, func(o *options) { o.json = false }, "instruments", "BTCUSDT", "NOPE")
+	f := acceptBinance(t, l, pub(t))
+	f.logon()
+	ok := f.expect("x")
+	bad := f.expect("x")
+	f.send("y", "320", string(ok.Get(320)), "146", "1", "55", "BTCUSDT", "15", "USDT")
+	f.send("3", "45", string(bad.Get(34)), "372", "x", "373", "5", "25016", "-1121", "58", "Invalid symbol.")
+	f.expect("5")
+	f.send("5")
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "Invalid symbol.") {
+			t.Errorf("stream = %v", err)
+		}
+		done <- nil
+	case <-time.After(5 * time.Second):
+		t.Fatal("instruments did not end")
+	}
+	if !strings.Contains(out.String(), "BTCUSDT  USDT") {
+		t.Errorf("BTCUSDT's row not written:\n%s", out.String())
+	}
+}

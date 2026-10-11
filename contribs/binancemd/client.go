@@ -126,10 +126,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 	}
 	log.LogAttrs(ctx, slog.LevelInfo, "connecting", slog.String("endpoint", o.endpoint), slog.String("sender_comp_id", sender))
 	ini.Run(ctx)
+	// What was received is written, even when the command fails.
+	endErr := out.end()
 	if err := context.Cause(ctx); !errors.Is(err, errDone) && !errors.Is(err, context.Canceled) {
-		return err
+		return errors.Join(err, endErr)
 	}
-	return out.end()
+	return endErr
 }
 
 // loadKey reads the Ed25519 private key of PEM file path.
