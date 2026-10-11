@@ -819,7 +819,9 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 		if c.logoutText != "" {
 			text = c.logoutText
 		}
-		s.disconnectLocked(c, &LogoutError{ByCounterparty: false, Text: text})
+		// After what is queued: crossing Logouts, ours may not be written
+		// yet.
+		s.closeAfterFlushLocked(c, &LogoutError{ByCounterparty: false, Text: text})
 		return
 	}
 	if !s.checkHeaderLocked(c, m, in.Seq, now) {

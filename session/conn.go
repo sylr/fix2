@@ -226,6 +226,11 @@ func (c *conn) lost(err error) {
 	if errors.Is(err, io.EOF) {
 		err = errors.New("connection closed by the counterparty")
 	}
+	if s.phase == phaseLogoutSent && c.logoutText != "" {
+		// Hanging up answers our Logout too: why we logged out.
+		s.disconnectLocked(c, &LogoutError{Text: c.logoutText, Err: err})
+		return
+	}
 	s.disconnectLocked(c, &LogoutError{Text: "connection lost", Err: err})
 }
 

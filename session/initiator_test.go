@@ -400,3 +400,29 @@ func TestLogoutReasonIsOurs(t *testing.T) {
 		t.Errorf("logout reason %v, want ours: end of day", reason)
 	}
 }
+
+// A counterparty hanging up rather than answering our Logout answers it
+// too: the session reports why it logged out.
+func TestLogoutReasonOnHangUp(t *testing.T) {
+	l := mem.Listen("acceptor")
+	ini, rec := startInitiator(t, l, nil)
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 0, "98", "0", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	done := make(chan error, 1)
+	go func() { done <- ini.Logout(context.Background(), "end of day") }()
+	p.expect("5", "58", "end of day")
+	p.conn.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	rec.mu.Lock()
+	reason := rec.logouts[0]
+	rec.mu.Unlock()
+	var le *session.LogoutError
+	if !errors.As(reason, &le) || le.ByCounterparty || le.Text != "end of day" || le.Err == nil {
+		t.Errorf("logout reason %v, want ours, end of day, and the hang up", reason)
+	}
+}
