@@ -92,8 +92,11 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 		if err := s.SetNextTarget(ctx, st.Generation, 10); err != nil {
 			t.Errorf("same NextTarget again: %v", err)
 		}
-		if err := s.SetNextTarget(ctx, st.Generation, 9); !errors.Is(err, store.ErrBackwards) {
-			t.Errorf("NextTarget backwards: err = %v, want ErrBackwards", err)
+		if err := s.SetNextTarget(ctx, st.Generation, 9); err != nil {
+			t.Errorf("NextTarget lowered, as an administrative request may: %v", err)
+		}
+		if err := s.SetNextTarget(ctx, st.Generation, 10); err != nil {
+			t.Fatal(err)
 		}
 		if err := s.SetNextTarget(ctx, st.Generation+1, 11); !errors.Is(err, store.ErrGenerationGone) {
 			t.Errorf("wrong generation: err = %v, want ErrGenerationGone", err)

@@ -1,0 +1,93 @@
+package session
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/sylr/fix2/dictionary"
+)
+
+// maxText bounds the Text (58) of messages the session sends, in bytes.
+const maxText = 512
+
+// cleanText makes s safe for a Text field: control characters, SOH
+// included, are escaped as \xNN, and the result is cut, on a rune boundary,
+// to maxText bytes.
+func cleanText(s string) string {
+	clean := true
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			clean = false
+			break
+		}
+	}
+	if !clean {
+		var b strings.Builder
+		for i := 0; i < len(s); i++ {
+			if c := s[i]; c < 0x20 || c == 0x7f {
+				fmt.Fprintf(&b, `\x%02x`, c)
+			} else {
+				b.WriteByte(c)
+			}
+		}
+		s = b.String()
+	}
+	if len(s) <= maxText {
+		return s
+	}
+	cut := maxText - len("...")
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
+}
+
+// quoteValue quotes a field value for a Text, escaping control characters
+// and cutting long values.
+func quoteValue(v []byte) string {
+	const maxValue = 64
+	if len(v) > maxValue {
+		return strconv.Quote(string(v[:maxValue])) + "..."
+	}
+	return strconv.Quote(string(v))
+}
+
+// rejectText returns the Text of a Reject for reason: the reason's name in
+// the FIX specification, which counterparties and test suites match, then
+// the detail.
+func rejectText(reason dictionary.RejectReason, detail string) string {
+	if detail == "" {
+		return reason.String()
+	}
+	return reason.String() + ": " + detail
+}
+
+// fieldDesc returns "tag (Name)" for a tag the dictionary defines, "tag"
+// otherwise.
+func fieldDesc(d *dictionary.Dict, tag int) string {
+	if d != nil {
+		if fd := d.Fields[tag]; fd != nil {
+			return strconv.Itoa(tag) + " (" + fd.Name + ")"
+		}
+	}
+	if name, ok := sessionFieldNames[tag]; ok {
+		return strconv.Itoa(tag) + " (" + name + ")"
+	}
+	return strconv.Itoa(tag)
+}
+
+// sessionFieldNames names the fields the session layer itself checks, for
+// Texts written without a dictionary.
+var sessionFieldNames = map[int]string{
+	7: "BeginSeqNo", 8: "BeginString", 9: "BodyLength", 10: "CheckSum",
+	16: "EndSeqNo", 34: "MsgSeqNum", 35: "MsgType", 36: "NewSeqNo",
+	43: "PossDupFlag", 45: "RefSeqNum", 49: "SenderCompID", 50: "SenderSubID",
+	52: "SendingTime", 56: "TargetCompID", 57: "TargetSubID", 58: "Text",
+	97: "PossResend", 98: "EncryptMethod", 108: "HeartBtInt", 112: "TestReqID",
+	122: "OrigSendingTime", 123: "GapFillFlag", 141: "ResetSeqNumFlag",
+	142: "SenderLocationID", 143: "TargetLocationID", 369: "LastMsgSeqNumProcessed",
+	371: "RefTagID", 372: "RefMsgType", 373: "SessionRejectReason",
+	789: "NextExpectedMsgSeqNum", 1128: "ApplVerID", 1137: "DefaultApplVerID",
+}

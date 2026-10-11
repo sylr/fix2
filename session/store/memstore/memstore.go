@@ -147,9 +147,6 @@ func (s *Store) SetNextTarget(_ context.Context, gen, next uint64) error {
 	if err := s.check(gen); err != nil {
 		return err
 	}
-	if next < s.state.NextTarget {
-		return fmt.Errorf("%w: NextTarget %d after %d", store.ErrBackwards, next, s.state.NextTarget)
-	}
 	s.state.NextTarget = next
 	return nil
 }

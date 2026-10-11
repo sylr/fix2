@@ -94,7 +94,8 @@ type Store interface {
 	Append(ctx context.Context, gen, seq uint64, raw []byte) error
 
 	// SetNextTarget records that every message up to next-1 was received
-	// and processed. next never decreases within a generation.
+	// and processed. The session only lowers it on an explicit
+	// administrative request (Session.SetNextTargetSeqNum).
 	SetNextTarget(ctx context.Context, gen, next uint64) error
 
 	// SetNextSender moves NextSender forward without storing messages, as a
