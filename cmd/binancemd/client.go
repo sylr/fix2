@@ -195,6 +195,9 @@ type client struct {
 	finish  context.CancelCauseFunc
 
 	mu          sync.Mutex
+	// loggedOn, connected and refusals follow the Logons FromAdmin sees,
+	// in order with the Logouts and Rejects that may follow them: OnLogon
+	// runs later, on another goroutine.
 	loggedOn    bool              // logged on once at least
 	connected   bool              // logged on, on the current connection
 	refusals    int               // Logons refused in a row
@@ -232,7 +235,7 @@ func (c *client) OnLogon(ctx context.Context, s *session.Session) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.log.LogAttrs(ctx, slog.LevelInfo, "logged on")
-	c.loggedOn, c.connected, c.refusals, c.maintenance = true, true, 0, false
+	c.maintenance = false
 	c.sent = map[uint64]string{}
 	c.subs = map[string]*sub{}
 	c.quotes = map[string]*tickerEvent{}
@@ -330,11 +333,13 @@ func (c *client) resubscribeLocked(ctx context.Context, s *session.Session, sb *
 	c.subscribeLocked(ctx, s, sb.symbol)
 }
 
-// FromAdmin reports Rejects and Logouts.
+// FromAdmin follows Logons, and reports Rejects and Logouts.
 func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix2.Message, _ session.Inbound) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch string(m.MsgType()) {
+	case "A":
+		c.loggedOn, c.connected, c.refusals = true, true, 0
 	case "3":
 		r := spotmd.WrapReject(m)
 		ref, _, _ := r.RefSeqNum()

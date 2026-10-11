@@ -524,3 +524,33 @@ func TestValidate(t *testing.T) {
 		t.Errorf("output:\n%s", out.String())
 	}
 }
+
+// A Logon that succeeds is no refusal, even when Binance logs out at once,
+// before OnLogon runs.
+func TestLogoutRightAfterLogonIsNoRefusal(t *testing.T) {
+	saved := initiatorOptions
+	initiatorOptions.ReconnectMin, initiatorOptions.ReconnectMax = 10*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { initiatorOptions = saved })
+	l := mem.Listen("binance")
+	_, _, done := startClient(t, l, nil, "trades", "BTCUSDT")
+	f := acceptBinance(t, l, pub(t))
+	f.logon()
+	f.expect("V")
+	f.conn.Close()
+	for range maxRefusals - 1 {
+		f = acceptBinance(t, l, pub(t))
+		f.cid = string(f.expect("A").Get(49))
+		f.send("5", "58", "Invalid signature.")
+	}
+	f = acceptBinance(t, l, pub(t))
+	f.logon()
+	f.send("5", "58", "Server maintenance")
+	// Not given up: it connects again.
+	f = acceptBinance(t, l, pub(t))
+	f.expect("A")
+	select {
+	case err := <-done:
+		t.Fatalf("gave up: %v", err)
+	default:
+	}
+}
