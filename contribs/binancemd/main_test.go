@@ -213,6 +213,13 @@ func (f *fakeBinance) logon() {
 // send sends a message of msgType with fields after the header.
 func (f *fakeBinance) send(msgType string, fields ...string) {
 	f.t.Helper()
+	if err := f.trySend(msgType, fields...); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// trySend is send to a client that may have hung up already.
+func (f *fakeBinance) trySend(msgType string, fields ...string) error {
 	b := fix2.NewBuilder("FIX.4.4", msgType).
 		SetString(49, "SPOT").SetString(56, f.cid).SetInt(34, f.seq).
 		SetString(52, string(fix2.AppendUTCTimestamp(nil, time.Now(), fix2.Microseconds)))
@@ -221,9 +228,8 @@ func (f *fakeBinance) send(msgType string, fields ...string) {
 		tag, _ := strconv.Atoi(fields[i])
 		b.Append(tag, []byte(fields[i+1]))
 	}
-	if _, err := f.conn.Write(b.Build()); err != nil {
-		f.t.Fatal(err)
-	}
+	_, err := f.conn.Write(b.Build())
+	return err
 }
 
 // startClient runs args' command against l, returning its output and its
@@ -472,7 +478,9 @@ func TestLogonRejected(t *testing.T) {
 	m := f.expect("A")
 	f.cid = string(m.Get(49))
 	f.send("3", "45", "1", "372", "A", "373", "8", "25016", "-2014", "58", "API-key format invalid.")
-	f.send("5", "58", "API-key format invalid.")
+	// Binance logs out too, though a Reject of its Logon already ended the
+	// session, which may have hung up.
+	_ = f.trySend("5", "58", "API-key format invalid.")
 	select {
 	case err := <-done:
 		if err == nil || !strings.Contains(err.Error(), "API-key format invalid. (error code -2014)") {
