@@ -278,20 +278,30 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, now ti
 // session's message, received with sequence number seq. On a problem it
 // rejects the message, counts it as received if it is the one expected, and
 // returns false: a wrong CompID or an inaccurate SendingTime then logs out,
-// as FIX requires (FIXT 1.1 test cases 2k and 2o).
+// as FIX requires (FIXT 1.1 test cases 2k and 2o). A Reset-mode
+// SequenceReset, whose MsgSeqNum does not count, is not counted.
 func (s *Session) checkHeaderLocked(c *conn, m *fix2.Message, seq uint64, now time.Time) bool {
 	reason, tag, text := s.compIDOrTimeProblem(m, now)
 	if text == "" {
 		return true
 	}
 	s.rejectLocked(m, reason, tag, text)
-	if seq == s.st.NextTarget {
-		s.markLocked(seq)
-		s.advanceLocked(c, seq+1)
-	}
+	reset := string(m.MsgType()) == "4" && !bytes.Equal(m.Get(tagGapFillFlag), yes)
+	counts := seq == s.st.NextTarget && !reset
 	switch reason {
 	case dictionary.ReasonCompIDProblem, dictionary.ReasonSendingTimeAccuracyProblem:
+		if counts {
+			// Counted, but what is kept ahead of it is not processed: the
+			// session logs out, and asks for it again once logged on.
+			s.markLocked(seq)
+			s.st.NextTarget = seq + 1
+		}
 		s.logoutLocked(c, "")
+	default:
+		if counts {
+			s.markLocked(seq)
+			s.advanceLocked(c, seq+1)
+		}
 	}
 	return false
 }
@@ -689,15 +699,15 @@ func (s *Session) validateLocked(m *fix2.Message, in *Inbound) *dictionary.Valid
 }
 
 // rejectValidationLocked rejects m for verr. A Reject or BusinessMessageReject
-// of a type the dictionaries do not support is not: a counterparty whose
-// dictionaries do not support ours either would reject it in turn, and the
-// two would loop.
+// the dictionaries do not define, as unsupported or as an invalid MsgType, is
+// not: a counterparty whose dictionaries do not define ours either would
+// reject it in turn, and the two would loop.
 func (s *Session) rejectValidationLocked(m *fix2.Message, verr *dictionary.ValidationError) {
+	if isReject(m.MsgType()) && (verr.Reason == -1 || verr.Reason == dictionary.ReasonInvalidMsgType) {
+		s.logUnanswered(m, verr.Msg)
+		return
+	}
 	if verr.Reason == -1 {
-		if isReject(m.MsgType()) {
-			s.logUnanswered(m, "Unsupported Message Type")
-			return
-		}
 		s.businessRejectLocked(m, BusinessRejectUnsupportedMessageType, "", "Unsupported Message Type")
 		return
 	}

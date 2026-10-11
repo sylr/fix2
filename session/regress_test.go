@@ -3,12 +3,15 @@ package session_test
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/dictionary/xmldict"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/store/memstore"
@@ -289,51 +292,105 @@ func TestRejectingRejects(t *testing.T) {
 	}
 }
 
+// sendWithHeader writes a message of msgType from sender, at MsgSeqNum seq,
+// sent at sendingTime: a header the peer's send would not write.
+func (p *peer) sendWithHeader(msgType, sender string, seq int, sendingTime time.Time, fields ...string) {
+	p.t.Helper()
+	b := fix2.NewBuilder(session.FIX44, msgType).
+		SetString(49, sender).SetString(56, "INI").SetInt(34, seq).
+		SetString(52, string(fix2.AppendUTCTimestamp(nil, sendingTime, fix2.Milliseconds)))
+	for i := 0; i+1 < len(fields); i += 2 {
+		tag, _ := strconv.Atoi(fields[i])
+		b.Append(tag, []byte(fields[i+1]))
+	}
+	if _, err := p.conn.Write(b.Build()); err != nil {
+		p.t.Fatal(err)
+	}
+}
+
+// A valid Reject the dictionary does not define is not rejected: a
+// counterparty with such a dictionary too would reject ours, and the two
+// would loop.
+func TestUndefinedRejectNotRejected(t *testing.T) {
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4" servicepack="0">
+  <header>
+    <field name="BeginString" required="Y"/><field name="BodyLength" required="Y"/>
+    <field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/>
+    <field name="TargetCompID" required="Y"/><field name="MsgSeqNum" required="Y"/>
+    <field name="SendingTime" required="Y"/>
+  </header>
+  <trailer><field name="CheckSum" required="Y"/></trailer>
+  <messages>
+    <message name="Heartbeat" msgtype="0" msgcat="admin"><field name="TestReqID" required="N"/></message>
+    <message name="TestRequest" msgtype="1" msgcat="admin"><field name="TestReqID" required="Y"/></message>
+    <message name="Logon" msgtype="A" msgcat="admin">
+      <field name="EncryptMethod" required="Y"/><field name="HeartBtInt" required="Y"/>
+    </message>
+  </messages>
+  <fields>
+    <field number="8" name="BeginString" type="STRING"/><field number="9" name="BodyLength" type="LENGTH"/>
+    <field number="10" name="CheckSum" type="STRING"/><field number="34" name="MsgSeqNum" type="SEQNUM"/>
+    <field number="35" name="MsgType" type="STRING"/><field number="49" name="SenderCompID" type="STRING"/>
+    <field number="52" name="SendingTime" type="UTCTIMESTAMP"/><field number="56" name="TargetCompID" type="STRING"/>
+    <field number="98" name="EncryptMethod" type="INT"/><field number="108" name="HeartBtInt" type="INT"/>
+    <field number="112" name="TestReqID" type="STRING"/>
+  </fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _, p := loggedOn(t, func(c *session.Config) { c.Dictionaries.Session = d })
+	p.send("3", 0, "45", "1")
+	p.send("1", 0, "112", "SYNC")
+	p.expect("0", "112", "SYNC")
+	if n := s.Stats().RejectsSent.Load(); n != 0 {
+		t.Errorf("%d rejects sent", n)
+	}
+}
+
 // A Reject whose SendingTime is inaccurate is rejected, then the session
 // logs out, as for any message.
 func TestRejectWithInaccurateSendingTime(t *testing.T) {
 	_, _, p := loggedOn(t, nil)
-	b := fix2.NewBuilder(session.FIX44, "3").
-		SetString(49, "ACC").SetString(56, "INI").SetInt(34, p.seq).
-		SetString(52, string(fix2.AppendUTCTimestamp(nil, time.Now().Add(-time.Hour), fix2.Milliseconds))).
-		SetString(45, "1")
+	p.sendWithHeader("3", "ACC", p.seq, time.Now().Add(-time.Hour), "45", "1")
 	p.seq++
-	if _, err := p.conn.Write(b.Build()); err != nil {
-		t.Fatal(err)
-	}
 	p.expect("3", "45", "2", "372", "3", "373", "10")
 	p.expect("5")
 }
 
 // A message expected next whose CompID or SendingTime is wrong is rejected,
 // counted as received, then the session logs out, as FIXT 1.1's test cases
-// 2k and 2o require: logging on again, it does not ask for it again.
+// 2k and 2o require: logging on again, it does not ask for it again. A
+// message kept ahead of it is not processed: the session is logging out. A
+// Reset-mode SequenceReset, whose MsgSeqNum does not count, is not counted.
 func TestHeaderProblemCountsTheMessage(t *testing.T) {
-	now := func(d time.Duration) string {
-		return string(fix2.AppendUTCTimestamp(nil, time.Now().Add(d), fix2.Milliseconds))
-	}
 	for _, tc := range []struct {
 		name        string
+		msgType     string
+		fields      []string
 		sender      string
-		sendingTime string
+		sendingTime time.Time
+		ahead       bool // a TestRequest kept ahead of the message
 		reason      string
+		next        uint64
 	}{
-		{"wrong CompID", "OTHER", now(0), "9"},
-		{"inaccurate SendingTime", "ACC", now(-time.Hour), "10"},
+		{"wrong CompID", "D", []string{"11", "O1"}, "OTHER", time.Now(), false, "9", 3},
+		{"inaccurate SendingTime", "D", []string{"11", "O1"}, "ACC", time.Now().Add(-time.Hour), false, "10", 3},
+		{"wrong CompID, a message kept ahead", "D", []string{"11", "O1"}, "OTHER", time.Now(), true, "9", 3},
+		{"Reset-mode SequenceReset", "4", []string{"36", "10"}, "ACC", time.Now().Add(-time.Hour), false, "10", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _, p := loggedOn(t, nil)
-			b := fix2.NewBuilder(session.FIX44, "D").
-				SetString(49, tc.sender).SetString(56, "INI").SetInt(34, p.seq).
-				SetString(52, tc.sendingTime).SetString(11, "O1")
-			p.seq++
-			if _, err := p.conn.Write(b.Build()); err != nil {
-				t.Fatal(err)
+			if tc.ahead {
+				p.send("1", p.seq+1, "112", "AHEAD")
+				p.expect("2", "7", "2")
 			}
+			p.sendWithHeader(tc.msgType, tc.sender, p.seq, tc.sendingTime, tc.fields...)
+			p.seq++
 			p.expect("3", "45", "2", "373", tc.reason)
 			p.expect("5")
-			if got := s.NextTargetSeqNum(); got != 3 {
-				t.Errorf("NextTargetSeqNum = %d, want 3", got)
+			if got := s.NextTargetSeqNum(); got != tc.next {
+				t.Errorf("NextTargetSeqNum = %d, want %d", got, tc.next)
 			}
 		})
 	}
