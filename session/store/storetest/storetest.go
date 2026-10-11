@@ -48,12 +48,15 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 			raw[0] = 'X' // the store keeps its own copy
 		}
 		got := collect(t, s, st.Generation, 1, 100)
+		if len(got) != 100 {
+			t.Fatalf("Range 1..100 returned %d records, want 100", len(got))
+		}
 		for i, r := range got {
 			if r.hole != store.HoleNone || string(r.raw) != string(want[i]) {
 				t.Fatalf("Range %d = %q (%v), want %q", i+1, r.raw, r.hole, want[i])
 			}
 		}
-		if st2, _ := reopenState(s); st2 != nil && st2.NextSender != 101 {
+		if st2 := state(t, s); st2.NextSender != 101 {
 			t.Errorf("NextSender = %d, want 101", st2.NextSender)
 		}
 	})
@@ -95,7 +98,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 		if err := s.SetNextTarget(ctx, st.Generation+1, 11); !errors.Is(err, store.ErrGenerationGone) {
 			t.Errorf("wrong generation: err = %v, want ErrGenerationGone", err)
 		}
-		if st2, ok := reopenState(s); ok && st2.NextTarget != 10 {
+		if st2 := state(t, s); st2.NextTarget != 10 {
 			t.Errorf("NextTarget = %d, want 10", st2.NextTarget)
 		}
 	})
@@ -156,18 +159,22 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 		if err := s.Reset(ctx, g, at, "w2"); err != nil {
 			t.Errorf("repeating a Reset: %v", err)
 		}
-		if err := s.Reset(ctx, g-1, at, "w2"); g > 1 && !errors.Is(err, store.ErrGenerationGone) {
-			t.Errorf("Reset of an older generation: err = %v, want ErrGenerationGone", err)
-		}
 		if err := s.Append(ctx, g, 2, []byte("late")); !errors.Is(err, store.ErrGenerationGone) {
 			t.Errorf("Append to the previous generation: err = %v, want ErrGenerationGone", err)
 		}
-		st2, ok := reopenState(s)
-		if ok && (st2.Generation != g+1 || st2.NextSender != 1 || st2.NextTarget != 1 || !st2.CreatedAt.Equal(at) || st2.WindowID != "w2") {
+		st2 := state(t, s)
+		if st2.Generation != g+1 || st2.NextSender != 1 || st2.NextTarget != 1 || !st2.CreatedAt.Equal(at) || st2.WindowID != "w2" {
 			t.Errorf("state after Reset = %+v", st2)
 		}
 		mustAppend(t, s, g+1, 1, "new one")
 		checkRecords(t, collect(t, s, g+1, 1, 1), []record{{1, "new one", store.HoleNone}})
+		// Two generations on, resetting the first is stale.
+		if err := s.Reset(ctx, g+1, at, "w3"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Reset(ctx, g, at, "w3"); !errors.Is(err, store.ErrGenerationGone) {
+			t.Errorf("Reset of an older generation: err = %v, want ErrGenerationGone", err)
+		}
 	})
 
 	t.Run("ResetDuringRange", func(t *testing.T) {
@@ -185,6 +192,15 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 		})
 		if !errors.Is(err, store.ErrGenerationGone) {
 			t.Errorf("Range across a Reset: err = %v, want ErrGenerationGone", err)
+		}
+		// A Reset from the last callback is reported too.
+		s2, st2 := open(t)
+		mustAppend(t, s2, st2.Generation, 1, "m")
+		err = s2.Range(ctx, st2.Generation, 1, 1, func(uint64, []byte, store.Hole) error {
+			return s2.Reset(ctx, st2.Generation, time.Now(), "")
+		})
+		if !errors.Is(err, store.ErrGenerationGone) {
+			t.Errorf("Range with a Reset in its last callback: err = %v, want ErrGenerationGone", err)
 		}
 	})
 
@@ -231,6 +247,38 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 				{1, "", store.HoleRetention}, {2, "", store.HoleRetention},
 				{3, "3", store.HoleNone}, {4, "4", store.HoleNone}, {5, "5", store.HoleNone},
 			})
+			// A retry of a truncated Append still succeeds.
+			if err := s.Append(ctx, g, 1, []byte("1")); err != nil {
+				t.Errorf("retrying a truncated Append: %v", err)
+			}
+			// A Range keeps its snapshot across a Truncate.
+			var got []record
+			err := s.Range(ctx, g, 3, 5, func(seq uint64, raw []byte, hole store.Hole) error {
+				got = append(got, record{seq, string(raw), hole})
+				if seq == 3 {
+					return s.(store.Truncater).Truncate(ctx, g, 6)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkRecords(t, got, []record{{3, "3", store.HoleNone}, {4, "4", store.HoleNone}, {5, "5", store.HoleNone}})
+		})
+
+		t.Run("TruncateRepeatedly", func(t *testing.T) {
+			s, st := open(t)
+			g := st.Generation
+			big := make([]byte, 100<<10)
+			for seq := uint64(1); seq <= 50; seq++ {
+				if err := s.Append(ctx, g, seq, big); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.(store.Truncater).Truncate(ctx, g, seq+1); err != nil {
+					t.Fatal(err)
+				}
+			}
+			checkRecords(t, collect(t, s, g, 49, 50), []record{{49, "", store.HoleRetention}, {50, "", store.HoleRetention}})
 		})
 	}
 
@@ -283,12 +331,13 @@ func mustAppend(t *testing.T, s store.Store, gen, seq uint64, raw string) {
 	}
 }
 
-// reopenState returns the store's state through Open, which a store answers
-// again with its current state.
-func reopenState(s store.Store) (*store.State, bool) {
+// state returns the store's state through Open, which a store answers again
+// with its current state.
+func state(t *testing.T, s store.Store) store.State {
+	t.Helper()
 	st, err := s.Open(context.Background())
 	if err != nil {
-		return nil, false
+		t.Fatalf("Open to read the state: %v", err)
 	}
-	return &st, true
+	return st
 }

@@ -87,9 +87,10 @@ type Store interface {
 	// Append stores raw, a message sent with sequence number seq in
 	// generation gen, and sets NextSender to seq+1 atomically. seq must be
 	// NextSender; repeating a successful Append with the same arguments
-	// succeeds without effect, even though NextSender moved since. raw is
-	// borrowed for the call. Append may buffer: durability is reached when
-	// Sync returns, if the store implements Syncer.
+	// succeeds without effect, even though NextSender moved since (once the
+	// message is truncated away, without comparing it). raw is borrowed for
+	// the call. Append may buffer: durability is reached when Sync returns,
+	// if the store implements Syncer.
 	Append(ctx context.Context, gen, seq uint64, raw []byte) error
 
 	// SetNextTarget records that every message up to next-1 was received
@@ -103,11 +104,12 @@ type Store interface {
 
 	// Range calls fn once for every sequence number from begin to end
 	// inclusive, in order, in generation gen: with the message stored, or
-	// with a nil raw and the reason there is none. end is lowered to
-	// NextSender-1 as it is when Range starts: later Appends are not seen.
-	// raw is only valid until fn returns. Range stops at fn's first error
-	// and returns it. It returns ErrGenerationGone if gen is not, or stops
-	// being, the current generation.
+	// with a nil raw and the reason there is none. It reports a snapshot
+	// taken when it starts: end is lowered to NextSender-1, and Appends and
+	// Truncates made meanwhile are not seen. raw is only valid until fn
+	// returns. Range stops at fn's first error and returns it. It returns
+	// ErrGenerationGone if gen is not the current generation, or stops being
+	// it before Range returns.
 	Range(ctx context.Context, gen, begin, end uint64, fn func(seq uint64, raw []byte, hole Hole) error) error
 
 	// Reset starts generation expectGen+1: both sequence numbers back to 1,

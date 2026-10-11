@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ const chunkSize = 64 << 10
 
 // entry locates the message of a sequence number, or says why there is none.
 type entry struct {
-	chunk int32
+	chunk int // chunk number, from the store's first chunk ever
 	off   uint32
 	n     uint32
 	hole  store.Hole
@@ -27,6 +28,8 @@ type entry struct {
 // Store is an in-memory store.Store. Messages are copied into chunks that are
 // only ever appended to, at 8-byte aligned offsets, so that a message handed
 // to a Range callback is never written again and is read without the lock.
+// Truncate replaces the index rather than changing it, so a Range keeps the
+// snapshot it took.
 type Store struct {
 	mu     sync.RWMutex
 	state  store.State
@@ -34,7 +37,8 @@ type Store struct {
 	closed bool
 	first  uint64   // sequence number of index[0]
 	index  []entry  // sequence numbers first.. NextSender-1
-	chunks [][]byte // arena; nil once truncated away
+	base   int      // chunk number of chunks[0]
+	chunks [][]byte // arena, from chunk number base
 	last   []uint64 // last sequence number in each chunk
 }
 
@@ -85,7 +89,8 @@ func (s *Store) Append(_ context.Context, gen, seq uint64, raw []byte) error {
 	switch {
 	case seq < s.state.NextSender:
 		// A retry of an Append that succeeded is fine; anything else is not.
-		if stored, hole := s.get(seq); hole == store.HoleNone && bytes.Equal(stored, raw) {
+		// A message truncated away cannot be compared.
+		if stored, hole := s.get(seq); hole == store.HoleRetention || hole == store.HoleNone && bytes.Equal(stored, raw) {
 			return nil
 		}
 		return fmt.Errorf("%w: message %d is already stored", store.ErrSeqMismatch, seq)
@@ -101,7 +106,7 @@ func (s *Store) Append(_ context.Context, gen, seq uint64, raw []byte) error {
 func (s *Store) copyIn(seq uint64, raw []byte) entry {
 	n := len(raw)
 	c := len(s.chunks) - 1
-	if c < 0 || s.chunks[c] == nil || len(s.chunks[c])+n > cap(s.chunks[c]) {
+	if c < 0 || len(s.chunks[c])+n > cap(s.chunks[c]) {
 		s.chunks = append(s.chunks, make([]byte, 0, max(chunkSize, n)))
 		s.last = append(s.last, 0)
 		c++
@@ -115,7 +120,7 @@ func (s *Store) copyIn(seq uint64, raw []byte) entry {
 	}
 	s.chunks[c] = chunk
 	s.last[c] = seq
-	return entry{chunk: int32(c), off: uint32(off), n: uint32(n)}
+	return entry{chunk: s.base + c, off: uint32(off), n: uint32(n)}
 }
 
 // get returns the message stored for seq, or why there is none.
@@ -123,14 +128,15 @@ func (s *Store) get(seq uint64) ([]byte, store.Hole) {
 	if seq < s.first {
 		return nil, store.HoleRetention
 	}
-	e := s.index[seq-s.first]
+	return lookup(s.index[seq-s.first], s.chunks, s.base)
+}
+
+// lookup returns the message e locates in chunks, numbered from base.
+func lookup(e entry, chunks [][]byte, base int) ([]byte, store.Hole) {
 	if e.hole != store.HoleNone {
 		return nil, e.hole
 	}
-	chunk := s.chunks[e.chunk]
-	if chunk == nil {
-		return nil, store.HoleRetention
-	}
+	chunk := chunks[e.chunk-base]
 	return chunk[e.off : e.off+e.n : e.off+e.n], store.HoleNone
 }
 
@@ -165,32 +171,45 @@ func (s *Store) SetNextSender(_ context.Context, gen, next uint64) error {
 	return nil
 }
 
-// Range implements store.Store. It takes the lock for each sequence number
-// and releases it before calling fn.
+// Range implements store.Store. It takes its snapshot under the lock, then
+// reads it without: the entries and the bytes it refers to are never
+// written again.
 func (s *Store) Range(ctx context.Context, gen, begin, end uint64, fn func(seq uint64, raw []byte, hole store.Hole) error) error {
 	s.mu.RLock()
 	if err := s.check(gen); err != nil {
 		s.mu.RUnlock()
 		return err
 	}
-	end = min(end, s.state.NextSender-1)
+	begin, end = max(begin, 1), min(end, s.state.NextSender-1)
+	first, index, base := s.first, s.index, s.base
+	var chunks [][]byte
+	if begin <= end {
+		chunks = slices.Clone(s.chunks)
+	}
 	s.mu.RUnlock()
-	for seq := max(begin, 1); seq <= end; seq++ {
+	for seq := begin; seq <= end; seq++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		s.mu.RLock()
-		if err := s.check(gen); err != nil {
-			s.mu.RUnlock()
+		if err := s.current(gen); err != nil {
 			return err
 		}
-		raw, hole := s.get(seq)
-		s.mu.RUnlock()
+		raw, hole := []byte(nil), store.HoleRetention
+		if seq >= first {
+			raw, hole = lookup(index[seq-first], chunks, base)
+		}
 		if err := fn(seq, raw, hole); err != nil {
 			return err
 		}
 	}
-	return nil
+	return s.current(gen)
+}
+
+// current returns an error if gen is not the current generation.
+func (s *Store) current(gen uint64) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.check(gen)
 }
 
 // Reset implements store.Store.
@@ -208,7 +227,7 @@ func (s *Store) Reset(_ context.Context, expectGen uint64, createdAt time.Time, 
 		return fmt.Errorf("%w: resetting generation %d, current is %d", store.ErrGenerationGone, expectGen, s.state.Generation)
 	}
 	s.state = store.State{Generation: expectGen + 1, NextSender: 1, NextTarget: 1, CreatedAt: createdAt, WindowID: windowID}
-	s.first, s.index, s.chunks, s.last = 1, nil, nil, nil
+	s.first, s.index, s.base, s.chunks, s.last = 1, nil, 0, nil, nil
 	return nil
 }
 
@@ -219,8 +238,8 @@ func (s *Store) Sync(_ context.Context, gen, _ uint64) error {
 	return s.check(gen)
 }
 
-// Truncate implements store.Truncater. Chunks holding only truncated messages
-// are released.
+// Truncate implements store.Truncater. The chunks holding only truncated
+// messages are released.
 func (s *Store) Truncate(_ context.Context, gen, before uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -231,12 +250,17 @@ func (s *Store) Truncate(_ context.Context, gen, before uint64) error {
 	if before <= s.first {
 		return nil
 	}
-	s.index = s.index[before-s.first:]
+	// New slices: a Range in progress keeps reading the old ones.
+	s.index = slices.Clone(s.index[before-s.first:])
 	s.first = before
-	for c, last := range s.last {
-		if s.chunks[c] != nil && last < before && c != len(s.chunks)-1 {
-			s.chunks[c] = nil
-		}
+	k := 0
+	for k < len(s.chunks)-1 && s.last[k] < before {
+		k++
+	}
+	if k > 0 {
+		s.chunks = slices.Clone(s.chunks[k:])
+		s.last = slices.Clone(s.last[k:])
+		s.base += k
 	}
 	return nil
 }
