@@ -13,6 +13,11 @@ on:
         default: 1m
 permissions:
   contents: read
+# A new commit on a branch, or a pull request, cancels its runs still going.
+# Per event: a push does not cancel the nightly fuzzing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     name: Test (${{ matrix.os }}, Go ${{ matrix.go }}${{ matrix.simd && ', simd' || '' }})
