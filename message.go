@@ -16,7 +16,7 @@ func (m *Message) init() {
 // reset empties m for parsing into it again, keeping a field slice grown
 // beyond the inline buffer so that large messages stop allocating too. A
 // slice pointing at another Message's inline buffer, as after a copy, is
-// dropped; a grown slice stays shared with any copy of m (see ParseInto).
+// dropped.
 func (m *Message) reset() {
 	if cap(m.fields) > len(m.buf) {
 		m.fields = m.fields[:0]
@@ -27,6 +27,28 @@ func (m *Message) reset() {
 
 func (m *Message) append(f Field) {
 	m.fields = append(m.fields, f)
+}
+
+// Clone returns a deep copy of m that owns its field values, which stays
+// valid when m is parsed into again or the buffer m was parsed from is
+// reused. A plain copy of a Message shares both with the original.
+func (m *Message) Clone() *Message {
+	n := 0
+	for _, f := range m.fields {
+		n += len(f.Value)
+	}
+	values := make([]byte, 0, n)
+	c := &Message{}
+	c.init()
+	if len(m.fields) > len(c.buf) {
+		c.fields = make([]Field, 0, len(m.fields))
+	}
+	for _, f := range m.fields {
+		start := len(values)
+		values = append(values, f.Value...)
+		c.fields = append(c.fields, Field{Tag: f.Tag, Value: values[start:len(values):len(values)]})
+	}
+	return c
 }
 
 // Fields returns the parsed fields. The returned slice must not be modified.

@@ -124,6 +124,39 @@ func TestParseInto_CopiedMessage(t *testing.T) {
 	}
 }
 
+// A plain copy shares the original's storage, which ParseInto reuses; Clone
+// does not.
+func TestParseInto_CopyAliasesCloneDoesNot(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("35=D\x01")
+	for i := range 40 {
+		fmt.Fprintf(&b, "%d=v\x01", 5000+i)
+	}
+	for _, body := range []string{"35=0\x0149=ORIG\x01", b.String() + "49=ORIG\x01"} {
+		var m Message
+		raw := buildMsg("FIX.4.4", body)
+		if err := ParseInto(&m, raw, nil); err != nil {
+			t.Fatal(err)
+		}
+		cp, cl := m, m.Clone()
+		if err := ParseInto(&m, buildMsg("FIX.4.4", "35=0\x0149=NEXT\x01"), nil); err != nil {
+			t.Fatal(err)
+		}
+		if got := string(cp.Get(49)); got != "NEXT" {
+			t.Errorf("%d fields: copy reads 49 = %q after reuse, want the aliasing documented (NEXT)", cl.Count(), got)
+		}
+		for i := range raw {
+			raw[i] = 'z'
+		}
+		if got := string(cl.Get(49)); got != "ORIG" {
+			t.Errorf("%d fields: clone reads 49 = %q, want ORIG", cl.Count(), got)
+		}
+		if cl.Count() != len(cl.Fields()) || string(cl.MsgType()) != string(body[3:4]) {
+			t.Errorf("clone = %v", cl.Fields())
+		}
+	}
+}
+
 func TestParseInto_Error(t *testing.T) {
 	var m Message
 	err := ParseInto(&m, buildMsg("FIX.4.4", "35=0\x0149=A\x01x=1\x01"), nil)

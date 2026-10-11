@@ -46,9 +46,9 @@ func Parse(data []byte) (Message, error) {
 // defines them (the default profile if p is nil). m is reset first and its
 // field storage reused, so parsing into the same Message repeatedly does not
 // allocate. Field values are zero-copy slices into data, valid while data is
-// not modified and until m is parsed into again. A copy of m made after it
-// grew beyond 32 fields shares that storage, so parse into m only once such
-// copies are no longer used. On error, m holds the fields parsed so far.
+// not modified and until m is parsed into again. A copy of m shares its field
+// storage, so parsing into m changes what the copy reads: use Clone to keep a
+// message. On error, m holds the fields parsed so far.
 func ParseInto(m *Message, data []byte, p *Profile) error {
 	if p == nil {
 		p = defaultProfile
