@@ -134,17 +134,17 @@ func TestSlogObserverDictionary(t *testing.T) {
 	order := fix2.NewBuilder(FIX44, "D").SetString(49, "A").SetString(56, "B").SetInt(34, 2).
 		SetString(11, "O1").SetString(54, "1").Build()
 	o.OnOutbound(s, Frame{Raw: order, Seq: 2})
-	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "A").SetString(554, "pw").Build(), Seq: 1})
+	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "A").SetString(554, "pw").SetString(925, "new").Build(), Seq: 1})
 	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "5").SetString(58, "bye\nFORGED").Build(), Seq: 2})
 	got := buf.String()
 	for _, want := range []string{
 		`msg="-> Header:  8(BeginString)=FIX.4.4, 9(BodyLength)=`,
-		`35(MsgType)=D, 49(SenderCompID)=A, 56(TargetCompID)=B, 34(MsgSeqNum)=2"`,
+		`35(MsgType)=D(ORDER_SINGLE), 49(SenderCompID)=A, 56(TargetCompID)=B, 34(MsgSeqNum)=2"`,
 		`msg="-> Body:    11(ClOrdID)=O1, 54(Side)=1(BUY)"`,
 		`msg="-> Trailer: 10(CheckSum)=`,
-		`msg="<- Body:    554=***"`, // redacted; this dictionary has no Password
+		`msg="<- Body:    554(Password)=***, 925=***"`, // redacted, known to the dictionary (Password) or not (NewPassword)
 		"session=FIX.4.4:A->B seq=2",
-		`msg="<- Body:    58=bye\\nFORGED"`, // escaped twice: by AppendField, then by the text handler
+		`msg="<- Body:    58(Text)=bye\\nFORGED"`, // escaped twice: by AppendField, then by the text handler
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log lacks %s:\n%s", want, got)
