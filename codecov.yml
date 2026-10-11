@@ -1,0 +1,17 @@
+---
+coverage:
+  status:
+    # Reported on pull requests, without failing them.
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+ignore:
+  # Packages fixgen generates, for tests and for the contribs.
+  - "tests"
+  - "contribs/*/internal"
+  # Test helpers.
+  - "internal/dicttest"
+  - "session/store/storetest"

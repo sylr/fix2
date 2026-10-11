@@ -1,0 +1,117 @@
+---
+name: Go
+on:
+  push:
+  pull_request:
+  schedule:
+    # Every night the fuzzers run longer, from the corpus grown so far.
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: Time to fuzz each target for
+        default: 1m
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Go ${{ matrix.go }}${{ matrix.simd && ', simd' || '' }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write # Codecov's upload, authenticated with OIDC
+    strategy:
+      fail-fast: false
+      matrix:
+        # amd64 and arm64. With Go 1.26, GOEXPERIMENT=simd builds the
+        # generic checksum: the SIMD ones need Go 1.27's archsimd.
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        go: ["1.26", "1.27"]
+        simd: [false, true]
+        include:
+          # darwin has its own hrtimer, in assembly for both.
+          - {os: macos-15, go: "1.27", simd: false}
+          - {os: macos-15, go: "1.27", simd: true}
+          - {os: macos-15-intel, go: "1.27", simd: false}
+          - {os: macos-15-intel, go: "1.27", simd: true}
+    env:
+      GOEXPERIMENT: ${{ matrix.simd && 'simd' || '' }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            go.sum
+            contribs/*/go.sum
+
+      - name: Verify go mod
+        run: make go-mod-verify
+
+      - name: Vet
+        run: make vet
+
+      - name: Test
+        run: make test test-contribs RACE=1 CODECOV=1
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.txt,contribs/binancemd/coverage.txt,contribs/coinbasemd/coverage.txt
+          # Each platform covers code the others do not: SIMD checksums,
+          # darwin's hrtimer. Codecov merges them.
+          flags: ${{ runner.os }}-${{ runner.arch }}-go${{ matrix.go }}${{ matrix.simd && '-simd' || '' }}
+          use_oidc: true
+
+  fuzz:
+    name: Fuzz (${{ matrix.os }}${{ matrix.simd && ', simd' || '' }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        simd: [false, true]
+    env:
+      GOEXPERIMENT: ${{ matrix.simd && 'simd' || '' }}
+      # A quick pass on pushes and pull requests, longer every night.
+      FUZZTIME: ${{ inputs.fuzztime || (github.event_name == 'schedule' && '3m') || '20s' }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache-dependency-path: |
+            go.sum
+            contribs/*/go.sum
+
+      - name: Locate the fuzz cache
+        id: gocache
+        run: echo "dir=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+      # The inputs the fuzzers found interesting, kept from run to run.
+      - name: Restore the fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.gocache.outputs.dir }}/fuzz
+          key: fuzz-${{ matrix.os }}-${{ matrix.simd }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-${{ matrix.os }}-${{ matrix.simd }}-
+
+      - name: Fuzz
+        run: make fuzz FUZZTIME=$FUZZTIME
+
+      # A failing input is written to its package's testdata/fuzz: commit it
+      # as a regression seed once fixed.
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures-${{ matrix.os }}${{ matrix.simd && '-simd' || '' }}
+          path: "**/testdata/fuzz/"
+          if-no-files-found: ignore

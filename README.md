@@ -1,5 +1,9 @@
 # fix2
 
+[![Go](https://github.com/sylr/fix2/actions/workflows/go.yaml/badge.svg)](https://github.com/sylr/fix2/actions/workflows/go.yaml)
+[![codecov](https://codecov.io/gh/sylr/fix2/graph/badge.svg)](https://codecov.io/gh/sylr/fix2)
+[![pkg.go.dev](https://pkg.go.dev/badge/github.com/sylr/fix2)](https://pkg.go.dev/github.com/sylr/fix2)
+
 A FIX protocol library for Go: a zero-copy parser, validating dictionaries,
 typed code generation and a session engine.
 
@@ -84,6 +88,16 @@ sandbox work with `--sandbox`:
 On macOS it verifies Coinbase's certificate with Go's verifier and
 `/etc/ssl/cert.pem` (`--ca-file` to choose): macOS's own rejects Coinbase's
 FIX certificates, which carry no Certificate Transparency timestamps.
+
+## Testing
+
+`make test` runs the module's tests and `make test-contribs` the contribs';
+`RACE=1` adds the race detector, `CODECOV=1` writes `coverage.txt`. `make
+fuzz` runs every fuzz target, the contribs' too, for `FUZZTIME` each (30s by
+default); a failing input lands in its package's `testdata/fuzz`. CI runs
+the tests on Linux and macOS, amd64 and arm64, with and without
+`GOEXPERIMENT=simd`, and fuzzes on Linux amd64 and arm64: 20s per target on
+every push, 3 minutes every night.
 
 ## Conformance
 
