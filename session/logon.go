@@ -185,7 +185,9 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	case s.initiator && reset && !s.sentReset:
 		s.resetStoreLocked("Logon answer with ResetSeqNumFlag")
 	case s.initiator && s.sentReset && !reset:
-		s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty did not echo our ResetSeqNumFlag")
+		// Some venues, Binance for one, never do: their MsgSeqNum, checked
+		// next, tells whether they reset.
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty did not echo our ResetSeqNumFlag")
 	}
 
 	// NextExpectedMsgSeqNum: what the counterparty expects of us, compared

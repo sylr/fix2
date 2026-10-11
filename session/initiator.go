@@ -200,7 +200,7 @@ func (i *Initiator) loop(ctx context.Context, is *initSession) {
 			}
 			err = cerr
 		}
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || s.isStopped() {
 			return
 		}
 		if err != nil {

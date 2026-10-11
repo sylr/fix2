@@ -71,10 +71,11 @@ func (s *Session) stop(ctx context.Context, text string) error {
 	return errors.Join(err, s.store.Close())
 }
 
+// isStopped reports whether the session is stopped, or stopping.
 func (s *Session) isStopped() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.stopped
+	return s.stopped || s.stopping
 }
 
 // SetNextSenderSeqNum moves the MsgSeqNum of the next message sent forward
