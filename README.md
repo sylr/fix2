@@ -112,3 +112,7 @@ ResendRequest chunking). Run them with a quickfix-go checkout:
 On an Apple M4: parsing a 24-field message into a reused `Message` takes
 280 ns and no allocation; validating it 85 ns; sending an order between an
 initiator and an acceptor in memory, 730 ns and one allocation.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
