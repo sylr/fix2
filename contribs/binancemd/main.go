@@ -14,10 +14,10 @@
 //	instruments [SYMBOL...] instruments' trading rules, all if none is given
 //	limits                  message and subscription limits of the connection
 //
-// The FIX API authenticates with an Ed25519 API key: --api-key (or
-// BINANCE_API_KEY) is the key, --key (or BINANCE_PRIVATE_KEY) the PEM file
-// of its private key. Market data needs the FIX_API or FIX_API_READ_ONLY
-// permission.
+// The FIX API authenticates with an Ed25519 API key: --api-key,
+// --api-key-file (a file holding it) or BINANCE_API_KEY is the key,
+// --key-file (or BINANCE_PRIVATE_KEY) the PEM file of its private key.
+// Market data needs the FIX_API or FIX_API_READ_ONLY permission.
 package main
 
 import (
@@ -46,16 +46,17 @@ const (
 
 // options are the flags of every command.
 type options struct {
-	apiKey    string
-	keyFile   string
-	sender    string
-	endpoint  string
-	testnet   bool
-	heartbeat time.Duration
-	json      bool
-	validate  bool
-	verbose   bool
-	trace     bool
+	apiKey     string
+	apiKeyFile string
+	keyFile    string
+	sender     string
+	endpoint   string
+	testnet    bool
+	heartbeat  time.Duration
+	json       bool
+	validate   bool
+	verbose    bool
+	trace      bool
 	// Command flags.
 	levels int // depth and book: levels of the snapshot
 	show   int // book: levels shown
@@ -99,10 +100,10 @@ func newCommand(stdout, stderr io.Writer) *cobra.Command {
 		Short: "Stream Binance Spot market data over the FIX API",
 		Long: `Stream Binance Spot market data over the Binance FIX API.
 
-The FIX API authenticates with an Ed25519 API key: --api-key (or
-BINANCE_API_KEY) is the key, --key (or BINANCE_PRIVATE_KEY) the PEM file of
-its private key. Market data needs the FIX_API or FIX_API_READ_ONLY
-permission.`,
+The FIX API authenticates with an Ed25519 API key: --api-key,
+--api-key-file (a file holding it) or BINANCE_API_KEY is the key,
+--key-file (or BINANCE_PRIVATE_KEY) the PEM file of its private key.
+Market data needs the FIX_API or FIX_API_READ_ONLY permission.`,
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -115,7 +116,8 @@ permission.`,
 	root.SetErr(stderr)
 	pf := root.PersistentFlags()
 	pf.StringVar(&o.apiKey, "api-key", "", "API key (default $BINANCE_API_KEY)")
-	pf.StringVar(&o.keyFile, "key", "", "PEM file of the API key's Ed25519 private key (default $BINANCE_PRIVATE_KEY)")
+	pf.StringVar(&o.apiKeyFile, "api-key-file", "", "file holding the API key, instead of --api-key")
+	pf.StringVar(&o.keyFile, "key-file", "", "PEM file of the API key's Ed25519 private key (default $BINANCE_PRIVATE_KEY)")
 	pf.StringVar(&o.sender, "sender", "", "SenderCompID, 1 to 8 letters, digits, - or _ (default random)")
 	pf.StringVar(&o.endpoint, "endpoint", "", "FIX market data endpoint, host:port (default "+prodEndpoint+")")
 	pf.BoolVar(&o.testnet, "testnet", false, "use the Spot testnet, "+testnetEndpoint)
@@ -159,6 +161,9 @@ func execute(ctx context.Context, o *options, cmd command, args []string, stdout
 	if err := o.check(cmd, symbols); err != nil {
 		return err
 	}
+	if err := o.readAPIKey(); err != nil {
+		return runError{err}
+	}
 	log := newLogger(stderr, o.verbose || o.trace)
 	if err := stream(ctx, o, cmd, symbols, newOutput(stdout, o.json, isTerminal(stdout)), log); err != nil {
 		return runError{err}
@@ -182,7 +187,7 @@ func newLogger(w io.Writer, debug bool) *slog.Logger {
 
 // check completes o from the environment and checks it for cmd.
 func (o *options) check(cmd command, symbols []string) error {
-	if o.apiKey == "" {
+	if o.apiKey == "" && o.apiKeyFile == "" {
 		o.apiKey = os.Getenv("BINANCE_API_KEY")
 	}
 	if o.keyFile == "" {
@@ -195,11 +200,14 @@ func (o *options) check(cmd command, symbols []string) error {
 		}
 	}
 	var errs []error
-	if o.apiKey == "" {
-		errs = append(errs, errors.New("no API key: set --api-key or BINANCE_API_KEY"))
+	switch {
+	case o.apiKey != "" && o.apiKeyFile != "":
+		errs = append(errs, errors.New("--api-key and --api-key-file: give one"))
+	case o.apiKey == "" && o.apiKeyFile == "":
+		errs = append(errs, errors.New("no API key: set --api-key, --api-key-file or BINANCE_API_KEY"))
 	}
 	if o.keyFile == "" {
-		errs = append(errs, errors.New("no private key: set --key or BINANCE_PRIVATE_KEY to the PEM file of the API key's Ed25519 private key"))
+		errs = append(errs, errors.New("no private key: set --key-file or BINANCE_PRIVATE_KEY to the PEM file of the API key's Ed25519 private key"))
 	}
 	if o.sender != "" && !validID(o.sender, 8) {
 		errs = append(errs, fmt.Errorf("--sender %q: 1 to 8 letters, digits, - or _", o.sender))
@@ -220,6 +228,23 @@ func (o *options) check(cmd command, symbols []string) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// readAPIKey reads the API key of --api-key-file, if given: the file's
+// content, without surrounding white space.
+func (o *options) readAPIKey() error {
+	if o.apiKeyFile == "" {
+		return nil
+	}
+	data, err := os.ReadFile(o.apiKeyFile)
+	if err != nil {
+		return fmt.Errorf("API key: %w", err)
+	}
+	o.apiKey = strings.TrimSpace(string(data))
+	if o.apiKey == "" {
+		return fmt.Errorf("API key: %s is empty", o.apiKeyFile)
+	}
+	return nil
 }
 
 // validID reports whether id has 1 to n letters, digits, - or _, as Binance

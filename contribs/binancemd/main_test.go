@@ -73,12 +73,14 @@ func TestRun_Usage(t *testing.T) {
 		{"--heartbeat", "2s"}, // no command
 		{"nope"},
 		{"trades"}, // no symbol
-		{"--heartbeat", "2s", "trades", "BTCUSDT"},         // too short
-		{"limits", "BTCUSDT"},                              // no symbol taken
-		{"book", "--levels", "1", "BTCUSDT"},               // too few levels
-		{"ticker", "--show", "3", "BTCUSDT"},               // a book flag
-		{"--sender", "TOO-LONG-ID", "ticker", "BTCUSDT"},   // CompID too long
-		{"trades", "--api-key", "k", "BTC/USDT", "ETHBTC"}, // invalid symbol
+		{"--heartbeat", "2s", "trades", "BTCUSDT"},                     // too short
+		{"limits", "BTCUSDT"},                                          // no symbol taken
+		{"book", "--levels", "1", "BTCUSDT"},                           // too few levels
+		{"ticker", "--show", "3", "BTCUSDT"},                           // a book flag
+		{"--sender", "TOO-LONG-ID", "ticker", "BTCUSDT"},               // CompID too long
+		{"trades", "--api-key", "k", "BTC/USDT", "ETHBTC"},             // invalid symbol
+		{"trades", "--api-key", "k", "--api-key-file", "f", "BTCUSDT"}, // both
+		{"trades", "--key", "k.pem", "BTCUSDT"},                        // renamed --key-file
 	} {
 		stderr.Reset()
 		t.Setenv("BINANCE_API_KEY", "")
@@ -109,7 +111,7 @@ func TestRun_Help(t *testing.T) {
 func TestRun_Failure(t *testing.T) {
 	var stderr bytes.Buffer
 	missing := filepath.Join(t.TempDir(), "missing.pem")
-	if code := run([]string{"trades", "--api-key", "k", "--key", missing, "BTCUSDT"}, io.Discard, &stderr); code != 1 {
+	if code := run([]string{"trades", "--api-key", "k", "--key-file", missing, "BTCUSDT"}, io.Discard, &stderr); code != 1 {
 		t.Errorf("exit %d, want 1; stderr: %s", code, stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "missing.pem") {
@@ -621,5 +623,31 @@ func TestInstruments_PartialFailure(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "BTCUSDT  USDT") {
 		t.Errorf("BTCUSDT's row not written:\n%s", out.String())
+	}
+}
+
+func TestAPIKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "api-key")
+	if err := os.WriteFile(path, []byte("  KEY123\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BINANCE_API_KEY", "FROM-ENV")
+	o := &options{apiKeyFile: path, keyFile: "k.pem", heartbeat: 30 * time.Second, levels: 10, show: 1}
+	if err := o.check(command{kindLimits}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.readAPIKey(); err != nil || o.apiKey != "KEY123" {
+		t.Errorf("API key %q, %v; want the file's, over the environment's", o.apiKey, err)
+	}
+	empty := filepath.Join(dir, "empty")
+	if err := os.WriteFile(empty, []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{empty, filepath.Join(dir, "missing")} {
+		var stderr bytes.Buffer
+		if code := run([]string{"limits", "--api-key-file", f, "--key-file", "k.pem"}, io.Discard, &stderr); code != 1 {
+			t.Errorf("--api-key-file %s: exit %d, want 1; stderr: %s", f, code, stderr.String())
+		}
 	}
 }

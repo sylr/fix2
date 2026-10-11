@@ -44,6 +44,7 @@ key with the `FIX_API` or `FIX_API_READ_ONLY` permission:
     cd contribs/binancemd && make
     export BINANCE_API_KEY=... BINANCE_PRIVATE_KEY=/path/to/ed25519-private.pem
     dist/binancemd trades BTCUSDT ETHUSDT
+    dist/binancemd trades --api-key-file api-key --key-file ed25519-private.pem BTCUSDT
     dist/binancemd ticker --json BTCUSDT
     dist/binancemd book --levels 1000 --show 10 BTCUSDT
     dist/binancemd instruments --testnet BTCUSDT
