@@ -105,6 +105,7 @@ type Dict struct {
 	trailerConds []compiledCond
 	enums        tagTable // tag -> index in enumChecks
 	enumChecks   []enumCheck
+	formats      tagTable // tag -> format of its values, see ValidateWith
 
 	fieldsByName map[string]*FieldDef
 	profile      *fix2.Profile // DATA fields, see Profile

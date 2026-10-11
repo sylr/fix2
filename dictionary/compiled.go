@@ -40,8 +40,19 @@ type tagEntry struct {
 	spec       *fix2.GroupSpec // that group's spec, whose entries top-level presence skips
 	structural bool            // BeginString, BodyLength or CheckSum, never enum-checked
 	declared   bool            // declared by the scope, not only a DATA/LENGTH partner
+	section    section         // where FIX requires the field: header, body or trailer
 	used       bool
 }
+
+// section is where FIX requires a field: the standard header first, the body,
+// then the standard trailer.
+type section uint8
+
+const (
+	sectionHeader section = iota
+	sectionBody
+	sectionTrailer
+)
 
 // newTagTable returns a table holding entries, keyed by their tags.
 func newTagTable(entries map[int]tagEntry) tagTable {
@@ -158,6 +169,7 @@ func (d *Dict) compile() {
 		d.enumChecks = append(d.enumChecks, e)
 	}
 	d.enums = newTagTable(enumIdx)
+	d.compileFormats()
 
 	// Envelope: slots for its required and condition tags, shared by all
 	// messages, then the table of the tags it allows.
@@ -170,13 +182,15 @@ func (d *Dict) compile() {
 
 	envCounters := specsByCounter(slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups)))
 	envEntries := map[int]tagEntry{}
-	for _, refs := range [][]FieldRef{d.Header, d.Trailer} {
-		addAllowed(d.profile, envEntries, refs, env.of, nil, envCounters, nil)
-	}
-	for _, tag := range []int{8, 9, 10} {
-		if _, ok := envEntries[tag]; !ok {
-			envEntries[tag] = tagEntry{slot: -1, structural: true}
+	addAllowed(d.profile, envEntries, d.Header, sectionHeader, env.of, nil, envCounters, nil)
+	addAllowed(d.profile, envEntries, d.Trailer, sectionTrailer, env.of, nil, envCounters, nil)
+	for tag, s := range map[int]section{8: sectionHeader, 9: sectionHeader, 10: sectionTrailer} {
+		e, ok := envEntries[tag]
+		if !ok {
+			e = tagEntry{slot: -1, structural: true}
 		}
+		e.section = s
+		envEntries[tag] = e
 	}
 	d.envelope = newTagTable(envEntries)
 
@@ -211,7 +225,7 @@ func (d *Dict) compile() {
 		m.slots = env.n + body.n
 
 		entries := map[int]tagEntry{}
-		addAllowed(d.profile, entries, m.Fields, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
+		addAllowed(d.profile, entries, m.Fields, sectionBody, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
 		m.body = newTagTable(entries)
 	}
 }
@@ -251,12 +265,12 @@ func compileConds(conds []Condition, s *slots) []compiledCond {
 // one. A tag's slot comes from own, else from shared, else it has none; it
 // is a group counter if sharedCounters, the envelope's, or counters has its
 // spec, in that order.
-func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
+func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef, sec section, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
 	add := func(tag int) {
 		if _, ok := entries[tag]; ok {
 			return
 		}
-		e := tagEntry{slot: -1, structural: structural(tag)}
+		e := tagEntry{slot: -1, structural: structural(tag), section: sec}
 		if e.spec = sharedCounters[tag]; e.spec == nil {
 			e.spec = counters[tag]
 		}

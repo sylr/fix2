@@ -18,6 +18,11 @@ var (
 	ErrRequiredTag      = fmt.Errorf("%w: required tag missing", ErrValidation)
 	ErrUnexpectedTag    = fmt.Errorf("%w: unexpected tag", ErrValidation)
 	ErrInvalidEnumValue = fmt.Errorf("%w: invalid enum value", ErrValidation)
+	ErrEmptyValue       = fmt.Errorf("%w: tag without a value", ErrValidation)
+	ErrIncorrectFormat  = fmt.Errorf("%w: incorrect data format", ErrValidation)
+	ErrRepeatedTag      = fmt.Errorf("%w: tag appears more than once", ErrValidation)
+	ErrOutOfOrder       = fmt.Errorf("%w: tag out of order", ErrValidation)
+	ErrGroupCount       = fmt.Errorf("%w: incorrect NumInGroup count", ErrValidation)
 )
 
 // ValidationError wraps a sentinel error with the offending tag, the
@@ -54,6 +59,11 @@ func (e *ValidationError) Unwrap() error {
 // Required tags (2-4) must be present outside group entries: a tag a group
 // entry holds does not stand for the message's own.
 func (d *Dict) Validate(msg *fix2.Message) error {
+	return d.validate(msg, 0)
+}
+
+// validate checks msg as Validate does, plus checks (see ValidateWith).
+func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	// 1. MsgType must be known.
 	mdef, ok := d.Messages[string(msg.MsgType())]
 	if !ok {
@@ -90,6 +100,9 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 			present[e.slot/64] |= 1 << (e.slot % 64)
 		}
 		groups = groups || e.counter
+		if fieldErr == nil && !e.structural && checks != 0 {
+			fieldErr = d.checkValue(f, checks)
+		}
 		if fieldErr == nil && !e.structural {
 			fieldErr = d.checkEnum(f)
 		}
@@ -165,6 +178,9 @@ func (d *Dict) Validate(msg *fix2.Message) error {
 		}
 	}
 
+	if fieldErr == nil && checks&(CheckRepeatedTags|CheckOrder|CheckGroupCounts) != 0 {
+		return d.checkStructure(msg, mdef, groups, checks)
+	}
 	return fieldErr
 }
 
