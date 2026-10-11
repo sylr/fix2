@@ -137,3 +137,37 @@ func TestParseLeapSecond(t *testing.T) {
 		}
 	}
 }
+
+func TestAppendUTCTime(t *testing.T) {
+	loc := time.FixedZone("X", -5*3600)
+	for _, tm := range []time.Time{
+		time.Date(2026, 10, 11, 8, 5, 9, 123456789, time.UTC),
+		time.Date(1999, 12, 31, 23, 59, 59, 999999999, loc), // a different UTC day
+		time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC),
+		time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), // falls back to time.Format
+	} {
+		for _, p := range []TimePrecision{Seconds, Milliseconds, Microseconds, Nanoseconds, 1, 12, -1} {
+			u := tm.UTC()
+			if got, want := string(AppendUTCTimestamp([]byte("x"), tm, p)), "x"+u.Format(p.layout(TimeFormatTimestampSec)); got != want {
+				t.Errorf("AppendUTCTimestamp(%v, %d) = %q, want %q", tm, p, got, want)
+			}
+			if got, want := string(AppendUTCTimeOnly(nil, tm, p)), u.Format(p.layout(TimeFormatTimeOnlySec)); got != want {
+				t.Errorf("AppendUTCTimeOnly(%v, %d) = %q, want %q", tm, p, got, want)
+			}
+		}
+		if got, want := string(AppendUTCDate(nil, tm)), tm.UTC().Format(TimeFormatDate); got != want {
+			t.Errorf("AppendUTCDate(%v) = %q, want %q", tm, got, want)
+		}
+	}
+	// What it formats parses back.
+	tm := time.Date(2026, 10, 11, 8, 5, 9, 123456789, time.UTC)
+	got, err := ParseUTCTimestamp(AppendUTCTimestamp(nil, tm, Nanoseconds))
+	if err != nil || !got.Equal(tm) {
+		t.Errorf("round trip = %v, %v", got, err)
+	}
+	buf := make([]byte, 0, 64)
+	if allocs := testing.AllocsPerRun(100, func() { buf = AppendUTCTimestamp(buf[:0], tm, Milliseconds) }); allocs != 0 {
+		t.Errorf("AppendUTCTimestamp: %v allocs, want 0", allocs)
+	}
+}

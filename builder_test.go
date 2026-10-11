@@ -2,7 +2,9 @@ package fix2
 
 import (
 	"bytes"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -340,5 +342,129 @@ func TestSetSectionsTagInBoth(t *testing.T) {
 	raw := b.SetData(90, 91, []byte("x")).Build()
 	if n := bytes.Count(raw, []byte("\x0191=")); n != 1 {
 		t.Errorf("%q: SecureData written %d times, want 1", raw, n)
+	}
+}
+
+func TestBuilder_AppendToMatchesBuild(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D").
+		SetString(49, "S").SetString(56, "T").SetInt(34, 7).
+		SetString(11, "ORD").SetFloat(44, 1.5).AppendInt(453, 1).SetData(95, 96, []byte("a\x01b"))
+	b.SetSections([]int{49, 56, 34}, []int{93}, nil)
+	want := b.Build()
+	prefix := []byte("prefix")
+	got := b.AppendTo(prefix)
+	if !bytes.Equal(got[:len(prefix)], prefix) || !bytes.Equal(got[len(prefix):], want) {
+		t.Fatalf("AppendTo = %q, want prefix + %q", got, want)
+	}
+	if _, err := Parse(want); err != nil {
+		t.Fatalf("Build output does not parse: %v", err)
+	}
+	// A large body needs more BodyLength digits than a small one.
+	big := NewBuilder("FIX.4.4", "B").SetString(58, strings.Repeat("x", 123456))
+	if _, err := Parse(big.Build()); err != nil {
+		t.Fatalf("large message does not parse: %v", err)
+	}
+}
+
+func TestBuilder_AppendBody(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D").SetString(11, "ORD").SetString(115, "OBO").SetString(89, "SIG")
+	b.SetSections([]int{115}, []int{89}, nil)
+	body, err := b.AppendBody(nil, func(tag int) bool { return tag == 34 || tag == 52 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(body), "115=OBO\x0111=ORD\x0189=SIG\x01"; got != want {
+		t.Errorf("AppendBody = %q, want %q", got, want)
+	}
+	b.SetInt(34, 9)
+	_, err = b.AppendBody(nil, func(tag int) bool { return tag == 34 })
+	var rerr *ReservedTagError
+	if !errors.As(err, &rerr) || rerr.Tag != 34 {
+		t.Fatalf("AppendBody with a reserved tag set: err = %v, want a ReservedTagError for 34", err)
+	}
+}
+
+func TestBuilder_ResetReuses(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D")
+	b.SetSections([]int{49}, nil, nil)
+	resets := 0
+	b.OnReset(func() { resets++ })
+	build := func() []byte {
+		return b.SetString(49, "S").SetString(11, "ORD").SetInt(38, 100).SetFloat(44, 10.25).AppendTo(nil)
+	}
+	first := build()
+	b.Reset()
+	if resets != 1 {
+		t.Errorf("OnReset function called %d times, want 1", resets)
+	}
+	if got := build(); !bytes.Equal(got, first) {
+		t.Errorf("after Reset: %q, want %q", got, first)
+	}
+	if b.MsgType() != "D" || b.BeginString() != "FIX.4.4" {
+		t.Errorf("Reset lost MsgType %q or BeginString %q", b.MsgType(), b.BeginString())
+	}
+	buf := make([]byte, 0, 512)
+	allocs := testing.AllocsPerRun(100, func() {
+		b.Reset()
+		b.SetString(49, "S").SetString(11, "ORD").SetInt(38, 100).SetFloat(44, 10.25)
+		buf = b.AppendTo(buf[:0])
+	})
+	if allocs != 0 {
+		t.Errorf("Reset, set and AppendTo: %v allocs, want 0", allocs)
+	}
+}
+
+// Values stay correct when the arena grows and when a field is replaced.
+func TestBuilder_ArenaGrowth(t *testing.T) {
+	b := NewBuilder("FIX.4.4", "D")
+	for i := range 200 {
+		b.SetString(5000+i, strings.Repeat("v", i))
+	}
+	b.SetString(5000, "replaced")
+	m, err := Parse(b.Build())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(m.Get(5000)); got != "replaced" {
+		t.Errorf("5000 = %q", got)
+	}
+	for i := 1; i < 200; i++ {
+		if got := string(m.Get(5000 + i)); got != strings.Repeat("v", i) {
+			t.Fatalf("%d = %q", 5000+i, got)
+		}
+	}
+}
+
+func TestAppendHelpers(t *testing.T) {
+	if got := string(AppendTagValue([]byte("x"), 58, "hi")); got != "x58=hi\x01" {
+		t.Errorf("AppendTagValue(string) = %q", got)
+	}
+	if got := string(AppendTagValue(nil, 58, []byte("hi"))); got != "58=hi\x01" {
+		t.Errorf("AppendTagValue([]byte) = %q", got)
+	}
+	if got := string(AppendTagInt(nil, 34, -12)); got != "34=-12\x01" {
+		t.Errorf("AppendTagInt = %q", got)
+	}
+	msg := []byte("8=FIX.4.4\x019=5\x0135=0\x01")
+	if got, want := CheckSum(msg), byte(checksumBlockGeneric(msg)%256); got != want {
+		t.Errorf("CheckSum = %d, want %d", got, want)
+	}
+	full := AppendTrailer(append([]byte("junk"), msg...), 4)
+	if _, err := Parse(full[4:]); err != nil {
+		t.Errorf("AppendTrailer: %q does not parse: %v", full[4:], err)
+	}
+}
+
+func BenchmarkBuilderAppendTo(b *testing.B) {
+	bl := NewBuilder("FIX.4.4", "D")
+	bl.SetSections([]int{49, 56, 34, 52}, nil, nil)
+	buf := make([]byte, 0, 512)
+	b.ReportAllocs()
+	for b.Loop() {
+		bl.Reset()
+		bl.SetString(49, "SENDER").SetString(56, "TARGET").SetInt(34, 12345).
+			SetString(52, "20231015-10:00:00.000").SetString(11, "order-12345").
+			SetString(55, "AAPL").SetString(54, "1").SetInt(38, 100).SetString(40, "2").SetFloat(44, 150.5)
+		buf = bl.AppendTo(buf[:0])
 	}
 }

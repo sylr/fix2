@@ -97,3 +97,87 @@ func parseLeapSecond(name string, v []byte, layout string, base int) (time.Time,
 	}
 	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999_999_999, time.UTC), nil
 }
+
+// TimePrecision is the number of fraction digits a formatted FIX time has.
+type TimePrecision int
+
+const (
+	Seconds      TimePrecision = 0 // no fraction
+	Milliseconds TimePrecision = 3
+	Microseconds TimePrecision = 6
+	Nanoseconds  TimePrecision = 9
+)
+
+// layout returns the Go layout of a timestamp, time or date-less, with p
+// fraction digits; p is clamped to 0-9.
+func (p TimePrecision) layout(base string) string {
+	n := min(max(int(p), 0), 9)
+	if n == 0 {
+		return base
+	}
+	return base + ".000000000"[:n+1]
+}
+
+// AppendUTCTimestamp appends t as a FIX UTCTimestamp ("YYYYMMDD-HH:MM:SS"
+// and p fraction digits, truncated) to dst without allocating.
+func AppendUTCTimestamp(dst []byte, t time.Time, p TimePrecision) []byte {
+	t = t.UTC()
+	y, mo, d := t.Date()
+	if y < 0 || y > 9999 {
+		return t.AppendFormat(dst, p.layout(TimeFormatTimestampSec))
+	}
+	dst = append4(dst, y)
+	dst = append2(dst, int(mo))
+	dst = append2(dst, d)
+	dst = append(dst, '-')
+	return appendClock(dst, t, p)
+}
+
+// AppendUTCTimeOnly appends t as a FIX UTCTimeOnly ("HH:MM:SS" and p
+// fraction digits, truncated) to dst without allocating.
+func AppendUTCTimeOnly(dst []byte, t time.Time, p TimePrecision) []byte {
+	return appendClock(dst, t.UTC(), p)
+}
+
+// AppendUTCDate appends t as a FIX UTCDateOnly ("YYYYMMDD") to dst without
+// allocating.
+func AppendUTCDate(dst []byte, t time.Time) []byte {
+	t = t.UTC()
+	y, mo, d := t.Date()
+	if y < 0 || y > 9999 {
+		return t.AppendFormat(dst, TimeFormatDate)
+	}
+	dst = append4(dst, y)
+	dst = append2(dst, int(mo))
+	return append2(dst, d)
+}
+
+// appendClock appends "HH:MM:SS" and p fraction digits of t, already UTC.
+func appendClock(dst []byte, t time.Time, p TimePrecision) []byte {
+	h, mi, s := t.Clock()
+	dst = append2(dst, h)
+	dst = append(dst, ':')
+	dst = append2(dst, mi)
+	dst = append(dst, ':')
+	dst = append2(dst, s)
+	n := min(max(int(p), 0), 9)
+	if n == 0 {
+		return dst
+	}
+	dst = append(dst, '.')
+	frac := t.Nanosecond()
+	var digits [9]byte
+	for i := 8; i >= 0; i-- {
+		digits[i] = byte('0' + frac%10)
+		frac /= 10
+	}
+	return append(dst, digits[:n]...)
+}
+
+func append2(dst []byte, v int) []byte {
+	return append(dst, byte('0'+v/10), byte('0'+v%10))
+}
+
+func append4(dst []byte, v int) []byte {
+	return append(dst, byte('0'+v/1000), byte('0'+v/100%10), byte('0'+v/10%10), byte('0'+v%10))
+}
