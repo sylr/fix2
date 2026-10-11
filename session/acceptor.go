@@ -306,6 +306,10 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		tc.Close()
 	}
 
+	// A connection still waiting for its Logon when the acceptor stops is
+	// closed, not left to its deadline.
+	unwatch := context.AfterFunc(ctx, func() { tc.Close() })
+	defer unwatch()
 	deadline := time.Now().Add(a.opts.LogonTimeout)
 	tc.SetReadDeadline(deadline)
 	if tlsConn, ok := tc.(transport.TLSConn); ok {
@@ -320,6 +324,10 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	framer := fix2.NewFramer(tc, fix2.FramerOptions{MaxBodyLength: a.opts.MaxPreLogonBytes})
 	frame, err := framer.Next()
 	if err != nil {
+		if ctx.Err() != nil {
+			refuse("acceptor stopping")
+			return
+		}
 		refuse("no valid first message", slog.Any("error", err))
 		return
 	}
@@ -354,6 +362,11 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	s, err := a.route(ctx, wire, req)
 	if err != nil {
 		refuse(err.Error(), slog.String("logon_for", wire.reversed().String()))
+		return
+	}
+	// The session owns the connection from here: it closes it when stopped.
+	if !unwatch() {
+		refuse("acceptor stopping")
 		return
 	}
 	tc.SetReadDeadline(time.Time{})
