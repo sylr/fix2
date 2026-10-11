@@ -9,9 +9,10 @@ coverage:
       default:
         informational: true
 ignore:
-  # Packages fixgen generates, for tests and for the contribs.
+  # The contribs, binancemd and coinbasemd: tools, not the library.
+  - "contribs"
+  # Packages fixgen generates for tests.
   - "tests"
-  - "contribs/*/internal"
   # Test helpers.
   - "internal/dicttest"
   - "session/store/storetest"
