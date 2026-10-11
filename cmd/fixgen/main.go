@@ -2,10 +2,12 @@
 //
 // Usage:
 //
-//	fixgen -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch]
+//	fixgen -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]
 //
 // With -dispatch, it also generates a typed Handler interface and a
-// Dispatch function routing messages to its methods.
+// Dispatch function routing messages to its methods. With -bytes, the
+// getters of numbers, booleans and times come with <Field>Bytes getters of
+// the raw values, such as exact decimal prices.
 package main
 
 import (
@@ -21,10 +23,11 @@ func main() {
 	pkg := flag.String("pkg", "", "Go package name for output (required)")
 	outDir := flag.String("out", ".", "output directory")
 	dispatch := flag.Bool("dispatch", false, "generate a typed Handler interface and Dispatch")
+	raw := flag.Bool("bytes", false, "generate <Field>Bytes getters of raw values for numbers, booleans and times")
 	flag.Parse()
 
 	if *dictPath == "" || *pkg == "" {
-		fmt.Fprintf(os.Stderr, "Usage: fixgen -dict <xml-path> -pkg <package-name> [-out <dir>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: fixgen -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]\n")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -35,7 +38,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := generateWith(dict, *pkg, *outDir, options{dispatch: *dispatch}); err != nil {
+	if err := generateWith(dict, *pkg, *outDir, options{dispatch: *dispatch, bytes: *raw}); err != nil {
 		fmt.Fprintf(os.Stderr, "fixgen: %v\n", err)
 		os.Exit(1)
 	}

@@ -572,12 +572,17 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 // module, adds testCode as a test file and runs go test there.
 func runGenerated(t *testing.T, xml, pkg, testCode string) {
 	t.Helper()
+	runGeneratedWith(t, xml, pkg, testCode, options{})
+}
+
+func runGeneratedWith(t *testing.T, xml, pkg, testCode string, opts options) {
+	t.Helper()
 	dict, err := xmldict.Load(strings.NewReader(xml))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	outDir := t.TempDir()
-	if err := generate(dict, pkg, outDir); err != nil {
+	if err := generateWith(dict, pkg, outDir, opts); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	modRoot, err := filepath.Abs("../..")
@@ -1812,4 +1817,91 @@ func TestCustomPair(t *testing.T) {
 	}
 }
 `)
+}
+
+const rawGettersXML = `<fix type="FIX" major="4" minor="4">
+  <header/><trailer/>
+  <messages>
+    <message name="Quote" msgtype="S" msgcat="app">
+      <field name="BidPx" required="N"/>
+      <field name="TransactTime" required="N"/>
+      <field name="Side" required="N"/>
+      <field name="Symbol" required="N"/>
+      <group name="NoLevels" required="N">
+        <field name="LevelPx" required="N"/>
+        <field name="LevelSize" required="N"/>
+      </group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="132" name="BidPx" type="PRICE"/>
+    <field number="60" name="TransactTime" type="UTCTIMESTAMP"/>
+    <field number="54" name="Side" type="CHAR"><value enum="1" description="BUY"/></field>
+    <field number="55" name="Symbol" type="STRING"/>
+    <field number="5000" name="NoLevels" type="NUMINGROUP"/>
+    <field number="5001" name="LevelPx" type="PRICE"/>
+    <field number="5002" name="LevelSize" type="QTY"/>
+  </fields>
+</fix>`
+
+// TestGenerateRawGetters covers -bytes: raw values of parsed fields, on
+// messages and group entries, exactly as received.
+func TestGenerateRawGetters(t *testing.T) {
+	runGeneratedWith(t, rawGettersXML, "raw", `package raw
+
+import (
+	"reflect"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestRaw(t *testing.T) {
+	msg, err := fix2.Parse(fix2.NewBuilder("FIX.4.4", "S").
+		SetString(132, "62000.01000000").SetString(60, "20241019-05:40:11.464000").
+		SetString(5000, "1").SetString(5001, "0.00001000").SetString(5002, "1.50").Build())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := WrapQuote(&msg)
+	if v, ok := q.BidPxBytes(); !ok || string(v) != "62000.01000000" {
+		t.Errorf("BidPxBytes = %q, %v", v, ok)
+	}
+	if v, ok := q.TransactTimeBytes(); !ok || string(v) != "20241019-05:40:11.464000" {
+		t.Errorf("TransactTimeBytes = %q, %v", v, ok)
+	}
+	e := q.NoLevelsEntries()
+	if len(e) != 1 {
+		t.Fatalf("%d entries", len(e))
+	}
+	if v, ok := e[0].LevelPxBytes(); !ok || string(v) != "0.00001000" {
+		t.Errorf("LevelPxBytes = %q, %v", v, ok)
+	}
+	if _, ok := e[0].LevelSizeBytes(); !ok {
+		t.Error("LevelSizeBytes missing")
+	}
+	// Strings and enums need none.
+	for _, name := range []string{"SymbolBytes", "SideBytes"} {
+		if _, ok := reflect.TypeOf(q).MethodByName(name); ok {
+			t.Errorf("unexpected method %s", name)
+		}
+	}
+}
+`, options{bytes: true})
+}
+
+func TestGenerateRawGetterClash(t *testing.T) {
+	xml := strings.Replace(rawGettersXML, `<field name="Symbol" required="N"/>`, `<field name="Symbol" required="N"/><field name="BidPxBytes" required="N"/>`, 1)
+	xml = strings.Replace(xml, `<field number="55" name="Symbol" type="STRING"/>`, `<field number="55" name="Symbol" type="STRING"/><field number="5003" name="BidPxBytes" type="STRING"/>`, 1)
+	dict, err := xmldict.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := generateWith(dict, "raw", t.TempDir(), options{bytes: true}); err == nil {
+		t.Error("expected a clash between BidPxBytes and BidPx's raw getter")
+	}
+	if err := generateWith(dict, "raw", t.TempDir(), options{}); err != nil {
+		t.Errorf("without -bytes: %v", err)
+	}
 }
