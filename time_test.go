@@ -1,6 +1,7 @@
 package fix2
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -169,5 +170,36 @@ func TestAppendUTCTime(t *testing.T) {
 	buf := make([]byte, 0, 64)
 	if allocs := testing.AllocsPerRun(100, func() { buf = AppendUTCTimestamp(buf[:0], tm, Milliseconds) }); allocs != 0 {
 		t.Errorf("AppendUTCTimestamp: %v allocs, want 0", allocs)
+	}
+}
+
+// The fast path agrees with time.Parse, and does not allocate.
+func FuzzParseUTCTimestamp(f *testing.F) {
+	for _, s := range []string{"20231015-10:00:00", "20231015-10:00:00.123", "20240229-23:59:59.123456789", "20230229-10:00:00", "20231015-24:00:00", "00000000-00:00:00"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		got, err := ParseUTCTimestamp([]byte(s))
+		layout := ""
+		switch n := len(s); n {
+		case 17, 21, 24, 27:
+			layout = TimeFormatTimestampSec + ".000000000"[:max(0, n-17)]
+		default:
+			return
+		}
+		if len(layout) == 18 || strings.Contains(s, ",") || len(s) > 17 && s[17] != '.' || s[15:17] == "60" {
+			return
+		}
+		want, werr := time.Parse(layout, s)
+		if (err == nil) != (werr == nil) || err == nil && !got.Equal(want) {
+			t.Fatalf("ParseUTCTimestamp(%q) = %v, %v; time.Parse = %v, %v", s, got, err, want, werr)
+		}
+	})
+}
+
+func TestParseUTCTimestamp_DoesNotAllocate(t *testing.T) {
+	v := []byte("20231015-10:00:00.123")
+	if n := testing.AllocsPerRun(100, func() { ParseUTCTimestamp(v) }); n != 0 {
+		t.Errorf("ParseUTCTimestamp: %v allocs, want 0", n)
 	}
 }

@@ -55,11 +55,11 @@ func parseFixTime(name string, v []byte, layout string) (time.Time, error) {
 	digits := len(v) - len(layout) - 1 // fraction digits after the dot
 	switch {
 	case len(v) == len(layout):
+		digits = 0
 	case len(v) < len(layout) || v[len(layout)] != '.':
 		// time.Parse also takes a comma, FIX does not.
 		return time.Time{}, fmt.Errorf("%s: cannot parse %q", name, v)
 	case digits == 3 || digits == 6 || digits == 9:
-		layout += ".000000000"[:digits+1]
 	case digits == 12:
 		// Go times stop at nanoseconds: drop the picoseconds.
 		for _, c := range v[len(v)-3:] {
@@ -68,14 +68,68 @@ func parseFixTime(name string, v []byte, layout string) (time.Time, error) {
 			}
 		}
 		v = v[:len(v)-3]
-		layout += ".000000000"
+		digits = 9
 	default:
 		return time.Time{}, fmt.Errorf("%s: cannot parse %q", name, v)
+	}
+	if t, ok := fastTime(v, base); ok {
+		return t, nil
+	}
+	if digits > 0 {
+		layout += ".000000000"[:digits+1]
 	}
 	if v[base-2] == '6' && v[base-1] == '0' {
 		return parseLeapSecond(name, v, layout, base)
 	}
 	return time.Parse(layout, string(v))
+}
+
+// fastTime parses v, a timestamp ("YYYYMMDD-HH:MM:SS", base 17) or a time
+// ("HH:MM:SS", base 8) with a fraction of 0, 3, 6 or 9 digits, without
+// allocating. It reports false for anything time.Parse should judge,
+// invalid values included, so that errors keep its wording.
+func fastTime(v []byte, base int) (time.Time, bool) {
+	num := func(b []byte) (int, bool) {
+		n := 0
+		for _, c := range b {
+			if c < '0' || c > '9' {
+				return 0, false
+			}
+			n = n*10 + int(c-'0')
+		}
+		return n, true
+	}
+	year, month, day := 0, 1, 1
+	clock := v
+	if base == len(TimeFormatTimestampSec) {
+		var ok1, ok2, ok3 bool
+		year, ok1 = num(v[0:4])
+		month, ok2 = num(v[4:6])
+		day, ok3 = num(v[6:8])
+		if !ok1 || !ok2 || !ok3 || v[8] != '-' || month < 1 || month > 12 || day < 1 ||
+			day > time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Day() {
+			return time.Time{}, false
+		}
+		clock = v[9:]
+	}
+	h, ok1 := num(clock[0:2])
+	m, ok2 := num(clock[3:5])
+	s, ok3 := num(clock[6:8])
+	if !ok1 || !ok2 || !ok3 || clock[2] != ':' || clock[5] != ':' || h > 23 || m > 59 || s > 59 {
+		return time.Time{}, false
+	}
+	ns := 0
+	if frac := v[base:]; len(frac) > 0 {
+		f, ok := num(frac[1:])
+		if !ok {
+			return time.Time{}, false
+		}
+		for range 10 - len(frac) {
+			f *= 10
+		}
+		ns = f
+	}
+	return time.Date(year, time.Month(month), day, h, m, s, ns, time.UTC), true
 }
 
 // parseLeapSecond parses v, whose seconds at v[base-2:base] are 60: only
