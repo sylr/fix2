@@ -351,8 +351,8 @@ func TestParseErrorConsistency(t *testing.T) {
 		sentinel error
 	}{
 		{
-			name: "wrong tag at begin",
-			raw:  []byte("9=123\x018=FIX.4.4\x0135=A\x0110=000\x01"),
+			name:     "wrong tag at begin",
+			raw:      []byte("9=123\x018=FIX.4.4\x0135=A\x0110=000\x01"),
 			sentinel: ErrInvalidBeginTag,
 		},
 		{
@@ -551,14 +551,48 @@ func FuzzParse(f *testing.F) {
 	f.Add(buildMsg("FIX.4.0", "35=0\x01"))
 	// Seed with garbage.
 	f.Add([]byte("not a fix message"))
+	// Seed with a header longer than ParseFromReader reads.
+	f.Add(buildMsg("FIX."+strings.Repeat("x", 64), "35=0\x01"))
+	// Seed with a CheckSum too short, its trailer still 7 bytes long.
+	f.Add([]byte("8=FIX.4.4\x019=5\x0135=0\x0110=1\x01ab"))
 	// Seed with DATA fields (embedded SOH, read by length).
 	f.Add(buildMsg("FIX.4.4", "35=A\x0195=6\x0196=A\x0155=X\x01212=3\x01213=\x01\x01\x01"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Parser must not panic.
+		// The reader parsers and the Framer read the same bytes, malformed
+		// headers and trailers included, from readers of any pace.
+		for _, r := range []io.Reader{bytes.NewReader(data), iotest.OneByteReader(bytes.NewReader(data)), iotest.DataErrReader(bytes.NewReader(data))} {
+			_, _ = ParseFromReader(r)
+		}
+		for _, r := range []io.Reader{iotest.HalfReader(bytes.NewReader(data)), iotest.TimeoutReader(bytes.NewReader(data))} {
+			fr := NewFramer(r, FramerOptions{BufferSize: 16, MaxBodyLength: 256})
+			for range 8 {
+				var g *GarbledError
+				if _, err := fr.Next(); errors.As(err, &g) {
+					_ = g.Error()
+				} else if err != nil {
+					break
+				}
+			}
+		}
+
+		// Parser must not panic, and must judge the CheckSum as FIX defines
+		// it, whichever way it sums.
 		msg, err := Parse(data)
+		checkChecksum(t, "Parse", data, err)
+		_, rerr := ParseFromReader(bytes.NewReader(data))
+		checkChecksum(t, "ParseFromReader", data, rerr)
 		if err != nil {
 			return
+		}
+		// A message Parse accepts, the reader parser reads alike, unless its
+		// header is longer than the reader parser reads to find BodyLength.
+		mr, err := ParseFromReader(iotest.OneByteReader(bytes.NewReader(data)))
+		if errors.Is(err, ErrMessageTooLarge) {
+			return
+		}
+		if err != nil || !slices.EqualFunc(msg.Fields(), mr.Fields(), fieldEqual) {
+			t.Fatalf("ParseFromReader: %v, %v; Parse: %v", mr.Fields(), err, msg.Fields())
 		}
 		// If parse succeeded, basic invariants must hold.
 		if msg.Count() < 4 {

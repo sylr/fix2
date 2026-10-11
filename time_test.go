@@ -197,6 +197,31 @@ func FuzzParseUTCTimestamp(f *testing.F) {
 	})
 }
 
+// ParseUTCTimeOnly shares ParseUTCTimestamp's fast path with its own
+// layout: it agrees with time.Parse too.
+func FuzzParseUTCTimeOnly(f *testing.F) {
+	for _, s := range []string{"10:00:00", "10:00:00.123", "23:59:59.123456789", "23:59:60", "24:00:00", "10:00:00.123456789012", "10:00:00,123"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		got, err := ParseUTCTimeOnly([]byte(s))
+		layout := ""
+		switch n := len(s); n {
+		case 8, 12, 15, 18:
+			layout = TimeFormatTimeOnlySec + ".000000000"[:max(0, n-8)]
+		default:
+			return
+		}
+		if strings.Contains(s, ",") || len(s) > 8 && s[8] != '.' || s[6:8] == "60" {
+			return
+		}
+		want, werr := time.Parse(layout, s)
+		if (err == nil) != (werr == nil) || err == nil && !got.Equal(want) {
+			t.Fatalf("ParseUTCTimeOnly(%q) = %v, %v; time.Parse = %v, %v", s, got, err, want, werr)
+		}
+	})
+}
+
 func TestParseUTCTimestamp_DoesNotAllocate(t *testing.T) {
 	v := []byte("20231015-10:00:00.123")
 	if n := testing.AllocsPerRun(100, func() { ParseUTCTimestamp(v) }); n != 0 {
