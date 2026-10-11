@@ -173,8 +173,14 @@ func (i *Initiator) Run(ctx context.Context) error {
 func (i *Initiator) loop(ctx context.Context, is *initSession) {
 	s := is.s
 	wait := i.opts.ReconnectMin
+	s.startSchedule(ctx)
 	for ctx.Err() == nil {
 		if s.isStopped() {
+			return
+		}
+		select {
+		case <-s.windowSignal():
+		case <-ctx.Done():
 			return
 		}
 		dctx, cancel := context.WithTimeout(ctx, i.opts.DialTimeout)

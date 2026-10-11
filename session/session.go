@@ -26,6 +26,7 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/session/schedule"
 	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/store/memstore"
 )
@@ -112,6 +113,12 @@ type Session struct {
 	replyTo uint64
 	// gapFilling is set while a GapFill moves the expected MsgSeqNum.
 	gapFilling bool
+	// The schedule's window: whether the session is within one, which,
+	// a channel closed when one opens, and how to stop following it.
+	inWindow    bool
+	window      schedule.Window
+	windowOpen  chan struct{}
+	schedCancel context.CancelFunc
 
 	stats Stats
 }

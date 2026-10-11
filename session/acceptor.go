@@ -98,6 +98,9 @@ func (a *Acceptor) add(s *Session) error {
 	s.initiator = false
 	a.sessions[s.id] = s
 	a.byWire[wire] = append(a.byWire[wire], s)
+	if a.ctx != nil {
+		s.startSchedule(a.ctx)
+	}
 	return nil
 }
 
@@ -166,6 +169,9 @@ func (a *Acceptor) Run(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	a.ctx = runCtx
+	for _, s := range a.sessions {
+		s.startSchedule(runCtx)
+	}
 	for _, l := range a.listeners {
 		a.wg.Add(1)
 		go a.acceptLoop(runCtx, l)

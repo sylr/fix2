@@ -226,9 +226,13 @@ func (s *Session) activeResetLocked(c *conn, m *fix2.Message, in Inbound) {
 // resetStoreLocked starts a new sequence number generation: both sides
 // restart at 1. Receipts of the previous generation without evidence end with
 // ErrUnknownDelivery.
-func (s *Session) resetStoreLocked(why string) {
+func (s *Session) resetStoreLocked(why string, windowID ...string) {
 	gen := s.st.Generation
-	if err := s.store.Reset(context.Background(), gen, time.Now(), s.st.WindowID); err != nil {
+	id := s.st.WindowID
+	if len(windowID) > 0 {
+		id = windowID[0]
+	}
+	if err := s.store.Reset(context.Background(), gen, time.Now(), id); err != nil {
 		s.log.LogAttrs(context.Background(), slog.LevelError, "resetting the store failed", slog.Any("error", err))
 		if s.c != nil {
 			s.disconnectLocked(s.c, &LogoutError{Text: "store reset failed", Err: err})

@@ -11,6 +11,7 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/session/schedule"
 	"github.com/sylr/fix2/session/store"
 )
 
@@ -93,6 +94,10 @@ type Config struct {
 	// MinHeartBtInt and MaxHeartBtInt bound the heartbeat interval an
 	// acceptor accepts, 1s and 300s if 0.
 	MinHeartBtInt, MaxHeartBtInt time.Duration
+	// Schedule tells when the session runs: it logs on only within its
+	// windows, logs out when one ends, and starts each afresh, at sequence
+	// number 1. Always, if nil.
+	Schedule schedule.Schedule
 	// Store persists the session; a new memstore.Store if nil.
 	Store store.Store
 	// Logger receives the session's events; nothing is logged if nil.
@@ -254,6 +259,11 @@ func (c *Config) Validate() error {
 	}
 	if c.Handler == nil {
 		add("Handler", "required (embed session.BaseHandler for defaults)")
+	}
+	if v, ok := c.Schedule.(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			add("Schedule", "%v", err)
+		}
 	}
 	for _, d := range []struct {
 		field string

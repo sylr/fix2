@@ -47,6 +47,9 @@ func (s *Session) Stop(ctx context.Context) error {
 		return err
 	}
 	s.stopped = true
+	if s.schedCancel != nil {
+		s.schedCancel()
+	}
 	d := s.deliv
 	s.receipts.notify()
 	s.mu.Unlock()

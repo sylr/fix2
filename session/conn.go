@@ -103,6 +103,8 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 		return nil, errors.New("session: a handler callback is stuck, see Config.MaxDeliveryStall")
 	case s.c != nil:
 		return nil, errAlreadyConnected
+	case s.cfg.Schedule != nil && !s.inWindow:
+		return nil, errOutsideWindow
 	}
 	if s.deliv == nil {
 		s.deliv = newDelivery(s)
