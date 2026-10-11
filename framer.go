@@ -85,6 +85,16 @@ func NewFramer(r io.Reader, opts FramerOptions) *Framer {
 	return &Framer{r: r, buf: make([]byte, size), maxBody: maxBody}
 }
 
+// SetMaxBodyLength changes the largest BodyLength accepted from the next
+// frame on, MaxBodyLength if n <= 0: an acceptor reads a connection's first
+// message with a small limit, then raises it once the peer is known.
+func (f *Framer) SetMaxBodyLength(n int) {
+	if n <= 0 {
+		n = MaxBodyLength
+	}
+	f.maxBody = n
+}
+
 // Next returns the next frame: the raw bytes of one message, from "8=" to
 // the SOH ending its CheckSum. The slice is only valid until the next call
 // to Next. Bytes that do not form a frame are skipped and reported by a
@@ -158,9 +168,8 @@ func (f *Framer) next() (frame []byte, garbled *GarbledError, err error) {
 	if err := f.fill(frameLen); err != nil {
 		return nil, nil, unexpected(err)
 	}
-	t := f.buf[f.start+headerEnd+bodyLen : f.start+frameLen]
-	if t[0] != '1' || t[1] != '0' || t[2] != '=' || !isDigit(t[3]) || !isDigit(t[4]) || !isDigit(t[5]) || t[6] != soh {
-		f.resync()
+	if !isTrailer(f.buf[f.start+headerEnd+bodyLen : f.start+frameLen]) {
+		f.skipToCheckSum(headerEnd + bodyLen - 1)
 		return nil, f.garbled(fmt.Errorf("%w: no CheckSum field after the %d bytes BodyLength declares", ErrBodyLenMismatch, bodyLen)), nil
 	}
 	frame = f.buf[f.start : f.start+frameLen]
@@ -257,6 +266,47 @@ func (f *Framer) fill(n int) error {
 		}
 	}
 	return nil
+}
+
+// isTrailer reports whether t, 7 bytes, is a CheckSum field "10=NNN\x01".
+func isTrailer(t []byte) bool {
+	return t[0] == '1' && t[1] == '0' && t[2] == '=' && isDigit(t[3]) && isDigit(t[4]) && isDigit(t[5]) && t[6] == soh
+}
+
+// checkSumField starts every CheckSum field, after the SOH ending the body.
+var checkSumField = []byte("\x0110=")
+
+// skipToCheckSum skips a frame whose CheckSum is not where its BodyLength
+// says, up to the end of the first CheckSum field from offset from, whatever
+// its value: a BodyLength too short ends at the frame's own CheckSum, one too
+// long swallows the next frame, as QuickFIX engines read them. Without a
+// CheckSum within MaxBodyLength more bytes, it resyncs on the next frame
+// start instead.
+func (f *Framer) skipToCheckSum(from int) {
+	const maxValue = 16 // bytes searched for the SOH ending a CheckSum value
+	limit := from + f.maxBody + trailerLen
+	eof := false
+	for {
+		if i := bytes.Index(f.buf[f.start+from:f.end], checkSumField); i >= 0 {
+			value := from + i + len(checkSumField) // offset of the value
+			rest := f.buf[f.start+value : f.end]
+			if j := bytes.IndexByte(rest[:min(len(rest), maxValue)], soh); j >= 0 {
+				f.skip(value + j + 1)
+				return
+			}
+			if len(rest) >= maxValue {
+				from = value // a look-alike: search further
+				continue
+			}
+		}
+		if eof || f.end-f.start >= limit {
+			f.resync()
+			return
+		}
+		if f.fill(f.end-f.start+1) != nil {
+			eof = true
+		}
+	}
 }
 
 // resync skips the malformed frame at f.start up to the next frame start

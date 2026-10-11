@@ -243,3 +243,22 @@ func FuzzFramer(f *testing.F) {
 		}
 	})
 }
+
+// A BodyLength too long swallows the next frame, up to its CheckSum, as
+// QuickFIX engines read it; the frame after is read again.
+func TestFramer_BodyLengthTooLong(t *testing.T) {
+	m1 := []byte("8=FIX.4.4\x019=40\x0135=D\x0134=4\x0149=TW\x0110=000\x01")
+	m2 := buildMsg("FIX.4.4", "35=D\x0134=5\x0149=TW\x01")
+	m3 := buildMsg("FIX.4.4", "35=0\x0134=6\x0149=TW\x01")
+	stream := bytes.Join([][]byte{m1, m2, m3}, nil)
+	frames, skipped, garbled, err := frameAll(t, bytes.NewReader(stream), FramerOptions{BufferSize: 32})
+	if err != io.EOF {
+		t.Fatalf("final error = %v", err)
+	}
+	if len(frames) != 1 || !bytes.Equal(frames[0], m3) {
+		t.Fatalf("frames = %q, want the third alone", frames)
+	}
+	if skipped != len(m1)+len(m2) || len(garbled) != 1 || !errors.Is(garbled[0], ErrBodyLenMismatch) {
+		t.Errorf("skipped %d bytes in %v, want %d in one report", skipped, garbled, len(m1)+len(m2))
+	}
+}
