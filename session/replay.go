@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
@@ -28,8 +29,9 @@ const replayChunk = 64 << 10
 
 // startReplayLocked has the writer resend messages begin to end. New
 // messages are held back until it is done, so that none goes out amid the
-// replay; queued ones of the range not yet handed to the writer are dropped,
-// to be sent by the replay as retransmissions. A replay asked for while one
+// replay; queued application messages of the range not yet handed to the
+// writer are dropped, to be sent by the replay as retransmissions, and
+// queued session-level ones are written first. A replay asked for while one
 // runs is queued, merged with an overlapping one.
 func (s *Session) startReplayLocked(c *conn, begin, end uint64, keepPending bool) {
 	if c.replay != nil {
@@ -183,26 +185,53 @@ func (c *conn) runReplay(job *replayJob) {
 		c.replay = nil
 		return
 	}
-	if len(c.replayQueue) > 0 {
+	c.replay = nil
+	for c.replay == nil && len(c.replayQueue) > 0 {
 		next := c.replayQueue[0]
 		c.replayQueue = c.replayQueue[1:]
-		c.replay = &replayJob{begin: next.begin, end: min(next.end, s.st.NextSender-1)}
-		if c.replay.begin > c.replay.end {
-			c.replay = nil
-		} else {
-			c.wakeWriter()
-			return
+		if end := min(next.end, s.st.NextSender-1); next.begin <= end {
+			// What was held up to the end of the next replay was
+			// sequenced before it was asked for: it is released, then
+			// treated as startReplayLocked treats what is pending. What
+			// was held after stays held behind it.
+			c.releaseHeldLocked(end)
+			c.removePendingLocked(next.begin, end)
+			c.replay = &replayJob{begin: next.begin, end: end}
 		}
 	}
-	c.replay = nil
-	// Release what was held back, after what is pending.
+	if c.replay == nil {
+		// Release what was held back, after what is pending.
+		c.releaseHeldLocked(math.MaxUint64)
+	}
+	c.wakeWriter()
+}
+
+// releaseHeldLocked moves the frames held back during a replay whose
+// MsgSeqNum is at most upTo, the first ones, to the end of the pending ones.
+func (c *conn) releaseHeldLocked(upTo uint64) {
+	n := len(c.heldFrames)
+	for i, f := range c.heldFrames {
+		if f.seq > upTo {
+			n = i
+			break
+		}
+	}
+	if n == 0 {
+		return
+	}
+	cut := c.heldFrames[n-1].end
 	base := len(c.pending)
-	c.pending = append(c.pending, c.held...)
-	for _, f := range c.heldFrames {
+	c.pending = append(c.pending, c.held[:cut]...)
+	for _, f := range c.heldFrames[:n] {
 		f.end += base
 		c.frames = append(c.frames, f)
 	}
-	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
+	rest := copy(c.held, c.held[cut:])
+	c.held = c.held[:rest]
+	kept := copy(c.heldFrames, c.heldFrames[n:])
+	c.heldFrames = c.heldFrames[:kept]
+	for i := range c.heldFrames {
+		c.heldFrames[i].end -= cut
+	}
 	c.signalRoomLocked()
-	c.wakeWriter()
 }

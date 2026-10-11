@@ -336,7 +336,7 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 		return 0, fmt.Errorf("session %s: storing message %d: %w", s.id, h.seq, err)
 	}
 	s.st.NextSender++
-	*frames = append(*frames, pendingFrame{end: len(*buf), seq: h.seq, queued: h.sendingTime, probe: h.probe})
+	*frames = append(*frames, pendingFrame{end: len(*buf), seq: h.seq, queued: h.sendingTime, probe: h.probe, admin: isAdmin([]byte(h.msgType))})
 	_ = control
 	c.wakeWriter()
 	return h.seq, nil

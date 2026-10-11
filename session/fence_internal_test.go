@@ -171,6 +171,18 @@ func TestRemovePending(t *testing.T) {
 	}
 }
 
+// Session-level frames stay when their range is replayed: the replay only
+// gap-fills them.
+func TestRemovePendingKeepsAdmin(t *testing.T) {
+	c := &conn{s: &Session{cfg: Config{MaxPendingMessages: 10, MaxPendingBytes: 100}}}
+	c.pending = []byte("AAABBBBCC")
+	c.frames = []pendingFrame{{end: 3, seq: 1}, {end: 7, seq: 2, admin: true}, {end: 9, seq: 3}}
+	c.removePendingLocked(1, 3)
+	if string(c.pending) != "BBBB" || len(c.frames) != 1 || c.frames[0].end != 4 || c.frames[0].seq != 2 {
+		t.Errorf("after removing 1 to 3: %q %+v", c.pending, c.frames)
+	}
+}
+
 // A GapFill moving straight past messages kept ahead of the gap drops them.
 func TestAdvancePrunesAfterJump(t *testing.T) {
 	s := fenceSession(t, nil)

@@ -21,6 +21,7 @@ type pendingFrame struct {
 	queued  time.Time
 	probe   string // TestReqID, if the frame is an acknowledgement probe
 	gapFill bool   // a SequenceReset-GapFill standing for messages seq..: not their write
+	admin   bool   // a session-level message, which a replay gap-fills rather than resends
 }
 
 // conn is one connection of a session: a reader goroutine and a writer
@@ -484,8 +485,11 @@ func (s *Session) armLocked(c *conn) {
 
 func itoa(v uint64) string { return string(appendDecimal(nil, v)) }
 
-// removePendingLocked removes from c's pending frames those whose MsgSeqNum
-// is in [begin, end]: they are about to be replayed.
+// removePendingLocked removes from c's pending frames the application
+// messages whose MsgSeqNum is in [begin, end]: they are about to be replayed.
+// Session-level messages stay, to be written before the replay: it only
+// gap-fills them, and a ResendRequest or a Heartbeat answering a TestRequest
+// dropped would never be sent.
 func (c *conn) removePendingLocked(begin, end uint64) {
 	if len(c.frames) == 0 {
 		return
@@ -494,7 +498,7 @@ func (c *conn) removePendingLocked(begin, end uint64) {
 	start := 0
 	for _, f := range c.frames {
 		srcEnd := f.end
-		if f.seq < begin || f.seq > end {
+		if f.admin || f.seq < begin || f.seq > end {
 			out = append(out, c.pending[start:srcEnd]...)
 			f.end = len(out)
 			kept = append(kept, f)
