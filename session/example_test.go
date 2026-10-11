@@ -196,3 +196,105 @@ func ExampleAcceptor_dynamic() {
 	// INTRUDER refused
 	// sessions: 1
 }
+
+// desk is the handler of a trading desk's session: its Logons carry the
+// desk's Username (553).
+type desk struct {
+	session.BaseHandler
+	username string
+}
+
+func (d desk) ToAdmin(_ context.Context, _ *session.Session, msgType string, b *fix2.Builder) error {
+	if msgType == "A" {
+		b.SetString(553, d.username)
+	}
+	return nil
+}
+
+// This example serves two desks of one client, logging on with the same
+// CompIDs: the acceptor's sessions are told apart by their Qualifier, and
+// AcceptorOptions.Route picks each Logon's from what it carries, its
+// Username here. Better grounds than a Username sent in the clear: over
+// TLS requiring and verifying client certificates
+// (tls.RequireAndVerifyClientCert), req.TLS.VerifiedChains names the
+// client, and a transport authenticating its peers gives req.Principal.
+func ExampleAcceptor_route() {
+	l := mem.Listen("broker")
+
+	broker := func(q string) session.SessionID {
+		return session.SessionID{BeginString: session.FIX44, SenderCompID: "BROKER", TargetCompID: "CLIENT", Qualifier: q}
+	}
+	// Refused, the intruder tries again and again: only its first try is
+	// told.
+	routed := make(chan string, 1)
+	tell := func(what string) {
+		select {
+		case routed <- what:
+		default:
+		}
+	}
+	acceptor := session.NewAcceptor(session.AcceptorOptions{
+		Route: func(ctx context.Context, req *session.LogonRequest, candidates []session.SessionID) (session.SessionID, error) {
+			username := string(req.Logon.Get(553))
+			for _, id := range candidates {
+				if id.Qualifier == username {
+					tell(username + " routed to " + id.String())
+					return id, nil
+				}
+			}
+			tell(username + " refused")
+			return session.SessionID{}, errors.New("unknown username")
+		},
+	})
+	for _, q := range []string{"equities", "options"} {
+		if _, err := acceptor.Add(session.Config{ID: broker(q), Handler: session.BaseHandler{}}); err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+	acceptor.Listen(l)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); acceptor.Run(ctx) }()
+	defer func() { cancel(); wg.Wait() }()
+
+	for _, username := range []string{"equities", "options", "mallory"} {
+		initiator := session.NewInitiator(session.InitiatorOptions{})
+		s, err := initiator.Add(session.Config{
+			ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "CLIENT", TargetCompID: "BROKER"},
+			Handler: desk{username: username},
+		}, l)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		wg.Add(1)
+		go func() { defer wg.Done(); initiator.Run(ctx) }()
+		select {
+		case what := <-routed:
+			fmt.Println(what)
+		case <-time.After(5 * time.Second):
+			fmt.Println("no Logon from", username)
+			return
+		}
+		for deadline := time.Now().Add(5 * time.Second); username != "mallory" && s.State() != session.StateLoggedOn; {
+			if time.Now().After(deadline) {
+				fmt.Println(username, "not logged on")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	for _, q := range []string{"equities", "options"} {
+		fmt.Println(q, acceptor.Session(broker(q)).State())
+	}
+	// Output:
+	// equities routed to FIX.4.4:BROKER->CLIENT:equities
+	// options routed to FIX.4.4:BROKER->CLIENT:options
+	// mallory refused
+	// equities logged on
+	// options logged on
+}
