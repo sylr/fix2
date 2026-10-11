@@ -2,11 +2,14 @@ package session
 
 import (
 	"bytes"
+	"encoding/json"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary/xmldict"
 )
 
 func TestRedact(t *testing.T) {
@@ -83,5 +86,66 @@ func TestAsyncObserver(t *testing.T) {
 	b.Close()
 	if b.Dropped() == 0 || b.Dropped()+uint64(len(blocked.frames)) != 10 {
 		t.Errorf("dropped %d, delivered %d of 10", b.Dropped(), len(blocked.frames))
+	}
+}
+
+// The frame is an attribute of its own: "message" is the message's key in
+// zerolog, and "msg" in zap and slog's own handlers.
+func TestSlogObserver(t *testing.T) {
+	s, err := New(Config{ID: SessionID{BeginString: FIX44, SenderCompID: "A", TargetCompID: "B"}, Handler: BaseHandler{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	o := SlogObserver{Logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))}
+	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "A").SetString(554, "pw").Build(), Seq: 1})
+	var rec map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &rec); err != nil {
+		t.Fatal(err)
+	}
+	frame, _ := rec["frame"].(string)
+	if rec["msg"] != "FIX in" || !strings.HasPrefix(frame, "8=FIX.4.4|") || !strings.Contains(frame, "554=***") {
+		t.Errorf("record %v", rec)
+	}
+
+	buf.Reset()
+	o.Tags = []int{553}
+	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "A").SetString(553, "key").SetString(554, "pw").Build(), Seq: 1})
+	if got := buf.String(); !strings.Contains(got, "553=***") || !strings.Contains(got, "554=pw") {
+		t.Errorf("with Tags 553: %s", got)
+	}
+}
+
+// With a dictionary, header, body and trailer are logged field by field.
+func TestSlogObserverDictionary(t *testing.T) {
+	d, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX44.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(Config{ID: SessionID{BeginString: FIX44, SenderCompID: "A", TargetCompID: "B"}, Handler: BaseHandler{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	o := SlogObserver{
+		Logger:     slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		Dictionary: d,
+	}
+	order := fix2.NewBuilder(FIX44, "D").SetString(49, "A").SetString(56, "B").SetInt(34, 2).
+		SetString(11, "O1").SetString(54, "1").Build()
+	o.OnOutbound(s, Frame{Raw: order, Seq: 2})
+	o.OnInbound(s, Frame{Raw: fix2.NewBuilder(FIX44, "A").SetString(554, "pw").Build(), Seq: 1})
+	got := buf.String()
+	for _, want := range []string{
+		`msg="-> Header:  8(BeginString)=FIX.4.4, 9(BodyLength)=`,
+		`35(MsgType)=D, 49(SenderCompID)=A, 56(TargetCompID)=B, 34(MsgSeqNum)=2"`,
+		`msg="-> Body:    11(ClOrdID)=O1, 54(Side)=1(BUY)"`,
+		`msg="-> Trailer: 10(CheckSum)=`,
+		`msg="<- Body:    554=***"`, // redacted; this dictionary has no Password
+		"session=FIX.4.4:A->B seq=2",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("log lacks %s:\n%s", want, got)
+		}
 	}
 }

@@ -155,7 +155,7 @@ func (s *Session) invalidTagLocked(c *conn, m *fix2.Message, tag int) {
 func (c *conn) garbled(frame []byte, err error) {
 	c.s.stats.Garbled.Add(1)
 	c.s.log.LogAttrs(context.Background(), slog.LevelWarn, "garbled message ignored",
-		slog.String("error", err.Error()), slog.String("message", string(frame[:min(len(frame), 256)])))
+		slog.String("error", err.Error()), slog.String("frame", string(frame[:min(len(frame), 256)])))
 }
 
 // authenticate asks the handler whether to accept Logon m.

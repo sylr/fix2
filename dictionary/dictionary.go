@@ -108,7 +108,8 @@ type Dict struct {
 	formats      tagTable // tag -> format of its values, see ValidateWith
 
 	fieldsByName map[string]*FieldDef
-	profile      *fix2.Profile // DATA fields, see Profile
+	profile      *fix2.Profile   // DATA fields, see Profile
+	sections     map[int]Section // header and trailer tags, see SectionOf
 }
 
 // FieldByName returns the field definition with the given name, or nil if not found.
@@ -127,6 +128,7 @@ func New(d *Dict) *Dict {
 		}
 	}
 	d.profile = d.dataProfile()
+	d.sections = d.sectionsOf()
 	d.compile()
 	return d
 }

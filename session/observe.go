@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
 )
 
 // SensitiveTags are the tags whose values Redact masks by default:
@@ -147,30 +148,80 @@ func (a *AsyncObserver) Close() {
 }
 
 // SlogObserver logs every frame to a slog.Logger, at level Debug, with the
-// values of SensitiveTags redacted: with a zerolog or zap slog handler, it
-// logs there. SOH separators are shown as "|".
+// values of Tags redacted: with a zerolog or zap slog handler, it logs there.
+// Without a Dictionary, a frame is logged whole, as the "frame" attribute,
+// SOH separators shown as "|". With one, it is logged as people read it:
+// header, body and trailer in a record each, as in "<- Body: 55(Symbol)=BTCUSDT,
+// 54(Side)=1(BUY)", every field named, its value described (see
+// dictionary.Dict.AppendField).
 type SlogObserver struct {
 	Logger *slog.Logger
+	// Tags are the tags whose values are redacted, SensitiveTags if nil:
+	// add Username (553) where it carries an API key, for one.
+	Tags []int
+	// Dictionary names the fields and describes their values, if set.
+	Dictionary *dictionary.Dict
 }
 
-func (o SlogObserver) log(s *Session, f Frame, dir string) {
+func (o SlogObserver) log(s *Session, f Frame, inbound bool) {
 	ctx := context.Background()
 	if !o.Logger.Enabled(ctx, slog.LevelDebug) {
 		return
 	}
-	raw := Redact(nil, f.Raw, s.profileFor(f.Raw))
+	p := s.profileFor(f.Raw)
+	raw := Redact(nil, f.Raw, p, o.Tags...)
+	attrs := []slog.Attr{slog.String("session", s.id.String()), slog.Uint64("seq", f.Seq), slog.Bool("resend", f.Resend)}
+	if o.Dictionary != nil && o.logFields(ctx, raw, p, inbound, attrs) {
+		return
+	}
 	for i, c := range raw {
 		if c == 1 {
 			raw[i] = '|'
 		}
 	}
-	o.Logger.LogAttrs(ctx, slog.LevelDebug, "FIX "+dir,
-		slog.String("session", s.id.String()), slog.Uint64("seq", f.Seq),
-		slog.Bool("resend", f.Resend), slog.String("message", string(raw)))
+	dir := "FIX out"
+	if inbound {
+		dir = "FIX in"
+	}
+	o.Logger.LogAttrs(ctx, slog.LevelDebug, dir, append(attrs, slog.String("frame", string(raw)))...)
+}
+
+// sectionLabels label the records of a message's header, body and trailer.
+var sectionLabels = [...]string{
+	dictionary.SectionHeader:  "Header: ",
+	dictionary.SectionBody:    "Body:   ",
+	dictionary.SectionTrailer: "Trailer:",
+}
+
+// logFields logs raw, a message, field by field, in a record per section. It
+// reports false if raw does not parse.
+func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix2.Profile, inbound bool, attrs []slog.Attr) bool {
+	var m fix2.Message
+	if err := fix2.ParseInto(&m, raw, p); err != nil {
+		return false
+	}
+	var parts [len(sectionLabels)][]byte
+	for _, f := range m.Fields() {
+		b := &parts[o.Dictionary.SectionOf(f.Tag)]
+		if len(*b) > 0 {
+			*b = append(*b, ", "...)
+		}
+		*b = o.Dictionary.AppendField(*b, f.Tag, f.Value)
+	}
+	dir := "-> "
+	if inbound {
+		dir = "<- "
+	}
+	for _, sec := range [...]dictionary.Section{dictionary.SectionHeader, dictionary.SectionBody, dictionary.SectionTrailer} {
+		if len(parts[sec]) > 0 {
+			o.Logger.LogAttrs(ctx, slog.LevelDebug, dir+sectionLabels[sec]+" "+string(parts[sec]), attrs...)
+		}
+	}
+	return true
 }
 
 // OnInbound implements MessageObserver.
-func (o SlogObserver) OnInbound(s *Session, f Frame) { o.log(s, f, "in") }
+func (o SlogObserver) OnInbound(s *Session, f Frame) { o.log(s, f, true) }
 
 // OnOutbound implements MessageObserver.
-func (o SlogObserver) OnOutbound(s *Session, f Frame) { o.log(s, f, "out") }
+func (o SlogObserver) OnOutbound(s *Session, f Frame) { o.log(s, f, false) }
