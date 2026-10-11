@@ -20,6 +20,8 @@ typed code generation and a session engine.
   FIXT 1.1, configured in Go:
   - many sessions per process and per listener, each with its own
     dictionaries, store and handler;
+  - dynamic sessions, created by the acceptor as their counterparties log
+    on;
   - logon, heartbeats, gap recovery, resends behind a barrier, sequence
     resets, NextExpectedMsgSeqNum, LastMsgSeqNumProcessed;
   - receipts telling when a sent message was written, and when the

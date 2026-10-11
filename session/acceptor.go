@@ -27,11 +27,15 @@ type AcceptorOptions struct {
 	// message, 1024 if 0: others are closed at once.
 	MaxPendingConnections int
 	// Resolve, if set, creates a session for a Logon no session matches,
-	// returning its configuration, or an error to refuse it.
+	// returning its configuration, or an error or nil to refuse it. The
+	// session stays until removed. A Logon arriving while another resolves
+	// the same wire identity waits for it: Resolve is never called twice
+	// at once for one wire identity, nor for one that has a session.
 	Resolve func(ctx context.Context, req *LogonRequest) (*Config, error)
 	// Route, if set, picks among sessions whose wire identity is the same,
 	// told apart by their Qualifier, using what the transport knows of the
-	// peer (address, TLS certificate, principal).
+	// peer (address, TLS certificate, principal). It is asked even of a
+	// single candidate, one Resolve has just created too.
 	Route func(ctx context.Context, req *LogonRequest, candidates []SessionID) (SessionID, error)
 }
 
@@ -48,7 +52,8 @@ type Acceptor struct {
 	ctx       context.Context // set while running
 	closing   bool            // Run is shutting down: no session added
 	wg        sync.WaitGroup
-	pending   chan struct{} // semaphore of connections before their Logon
+	pending   chan struct{}               // semaphore of connections before their Logon
+	resolving map[SessionID]chan struct{} // wire identities Resolve is creating, closed once done
 }
 
 // NewAcceptor returns an Acceptor.
@@ -66,11 +71,12 @@ func NewAcceptor(opts AcceptorOptions) *Acceptor {
 		opts.MaxPendingConnections = 1024
 	}
 	return &Acceptor{
-		opts:     opts,
-		log:      opts.Logger,
-		sessions: make(map[SessionID]*Session),
-		byWire:   make(map[SessionID][]*Session),
-		pending:  make(chan struct{}, opts.MaxPendingConnections),
+		opts:      opts,
+		log:       opts.Logger,
+		sessions:  make(map[SessionID]*Session),
+		byWire:    make(map[SessionID][]*Session),
+		pending:   make(chan struct{}, opts.MaxPendingConnections),
+		resolving: make(map[SessionID]chan struct{}),
 	}
 }
 
@@ -131,6 +137,41 @@ func (a *Acceptor) Remove(ctx context.Context, id SessionID) error {
 	}
 	a.mu.Unlock()
 	return s.Stop(ctx)
+}
+
+// resolve creates the session of a Logon with AcceptorOptions.Resolve, the
+// caller having claimed wire in a.resolving.
+func (a *Acceptor) resolve(ctx context.Context, wire SessionID, req *LogonRequest) error {
+	defer func() {
+		a.mu.Lock()
+		close(a.resolving[wire])
+		delete(a.resolving, wire)
+		a.mu.Unlock()
+	}()
+	cfg, err := a.opts.Resolve(ctx, req)
+	if err != nil {
+		return fmt.Errorf("dynamic session refused: %w", err)
+	}
+	if cfg == nil {
+		return errors.New("no session for this Logon")
+	}
+	s, err := New(*cfg)
+	if err != nil {
+		return err
+	}
+	if s.id.reversed() != wire {
+		s.store.Close()
+		return fmt.Errorf("dynamic session %s does not match the Logon's identities", s.id)
+	}
+	if err := a.add(s); err != nil {
+		s.store.Close()
+		// Added meanwhile with Add: route finds it.
+		if a.Session(s.id) != nil {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // Session returns session id, or nil.
@@ -340,44 +381,38 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 
 // route returns the session a Logon is for.
 func (a *Acceptor) route(ctx context.Context, wire SessionID, req *LogonRequest) (*Session, error) {
-	a.mu.Lock()
-	candidates := append([]*Session(nil), a.byWire[wire]...)
-	a.mu.Unlock()
-	switch len(candidates) {
-	case 0:
+	var candidates []*Session
+	for {
+		a.mu.Lock()
+		candidates = append(candidates[:0], a.byWire[wire]...)
+		resolving, busy := a.resolving[wire]
+		if len(candidates) == 0 && !busy && a.opts.Resolve != nil {
+			a.resolving[wire] = make(chan struct{})
+		}
+		a.mu.Unlock()
+		if len(candidates) > 0 {
+			break
+		}
 		if a.opts.Resolve == nil {
 			return nil, errors.New("no session for this Logon")
 		}
-		cfg, err := a.opts.Resolve(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("dynamic session refused: %w", err)
-		}
-		if cfg == nil {
-			return nil, errors.New("no session for this Logon")
-		}
-		s, err := New(*cfg)
-		if err != nil {
-			return nil, err
-		}
-		if s.id.reversed() != wire {
-			s.store.Close()
-			return nil, fmt.Errorf("dynamic session %s does not match the Logon's identities", s.id)
-		}
-		if err := a.add(s); err != nil {
-			s.store.Close()
-			// Another connection created it meanwhile.
-			if existing := a.Session(s.id); existing != nil {
-				return existing, nil
+		if busy {
+			a.log.LogAttrs(ctx, slog.LevelDebug, "Logon waiting for another connection's dynamic session", slog.String("logon_for", req.ID.String()))
+			select {
+			case <-resolving:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			}
-			return nil, err
 		}
-		return s, nil
-	case 1:
-		if a.opts.Route == nil {
-			return candidates[0], nil
+		if err := a.resolve(ctx, wire, req); err != nil {
+			return nil, err
 		}
 	}
 	if a.opts.Route == nil {
+		if len(candidates) == 1 {
+			return candidates[0], nil
+		}
 		return nil, errors.New("several sessions match this Logon")
 	}
 	ids := make([]SessionID, len(candidates))

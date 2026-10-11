@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -122,4 +123,76 @@ func ExampleConfig() {
 	fmt.Println(bad.Validate())
 	// Output:
 	// session FIX.4.4:CLIENT->: invalid configuration: ID.TargetCompID: required; HeartBtInt: must be whole seconds >= 0, got 1.5s
+}
+
+// This example creates sessions as their counterparties log on, with
+// AcceptorOptions.Resolve: the acceptor is given none up front, and
+// Resolve decides from each Logon whether to serve it and how. A session
+// so created stays, its sequence numbers too, until Acceptor.Remove.
+func ExampleAcceptor_dynamic() {
+	l := mem.Listen("broker")
+
+	known := map[string]bool{"CLIENT-A": true, "CLIENT-B": true}
+	// Refused, the intruder tries again and again: only its first try is
+	// told.
+	resolved := make(chan string, 1)
+	tell := func(what string) {
+		select {
+		case resolved <- what:
+		default:
+		}
+	}
+	acceptor := session.NewAcceptor(session.AcceptorOptions{
+		Resolve: func(ctx context.Context, req *session.LogonRequest) (*session.Config, error) {
+			// req.ID is the session the Logon is for, as the acceptor
+			// names it: the counterparty is its Target.
+			if !known[req.ID.TargetCompID] {
+				tell(req.ID.TargetCompID + " refused")
+				return nil, errors.New("unknown counterparty")
+			}
+			tell(req.ID.TargetCompID + " served as " + req.ID.String())
+			return &session.Config{ID: req.ID, Handler: session.BaseHandler{}}, nil
+		},
+	})
+	acceptor.Listen(l)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); acceptor.Run(ctx) }()
+	defer func() { cancel(); wg.Wait() }()
+
+	for _, client := range []string{"CLIENT-A", "INTRUDER"} {
+		initiator := session.NewInitiator(session.InitiatorOptions{})
+		s, err := initiator.Add(session.Config{
+			ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: client, TargetCompID: "BROKER"},
+			Handler: session.BaseHandler{},
+		}, l)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		wg.Add(1)
+		go func() { defer wg.Done(); initiator.Run(ctx) }()
+		select {
+		case what := <-resolved:
+			fmt.Println(what)
+		case <-time.After(5 * time.Second):
+			fmt.Println("no Logon from", client)
+			return
+		}
+		for deadline := time.Now().Add(5 * time.Second); known[client] && s.State() != session.StateLoggedOn; {
+			if time.Now().After(deadline) {
+				fmt.Println(client, "not logged on")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	fmt.Println("sessions:", len(acceptor.Sessions()))
+	// Output:
+	// CLIENT-A served as FIX.4.4:BROKER->CLIENT-A
+	// INTRUDER refused
+	// sessions: 1
 }
