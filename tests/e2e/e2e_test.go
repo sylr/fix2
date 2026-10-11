@@ -85,13 +85,9 @@ func (p *peer) FromAdmin(_ context.Context, s *session.Session, m *fix2.Message,
 }
 
 // unexpected fails the test on an application message of an unexpected
-// type, a BusinessMessageReject (35=j) for one, which it does not reject:
-// the two ends would reject each other's rejects forever.
+// type, a BusinessMessageReject (35=j) for one.
 func (p *peer) unexpected(s *session.Session, m *fix2.Message) error {
 	p.t.Errorf("%s received MsgType %s: %s", s.ID(), m.MsgType(), m.Get(58))
-	if string(m.MsgType()) == "j" {
-		return nil
-	}
 	return fix2.ErrUnsupportedMessageType
 }
 

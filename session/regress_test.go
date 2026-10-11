@@ -8,10 +8,14 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/tests/dicts/fix44"
+	"github.com/sylr/fix2/tests/dicts/fix50sp2"
+	"github.com/sylr/fix2/tests/dicts/fixt11"
 )
 
 // A message written, then gap-filled at the counterparty's request when the
@@ -225,5 +229,110 @@ func TestRunStopsSessions(t *testing.T) {
 	<-done
 	if st := s.State(); st != session.StateStopped {
 		t.Errorf("after Run: %s, want stopped", st)
+	}
+}
+
+// refusingRejects is a recorder whose application refuses every
+// BusinessMessageReject, as a generated Dispatch without a handler for it
+// does.
+type refusingRejects struct{ *recorder }
+
+func (r refusingRejects) FromApp(ctx context.Context, s *session.Session, m *fix2.Message, in session.Inbound) error {
+	if string(m.MsgType()) == "j" {
+		return fix2.ErrUnsupportedMessageType
+	}
+	return r.recorder.FromApp(ctx, s, m, in)
+}
+
+// A Reject or BusinessMessageReject, invalid or refused by the handler, is
+// not rejected in turn: the counterparty would reject our reject, and the
+// two would loop. A TestRequest sent after it is answered with nothing
+// before its Heartbeat.
+func TestRejectsAreNotRejected(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*session.Config)
+		send   []string // MsgType, then fields
+	}{
+		{"invalid Reject", func(c *session.Config) {
+			c.Dictionaries.Session = fix44.Dictionary()
+		}, []string{"3", "58", "no RefSeqNum"}},
+		{"invalid BusinessMessageReject", func(c *session.Config) {
+			c.Dictionaries.Session = fix44.Dictionary()
+		}, []string{"j", "45", "1", "58", "no RefMsgType nor BusinessRejectReason"}},
+		{"BusinessMessageReject refused by the handler", func(c *session.Config) {
+			c.Handler = refusingRejects{c.Handler.(*recorder)}
+		}, []string{"j", "45", "1", "372", "D", "380", "3"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, p := loggedOn(t, tc.change)
+			p.send(tc.send[0], 0, tc.send[1:]...)
+			// An order delivered after it: the handler is done with it.
+			p.send("D", 0, "11", "O1", "55", "X", "54", "1",
+				"60", string(fix2.AppendUTCTimestamp(nil, time.Now(), fix2.Milliseconds)), "38", "1", "40", "1")
+			rec.wait(t, func() bool { return len(rec.apps) == 1 })
+			p.send("1", 0, "112", "SYNC")
+			p.expect("0", "112", "SYNC")
+			if n := s.Stats().RejectsSent.Load(); n != 0 {
+				t.Errorf("%d rejects sent", n)
+			}
+		})
+	}
+}
+
+// Two FIXT sessions whose FIX 5.0 SP2 dictionary has no
+// BusinessMessageReject, though FIXT 1.1's MsgType lists it: one receiving a
+// BusinessMessageReject does not reject it as an unsupported message type,
+// which the other would reject in turn, and so on forever.
+func TestUnsupportedBusinessMessageRejectNotRejected(t *testing.T) {
+	dicts := session.Dictionaries{
+		Session:          fixt11.Dictionary(),
+		Apps:             map[string]*dictionary.Dict{fix50sp2.Version.ApplVerID: fix50sp2.Dictionary()},
+		DefaultApplVerID: fix50sp2.Version.ApplVerID,
+	}
+	l := mem.Listen("acceptor")
+	a := session.NewAcceptor(session.AcceptorOptions{})
+	acc, err := a.Add(session.Config{
+		ID:           session.SessionID{BeginString: session.FIXT11, SenderCompID: "ACC", TargetCompID: "INI"},
+		Dictionaries: dicts,
+		Handler:      newRecorder(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Listen(l)
+	i := session.NewInitiator(session.InitiatorOptions{})
+	ir := newRecorder()
+	ini, err := i.Add(session.Config{
+		ID:           session.SessionID{BeginString: session.FIXT11, SenderCompID: "INI", TargetCompID: "ACC"},
+		Dictionaries: dicts,
+		Handler:      ir,
+	}, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Go(func() { a.Run(ctx) })
+	wg.Go(func() { i.Run(ctx) })
+	t.Cleanup(func() { cancel(); wg.Wait() })
+	ir.wait(t, func() bool { return ir.logons == 1 })
+
+	wctx, wcancel := context.WithTimeout(ctx, 5*time.Second)
+	defer wcancel()
+	r, err := acc.Send(wctx, fix2.NewBuilder(session.FIXT11, "j").
+		SetString(45, "1").SetString(372, "D").SetString(380, "3").SetString(58, "Unsupported Message Type"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Acknowledged, the initiator read it: it would have rejected it then.
+	if err := r.Wait(wctx, session.Acknowledged); err != nil {
+		t.Fatalf("Wait(Acknowledged): %v", err)
+	}
+	if n := ini.Stats().RejectsSent.Load(); n != 0 {
+		t.Errorf("the initiator sent %d rejects", n)
+	}
+	if n := acc.Stats().RejectsSent.Load(); n != 0 {
+		t.Errorf("the acceptor sent %d rejects", n)
 	}
 }
