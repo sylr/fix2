@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -406,8 +407,15 @@ func TestInstruments_NotListed(t *testing.T) {
 	f.send("y", "320", id, "322", "R1", "560", "0", "393", "1", "893", "Y", "146", "1", "55", "BTC-USD", "15", "USD")
 	f.expect("5")
 	f.send("5")
-	if err := waitDone(t, done); err == nil || !strings.Contains(err.Error(), "not listed") {
+	if err := waitDone(t, done); err == nil || !strings.Contains(err.Error(), "not listed by Coinbase: NOPE-USD") {
 		t.Errorf("stream = %v", err)
+	}
+}
+
+// A symbol given twice is asked for once.
+func TestSymbolsOf(t *testing.T) {
+	if got := symbolsOf([]string{"btc-usd", "BTC-USD", "eth-usd"}); !slices.Equal(got, []string{"BTC-USD", "ETH-USD"}) {
+		t.Errorf("symbolsOf = %v", got)
 	}
 }
 

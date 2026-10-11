@@ -28,6 +28,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -190,10 +191,7 @@ the public sandbox work with --sandbox.`,
 
 // execute runs command cmd for symbols.
 func execute(ctx context.Context, o *options, cmd command, args []string, stdout, stderr io.Writer) error {
-	symbols := make([]string, len(args))
-	for i, s := range args {
-		symbols[i] = strings.ToUpper(s)
-	}
+	symbols := symbolsOf(args)
 	if err := o.check(symbols); err != nil {
 		return err
 	}
@@ -207,6 +205,18 @@ func execute(ctx context.Context, o *options, cmd command, args []string, stdout
 		return runError{err}
 	}
 	return nil
+}
+
+// symbolsOf returns the symbols of args, upper case, each once: Coinbase
+// refuses a second subscription to one.
+func symbolsOf(args []string) []string {
+	var symbols []string
+	for _, s := range args {
+		if s = strings.ToUpper(s); !slices.Contains(symbols, s) {
+			symbols = append(symbols, s)
+		}
+	}
+	return symbols
 }
 
 // newLogger returns a logger writing to w with zerolog's console writer, in

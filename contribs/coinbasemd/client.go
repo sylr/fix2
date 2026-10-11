@@ -219,8 +219,8 @@ type client struct {
 	subs      map[string]*sub   // by MDReqID
 	quotes    map[string]*tickerEvent
 	books     map[string]*book
-	query     string // the SecurityReqID of the instruments asked for
-	listed    int    // instruments listed
+	query     string          // the SecurityReqID of the instruments asked for
+	listed    map[string]bool // the symbols listed
 }
 
 var _ session.LogonSigner = (*client)(nil)
@@ -251,7 +251,7 @@ func (c *client) OnLogon(ctx context.Context, s *session.Session) {
 	c.subs = map[string]*sub{}
 	c.quotes = map[string]*tickerEvent{}
 	c.books = map[string]*book{}
-	c.listed = 0
+	c.listed = map[string]bool{}
 	if c.cmd.kind == kindInstruments {
 		c.query = c.nextID("INSTRUMENTS", "")
 		r, err := s.Send(ctx, md.BuildSecurityListRequest(session.FIXT11).SetSecurityReqID(c.query).
@@ -655,12 +655,18 @@ func (d *dispatcher) OnSecurityList(y *md.SecurityList) error {
 		}
 		e.Status, _ = g.MDSecurityTradingStatus()
 		c.out.instrument(e)
-		c.listed++
+		c.listed[symbol] = true
 	}
 	// The list may come in fragments: it is complete with the last.
 	if last, ok := y.LastFragment(); !ok || last == md.LastFragmentYes {
-		if len(c.symbols) > 0 && c.listed < len(c.symbols) {
-			c.finish(fmt.Errorf("%d of the %d symbols asked for are not listed", len(c.symbols)-c.listed, len(c.symbols)))
+		var missing []string
+		for _, s := range c.symbols {
+			if !c.listed[s] {
+				missing = append(missing, s)
+			}
+		}
+		if len(missing) > 0 {
+			c.finish(fmt.Errorf("not listed by Coinbase: %s", strings.Join(missing, ", ")))
 			return nil
 		}
 		c.finish(errDone)
