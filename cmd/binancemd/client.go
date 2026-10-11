@@ -194,7 +194,7 @@ type client struct {
 	log     *slog.Logger
 	finish  context.CancelCauseFunc
 
-	mu          sync.Mutex
+	mu sync.Mutex
 	// loggedOn, connected and refusals follow the Logons FromAdmin sees,
 	// in order with the Logouts and Rejects that may follow them: OnLogon
 	// runs later, on another goroutine.
