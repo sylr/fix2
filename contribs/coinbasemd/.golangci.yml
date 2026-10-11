@@ -1,0 +1,7 @@
+version: "2"
+
+linters:
+  exclusions:
+    presets:
+      # Errors of fmt.Fprint*, Close, os.Setenv... that are commonly ignored.
+      - std-error-handling
