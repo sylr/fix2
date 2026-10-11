@@ -95,9 +95,9 @@ FIX certificates, which carry no Certificate Transparency timestamps.
 `RACE=1` adds the race detector, `CODECOV=1` writes `coverage.txt`. `make
 fuzz` runs every fuzz target, the contribs' too, for `FUZZTIME` each (30s by
 default); a failing input lands in its package's `testdata/fuzz`. CI runs
-the tests on Linux and macOS, amd64 and arm64, with and without
-`GOEXPERIMENT=simd`, and fuzzes on Linux amd64 and arm64: 20s per target on
-every push, 3 minutes every night.
+the tests and fuzzes on Linux, amd64 and arm64, with and without
+`GOEXPERIMENT=simd`: 20s per fuzz target on every push, 3 minutes every
+night.
 
 ## Conformance
 

@@ -28,12 +28,6 @@ jobs:
         os: [ubuntu-24.04, ubuntu-24.04-arm]
         go: ["1.26", "1.27"]
         simd: [false, true]
-        include:
-          # darwin has its own hrtimer, in assembly for both.
-          - {os: macos-15, go: "1.27", simd: false}
-          - {os: macos-15, go: "1.27", simd: true}
-          - {os: macos-15-intel, go: "1.27", simd: false}
-          - {os: macos-15-intel, go: "1.27", simd: true}
     env:
       GOEXPERIMENT: ${{ matrix.simd && 'simd' || '' }}
     steps:
@@ -61,8 +55,8 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: coverage.txt,contribs/binancemd/coverage.txt,contribs/coinbasemd/coverage.txt
-          # Each platform covers code the others do not: SIMD checksums,
-          # darwin's hrtimer. Codecov merges them.
+          # Each platform covers code the others do not, the SIMD
+          # checksums: Codecov merges them.
           flags: ${{ runner.os }}-${{ runner.arch }}-go${{ matrix.go }}${{ matrix.simd && '-simd' || '' }}
           use_oidc: true
 
