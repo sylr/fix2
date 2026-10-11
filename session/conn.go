@@ -54,6 +54,7 @@ type conn struct {
 	readBlocked         time.Time // since when the reader waits for the delivery queue
 	logonDeadline       time.Time
 	logoutDeadline      time.Time
+	logoutText          string // the Text of our Logout, why we logged out
 	timer               *time.Timer
 	testReqs            uint64 // TestRequests sent, for their IDs
 	probeWanted         bool   // an acknowledgement probe waits for AckProbeMinInterval

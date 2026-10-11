@@ -83,7 +83,7 @@ const (
 // reason we gave, or the Text of the counterparty's Logout.
 type LogoutError struct {
 	ByCounterparty bool   // the counterparty logged out
-	Text           string // the Logout's Text, or why we disconnected
+	Text           string // the counterparty's Logout's Text, or why we logged out or disconnected
 	Err            error  // the underlying error, if any
 }
 

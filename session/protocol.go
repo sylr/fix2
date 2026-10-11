@@ -782,6 +782,7 @@ func (s *Session) logoutLocked(c *conn, text string) {
 	}
 	s.sendLogoutLocked(c, text)
 	s.phase = phaseLogoutSent
+	c.logoutText = text
 	c.logoutDeadline = time.Now().Add(s.cfg.LogoutTimeout)
 	s.armLocked(c)
 }
@@ -812,6 +813,11 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 		if in.Seq == s.st.NextTarget {
 			s.markLocked(in.Seq)
 			s.advanceLocked(c, in.Seq+1)
+		}
+		// Why we logged out, rather than the answer's Text: an answer
+		// usually has none, and crossing Logouts both give theirs.
+		if c.logoutText != "" {
+			text = c.logoutText
 		}
 		s.disconnectLocked(c, &LogoutError{ByCounterparty: false, Text: text})
 		return

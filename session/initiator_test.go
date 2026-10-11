@@ -374,3 +374,29 @@ func TestInitiator_LastProcessedWhileOnLogonRuns(t *testing.T) {
 	p.send("1", 0, "112", "PING")
 	p.expect("0", "112", "PING", "369", "2")
 }
+
+// Logged out by us, the session reports why, not the Text of the
+// counterparty's answer, which usually has none.
+func TestLogoutReasonIsOurs(t *testing.T) {
+	l := mem.Listen("acceptor")
+	ini, rec := startInitiator(t, l, nil)
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 0, "98", "0", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	done := make(chan error, 1)
+	go func() { done <- ini.Logout(context.Background(), "end of day") }()
+	p.expect("5", "58", "end of day")
+	p.send("5", 0)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	rec.mu.Lock()
+	reason := rec.logouts[0]
+	rec.mu.Unlock()
+	var le *session.LogoutError
+	if !errors.As(reason, &le) || le.ByCounterparty || le.Text != "end of day" {
+		t.Errorf("logout reason %v, want ours: end of day", reason)
+	}
+}
