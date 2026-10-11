@@ -134,7 +134,9 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 	}
 	if s.cfg.Schedule != nil && s.st.WindowID != s.window.ID {
 		// A new window starts afresh; the previous connection is done.
-		s.resetStoreLocked("new session window "+s.window.Start.Format(time.RFC3339), s.window.ID)
+		if err := s.resetStoreLocked("new session window "+s.window.Start.Format(time.RFC3339), s.window.ID); err != nil {
+			return nil, err
+		}
 	}
 	s.epoch++
 	now := time.Now()

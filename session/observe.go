@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"slices"
@@ -54,6 +55,30 @@ func Redact(dst, raw []byte, p *fix2.Profile, tags ...int) []byte {
 	return fix2.AppendTrailer(dst, start)
 }
 
+// profileFor returns the profile raw, a whole message, parses with: for
+// FIXT, that of its application version, from its ApplVerID (1128), in the
+// header before any DATA field of the body, or the counterparty's default.
+func (s *Session) profileFor(raw []byte) *fix2.Profile {
+	if s.dicts.parseApps == nil {
+		return s.dicts.parse
+	}
+	if i := bytes.Index(raw, []byte("\x011128=")); i >= 0 {
+		v := raw[i+6:]
+		if j := bytes.IndexByte(v, 1); j >= 0 {
+			if p := s.dicts.parseApps[string(v[:j])]; p != nil {
+				return p
+			}
+		}
+	}
+	s.mu.Lock()
+	peer := s.peerApplVerID
+	s.mu.Unlock()
+	if p := s.dicts.parseApps[peer]; p != nil {
+		return p
+	}
+	return s.dicts.parse
+}
+
 // AsyncObserver passes frames to another MessageObserver from a goroutine
 // of its own, so that a slow observer (a file, a database) does not slow the
 // session: frames are redacted into a bounded queue and dropped, and
@@ -97,7 +122,7 @@ func (a *AsyncObserver) run() {
 }
 
 func (a *AsyncObserver) push(s *Session, f Frame, inbound bool) {
-	f.Raw = Redact(nil, f.Raw, s.dicts.parse, a.tags...)
+	f.Raw = Redact(nil, f.Raw, s.profileFor(f.Raw), a.tags...)
 	select {
 	case a.queue <- observed{s, f, inbound}:
 	default:
@@ -133,7 +158,7 @@ func (o SlogObserver) log(s *Session, f Frame, dir string) {
 	if !o.Logger.Enabled(ctx, slog.LevelDebug) {
 		return
 	}
-	raw := Redact(nil, f.Raw, s.dicts.parse)
+	raw := Redact(nil, f.Raw, s.profileFor(f.Raw))
 	for i, c := range raw {
 		if c == 1 {
 			raw[i] = '|'

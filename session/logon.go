@@ -273,7 +273,7 @@ func (s *Session) fenceReset(c *conn) {
 // resetStoreLocked starts a new sequence number generation: both sides
 // restart at 1. Receipts of the previous generation without evidence end with
 // ErrUnknownDelivery.
-func (s *Session) resetStoreLocked(why string, windowID ...string) {
+func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	gen := s.st.Generation
 	id := s.st.WindowID
 	if len(windowID) > 0 {
@@ -284,7 +284,7 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) {
 		if s.c != nil {
 			s.disconnectLocked(s.c, &LogoutError{Text: "store reset failed", Err: err})
 		}
-		return
+		return fmt.Errorf("session %s: resetting the store (%s): %w", s.id, why, err)
 	}
 	st, err := s.store.Open(context.Background())
 	if err != nil {
@@ -297,4 +297,5 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) {
 	clear(s.stash)
 	s.receipts.newGeneration(gen, st.Generation)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "sequence numbers reset", slog.String("why", why), slog.Uint64("generation", st.Generation))
+	return nil
 }
