@@ -3,14 +3,22 @@ package xmldict
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
+	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
+
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
 )
 
 // TestDecodeMatchesEncodingXML checks that decode fills the xml* types as
@@ -209,4 +217,92 @@ func FuzzMarkupLimiter(f *testing.F) {
 func limit(r io.Reader) error {
 	_, err := io.Copy(io.Discard, &markupLimiter{r: r})
 	return err
+}
+
+// FuzzLoad checks that Load returns a dictionary or an error on any input,
+// within bounded time and memory, and that a dictionary it returns validates
+// messages without panicking: for each message type, one with all its fields
+// and a bare one.
+func FuzzLoad(f *testing.F) {
+	for _, seed := range []string{
+		`<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages><message name="M" msgtype="M"><component name="C"/><group name="NoG" required="Y"><field name="A"/><group name="NoH"><field name="B"/></group></group></message></messages><components><component name="C"><field name="A"/><component name="D"/></component><component name="D"><field name="B" required="Y"/></component></components><fields><field number="35" name="MsgType" type="STRING"/><field number="1" name="A" type="STRING"/><field number="2" name="B" type="INT"><value enum="1" description="ONE"/></field><field number="3" name="NoG" type="NUMINGROUP"/><field number="4" name="NoH" type="NUMINGROUP"/></fields></fix>`,
+		`<fix><messages><message name="M" msgtype="M"><component name="C"/></message></messages><components><component name="C"><component name="C"/></component></components></fix>`,
+		`<fix><messages><message name="M" msgtype="M"><group name="G"><group name="G"><field name="A"/></group></group></message></messages><fields><field number="1" name="A" type="X"/><field number="1" name="G" type="NUMINGROUP"/></fields></fix>`,
+		`<fix><messages><message name="M" msgtype="M"><field name="Missing"/></message></messages></fix>`,
+		`<fix><messages><message name="M" msgtype="M"/><message name="N" msgtype="M"/></messages><fields><field number="-1" name="A"/><field number="0" name="B"/><field number="1" name="A"/></fields></fix>`,
+		`<fix><header><group name="NoHops"><field name="HopCompID"/></group></header><fields><field number="627" name="NoHops" type="NUMINGROUP"/><field number="628" name="HopCompID" type="STRING"/></fields></fix>`,
+		`<fix><messages><message name="M" msgtype="M"><group name="NoG"><field name="Len"/><field name="Data"/></group></message></messages><fields><field number="1" name="NoG" type="NUMINGROUP"/><field number="95" name="Len" type="LENGTH"/><field number="96" name="Data" type="DATA"/></fields></fix>`,
+		`<`, ``, `<fix>`, `<fix><messages><message/></messages></fix>`,
+	} {
+		f.Add([]byte(seed))
+	}
+	for _, name := range []string{"FIX40", "FIX44", "FIXT11"} {
+		if data, err := os.ReadFile("../../cmd/fixgen/testdata/" + name + ".xml"); err == nil {
+			f.Add(data)
+		}
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		start := time.Now()
+		d, err := Load(bytes.NewReader(data))
+		runtime.ReadMemStats(&after)
+		if took := time.Since(start); took > 5*time.Second {
+			t.Fatalf("Load took %v for %d bytes", took, len(data))
+		}
+		if n := after.TotalAlloc - before.TotalAlloc; n > 1<<30 {
+			t.Fatalf("Load allocated %d bytes for %d bytes", n, len(data))
+		}
+		if err != nil {
+			if d != nil {
+				t.Fatalf("Load returned a dictionary and %v", err)
+			}
+			return
+		}
+		useLoaded(t, d)
+	})
+}
+
+// useLoaded validates messages with d, as a session would.
+func useLoaded(t *testing.T, d *dictionary.Dict) {
+	t.Helper()
+	begin := "FIX." + d.Major + "." + d.Minor
+	if strings.ContainsRune(begin, 1) {
+		return
+	}
+	// Every message, in a fixed order, so that an input reproduces.
+	for _, mt := range slices.Sorted(maps.Keys(d.Messages)) {
+		md := d.Messages[mt]
+		var all strings.Builder
+		for _, ref := range md.Fields {
+			fmt.Fprintf(&all, "%d=1\x01", ref.Tag)
+		}
+		for _, g := range md.Groups {
+			fmt.Fprintf(&all, "%d=2\x01%d=1\x01%d=1\x01", g.CounterTag, g.DelimTag, g.DelimTag)
+		}
+		for _, body := range []string{"", all.String()} {
+			msg := "35=" + md.MsgType + "\x01" + body
+			wire := fmt.Sprintf("8=%s\x019=%d\x01%s", begin, len(msg), msg)
+			var sum byte
+			for i := range len(wire) {
+				sum += wire[i]
+			}
+			wire += fmt.Sprintf("10=%03d\x01", sum)
+			var m fix2.Message
+			if err := fix2.ParseInto(&m, []byte(wire), d.Profile()); err != nil {
+				continue
+			}
+			err := d.ValidateWith(&m, dictionary.CheckAll)
+			var ve *dictionary.ValidationError
+			if err != nil && !errors.As(err, &ve) {
+				t.Fatalf("ValidateWith returned %T: %v", err, err)
+			}
+			d.Validate(&m)
+			d.Sections(&m)
+			for _, fl := range m.Fields() {
+				d.AppendField(nil, fl.Tag, fl.Value)
+			}
+		}
+	}
+	dictionary.Compose(d, d)
 }

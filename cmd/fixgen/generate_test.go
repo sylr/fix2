@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"maps"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sylr/fix2/dictionary"
 	"github.com/sylr/fix2/dictionary/xmldict"
@@ -1904,4 +1906,50 @@ func TestGenerateRawGetterClash(t *testing.T) {
 	if err := generateWith(dict, "raw", t.TempDir(), options{}); err != nil {
 		t.Errorf("without -bytes: %v", err)
 	}
+}
+
+// FuzzGenerate checks that the generator neither panics nor writes Go that
+// does not parse, for any dictionary xmldict.Load accepts: it returns an
+// error for the ones it cannot name safely.
+func FuzzGenerate(f *testing.F) {
+	for _, name := range []string{"FIX40", "FIX44", "FIXT11"} {
+		data, err := os.ReadFile("testdata/" + name + ".xml")
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(data, false, false)
+	}
+	f.Add([]byte(`<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages><message name="M" msgtype="M"><component name="C"/><group name="NoG" required="Y"><field name="A"/><group name="NoH"><field name="B"/><field name="Len"/><field name="Data"/></group></group></message></messages><components><component name="C"><field name="A"/><component name="D"/></component><component name="D"><field name="B" required="Y"/></component></components><fields><field number="35" name="MsgType" type="STRING"/><field number="1" name="A" type="STRING"/><field number="2" name="B" type="INT"><value enum="1" description="ONE"/><value enum="2" description="One"/></field><field number="3" name="NoG" type="NUMINGROUP"/><field number="4" name="NoH" type="NUMINGROUP"/><field number="5" name="Len" type="LENGTH"/><field number="6" name="Data" type="DATA"/></fields></fix>`), true, true)
+	f.Fuzz(func(t *testing.T, data []byte, dispatch, raw bool) {
+		dict, err := xmldict.Load(bytes.NewReader(data))
+		if err != nil {
+			return
+		}
+		out := t.TempDir()
+		hang := time.AfterFunc(10*time.Second, func() { panic("generate hangs") })
+		err = generateWith(dict, "gen", out, options{dispatch: dispatch, bytes: raw})
+		hang.Stop()
+		// The generator refuses dictionaries whose names it cannot turn into
+		// distinct Go identifiers and files; any other error is code that
+		// does not format or parse, which generateWith checks itself.
+		if err != nil && !rejected(err) {
+			t.Fatalf("generated code does not format or parse: %v", err)
+		}
+	})
+}
+
+// rejected reports whether err is the generator refusing a dictionary, not
+// failing to write valid Go for it.
+func rejected(err error) bool {
+	for _, why := range []string{
+		"must be an ASCII letter followed by letters and digits", // checkNames
+		"which must follow its LENGTH field",                     // checkNames
+		"written twice",                                          // generateWith
+		"rename the dictionary entries it comes from",            // checkGenerated
+	} {
+		if strings.Contains(err.Error(), why) {
+			return true
+		}
+	}
+	return false
 }
