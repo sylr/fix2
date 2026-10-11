@@ -94,6 +94,7 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 	ctx, finish := context.WithCancelCause(ctx)
 	defer finish(nil)
 	c := &client{
+		ctx:     ctx,
 		apiKey:  o.apiKey,
 		key:     key,
 		cmd:     cmd,
@@ -128,7 +129,7 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 	if err := context.Cause(ctx); !errors.Is(err, errDone) && !errors.Is(err, context.Canceled) {
 		return err
 	}
-	return out.flush()
+	return out.end()
 }
 
 // loadKey reads the Ed25519 private key of PEM file path.
@@ -192,6 +193,7 @@ type client struct {
 	show    int
 	out     output
 	log     *slog.Logger
+	ctx     context.Context // done once the command ends
 	finish  context.CancelCauseFunc
 
 	mu sync.Mutex
@@ -263,9 +265,14 @@ func (c *client) OnLogon(ctx context.Context, s *session.Session) {
 	}
 }
 
-// OnLogout tells of a disconnection: the initiator reconnects.
+// OnLogout tells of a disconnection: the initiator reconnects, unless the
+// command ends.
 func (c *client) OnLogout(ctx context.Context, _ *session.Session, reason error) {
 	// connected stays set: the answer to our Logout may come after this.
+	if c.ctx.Err() != nil {
+		c.log.LogAttrs(ctx, slog.LevelInfo, "logged out")
+		return
+	}
 	c.log.LogAttrs(ctx, slog.LevelWarn, "disconnected, reconnecting", slog.Any("reason", reason))
 }
 
@@ -371,6 +378,9 @@ func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix2.Mess
 		if !c.connected {
 			c.refusedLocked(ctx, fmt.Errorf("Binance refused the logon: %s", text))
 			return
+		}
+		if c.ctx.Err() != nil || c.maintenance {
+			return // the answer to ours
 		}
 		c.log.LogAttrs(ctx, slog.LevelWarn, "Binance logged out", slog.String("text", text))
 	}

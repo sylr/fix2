@@ -87,8 +87,10 @@ type output interface {
 	depth(e *depthEvent)
 	instrument(e *instrumentEvent)
 	limit(e *limitEvent)
-	// flush writes what is buffered.
+	// flush writes what is buffered, but tables.
 	flush() error
+	// end writes everything: the command ends.
+	end() error
 }
 
 func newOutput(w io.Writer, jsonLines, terminal bool) output {
@@ -117,6 +119,7 @@ func (o *jsonOutput) depth(e *depthEvent)           { o.write(e) }
 func (o *jsonOutput) instrument(e *instrumentEvent) { o.write(e) }
 func (o *jsonOutput) limit(e *limitEvent)           { o.write(e) }
 func (o *jsonOutput) flush() error                  { return o.w.Flush() }
+func (o *jsonOutput) end() error                    { return o.w.Flush() }
 
 // textOutput writes lines for people. On a terminal, books are redrawn in
 // place.
@@ -124,7 +127,7 @@ type textOutput struct {
 	w        *bufio.Writer
 	terminal bool
 	books    map[string]string // the last drawing of each book, on a terminal
-	table    *tabwriter.Writer // instruments and limits, aligned
+	table    *tabwriter.Writer // instruments and limits, aligned once complete
 }
 
 const timeFormat = "15:04:05.000000"
@@ -242,7 +245,11 @@ func (o *textOutput) depth(e *depthEvent) {
 		ids = fmt.Sprintf(" [%d-%d]", e.FirstUpdateID, e.LastUpdateID)
 	}
 	for _, c := range e.Changes {
-		fmt.Fprintf(o.w, "%s %s %s %s %s %s%s\n", e.Time.Format(timeFormat), e.Symbol, c.Side, c.Action, c.Price, c.Qty, ids)
+		qty := ""
+		if c.Qty != "" {
+			qty = " " + c.Qty
+		}
+		fmt.Fprintf(o.w, "%s %s %s %s %s%s%s\n", e.Time.Format(timeFormat), e.Symbol, c.Side, c.Action, c.Price, qty, ids)
 	}
 }
 
@@ -270,7 +277,9 @@ func dash(s string) string {
 	return s
 }
 
-func (o *textOutput) flush() error {
+func (o *textOutput) flush() error { return o.w.Flush() }
+
+func (o *textOutput) end() error {
 	if o.table != nil {
 		o.table.Flush()
 	}
