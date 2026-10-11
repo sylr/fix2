@@ -36,10 +36,10 @@ jobs:
       GOEXPERIMENT: ${{ matrix.simd && 'simd' || '' }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache-dependency-path: |
@@ -56,7 +56,7 @@ jobs:
         run: make test test-contribs RACE=1 CODECOV=1
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: coverage.txt,contribs/binancemd/coverage.txt,contribs/coinbasemd/coverage.txt
           # Each platform covers code the others do not, SIMD checksums,
@@ -79,10 +79,10 @@ jobs:
       FUZZTIME: ${{ inputs.fuzztime || (github.event_name == 'schedule' && '3m') || '20s' }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache-dependency-path: |
@@ -95,7 +95,7 @@ jobs:
 
       # The inputs the fuzzers found interesting, kept from run to run.
       - name: Restore the fuzz corpus
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.gocache.outputs.dir }}/fuzz
           key: fuzz-${{ matrix.os }}-${{ matrix.simd }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -108,7 +108,7 @@ jobs:
       # as a regression seed once fixed.
       - name: Upload failing inputs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-failures-${{ matrix.os }}${{ matrix.simd && '-simd' || '' }}
           path: "**/testdata/fuzz/"
