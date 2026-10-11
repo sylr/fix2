@@ -4,9 +4,12 @@
 // A Go timer is serviced by the runtime's netpoller, which on Linux blocks
 // in epoll_wait with a millisecond timeout, and the kernel may defer that
 // wakeup by the thread's timer slack (50µs by default) as well: a timer
-// fires up to a millisecond or so late. A deadline that matters to the
+// fires up to a millisecond or so late. On macOS, timer coalescing ends a Go
+// timer's wait about 250µs late. A deadline that matters to the
 // microsecond, a trading-phase boundary, approaches on Go timers and waits
-// out its last few milliseconds here.
+// out its last few milliseconds here: in clock_nanosleep with 1ns of timer
+// slack on Linux, in mach_wait_until on a real-time thread on macOS, on a
+// Go timer elsewhere.
 package hrtimer
 
 import (
