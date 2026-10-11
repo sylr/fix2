@@ -92,7 +92,12 @@ FIX certificates, which carry no Certificate Transparency timestamps.
 ## Testing
 
 `make test` runs the module's tests and `make test-contribs` the contribs';
-`RACE=1` adds the race detector, `CODECOV=1` writes `coverage.txt`. `make
+`RACE=1` adds the race detector, `CODECOV=1` writes `coverage.txt`. The
+end-to-end suite, `tests/e2e`, logs an initiator on to an acceptor in FIX
+4.4 and in FIX 5.0 SP2, over TCP and in memory, with limited dictionaries
+both sessions validate against: the initiator sends NewOrderSingle
+messages, the acceptor acknowledges and fills each with ExecutionReport
+messages (`go test ./tests/e2e/`). `make
 fuzz` runs every fuzz target, the contribs' too, for `FUZZTIME` each (30s by
 default); a failing input lands in its package's `testdata/fuzz`. CI runs
 the tests on Linux, amd64 and arm64, and on macOS, arm64, with and without
