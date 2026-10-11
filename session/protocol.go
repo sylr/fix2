@@ -276,23 +276,22 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, now ti
 
 // checkHeaderLocked checks the CompIDs and SendingTime of an established
 // session's message, received with sequence number seq. On a problem it
-// rejects the message and returns false: a wrong CompID or an inaccurate
-// SendingTime then logs out, as FIX requires; a missing or malformed field
-// counts the message as received if it is the one expected.
+// rejects the message, counts it as received if it is the one expected, and
+// returns false: a wrong CompID or an inaccurate SendingTime then logs out,
+// as FIX requires (FIXT 1.1 test cases 2k and 2o).
 func (s *Session) checkHeaderLocked(c *conn, m *fix2.Message, seq uint64, now time.Time) bool {
 	reason, tag, text := s.compIDOrTimeProblem(m, now)
 	if text == "" {
 		return true
 	}
 	s.rejectLocked(m, reason, tag, text)
+	if seq == s.st.NextTarget {
+		s.markLocked(seq)
+		s.advanceLocked(c, seq+1)
+	}
 	switch reason {
 	case dictionary.ReasonCompIDProblem, dictionary.ReasonSendingTimeAccuracyProblem:
 		s.logoutLocked(c, "")
-	default:
-		if seq == s.st.NextTarget {
-			s.markLocked(seq)
-			s.advanceLocked(c, seq+1)
-		}
 	}
 	return false
 }

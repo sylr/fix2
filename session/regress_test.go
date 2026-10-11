@@ -305,6 +305,40 @@ func TestRejectWithInaccurateSendingTime(t *testing.T) {
 	p.expect("5")
 }
 
+// A message expected next whose CompID or SendingTime is wrong is rejected,
+// counted as received, then the session logs out, as FIXT 1.1's test cases
+// 2k and 2o require: logging on again, it does not ask for it again.
+func TestHeaderProblemCountsTheMessage(t *testing.T) {
+	now := func(d time.Duration) string {
+		return string(fix2.AppendUTCTimestamp(nil, time.Now().Add(d), fix2.Milliseconds))
+	}
+	for _, tc := range []struct {
+		name        string
+		sender      string
+		sendingTime string
+		reason      string
+	}{
+		{"wrong CompID", "OTHER", now(0), "9"},
+		{"inaccurate SendingTime", "ACC", now(-time.Hour), "10"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, p := loggedOn(t, nil)
+			b := fix2.NewBuilder(session.FIX44, "D").
+				SetString(49, tc.sender).SetString(56, "INI").SetInt(34, p.seq).
+				SetString(52, tc.sendingTime).SetString(11, "O1")
+			p.seq++
+			if _, err := p.conn.Write(b.Build()); err != nil {
+				t.Fatal(err)
+			}
+			p.expect("3", "45", "2", "373", tc.reason)
+			p.expect("5")
+			if got := s.NextTargetSeqNum(); got != 3 {
+				t.Errorf("NextTargetSeqNum = %d, want 3", got)
+			}
+		})
+	}
+}
+
 // Two FIXT sessions whose FIX 5.0 SP2 dictionary has no
 // BusinessMessageReject, though FIXT 1.1's MsgType lists it: one receiving a
 // BusinessMessageReject does not reject it as an unsupported message type,
