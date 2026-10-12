@@ -135,6 +135,43 @@ func checkNames(dict *dictionary.Dict) error {
 	return nil
 }
 
+// withLengthFields returns dict with a definition of every LENGTH field it
+// pairs with a DATA field without defining it, such as RawDataLength(95)
+// for RawData(96) (see dictionary.Dict.Profile), named after the DATA field
+// with a Length suffix: the parser requires the LENGTH field right before
+// its DATA field, so generated builders write it and readers expect it. dict
+// itself is left as it is: it is the dictionary generated packages declare.
+// A DATA field paired with no LENGTH field is refused, as its setter would
+// write values the parser cannot read back.
+func withLengthFields(dict *dictionary.Dict) (*dictionary.Dict, error) {
+	var lengths []*dictionary.FieldDef
+	for _, tag := range slices.Sorted(maps.Keys(dict.Fields)) {
+		fd := dict.Fields[tag]
+		if fd.Type != "DATA" && fd.Type != "XMLDATA" {
+			continue
+		}
+		l := dict.Profile().DataLengthTag(tag)
+		switch {
+		case l == 0:
+			return nil, fmt.Errorf("DATA field %s has no LENGTH field giving its size: define its LENGTH field, named %sLen or %sLength", fd.Name, fd.Name, fd.Name)
+		case dict.Fields[l] != nil:
+			continue
+		case dict.FieldByName(fd.Name+"Length") != nil:
+			return nil, fmt.Errorf("DATA field %s: %sLength names another field than its LENGTH field, tag %d: define its LENGTH field", fd.Name, fd.Name, l)
+		}
+		lengths = append(lengths, &dictionary.FieldDef{Tag: l, Name: fd.Name + "Length", Type: "LENGTH"})
+	}
+	if len(lengths) == 0 {
+		return dict, nil
+	}
+	full := *dict
+	full.Fields = maps.Clone(dict.Fields)
+	for _, fd := range lengths {
+		full.Fields[fd.Tag] = fd
+	}
+	return &full, nil
+}
+
 // checkGenerated parses the generated files and reports any top-level
 // identifier, or method of the same type, declared twice: dictionary names
 // can combine into the same Go identifier in many ways (message FooBuilder
@@ -218,6 +255,11 @@ func generateWith(dict *dictionary.Dict, pkg, outDir string, opts options) error
 		return err
 	}
 	written := map[string]bool{"doc.go": true, "fields.go": true, "dictionary.go": true}
+	declared := dict
+	dict, err := withLengthFields(dict)
+	if err != nil {
+		return err
+	}
 	if err := checkNames(dict); err != nil {
 		return err
 	}
@@ -236,7 +278,7 @@ func generateWith(dict *dictionary.Dict, pkg, outDir string, opts options) error
 	if err := writeFields(dict, pkg, outDir); err != nil {
 		return fmt.Errorf("fields.go: %w", err)
 	}
-	if err := writeDictionary(dict, pkg, outDir); err != nil {
+	if err := writeDictionary(declared, pkg, outDir); err != nil {
 		return fmt.Errorf("dictionary.go: %w", err)
 	}
 

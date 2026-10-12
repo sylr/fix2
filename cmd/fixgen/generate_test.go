@@ -1821,6 +1821,124 @@ func TestCustomPair(t *testing.T) {
 `)
 }
 
+// TestGenerateStandardDataPair covers RawData(96), which the parser reads by
+// the length RawDataLength(95) gives, whether the dictionary defines 95 or
+// not: builders write both, of messages and group entries, and readers read
+// RawData back, from built messages and received ones.
+func TestGenerateStandardDataPair(t *testing.T) {
+	const tmpl = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app">%s<field name="RawData" required="N"/>
+    <group name="NoX" required="N"><field name="Text" required="Y"/>%s<field name="RawData" required="N"/></group>
+  </message></messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="58" name="Text" type="STRING"/>%s
+    <field number="96" name="RawData" type="DATA"/>
+    <field number="7001" name="NoX" type="NUMINGROUP"/>
+  </fields>
+</fix>`
+	const length = `<field name="RawDataLength" required="N"/>`
+	const lengthDef = `<field number="95" name="RawDataLength" type="LENGTH"/>`
+	const test = `package PKG
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func parse(t *testing.T, raw []byte) *M {
+	t.Helper()
+	var m fix2.Message
+	if err := fix2.ParseInto(&m, raw, Dictionary().Profile()); err != nil {
+		t.Fatalf("ParseInto(%q): %v", raw, err)
+	}
+	if err := Dictionary().Validate(&m); err != nil {
+		t.Fatalf("Validate(%q): %v", raw, err)
+	}
+	return WrapM(&m)
+}
+
+func check(t *testing.T, raw []byte, top string, entries ...string) {
+	t.Helper()
+	m := parse(t, raw)
+	if v, ok := m.RawData(); string(v) != top || ok != (top != "") {
+		t.Errorf("RawData = %q, %v; want %q (%q)", v, ok, top, raw)
+	}
+	es := m.NoXEntries()
+	if len(es) != len(entries) {
+		t.Fatalf("%d entries, want %d (%q)", len(es), len(entries), raw)
+	}
+	for i, want := range entries {
+		if v, _ := es[i].RawData(); string(v) != want {
+			t.Errorf("entry %d RawData = %q, want %q (%q)", i, v, want, raw)
+		}
+	}
+}
+
+func TestBuilt(t *testing.T) {
+	if TagRawDataLength != 95 {
+		t.Errorf("TagRawDataLength = %d", TagRawDataLength)
+	}
+	for _, v := range []string{"ab", "a\x01b", "\x0110=000\x01"} {
+		check(t, BuildM("FIX.4.4").SetRawData([]byte(v)).Build(), v)
+		check(t, BuildM("FIX.4.4").AddNoXEntry(NewNoXEntry().SetText("t").SetRawData([]byte(v))).Build(), "", v)
+		check(t, BuildM("FIX.4.4").
+			SetRawData([]byte(v)).
+			AddNoXEntry(NewNoXEntry().SetText("t").SetRawData([]byte(v))).
+			AddNoXEntry(NewNoXEntry().SetText("u")).
+			AddNoXEntry(NewNoXEntry().SetText("w").SetRawData([]byte(v+v))).
+			Build(), v, v, "", v+v)
+	}
+}
+
+func TestReceived(t *testing.T) {
+	raw := fix2.NewBuilder("FIX.4.4", "M").
+		SetData(95, 96, []byte("a\x01b")).
+		Append(7001, []byte("2")).
+		Append(58, []byte("t")).Append(95, []byte("3")).Append(96, []byte("c\x01d")).
+		Append(58, []byte("u")).Append(95, []byte("2")).Append(96, []byte("ef")).
+		Build()
+	check(t, raw, "a\x01b", "c\x01d", "ef")
+}
+`
+	for _, tc := range []struct{ name, pkg, length, lengthDef string }{
+		{"RawDataLength undefined", "undeclared", "", ""},
+		{"RawDataLength defined", "declared", length, lengthDef},
+		{"RawDataLength defined, listed nowhere", "unlisted", "", lengthDef},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			xml := fmt.Sprintf(tmpl, tc.length, tc.length, tc.lengthDef)
+			runGenerated(t, xml, tc.pkg, strings.ReplaceAll(test, "PKG", tc.pkg))
+		})
+	}
+}
+
+// TestGenerateRejectsUnpairedData covers a DATA field no LENGTH field
+// announces: its setter could not write a value the parser reads back, so
+// the generator refuses the dictionary.
+func TestGenerateRejectsUnpairedData(t *testing.T) {
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages><message name="Blob" msgtype="U1" msgcat="app"><field name="Text" required="N"/><field name="CustomBlob" required="N"/></message></messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="58" name="Text" type="STRING"/>
+    <field number="50002" name="CustomBlob" type="DATA"/>
+  </fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = generate(d, "blob", t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "CustomBlob") || !rejected(err) {
+		t.Errorf("generate = %v, want CustomBlob refused for its missing LENGTH field", err)
+	}
+}
+
 const rawGettersXML = `<fix type="FIX" major="4" minor="4">
   <header/><trailer/>
   <messages>
@@ -2002,6 +2120,7 @@ func rejected(err error) bool {
 	for _, why := range []string{
 		"must be an ASCII letter followed by letters and digits", // checkNames
 		"which must follow its LENGTH field",                     // checkNames
+		"define its LENGTH field",                                // withLengthFields
 		"written twice",                                          // generateWith
 		"rename the dictionary entries it comes from",            // checkGenerated
 	} {
