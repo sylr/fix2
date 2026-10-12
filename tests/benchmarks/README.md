@@ -75,14 +75,18 @@ most *window* of them awaiting their answer; the acceptor answers each:
   entries. The acceptor reads the order's fields and its Parties, and
   answers with an ExecutionReport (35=8) acknowledging it (ExecType and
   OrdStatus New), echoing the ClOrdID, Symbol, Side, OrderQty, Price and
-  the Parties. The initiator reads the ClOrdID and the Parties, which must
-  be those it sent.
+  the Parties. The initiator reads the ClOrdID, ExecType, OrdStatus,
+  Side, Symbol, OrderQty, Price and the Parties: a New acknowledgement of
+  the order it sent.
 - **marketdata**: MarketDataRequest (35=V) messages for a snapshot of 10
   levels of the bids and offers of a symbol (two groups: NoMDEntryTypes,
   NoRelatedSym). The acceptor reads them, and answers with a
   MarketDataSnapshotFullRefresh (35=W) of 20 entries (NoMDEntries: type,
-  price and size of each level). The initiator reads the MDReqID and every
-  entry, which must be the book's.
+  price and size of each level). The initiator reads the MDReqID, the
+  Symbol and every entry, which must be the book's.
+
+Every field an agent reads must be there, and an answer must be of the
+initiator's scenario: an ExecutionReport answers no MarketDataRequest.
 
 A window of 1 measures latency: one request in flight at a time. Larger
 windows measure throughput: the engines batch, queue and contend. Windows
@@ -273,21 +277,21 @@ The messages (`internal/scenario`), the fields an agent reads marked †:
 |---|---|
 | 11 ClOrdID = the order's number † | 37 OrderID = the acceptor's count of orders, from 1 |
 | 21 HandlInst = 1 | 17 ExecID = OrderID |
-| 38 OrderQty = 1000000 † | 150 ExecType = 0 |
-| 40 OrdType = 2 | 39 OrdStatus = 0 |
-| 44 Price = 1.08255 † | 54 Side, echoed |
+| 38 OrderQty = 1000000 † | 150 ExecType = 0 † |
+| 40 OrdType = 2 | 39 OrdStatus = 0 † |
+| 44 Price = 1.08255 † | 54 Side, echoed † |
 | 54 Side = 1 † | 151 LeavesQty = OrderQty |
 | 55 Symbol = EURUSD † | 14 CumQty = 0 |
 | 59 TimeInForce = 0 | 6 AvgPx = 0 |
 | 60 TransactTime = now, ms | 11 ClOrdID, echoed † |
-| 453 NoPartyIDs = 3, each: 448 PartyID, 447 PartyIDSource, 452 PartyRole † | 38 OrderQty, 44 Price, 55 Symbol, echoed |
+| 453 NoPartyIDs = 3, each: 448 PartyID, 447 PartyIDSource, 452 PartyRole † | 38 OrderQty, 44 Price, 55 Symbol, echoed † |
 | BROKER-1 D 1, CLIENT-1 D 3, TRADER-1 D 11 | 60 TransactTime = now, ms |
 | | 453 NoPartyIDs, echoed † |
 
 | MarketDataRequest | MarketDataSnapshotFullRefresh |
 |---|---|
 | 262 MDReqID = the request's number † | 262 MDReqID, echoed † |
-| 263 SubscriptionRequestType = 0 † | 55 Symbol, echoed |
+| 263 SubscriptionRequestType = 0 † | 55 Symbol, echoed † |
 | 264 MarketDepth = 10 † | 268 NoMDEntries = 20, each: 269 MDEntryType, 270 MDEntryPx, 271 MDEntrySize † |
 | 267 NoMDEntryTypes = 2: 269 MDEntryType 0, 1 † | bids 1.08249 to 1.08241 and 1.08239, |
 | 146 NoRelatedSym = 1: 55 Symbol EURUSD † | offers 1.08251 to 1.08259 and 1.08261, |

@@ -624,7 +624,25 @@ public:
   void onMessage(const FIX44::ExecutionReport &m, const FIX::SessionID &) override {
     answers(ORDERS);
     FIX::ClOrdID clOrdID;
+    FIX::ExecType execType;
+    FIX::OrdStatus ordStatus;
+    FIX::Side side;
+    FIX::Symbol symbol;
+    FIX::OrderQty qty;
+    FIX::Price px;
     m.get(clOrdID);
+    m.get(execType);
+    m.get(ordStatus);
+    m.get(side);
+    m.get(symbol);
+    m.get(qty);
+    m.get(px);
+    if (execType.getValue() != EXEC_TYPE_NEW || ordStatus.getValue() != ORD_STATUS_NEW || side.getValue() != SIDE ||
+        symbol.getValue() != SYMBOL || qty.getValue() != ORDER_QTY || px.getValue() != PRICE) {
+      anomaly("ExecutionReport: ExecType " + execType.getString() + ", OrdStatus " + ordStatus.getString() + ", Side " +
+              side.getString() + ", Symbol " + symbol.getValue() + ", OrderQty " + qty.getString() + ", Price " +
+              px.getString());
+    }
     int n = int(m.groupCount(FIX::FIELD::NoPartyIDs));
     if (n != N_PARTIES) {
       anomaly(std::to_string(n) + " Parties entries, want " + std::to_string(N_PARTIES));
@@ -652,7 +670,12 @@ public:
   void onMessage(const FIX44::MarketDataSnapshotFullRefresh &m, const FIX::SessionID &) override {
     answers(MARKET_DATA);
     FIX::MDReqID reqID;
+    FIX::Symbol symbol;
     m.get(reqID);
+    m.get(symbol);
+    if (symbol.getValue() != SYMBOL) {
+      anomaly("MarketDataSnapshotFullRefresh: Symbol " + symbol.getValue());
+    }
     int n = int(m.groupCount(FIX::FIELD::NoMDEntries));
     if (n != 2 * MARKET_DEPTH) {
       anomaly(std::to_string(n) + " NoMDEntries entries, want " + std::to_string(2 * MARKET_DEPTH));

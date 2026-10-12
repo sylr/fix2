@@ -652,6 +652,17 @@ public final class Agent {
             public void onMessage(ExecutionReport m, SessionID id) throws FieldNotFound, UnsupportedMessageType {
                 answers(ORDERS);
                 String clOrdID = m.getClOrdID().getValue();
+                char execType = m.getExecType().getValue();
+                char ordStatus = m.getOrdStatus().getValue();
+                char side = m.getSide().getValue();
+                String symbol = m.getSymbol().getValue();
+                double qty = m.getOrderQty().getValue();
+                double px = m.getPrice().getValue();
+                if (execType != EXEC_TYPE_NEW || ordStatus != ORD_STATUS_NEW || side != SIDE || !symbol.equals(SYMBOL)
+                        || qty != ORDER_QTY || px != PRICE) {
+                    anomaly("ExecutionReport: ExecType " + execType + ", OrdStatus " + ordStatus + ", Side " + side
+                            + ", Symbol " + symbol + ", OrderQty " + qty + ", Price " + px);
+                }
                 int n = m.getGroupCount(NoPartyIDs.FIELD);
                 if (n != PARTIES.length) {
                     anomaly(n + " Parties entries, want " + PARTIES.length);
@@ -676,6 +687,10 @@ public final class Agent {
                     throws FieldNotFound, UnsupportedMessageType {
                 answers(MARKET_DATA);
                 String reqID = m.getMDReqID().getValue();
+                String symbol = m.getSymbol().getValue();
+                if (!symbol.equals(SYMBOL)) {
+                    anomaly("MarketDataSnapshotFullRefresh: Symbol " + symbol);
+                }
                 int n = m.getGroupCount(NoMDEntries.FIELD);
                 if (n != 2 * MARKET_DEPTH) {
                     anomaly(n + " NoMDEntries entries, want " + 2 * MARKET_DEPTH);

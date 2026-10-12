@@ -261,6 +261,12 @@ type client struct {
 
 func (c *client) onExecutionReport(m executionreport.ExecutionReport, _ quickfix.SessionID) quickfix.MessageRejectError {
 	clOrdID := checked(m.GetClOrdID())
+	c.check.Execution(string(checked(m.GetExecType())), string(checked(m.GetOrdStatus())),
+		string(checked(m.GetSide())), checked(m.GetSymbol()))
+	// Compared as decimals, the values QuickFIX/Go reads.
+	if qty, px := checked(m.GetOrderQty()), checked(m.GetPrice()); !qty.Equal(orderQty.v) || !px.Equal(price.v) {
+		scenario.Anomaly("ExecutionReport: OrderQty %v, Price %v; want %v, %v", qty, px, orderQty.v, price.v)
+	}
 	parties := checked(m.GetNoPartyIDs())
 	c.check.Parties(parties.Len())
 	for i := range parties.Len() {
@@ -273,6 +279,7 @@ func (c *client) onExecutionReport(m executionreport.ExecutionReport, _ quickfix
 
 func (c *client) onMarketDataSnapshotFullRefresh(m marketdatasnapshotfullrefresh.MarketDataSnapshotFullRefresh, _ quickfix.SessionID) quickfix.MessageRejectError {
 	reqID := checked(m.GetMDReqID())
+	c.check.Snapshot(checked(m.GetSymbol()))
 	entries := checked(m.GetNoMDEntries())
 	c.check.Entries(entries.Len())
 	for i := range min(entries.Len(), 2*scenario.MarketDepth) {

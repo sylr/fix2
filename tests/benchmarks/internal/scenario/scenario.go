@@ -79,6 +79,30 @@ func (c Checker) Answers(s string) bool {
 	return true
 }
 
+// Execution checks an ExecutionReport acknowledges an order of the
+// scenario: ExecType and OrdStatus New, and the order's Side and Symbol.
+func (Checker) Execution(execType, ordStatus, side, symbol string) {
+	if execType != ExecTypeNew || ordStatus != OrdStatusNew || side != Side || symbol != Symbol {
+		Anomaly("ExecutionReport: ExecType %s, OrdStatus %s, Side %s, Symbol %s; want %s, %s, %s, %s",
+			execType, ordStatus, side, symbol, ExecTypeNew, OrdStatusNew, Side, Symbol)
+	}
+}
+
+// Order checks an ExecutionReport echoes the order's OrderQty and Price.
+func (Checker) Order(qty, px float64) {
+	if qty != OrderQty || px != Price {
+		Anomaly("ExecutionReport: OrderQty %v, Price %v; want %v, %v", qty, px, float64(OrderQty), Price)
+	}
+}
+
+// Snapshot checks a MarketDataSnapshotFullRefresh is of the scenario's
+// Symbol.
+func (Checker) Snapshot(symbol string) {
+	if symbol != Symbol {
+		Anomaly("MarketDataSnapshotFullRefresh: Symbol %s, want %s", symbol, Symbol)
+	}
+}
+
 // Party checks the i-th Parties entry of an ExecutionReport.
 func (Checker) Party(i int, id, source, role string) {
 	if i >= len(Parties) || Parties[i] != (Party{ID: id, Source: source, Role: role}) {

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -100,12 +102,30 @@ func checkRejects(s *session.Session) {
 	}
 }
 
-// checked reports err, a getter's, as an anomaly.
-func checked[T any](v T, _ bool, err error) T {
-	if err != nil {
-		scenario.Anomaly("%v", err)
+// present returns the value of a field read, reporting it missing as an
+// anomaly, as the QuickFIX engines' getters fail on a missing field.
+func present[T any](v T, ok bool) T {
+	if !ok {
+		missing("missing")
 	}
 	return v
+}
+
+// required is present for the getters which parse the value too.
+func required[T any](v T, ok bool, err error) T {
+	switch {
+	case err != nil:
+		missing(err.Error())
+	case !ok:
+		missing("missing")
+	}
+	return v
+}
+
+// missing reports a field read by present or required's caller.
+func missing(what string) {
+	_, file, line, _ := runtime.Caller(2)
+	scenario.Anomaly("%s:%d: field %s", filepath.Base(file), line, what)
 }
 
 // exchange is the acceptor's session handler: it dispatches the
@@ -139,11 +159,11 @@ type exchangeApp struct {
 }
 
 func (x *exchangeApp) OnNewOrderSingle(m *fix44.NewOrderSingle) error {
-	clOrdID, _ := m.ClOrdID()
-	symbol, _ := m.Symbol()
-	side, _ := m.Side()
-	qty := checked(m.OrderQty())
-	px := checked(m.Price())
+	clOrdID := present(m.ClOrdID())
+	symbol := present(m.Symbol())
+	side := present(m.Side())
+	qty := required(m.OrderQty())
+	px := required(m.Price())
 	x.n++
 	id := strconv.Itoa(x.n)
 	er := x.er
@@ -165,9 +185,9 @@ func (x *exchangeApp) OnNewOrderSingle(m *fix44.NewOrderSingle) error {
 		if i == len(x.parties) {
 			x.parties = append(x.parties, fix44.NewNoPartyIDsEntry())
 		}
-		pid, _ := p.PartyID()
-		src, _ := p.PartyIDSource()
-		role, _ := p.PartyRole()
+		pid := present(p.PartyID())
+		src := present(p.PartyIDSource())
+		role := present(p.PartyRole())
 		er.AddNoPartyIDsEntry(x.parties[i].SetPartyID(pid).SetPartyIDSource(src).SetPartyRole(role))
 	}
 	// A Send from a callback never waits: the window bounds what is queued.
@@ -176,21 +196,21 @@ func (x *exchangeApp) OnNewOrderSingle(m *fix44.NewOrderSingle) error {
 }
 
 func (x *exchangeApp) OnMarketDataRequest(m *fix44.MarketDataRequest) error {
-	reqID, _ := m.MDReqID()
-	sub, _ := m.SubscriptionRequestType()
-	depth := checked(m.MarketDepth())
+	reqID := present(m.MDReqID())
+	sub := present(m.SubscriptionRequestType())
+	depth := required(m.MarketDepth())
 	types := m.NoMDEntryTypesEntries()
 	syms := m.NoRelatedSymEntries()
 	if sub != scenario.SubscriptionSnapshot || depth != scenario.MarketDepth || len(types) != len(scenario.EntryTypes) || len(syms) != 1 {
 		scenario.Anomaly("MarketDataRequest %s: %s of %d levels of %d types of %d symbols", reqID, sub, depth, len(types), len(syms))
 		return nil
 	}
-	symbol, _ := syms[0].Symbol()
+	symbol := present(syms[0].Symbol())
 	w := x.w
 	w.Reset()
 	w.SetMDReqID(reqID).SetSymbol(symbol)
 	for k, t := range types {
-		typ, _ := t.MDEntryType()
+		typ := present(t.MDEntryType())
 		if string(typ) != scenario.EntryTypes[k] {
 			scenario.Anomaly("MarketDataRequest %s: MDEntryType %s, want %s", reqID, typ, scenario.EntryTypes[k])
 		}
@@ -268,13 +288,16 @@ func (c *clientApp) OnExecutionReport(m *fix44.ExecutionReport) error {
 	if !c.check.Answers(scenario.Orders) {
 		return fix2.ErrUnsupportedMessageType
 	}
-	clOrdID, _ := m.ClOrdID()
+	clOrdID := present(m.ClOrdID())
+	c.check.Execution(string(present(m.ExecType())), string(present(m.OrdStatus())),
+		string(present(m.Side())), present(m.Symbol()))
+	c.check.Order(required(m.OrderQty()), required(m.Price()))
 	parties := m.NoPartyIDsEntries()
 	c.check.Parties(len(parties))
 	for i, p := range parties {
-		pid, _ := p.PartyID()
-		src, _ := p.PartyIDSource()
-		role, _ := p.PartyRole()
+		pid := present(p.PartyID())
+		src := present(p.PartyIDSource())
+		role := present(p.PartyRole())
 		c.check.Party(i, pid, string(src), string(role))
 	}
 	c.tr.Ack(clOrdID)
@@ -285,13 +308,14 @@ func (c *clientApp) OnMarketDataSnapshotFullRefresh(m *fix44.MarketDataSnapshotF
 	if !c.check.Answers(scenario.MarketData) {
 		return fix2.ErrUnsupportedMessageType
 	}
-	reqID, _ := m.MDReqID()
+	reqID := present(m.MDReqID())
+	c.check.Snapshot(present(m.Symbol()))
 	entries := m.NoMDEntriesEntries()
 	c.check.Entries(len(entries))
 	for i, e := range entries {
-		typ, _ := e.MDEntryType()
-		px := checked(e.MDEntryPx())
-		size := checked(e.MDEntrySize())
+		typ := present(e.MDEntryType())
+		px := required(e.MDEntryPx())
+		size := required(e.MDEntrySize())
 		c.check.Entry(i, string(typ), px, size)
 	}
 	c.tr.Ack(reqID)
