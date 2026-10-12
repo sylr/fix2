@@ -643,12 +643,14 @@ public final class Agent {
     /** Client reads the answers it receives and passes their identifiers to the tracker. */
     static final class Client extends Watcher {
         final Tracker tr;
+        final String scenario;
         private final ExecutionReport.NoPartyIDs party = new ExecutionReport.NoPartyIDs();
         private final MarketDataSnapshotFullRefresh.NoMDEntries entry = new MarketDataSnapshotFullRefresh.NoMDEntries();
 
         private final MessageCracker cracker = new MessageCracker() {
             @Override
-            public void onMessage(ExecutionReport m, SessionID id) throws FieldNotFound {
+            public void onMessage(ExecutionReport m, SessionID id) throws FieldNotFound, UnsupportedMessageType {
+                answers(ORDERS);
                 String clOrdID = m.getClOrdID().getValue();
                 int n = m.getGroupCount(NoPartyIDs.FIELD);
                 if (n != PARTIES.length) {
@@ -670,7 +672,9 @@ public final class Agent {
             }
 
             @Override
-            public void onMessage(MarketDataSnapshotFullRefresh m, SessionID id) throws FieldNotFound {
+            public void onMessage(MarketDataSnapshotFullRefresh m, SessionID id)
+                    throws FieldNotFound, UnsupportedMessageType {
+                answers(MARKET_DATA);
                 String reqID = m.getMDReqID().getValue();
                 int n = m.getGroupCount(NoMDEntries.FIELD);
                 if (n != 2 * MARKET_DEPTH) {
@@ -692,8 +696,20 @@ public final class Agent {
             }
         };
 
-        Client(Tracker tr) {
+        /**
+         * answers reports an answer of scenario s other than the client's: a MarketDataSnapshotFullRefresh answers
+         * no order, an ExecutionReport no MarketDataRequest.
+         */
+        void answers(String s) throws UnsupportedMessageType {
+            if (!s.equals(scenario)) {
+                anomaly("an answer of the " + s + " scenario in the " + scenario + " scenario");
+                throw new UnsupportedMessageType();
+            }
+        }
+
+        Client(Tracker tr, String scenario) {
             this.tr = tr;
+            this.scenario = scenario;
         }
 
         @Override
@@ -703,7 +719,7 @@ public final class Agent {
     }
 
     static void initiator(Params p) throws Exception {
-        Client c = new Client(new Tracker(p));
+        Client c = new Client(new Tracker(p), p.scenario);
         SessionSettings st = settings(p, INITIATOR, ACCEPTOR,
                 "ConnectionType=initiator", "SocketConnectHost=" + HOST, "SocketConnectPort=" + p.port);
         SocketInitiator i = new SocketInitiator(c, new MemoryStoreFactory(), st, NO_LOG, new DefaultMessageFactory());

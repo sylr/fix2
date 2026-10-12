@@ -265,6 +265,9 @@ type clientApp struct {
 }
 
 func (c *clientApp) OnExecutionReport(m *fix44.ExecutionReport) error {
+	if !c.check.Answers(scenario.Orders) {
+		return fix2.ErrUnsupportedMessageType
+	}
 	clOrdID, _ := m.ClOrdID()
 	parties := m.NoPartyIDsEntries()
 	c.check.Parties(len(parties))
@@ -279,6 +282,9 @@ func (c *clientApp) OnExecutionReport(m *fix44.ExecutionReport) error {
 }
 
 func (c *clientApp) OnMarketDataSnapshotFullRefresh(m *fix44.MarketDataSnapshotFullRefresh) error {
+	if !c.check.Answers(scenario.MarketData) {
+		return fix2.ErrUnsupportedMessageType
+	}
 	reqID, _ := m.MDReqID()
 	entries := m.NoMDEntriesEntries()
 	c.check.Entries(len(entries))
@@ -293,7 +299,7 @@ func (c *clientApp) OnMarketDataSnapshotFullRefresh(m *fix44.MarketDataSnapshotF
 }
 
 func initiator(p scenario.Params) error {
-	c := &client{app: &clientApp{tr: scenario.NewTracker(p)}, logons: make(chan struct{}, 1)}
+	c := &client{app: &clientApp{check: scenario.Checker{Scenario: p.Scenario}, tr: scenario.NewTracker(p)}, logons: make(chan struct{}, 1)}
 	cfg, err := config(p, scenario.InitiatorCompID, scenario.AcceptorCompID, c)
 	if err != nil {
 		return err

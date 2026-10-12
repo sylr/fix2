@@ -613,7 +613,7 @@ void acceptor(const Params &p) {
 // tracker.
 class Client : public Watcher, public FIX44::MessageCracker {
 public:
-  explicit Client(Tracker &tr) : tr_(tr) {}
+  Client(Tracker &tr, const std::string &scenario) : tr_(tr), scenario_(scenario) {}
 
   void fromApp(const FIX::Message &m, const FIX::SessionID &id)
       EXCEPT(FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue,
@@ -622,6 +622,7 @@ public:
   }
 
   void onMessage(const FIX44::ExecutionReport &m, const FIX::SessionID &) override {
+    answers(ORDERS);
     FIX::ClOrdID clOrdID;
     m.get(clOrdID);
     int n = int(m.groupCount(FIX::FIELD::NoPartyIDs));
@@ -649,6 +650,7 @@ public:
   }
 
   void onMessage(const FIX44::MarketDataSnapshotFullRefresh &m, const FIX::SessionID &) override {
+    answers(MARKET_DATA);
     FIX::MDReqID reqID;
     m.get(reqID);
     int n = int(m.groupCount(FIX::FIELD::NoMDEntries));
@@ -677,14 +679,25 @@ public:
   }
 
 private:
+  // answers reports an answer of scenario s other than the client's: a
+  // MarketDataSnapshotFullRefresh answers no order, an ExecutionReport no
+  // MarketDataRequest.
+  void answers(const std::string &s) {
+    if (s != scenario_) {
+      anomaly("an answer of the " + s + " scenario in the " + scenario_ + " scenario");
+      throw FIX::UnsupportedMessageType();
+    }
+  }
+
   Tracker &tr_;
+  const std::string scenario_;
   FIX44::ExecutionReport::NoPartyIDs party_;
   FIX44::MarketDataSnapshotFullRefresh::NoMDEntries entry_;
 };
 
 void initiator(const Params &p) {
   Tracker tr(p);
-  Client c(tr);
+  Client c(tr, p.scenario);
   FIX::MemoryStoreFactory store;
   auto st = settings(p, INITIATOR, ACCEPTOR,
                      {"ConnectionType=initiator", "SocketConnectHost=" + HOST,

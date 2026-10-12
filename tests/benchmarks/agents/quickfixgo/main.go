@@ -291,9 +291,14 @@ func (c *client) onMarketDataSnapshotFullRefresh(m marketdatasnapshotfullrefresh
 }
 
 func initiator(p scenario.Params) error {
-	c := &client{app: newApp(), tr: scenario.NewTracker(p)}
-	c.AddRoute(executionreport.Route(c.onExecutionReport))
-	c.AddRoute(marketdatasnapshotfullrefresh.Route(c.onMarketDataSnapshotFullRefresh))
+	c := &client{app: newApp(), check: scenario.Checker{Scenario: p.Scenario}, tr: scenario.NewTracker(p)}
+	// Only the scenario's answers are routed: FromApp reports any other.
+	switch p.Scenario {
+	case scenario.Orders:
+		c.AddRoute(executionreport.Route(c.onExecutionReport))
+	case scenario.MarketData:
+		c.AddRoute(marketdatasnapshotfullrefresh.Route(c.onMarketDataSnapshotFullRefresh))
+	}
 	st, err := settings(p, scenario.InitiatorCompID, scenario.AcceptorCompID,
 		"SocketConnectHost="+scenario.Host, "SocketConnectPort="+strconv.Itoa(p.Port))
 	if err != nil {

@@ -62,9 +62,22 @@ const (
 	OrdStatusNew = "0"
 )
 
-// Checker checks the answers the initiator reads against what the scenario
+// Checker checks the answers the initiator reads against what its scenario
 // expects, reporting any difference as an anomaly.
-type Checker struct{}
+type Checker struct {
+	Scenario string
+}
+
+// Answers tells whether an answer of scenario s is one of the checker's,
+// reporting it otherwise: a MarketDataSnapshotFullRefresh answers no order,
+// an ExecutionReport no MarketDataRequest.
+func (c Checker) Answers(s string) bool {
+	if s != c.Scenario {
+		Anomaly("an answer of the %s scenario in the %s scenario", s, c.Scenario)
+		return false
+	}
+	return true
+}
 
 // Party checks the i-th Parties entry of an ExecutionReport.
 func (Checker) Party(i int, id, source, role string) {
