@@ -30,6 +30,13 @@ AGENTS       ?= $(GO_AGENTS) $(JAVA_AGENTS) $(CMAKE_AGENTS)
 # The agent the others are compared to, one of AGENTS.
 BASELINE    ?= fix2
 
+# The CMake agents build in a directory of their toolchain's, the compiler
+# and the QuickFIX C++ they build with, both of the shell (nix develop): a
+# CMake cache keeps the compiler it was configured with, which a new
+# toolchain must not inherit.
+CXX_PATH       := $(shell command -v $(CXX))
+CMAKE_BUILD_ID := $(shell printf '%s\n%s\n' '$(CXX_PATH)' '$(QUICKFIX_CPP)' | cksum | cut -d' ' -f1)
+
 .PHONY: generate build bench vet clean
 
 # generate generates the Go engines' code from $(DICT), into gen/: fix2's
@@ -60,9 +67,10 @@ build: generate
 		install -m 755 agents/$$a/$$a.sh bin/$$a || exit 1; \
 	done
 	for a in $(filter $(CMAKE_AGENTS),$(AGENTS)); do \
-		$(CMAKE) -S agents/$$a -B agents/$$a/build -DCMAKE_BUILD_TYPE=Release $(CMAKE_FLAGS) && \
-		$(CMAKE) --build agents/$$a/build && \
-		install -m 755 agents/$$a/build/$$a bin/$$a || exit 1; \
+		b=agents/$$a/build/$(CMAKE_BUILD_ID); \
+		$(CMAKE) -S agents/$$a -B $$b -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=$(CXX_PATH) $(CMAKE_FLAGS) && \
+		$(CMAKE) --build $$b && \
+		install -m 755 $$b/$$a bin/$$a || exit 1; \
 	done
 
 # bench runs the matrix and writes every run to $(OUTPUT), for benchstat:

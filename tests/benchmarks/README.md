@@ -307,7 +307,9 @@ pass `-impl <name>=bin/<name>`. The Makefile builds and passes every
 directory of `agents/`: one holding Go files with `go build`, one holding a
 `pom.xml` with Maven, which must build `target/<name>-agent.jar`, run by
 `agents/<name>/<name>.sh` (see `agents/quickfixj`), one holding a
-`CMakeLists.txt` with CMake, in `agents/<name>/build`, which must build the
+`CMakeLists.txt` with CMake, with the shell's compiler, in a directory of
+`agents/<name>/build` of its own for each compiler and QuickFIX C++, so
+that no CMake cache outlives its toolchain, which must build the
 executable `<name>` (see `agents/quickfixcpp`). Write to stdout only the
 protocol's lines: an engine logging there, as QuickFIX/J's connectors do by
 default, fails the run.
