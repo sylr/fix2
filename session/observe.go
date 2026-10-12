@@ -13,9 +13,18 @@ import (
 
 // SensitiveTags are the tags whose values Redact masks by default:
 // Password, NewPassword, the encrypted passwords, RawData and SecureData.
-// Sessions also never show them in the Texts of their Rejects or in their
-// logs. An application adds its own here, Username (553) where it carries an
-// API key for one: an observer's Tags only change what that observer masks.
+// An application adds its own here, Username (553) where it carries an API
+// key for one: an observer's Tags only change what that observer masks.
+//
+// Sessions keep their values out of the Texts of their Rejects and out of
+// their logs as far as they can tell them: a Text or logged value of a
+// received message is withheld when it holds the first 4 bytes of one, a
+// value shorter than that being looked for only in its own field, and an
+// unparsable message is logged without any of its values. Not covered: the
+// CompIDs of a session, its identity, on every line it logs, a dynamic
+// session's taken from its counterparty's Logon; the numbers a session
+// works out itself, its NextTarget among them, which a counterparty can
+// make equal to one it sent; and what handlers return or log.
 var SensitiveTags = []int{554, 925, 1402, 1404, 96, 91}
 
 // Redact appends raw to dst with the values of tags (SensitiveTags if

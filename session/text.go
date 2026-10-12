@@ -77,6 +77,32 @@ func withhold(m *fix2.Message, tag int, text, fallback string) string {
 	return text
 }
 
+// withholdAttrs withholds, in attrs, the values that may show the value of
+// one of m's SensitiveTags fields, as withhold does: as a handler prints
+// them, a LogValuer's resolved and a group's attributes included. A value of
+// kind Any is replaced by the string checked, what is logged being what was
+// checked whatever its type prints elsewhere.
+func withholdAttrs(m *fix2.Message, attrs []slog.Attr) {
+	for i := range attrs {
+		v := attrs[i].Value.Resolve()
+		switch v.Kind() {
+		case slog.KindGroup:
+			g := slices.Clone(v.Group())
+			withholdAttrs(m, g)
+			v = slog.GroupValue(g...)
+		default:
+			s := v.String()
+			switch {
+			case withhold(m, noTag, s, "") == "":
+				v = slog.StringValue("withheld")
+			case v.Kind() == slog.KindAny:
+				v = slog.StringValue(s)
+			}
+		}
+		attrs[i].Value = v
+	}
+}
+
 // numAttr logs v, a number of m's field tag, or worked out from one, as key:
 // withheld if it may show a credential, as a misplaced one would.
 func numAttr(m *fix2.Message, key string, tag int, v int64) slog.Attr {

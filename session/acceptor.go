@@ -381,13 +381,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	refuse := func(why string, args ...slog.Attr) {
 		if parsed {
 			why = withhold(&m, noTag, why, "Logon refused, reason withheld")
-			for i, arg := range args {
-				if k := arg.Value.Kind(); k == slog.KindString || k == slog.KindAny {
-					if v := arg.Value.String(); withhold(&m, noTag, v, "") == "" {
-						args[i].Value = slog.StringValue("withheld")
-					}
-				}
-			}
+			withholdAttrs(&m, args)
 		}
 		a.log.LogAttrs(ctx, slog.LevelWarn, "connection refused: "+why, append([]slog.Attr{slog.String("remote", remote)}, args...)...)
 		tc.Close()

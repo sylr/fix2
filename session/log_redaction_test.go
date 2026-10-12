@@ -400,3 +400,62 @@ func TestAcceptorRefusalRedaction(t *testing.T) {
 		t.Errorf("secret logged:\n%s", out)
 	}
 }
+
+// valuerError is an error which a handler logs otherwise than its text, as
+// a slog.LogValuer.
+type valuerError struct{ value slog.Value }
+
+func (valuerError) Error() string          { return "ordinary failure" }
+func (e valuerError) LogValue() slog.Value { return e.value }
+
+// refusingHandler fails ToAdmin, which refuses the Logon it answers.
+type refusingHandler struct {
+	session.BaseHandler
+	err error
+}
+
+func (h refusingHandler) ToAdmin(context.Context, *session.Session, string, *fix2.Builder) error {
+	return h.err
+}
+
+// An acceptor refusing a Logon withholds the attributes it logs as the
+// handler prints them: a LogValuer's value, a group's, as an error's text.
+func TestAcceptorRefusalAttrRedaction(t *testing.T) {
+	const secret = "S3CRET-VALUE"
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"error text", fmt.Errorf("failed with %s", secret)},
+		{"LogValuer", valuerError{slog.StringValue(secret)}},
+		{"LogValuer group", valuerError{slog.GroupValue(slog.String("cause", secret))}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &logBuffer{}
+			a := session.NewAcceptor(session.AcceptorOptions{Logger: slog.New(slog.NewJSONHandler(buf, nil))})
+			id := session.SessionID{BeginString: session.FIX44, SenderCompID: "S", TargetCompID: "C"}
+			if _, err := a.Add(session.Config{ID: id, Handler: refusingHandler{err: tc.err}}); err != nil {
+				t.Fatal(err)
+			}
+			l := mem.Listen("acceptor")
+			a.Listen(l)
+			ctx, cancel := context.WithCancel(context.Background())
+			stopped := make(chan struct{})
+			go func() { defer close(stopped); a.Run(ctx) }()
+			defer func() { cancel(); <-stopped }()
+			c, err := l.Dial(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+			go discard(c)
+			if _, err := c.Write(rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|554="+secret+"|", "")); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, func() bool { return strings.Contains(buf.String(), "connection refused") })
+			if out := buf.String(); strings.Contains(out, secret) {
+				t.Errorf("secret logged:\n%s", out)
+			}
+		})
+	}
+}
