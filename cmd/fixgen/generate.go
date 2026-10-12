@@ -137,12 +137,12 @@ func checkNames(dict *dictionary.Dict) error {
 
 // withLengthFields returns dict with a definition of every LENGTH field it
 // pairs with a DATA field without defining it, such as RawDataLength(95)
-// for RawData(96) (see dictionary.Dict.Profile), named after the DATA field
-// with a Length suffix: the parser requires the LENGTH field right before
-// its DATA field, so generated builders write it and readers expect it. dict
-// itself is left as it is: it is the dictionary generated packages declare.
-// A DATA field paired with no LENGTH field is refused, as its setter would
-// write values the parser cannot read back.
+// for RawData(96) (see dictionary.Dict.Profile), named as FIX does, or else
+// after the DATA field with a Length suffix: the parser requires the LENGTH
+// field right before its DATA field, so generated builders write it and
+// readers expect it. dict itself is left as it is: it is the dictionary
+// generated packages declare. A DATA field paired with no LENGTH field is
+// refused, as its setter would write values the parser cannot read back.
 func withLengthFields(dict *dictionary.Dict) (*dictionary.Dict, error) {
 	var lengths []*dictionary.FieldDef
 	for _, tag := range slices.Sorted(maps.Keys(dict.Fields)) {
@@ -151,15 +151,20 @@ func withLengthFields(dict *dictionary.Dict) (*dictionary.Dict, error) {
 			continue
 		}
 		l := dict.Profile().DataLengthTag(tag)
-		switch {
-		case l == 0:
+		if l == 0 {
 			return nil, fmt.Errorf("DATA field %s has no LENGTH field giving its size: define its LENGTH field, named %sLen or %sLength", fd.Name, fd.Name, fd.Name)
-		case dict.Fields[l] != nil:
-			continue
-		case dict.FieldByName(fd.Name+"Length") != nil:
-			return nil, fmt.Errorf("DATA field %s: %sLength names another field than its LENGTH field, tag %d: define its LENGTH field", fd.Name, fd.Name, l)
 		}
-		lengths = append(lengths, &dictionary.FieldDef{Tag: l, Name: fd.Name + "Length", Type: "LENGTH"})
+		if dict.Fields[l] != nil {
+			continue
+		}
+		name := standardLengthNames[l]
+		if name == "" {
+			name = fd.Name + "Length"
+		}
+		if dict.FieldByName(name) != nil {
+			return nil, fmt.Errorf("DATA field %s: %s names another field than its LENGTH field, tag %d: define its LENGTH field", fd.Name, name, l)
+		}
+		lengths = append(lengths, &dictionary.FieldDef{Tag: l, Name: name, Type: "LENGTH"})
 	}
 	if len(lengths) == 0 {
 		return dict, nil
@@ -169,7 +174,14 @@ func withLengthFields(dict *dictionary.Dict) (*dictionary.Dict, error) {
 	for _, fd := range lengths {
 		full.Fields[fd.Tag] = fd
 	}
-	return &full, nil
+	// New compiles the tables of the copy, of its messages too: copies, which
+	// it writes to.
+	full.Messages = make(map[string]*dictionary.MessageDef, len(dict.Messages))
+	for mt, md := range dict.Messages {
+		m := *md
+		full.Messages[mt] = &m
+	}
+	return dictionary.New(&full), nil
 }
 
 // checkGenerated parses the generated files and reports any top-level

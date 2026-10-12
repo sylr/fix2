@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
 	"github.com/sylr/fix2/dictionary/xmldict"
 )
@@ -1914,6 +1915,108 @@ func TestReceived(t *testing.T) {
 			runGenerated(t, xml, tc.pkg, strings.ReplaceAll(test, "PKG", tc.pkg))
 		})
 	}
+}
+
+// standardNamesXML defines EncodedText(355) and XmlData(213) without their
+// LENGTH fields, EncodedTextLen(354) and XmlDataLen(212).
+const standardNamesXML = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app">
+    <field name="EncodedText" required="N"/>
+    <group name="NoX" required="N"><field name="Text" required="Y"/><field name="XmlData" required="N"/></group>
+  </message></messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="58" name="Text" type="STRING"/>
+    <field number="213" name="XmlData" type="XMLDATA"/>
+    <field number="355" name="EncodedText" type="DATA"/>
+    <field number="7001" name="NoX" type="NUMINGROUP"/>
+  </fields>
+</fix>`
+
+// TestWithLengthFields checks the dictionary the generator works from: it
+// defines the LENGTH fields the dictionary leaves out, with their standard
+// names, looked up as the others, and parses as the dictionary does.
+func TestWithLengthFields(t *testing.T) {
+	dict, err := xmldict.Load(strings.NewReader(standardNamesXML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, err := withLengthFields(dict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for tag, name := range map[int]string{354: "EncodedTextLen", 212: "XmlDataLen"} {
+		if fd := full.FieldByName(name); fd == nil || fd.Tag != tag || full.Fields[tag] != fd {
+			t.Errorf("FieldByName(%s) = %v, want the definition of tag %d", name, fd, tag)
+		}
+		if dict.Fields[tag] != nil || dict.FieldByName(name) != nil {
+			t.Errorf("the dictionary given now defines %s", name)
+		}
+	}
+	want := slices.SortedFunc(slices.Values(dict.Profile().DataPairs()), func(a, b fix2.DataPair) int { return a.Data - b.Data })
+	got := slices.SortedFunc(slices.Values(full.Profile().DataPairs()), func(a, b fix2.DataPair) int { return a.Data - b.Data })
+	if !slices.Equal(got, want) {
+		t.Errorf("DATA fields %v, want those of the dictionary given, %v", got, want)
+	}
+}
+
+// TestStandardLengthNames checks the names of the standard LENGTH fields
+// against the FIX Latest repository.
+func TestStandardLengthNames(t *testing.T) {
+	latest, err := xmldict.LoadFile("testdata/OrchestraFIXLatest.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range fix2.DefaultProfile().DataPairs() {
+		name := standardLengthNames[p.Length]
+		if name == "" {
+			t.Errorf("LENGTH field %d of DATA field %d has no standard name", p.Length, p.Data)
+		}
+		if fd := latest.Fields[p.Length]; fd != nil && fd.Name != name {
+			t.Errorf("LENGTH field %d is named %s, FIX Latest names it %s", p.Length, name, fd.Name)
+		}
+	}
+}
+
+// TestGenerateStandardLengthNames covers DATA fields whose LENGTH fields
+// the dictionary leaves out: the generated code names those as FIX does.
+func TestGenerateStandardLengthNames(t *testing.T) {
+	runGenerated(t, standardNamesXML, "stdnames", `package stdnames
+
+import (
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+)
+
+func TestNames(t *testing.T) {
+	if TagEncodedTextLen != 354 || TagXmlDataLen != 212 {
+		t.Errorf("TagEncodedTextLen = %d, TagXmlDataLen = %d", TagEncodedTextLen, TagXmlDataLen)
+	}
+	raw := BuildM("FIX.4.4").
+		SetEncodedText([]byte("a\x01b")).
+		AddNoXEntry(NewNoXEntry().SetText("t").SetXmlData([]byte("<x>\x01</x>"))).
+		Build()
+	var msg fix2.Message
+	if err := fix2.ParseInto(&msg, raw, Dictionary().Profile()); err != nil {
+		t.Fatalf("ParseInto(%q): %v", raw, err)
+	}
+	if err := Dictionary().Validate(&msg); err != nil {
+		t.Fatalf("Validate(%q): %v", raw, err)
+	}
+	m := WrapM(&msg)
+	if v, _ := m.EncodedText(); string(v) != "a\x01b" {
+		t.Errorf("EncodedText = %q (%q)", v, raw)
+	}
+	if es := m.NoXEntries(); len(es) != 1 {
+		t.Fatalf("%d entries (%q)", len(es), raw)
+	} else if v, _ := es[0].XmlData(); string(v) != "<x>\x01</x>" {
+		t.Errorf("XmlData = %q (%q)", v, raw)
+	}
+}
+`)
 }
 
 // TestGenerateRejectsUnpairedData covers a DATA field no LENGTH field
