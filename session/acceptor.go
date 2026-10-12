@@ -405,7 +405,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		return
 	}
 	if string(m.MsgType()) != "A" {
-		refuse("first message is not a Logon", slog.String("msg_type", string(m.MsgType())))
+		refuse("first message is not a Logon", slog.String("msg_type", withhold(&m, tagMsgType, string(m.MsgType()), "withheld")))
 		return
 	}
 	// The identities as the counterparty sends them: its Sender is our
@@ -429,7 +429,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	}
 	s, err := a.route(ctx, wire, req, deadline)
 	if err != nil {
-		refuse(err.Error(), slog.String("logon_for", wire.reversed().String()))
+		refuse(err.Error(), slog.String("logon_for", withhold(&m, noTag, wire.reversed().String(), "withheld")))
 		return
 	}
 	// The session owns the connection from here: it closes it when stopped.
@@ -487,7 +487,7 @@ func (a *Acceptor) route(ctx context.Context, wire SessionID, req *LogonRequest,
 			break
 		}
 		if adding != nil {
-			a.log.LogAttrs(ctx, slog.LevelDebug, "Logon waiting for its session being added", slog.String("logon_for", req.ID.String()))
+			a.log.LogAttrs(ctx, slog.LevelDebug, "Logon waiting for its session being added", slog.String("logon_for", withhold(req.Logon, noTag, req.ID.String(), "withheld")))
 			select {
 			case <-adding:
 				continue
@@ -501,7 +501,7 @@ func (a *Acceptor) route(ctx context.Context, wire SessionID, req *LogonRequest,
 			return nil, errors.New("no session for this Logon")
 		}
 		if busy {
-			a.log.LogAttrs(ctx, slog.LevelDebug, "Logon waiting for another connection's dynamic session", slog.String("logon_for", req.ID.String()))
+			a.log.LogAttrs(ctx, slog.LevelDebug, "Logon waiting for another connection's dynamic session", slog.String("logon_for", withhold(req.Logon, noTag, req.ID.String(), "withheld")))
 			select {
 			case <-resolving:
 				continue

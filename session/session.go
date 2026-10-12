@@ -381,10 +381,18 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 
 // uncertain reports whether a store error leaves the persisted state in
 // doubt: a write that may or may not have been made, or a store that moved
-// on without the session. Only reconciling the store settles it.
+// on without the session (diverged). Only reconciling the store settles it.
 func uncertain(err error) bool {
-	return errors.Is(err, store.ErrUnknownOutcome) || errors.Is(err, store.ErrSeqMismatch) ||
-		errors.Is(err, store.ErrGenerationGone) || errors.Is(err, store.ErrBackwards) || errors.Is(err, store.ErrClosed)
+	return errors.Is(err, store.ErrUnknownOutcome) || diverged(err)
+}
+
+// diverged reports whether a store error tells the store moved on without
+// the session, or was closed, whatever else it wraps or is joined with,
+// ErrUnknownOutcome included: setting a value again cannot settle that, nor
+// is it what cancelling a call does.
+func diverged(err error) bool {
+	return errors.Is(err, store.ErrSeqMismatch) || errors.Is(err, store.ErrGenerationGone) ||
+		errors.Is(err, store.ErrBackwards) || errors.Is(err, store.ErrClosed)
 }
 
 // haltLocked stops the session for err, a store failure that left its

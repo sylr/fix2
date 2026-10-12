@@ -85,10 +85,13 @@ var (
 // ErrUnknownOutcome, ErrSeqMismatch, ErrGenerationGone, ErrBackwards and
 // ErrClosed leave the persisted state in doubt: they halt the session (see
 // session.Session.Err), which stays down until the store is reconciled.
-// Except ErrUnknownOutcome from SetNextTarget, which its next call settles,
-// and errors about a generation the session itself left meanwhile, as a
-// Sync of the messages of a generation it just reset may return. Other
-// errors drop the connection, or fail the call that asked for the write.
+// Except ErrUnknownOutcome alone from SetNextTarget, which its next call
+// settles, or from a Sync the session cancelled, and errors about a
+// generation the session itself left meanwhile, as a Sync of the messages
+// of a generation it just reset may return. An error that is or wraps
+// ErrSeqMismatch, ErrGenerationGone, ErrBackwards or ErrClosed always halts
+// it, whatever it is joined with. Other errors drop the connection, or fail
+// the call that asked for the write.
 type Store interface {
 	// Open loads the state, creating generation 1 with both sequence
 	// numbers at 1 if the store is empty. The session calls it once, before
@@ -147,9 +150,11 @@ type Syncer interface {
 	// may be called again for messages already durable. It should return
 	// once ctx is done, with ctx.Err(): the session bounds it by its
 	// WriteTimeout, and by the connection staying open, or by the context
-	// Stop is given. A Sync the session cancelled is never taken as an
-	// uncertain outcome, whatever it returns: its messages are not sent,
-	// and the next Sync covers them again.
+	// Stop is given. A Sync the session cancelled that returns ctx's error
+	// or ErrUnknownOutcome is not taken as an uncertain outcome: its
+	// messages are not sent, and the next Sync covers them again. One that
+	// returns, or wraps, ErrSeqMismatch, ErrGenerationGone, ErrBackwards or
+	// ErrClosed halts the session, cancelled or not.
 	Sync(ctx context.Context, gen, upToSeq uint64) error
 }
 

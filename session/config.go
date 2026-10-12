@@ -23,7 +23,11 @@ type Dictionaries struct {
 	// beyond what the session layer itself checks.
 	Session *dictionary.Dict
 	// Apps are, for FIXT 1.1, the application dictionaries by ApplVerID
-	// value ("9" for FIX 5.0 SP2...).
+	// value ("9" for FIX 5.0 SP2...). A message's application version is
+	// the ApplVerID (1128) of its standard header, the counterparty's
+	// DefaultApplVerID without one. With Apps, a version without a
+	// dictionary is rejected (SessionRejectReason 18); without, any is
+	// accepted, and delivered as Inbound.ApplVerID.
 	Apps map[string]*dictionary.Dict
 	// DefaultApplVerID is, for FIXT 1.1, the application version of the
 	// messages we send without ApplVerID (1128); we announce it in our Logon
@@ -47,8 +51,9 @@ const (
 // changed or counterparties differ.
 //
 // In every mode, a Logon with ResetSeqNumFlag (141=Y) received while logged
-// on is checked as a first Logon is (CompIDs, SendingTime, EncryptMethod,
-// HeartBtInt, DefaultApplVerID), and its MsgSeqNum must be 1: an invalid one
+// on is checked as an acceptor checks a first Logon (CompIDs, SendingTime,
+// EncryptMethod, HeartBtInt, DefaultApplVerID), and its MsgSeqNum must be 1:
+// an invalid one
 // is rejected and logs out, resetting nothing. One received while logging out
 // is ignored: FIX lets the session send nothing then but what a
 // ResendRequest asks for.
@@ -156,10 +161,12 @@ type Config struct {
 	// Store persists the session; a new memstore.Store if nil. Received
 	// messages are processed at least once: after a restart, those
 	// processed but not yet recorded, a batch of 64 at most, are delivered
-	// again. A failure to record them drops the connection and stops the
-	// processing of those received after them, which the next connection
-	// asks for again; one that leaves the store in doubt halts the session
-	// (see Session.Err).
+	// again. A failure to record them drops the connection and holds the
+	// delivery of those received after them, kept in memory, until
+	// recording works again, which the next connection waits for, their
+	// generation is reset, or the session stops: a crash meanwhile loses
+	// only what the counterparty can send again or report. One that leaves
+	// the store in doubt halts the session (see Session.Err).
 	Store store.Store
 	// Logger receives the session's events; nothing is logged if nil.
 	Logger *slog.Logger

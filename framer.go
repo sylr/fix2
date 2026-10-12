@@ -177,7 +177,7 @@ func (f *Framer) next() (frame []byte, garbled *GarbledError, err error) {
 	}
 	if !isTrailer(f.buf[f.start+headerEnd+bodyLen : f.start+frameLen]) {
 		f.skipToCheckSum(headerEnd + bodyLen - 1)
-		return nil, f.garbled(fmt.Errorf("%w: no CheckSum field after the %d bytes BodyLength declares", ErrBodyLenMismatch, bodyLen)), nil
+		return nil, f.garbled(fmt.Errorf("%w: no CheckSum field where BodyLength says the body ends", ErrBodyLenMismatch)), nil
 	}
 	frame = f.buf[f.start : f.start+frameLen]
 	f.start += frameLen
@@ -236,7 +236,7 @@ func (f *Framer) header() (int, int, error) {
 		return 0, 0, fmt.Errorf("%w: empty BodyLength", ErrInvalidBodyLen)
 	}
 	if bodyLen > f.maxBody {
-		return 0, 0, fmt.Errorf("%w: BodyLength %d exceeds %d", ErrMessageTooLarge, bodyLen, f.maxBody)
+		return 0, 0, fmt.Errorf("%w: BodyLength exceeds %d", ErrMessageTooLarge, f.maxBody)
 	}
 	return i + 1, bodyLen, nil
 }

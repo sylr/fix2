@@ -798,14 +798,26 @@ func TestParseDataFields(t *testing.T) {
 // credential, and the errors are logged.
 func TestParseErrorsWithoutValues(t *testing.T) {
 	const secret = "S3CRET"
+	// A CheckSum other than the right one.
+	badSum := buildMsg("FIX.4.4", "35=A\x0149=S\x01")
+	sum := "199"
+	if string(badSum[len(badSum)-4:len(badSum)-1]) == sum {
+		sum = "198"
+	}
+	badSum = append(badSum[:len(badSum)-4:len(badSum)-4], sum+"\x01"...)
 	for _, tc := range []struct {
-		name string
-		raw  []byte
-		err  error
+		name   string
+		raw    []byte
+		err    error
+		secret string // what the error must not show
 	}{
-		{"invalid length", buildMsg("FIX.4.4", "35=A\x0195="+secret+"\x0196="+secret+"\x01"), ErrMalformedField},
-		{"BeginString not FIX", buildMsg(secret, "35=A\x01"), ErrInvalidBeginTag},
-		{"no BeginString", []byte(secret + "\x019=15\x0135=A\x0149=SENDER\x0110=000\x01"), ErrInvalidBeginTag},
+		{"invalid length", buildMsg("FIX.4.4", "35=A\x0195="+secret+"\x0196="+secret+"\x01"), ErrMalformedField, "S3"},
+		{"BeginString not FIX", buildMsg(secret, "35=A\x01"), ErrInvalidBeginTag, "S3"},
+		{"no BeginString", []byte(secret + "\x019=15\x0135=A\x0149=SENDER\x0110=000\x01"), ErrInvalidBeginTag, "S3"},
+		{"declared length", buildMsg("FIX.4.4", "35=A\x01554=42424242\x0195=42424242\x0196=x\x01"), ErrMalformedField, "4242"},
+		{"BodyLength too large", []byte("8=FIX.4.4\x019=42424242\x0135=A\x0149=SENDER\x0110=000\x01"), ErrFix2, "4242"},
+		{"CheckSum mismatch", badSum, ErrChecksumMismatch, sum},
+		{"CheckSum too long", append(buildMsg("FIX.4.4", "35=A\x01")[:25:25], "4242\x01"...), ErrInvalidCheckSum, "4242"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, p := range []struct {
@@ -819,7 +831,7 @@ func TestParseErrorsWithoutValues(t *testing.T) {
 				if !errors.Is(err, tc.err) {
 					t.Errorf("%s: got %v, want %v", p.name, err, tc.err)
 				}
-				if err != nil && strings.Contains(err.Error(), secret[:2]) {
+				if err != nil && strings.Contains(err.Error(), tc.secret) {
 					t.Errorf("%s: error %q shows the value", p.name, err)
 				}
 			}

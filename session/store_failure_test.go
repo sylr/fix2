@@ -497,9 +497,9 @@ func (c countLog) Handle(_ context.Context, r slog.Record) error {
 const deliveryQueue = 16
 
 // Received messages processed but not recorded stay within a batch: a
-// failure to record them drops the connection and those queued, which the
-// session expects again, and no new connection starts until they are
-// recorded.
+// failure to record them drops the connection and holds the delivery of
+// those received after them, and no new connection starts until they are
+// recorded. Those are delivered then: none is lost.
 func TestStoreTargetFailure(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -512,7 +512,7 @@ func TestStoreTargetFailure(t *testing.T) {
 			fs := &targetStore{Store: memstore.New(), err: tc.err}
 			logged := new(atomic.Int64)
 			l := mem.Listen("acceptor")
-			s, _, p := logOn(t, l, l, func(c *session.Config) {
+			s, rec, p := logOn(t, l, l, func(c *session.Config) {
 				c.Store = fs
 				c.DeliveryQueue = deliveryQueue
 				c.Logger = slog.New(countLog{msg: "recording received messages processed failed", n: logged})
@@ -522,10 +522,16 @@ func TestStoreTargetFailure(t *testing.T) {
 			fs.fail.Store(true)
 			p.sendOrders(300)
 			p.expectEnd(5 * time.Second)
+			time.Sleep(20 * time.Millisecond)
 			read, persisted := s.NextTargetSeqNum(), fs.persisted()
-			if read-persisted > 64 {
+			if read-persisted > 64+deliveryQueue+4 {
 				t.Errorf("%d messages read beyond the %d recorded", read-persisted, persisted)
 			}
+			rec.mu.Lock()
+			if n := len(rec.apps); uint64(n) > persisted-2+64 {
+				t.Errorf("%d orders processed, %d beyond the %d recorded", n, uint64(n)-(persisted-2), persisted-2)
+			}
+			rec.mu.Unlock()
 			if err := s.Err(); err != nil {
 				t.Errorf("Err = %v, want nil: the counter is set again", err)
 			}
@@ -537,6 +543,12 @@ func TestStoreTargetFailure(t *testing.T) {
 			p3 := acceptPeer(t, l)
 			p3.expect("A")
 			waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+			// Every order read is processed: none is lost.
+			rec.mu.Lock()
+			if n, want := len(rec.apps), int(read)-2; n != want {
+				t.Errorf("%d orders processed, want the %d read", n, want)
+			}
+			rec.mu.Unlock()
 			if n := logged.Load(); n != 1 {
 				t.Errorf("failure logged %d times, want once", n)
 			}
@@ -545,17 +557,24 @@ func TestStoreTargetFailure(t *testing.T) {
 }
 
 // A failure to record received messages that tells the store moved on
-// halts the session.
+// halts the session, even joined with ErrUnknownOutcome.
 func TestStoreTargetDivergenceHalts(t *testing.T) {
-	fs := &targetStore{Store: memstore.New(), err: store.ErrGenerationGone}
-	l := mem.Listen("acceptor")
-	s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs; c.DeliveryQueue = deliveryQueue })
-	waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
-	fs.fail.Store(true)
-	p.sendOrders(300)
-	p.expectEnd(5 * time.Second)
-	expectHalted(t, s, store.ErrGenerationGone)
-	expectNoRedial(t, l)
+	for _, structural := range divergences {
+		for _, err := range withUnknownOutcome(structural) {
+			t.Run(err.Error(), func(t *testing.T) {
+				fs := &targetStore{Store: memstore.New(), err: err}
+				l := mem.Listen("acceptor")
+				s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs; c.DeliveryQueue = deliveryQueue })
+				waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+				fs.fail.Store(true)
+				p.sendOrders(300)
+				p.expectEnd(5 * time.Second)
+				waitFor(t, func() bool { return s.Err() != nil })
+				expectHalted(t, s, structural)
+				expectNoRedial(t, l)
+			})
+		}
+	}
 }
 
 // A healthy store records the processed prefix every 64 messages at most,
@@ -867,23 +886,36 @@ func TestStoreSyncTimeout(t *testing.T) {
 // A Sync the session cancels still halts it if the store says it moved on:
 // that is no outcome of the cancellation.
 func TestStoreSyncCancelledDivergenceHalts(t *testing.T) {
-	for _, err := range []error{store.ErrSeqMismatch, store.ErrClosed} {
-		t.Run(err.Error(), func(t *testing.T) {
-			st := newSyncStore()
-			st.hangErr = err
-			t.Cleanup(func() { close(st.release) })
-			d := &durableDialer{l: mem.Listen("acceptor"), st: st}
-			s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = 100 * time.Millisecond })
-			st.hang.Store(true)
-			if _, err := s.Send(context.Background(), order("O1")); err != nil {
-				t.Fatal(err)
-			}
-			p.expectSilentEnd()
-			waitFor(t, func() bool { return s.Err() != nil })
-			expectHalted(t, s, err)
-			expectNoRedial(t, d.l)
-		})
+	for _, structural := range divergences {
+		for _, err := range withUnknownOutcome(structural) {
+			t.Run(err.Error(), func(t *testing.T) {
+				st := newSyncStore()
+				st.hangErr = err
+				t.Cleanup(func() { close(st.release) })
+				d := &durableDialer{l: mem.Listen("acceptor"), st: st}
+				s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = 100 * time.Millisecond })
+				st.hang.Store(true)
+				if _, err := s.Send(context.Background(), order("O1")); err != nil {
+					t.Fatal(err)
+				}
+				p.expectSilentEnd()
+				waitFor(t, func() bool { return s.Err() != nil })
+				expectHalted(t, s, structural)
+				expectNoRedial(t, d.l)
+			})
+		}
 	}
+}
+
+// divergences are the store errors telling the store moved on, or was
+// closed.
+var divergences = []error{store.ErrSeqMismatch, store.ErrGenerationGone, store.ErrBackwards, store.ErrClosed}
+
+// withUnknownOutcome returns err, alone, joined with ErrUnknownOutcome, and
+// that wrapped.
+func withUnknownOutcome(err error) []error {
+	joined := errors.Join(store.ErrUnknownOutcome, err)
+	return []error{err, joined, fmt.Errorf("wrapped: %w", joined)}
 }
 
 // Syncs slower than half WriteTimeout, but each shorter than it, are never

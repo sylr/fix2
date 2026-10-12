@@ -12,7 +12,6 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/transport"
 )
 
@@ -418,10 +417,10 @@ func (c *conn) sync(gen, upTo uint64) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// The store moved on, or was closed: the cancellation does not do that.
-	diverged := uncertain(err) && !errors.Is(err, store.ErrUnknownOutcome)
 	switch cause := context.Cause(c.syncCtx); {
-	case cause != nil && !diverged:
+	// A store that moved on, or was closed, is no outcome of the
+	// cancellation, whatever error it is joined with.
+	case cause != nil && !diverged(err):
 		// The session cancelled the Sync itself, the connection closing
 		// or the Sync taking too long, and its outcome is unknown at
 		// worst: no halt. The batch is not written, and Sync being

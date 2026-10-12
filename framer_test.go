@@ -105,16 +105,25 @@ func TestFramer_Garbled(t *testing.T) {
 
 // A garbled report tells what is wrong, never the bytes received.
 func TestFramer_GarbledWithoutValues(t *testing.T) {
-	const secret = "S3CRET"
-	stream := append([]byte("8=FIX"+secret+"\x019=40\x01"), buildMsg("FIX.4.4", "35=0\x01")...)
-	_, _, garbled, _ := frameAll(t, bytes.NewReader(stream), FramerOptions{})
-	if len(garbled) == 0 {
-		t.Fatal("nothing reported garbled")
-	}
-	for _, g := range garbled {
-		if strings.Contains(g.Error(), secret) {
-			t.Errorf("garbled report %q shows the bytes received", g)
-		}
+	for _, tc := range []struct {
+		name, before, secret string
+	}{
+		{"BeginString not FIX", "8=FIXS3CRET\x019=40\x01", "S3CRET"},
+		{"BodyLength too large", "8=FIX.4.4\x019=424242\x01", "4242"},
+		{"no CheckSum after the body", "8=FIX.4.4\x019=97\x0135=0\x01" + strings.Repeat("x", 120), "97"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stream := append([]byte(tc.before), buildMsg("FIX.4.4", "35=0\x01")...)
+			_, _, garbled, _ := frameAll(t, bytes.NewReader(stream), FramerOptions{MaxBodyLength: 5000})
+			if len(garbled) == 0 {
+				t.Fatal("nothing reported garbled")
+			}
+			for _, g := range garbled {
+				if strings.Contains(g.Error(), tc.secret) {
+					t.Errorf("garbled report %q shows the bytes received", g)
+				}
+			}
+		})
 	}
 }
 
@@ -326,7 +335,7 @@ const badFrame = "8=FIX.4.4\x019=5\x0135=0\x01xx"
 func TestFramer_SkipToCheckSum(t *testing.T) {
 	good := buildMsg("FIX.4.4", "35=0\x0149=A\x01")
 	mismatch := func(skipped int) string {
-		return fmt.Sprintf("skipped %d: %v: no CheckSum field after the 5 bytes BodyLength declares", skipped, ErrBodyLenMismatch)
+		return fmt.Sprintf("skipped %d: %v: no CheckSum field where BodyLength says the body ends", skipped, ErrBodyLenMismatch)
 	}
 	for _, tc := range []struct {
 		name    string

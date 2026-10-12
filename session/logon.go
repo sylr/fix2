@@ -145,7 +145,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		if v := m.Get(tagDefaultApplVerID); s.prof.fixt && string(v) != s.peerApplVerID && (s.dicts.apps == nil || s.dicts.apps[string(v)] != nil) {
 			// What was negotiated at logon holds until the next.
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty's DefaultApplVerID changed on a sequence reset: the one of the logon is kept",
-				slog.String("default_appl_ver_id", string(v)), slog.String("kept", s.peerApplVerID))
+				slog.String("default_appl_ver_id", withhold(m, tagDefaultApplVerID, string(v), "withheld")), slog.String("kept", s.peerApplVerID))
 		}
 		s.activeResetLocked(c, m, in)
 		return
@@ -164,7 +164,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		// As QuickFIX: accepted, its messages validated with our own
 		// default version.
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty's DefaultApplVerID has no dictionary: our default is used for its messages",
-			slog.String("default_appl_ver_id", peerApplVerID), slog.String("have", strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", ")))
+			slog.String("default_appl_ver_id", withhold(m, tagDefaultApplVerID, peerApplVerID, "withheld")), slog.String("have", strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", ")))
 		peerApplVerID = s.cfg.Dictionaries.DefaultApplVerID
 	}
 
@@ -214,13 +214,15 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 				slog.String("value", withhold(m, tagNextExpectedMsgSeqNum, quoteValue(m.Get(tagNextExpectedMsgSeqNum)), "withheld")))
 		}
 		if peerNext > nextBefore {
-			s.sendLogoutLocked(c, fmt.Sprintf("Tag 789 (NextExpectedMsgSeqNum) is higher than expected. Expected %d, Received %d", nextBefore, peerNext))
+			s.sendLogoutLocked(c, withhold(m, tagNextExpectedMsgSeqNum,
+				fmt.Sprintf("Tag 789 (NextExpectedMsgSeqNum) is higher than expected. Expected %d, Received %d", nextBefore, peerNext),
+				"Tag 789 (NextExpectedMsgSeqNum) is higher than expected"))
 			s.closeAfterFlushLocked(c, &LogoutError{Text: "counterparty expects messages we never sent"})
 			return
 		}
 	}
 	if in.Seq < s.st.NextTarget {
-		s.sendLogoutLocked(c, fmt.Sprintf("MsgSeqNum too low, expecting %d but received %d", s.st.NextTarget, in.Seq))
+		s.sendLogoutLocked(c, seqTooLowText(m, s.st.NextTarget, in.Seq))
 		s.closeAfterFlushLocked(c, &LogoutError{Text: "Logon MsgSeqNum too low"})
 		return
 	}
@@ -287,8 +289,12 @@ type logonProblem struct {
 }
 
 // checkLogon checks the fields of Logon m the session relies on: CompIDs,
-// SendingTime, EncryptMethod, which FIX requires of every Logon, HeartBtInt
-// and, for FIXT, DefaultApplVerID. It returns the HeartBtInt and the
+// SendingTime, EncryptMethod, HeartBtInt and, for FIXT, DefaultApplVerID.
+// FIX requires EncryptMethod of every Logon: an acceptor requires it of the
+// counterparty's, an initiator accepts a Logon answer without it, as some
+// venues send (Binance's dictionary has it optional), but not a reset Logon
+// on an established session (see resetLogonProblem). It returns the
+// HeartBtInt and the
 // DefaultApplVerID, which may have no dictionary unless CompatStrict2020 is
 // set, or the problem, its text withheld if it may show a credential: it is
 // logged.
@@ -300,9 +306,9 @@ func (s *Session) checkLogon(m *fix2.Message, now time.Time) (int, string, *logo
 		return 0, "", newLogonProblem(m, reason, tag, text)
 	}
 	switch v := m.Get(tagEncryptMethod); {
-	case v == nil:
+	case v == nil && !s.initiator:
 		return problem(dictionary.ReasonRequiredTagMissing, tagEncryptMethod, "%s", fieldDesc(nil, tagEncryptMethod))
-	case string(v) != "0":
+	case v != nil && string(v) != "0":
 		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))
 	}
 	v := m.Get(tagHeartBtInt)
@@ -332,11 +338,15 @@ func (s *Session) checkLogon(m *fix2.Message, now time.Time) (int, string, *logo
 }
 
 // resetLogonProblem checks Logon m with ResetSeqNumFlag, received on an
-// established session, as a first Logon is checked, and its MsgSeqNum: FIX
-// requires 1, both sides restarting there.
+// established session, as an acceptor checks a first Logon, EncryptMethod
+// required, and its MsgSeqNum: FIX requires 1, both sides restarting there.
 func (s *Session) resetLogonProblem(m *fix2.Message, now time.Time) *logonProblem {
 	if _, _, p := s.checkLogon(m, now); p != nil {
 		return p
+	}
+	if m.Get(tagEncryptMethod) == nil {
+		return newLogonProblem(m, dictionary.ReasonRequiredTagMissing, tagEncryptMethod,
+			rejectText(dictionary.ReasonRequiredTagMissing, fieldDesc(nil, tagEncryptMethod)))
 	}
 	v := m.Get(tagMsgSeqNum)
 	if seq, err := fix2.ParseInt(v); err != nil || seq != 1 {
@@ -457,6 +467,11 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	clear(s.stash)
 	s.receipts.newGeneration(gen, st.Generation)
 	s.ret.newGeneration()
+	if s.deliv != nil {
+		// The messages of the previous generation held behind a failure to
+		// record them are delivered: recording them is moot now.
+		s.deliv.holdLocked(0)
+	}
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "sequence numbers reset", slog.String("why", why), slog.Uint64("generation", st.Generation))
 	return nil
 }

@@ -262,29 +262,156 @@ func TestResetPastHeld_LossBeforeCommit(t *testing.T) {
 	waitFor(t, func() bool { return st.highest() == 102 })
 }
 
-// A failure to record the messages processed stops their processing, those
-// a Reset releases from the held ones included: no more than a batch is
-// processed unrecorded, and the next connection asks for the rest again.
-func TestResetPastHeld_RecordingFails(t *testing.T) {
-	const n, batch = 200, 64
+// recordingFails logs an initiator recording through fs on to a peer whose
+// Logon comes at 3, ahead of a gap, sends it n orders, then makes recording
+// fail and resets past them all: the connection drops amid their delivery.
+// It returns once the handler is told.
+func recordingFails(t *testing.T, n int, change func(*session.Config)) (*session.Session, *eventRecorder, *targetStore, *mem.Listener) {
+	t.Helper()
 	fs := &targetStore{Store: memstore.New(), err: errors.New("disk full")}
-	s, rec, p := heldGap(t, 3, func(c *session.Config) { c.Store = fs; c.DeliveryQueue = 2 })
+	l := mem.Listen("acceptor")
+	rec := &eventRecorder{recorder: newRecorder()}
+	s, _ := startInitiator(t, l, func(c *session.Config) {
+		c.Store = fs
+		c.Handler = rec
+		c.DeliveryQueue = 2
+		if change != nil {
+			change(c)
+		}
+	})
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 3, "98", "0", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	p.expect("2", "7", "1", "16", "0")
 	for i := range n {
 		p.order(4+i, fmt.Sprint("O", i))
 	}
 	fs.fail.Store(true)
 	p.resetTo(n+4, n+5)
 	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
-	time.Sleep(50 * time.Millisecond)
+	return s, rec, fs, l
+}
+
+// expectHeld checks that rec was told of no more than a batch of the
+// orders recordingFails sends: OnLogout goes past the messages held, and
+// once it was told, what was processed before the failure is all there is
+// until recording works again.
+func expectHeld(t *testing.T, rec *eventRecorder) {
+	t.Helper()
+	const batch = 64
 	rec.mu.Lock()
-	delivered := len(rec.apps)
-	rec.mu.Unlock()
-	if delivered > batch {
-		t.Errorf("%d orders processed while recording failed, want at most %d", delivered, batch)
+	defer rec.mu.Unlock()
+	if n := len(rec.apps); n > batch {
+		t.Errorf("%d orders processed while recording failed, want at most %d", n, batch)
 	}
-	// What was not processed is asked for again.
-	if next, persisted := s.NextTargetSeqNum(), fs.persisted(); next > persisted+batch {
-		t.Errorf("NextTargetSeqNum %d, %d beyond the %d recorded", next, next-persisted, persisted)
+}
+
+// heldEvents are what the handler is told of the n orders recordingFails
+// sends, then of extra.
+func heldEvents(n int, extra ...string) []string {
+	want := []string{"loss 1-2"}
+	for i := range n {
+		want = append(want, fmt.Sprint("app O", i))
+	}
+	return append(want, extra...)
+}
+
+// A failure to record the messages processed holds the delivery of the
+// others, those a Reset releases from the held ones included, past a batch.
+// They were received, and are not asked for again: once recording works
+// again, and the counterparty reconnects, they are delivered, whatever it
+// does with the messages that are asked for.
+func TestResetPastHeld_RecordingFails(t *testing.T) {
+	const n = 200
+	for _, tc := range []struct {
+		name   string
+		answer func(p *peer) // to our ResendRequest for 205 to 209
+		extra  []string
+	}{
+		{"counterparty resends", func(p *peer) {
+			for seq := n + 5; seq < n+10; seq++ {
+				p.send("D", seq, "11", fmt.Sprint("R", seq), "55", "X", "43", "Y", "122", origTime())
+			}
+		}, []string{"app R205", "app R206", "app R207", "app R208", "app R209"}},
+		{"counterparty gap-fills", func(p *peer) {
+			p.send("4", n+5, "123", "Y", "36", fmt.Sprint(n+10), "43", "Y", "122", origTime())
+		}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, fs, l := recordingFails(t, n, nil)
+			expectHeld(t, rec)
+			if next := s.NextTargetSeqNum(); next != n+5 {
+				t.Errorf("NextTargetSeqNum = %d, want %d: the orders received are not asked for again", next, n+5)
+			}
+			// No connection until recording works again.
+			p2 := acceptPeer(t, l)
+			p2.expectSilentEnd()
+			fs.fail.Store(false)
+			p3 := acceptPeer(t, l)
+			p3.expect("A")
+			// Recorded, they are delivered.
+			rec.wait(t, func() bool { return len(rec.apps) == n })
+			// The counterparty sent 205 to 209 meanwhile, which were lost.
+			p3.send("A", n+10, "98", "0", "108", "30")
+			p3.expect("2", "7", fmt.Sprint(n+5), "16", "0")
+			tc.answer(p3)
+			p3.order(n+11, "AFTER")
+			want := heldEvents(n, append(tc.extra, "app AFTER")...)
+			rec.waitEvents(t, want...)
+			waitFor(t, func() bool { return fs.persisted() == uint64(n+12) })
+		})
+	}
+}
+
+// A sequence reset after a failure to record the messages processed
+// delivers those held, of the generation reset: the counterparty will not
+// send them again.
+func TestResetPastHeld_RecordingFailsThenReset(t *testing.T) {
+	const n = 200
+	t.Run("ResetOnDisconnect", func(t *testing.T) {
+		_, rec, fs, l := recordingFails(t, n, func(c *session.Config) { c.ResetOnDisconnect = true })
+		rec.wait(t, func() bool { return len(rec.apps) == n })
+		fs.fail.Store(false)
+		p := acceptPeer(t, l)
+		p.expect("A", "34", "1")
+		p.send("A", 1, "98", "0", "108", "30")
+		p.order(2, "AFTER")
+		rec.waitEvents(t, heldEvents(n, "app AFTER")...)
+		waitFor(t, func() bool { return fs.persisted() == 3 })
+	})
+	t.Run("counterparty's ResetSeqNumFlag", func(t *testing.T) {
+		_, rec, fs, l := recordingFails(t, n, nil)
+		expectHeld(t, rec)
+		fs.fail.Store(false)
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+		p.order(2, "AFTER")
+		rec.waitEvents(t, heldEvents(n, "app AFTER")...)
+		waitFor(t, func() bool { return fs.persisted() == 3 })
+	})
+}
+
+// Stopping a session whose recording fails delivers the messages held
+// behind the failure: they may be delivered again after a restart, not
+// lost.
+func TestResetPastHeld_StopWhileRecordingFails(t *testing.T) {
+	const n = 200
+	s, rec, _, _ := recordingFails(t, n, nil)
+	expectHeld(t, rec)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Stop(ctx) }()
+	rec.waitEvents(t, heldEvents(n)...)
+	if err := <-done; err != nil {
+		t.Logf("Stop = %v", err)
+	}
+	select {
+	case <-s.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("Done not closed")
 	}
 }
 

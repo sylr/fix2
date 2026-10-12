@@ -250,10 +250,11 @@ func TestActiveResetRefused(t *testing.T) {
 	}
 }
 
-// A Logon without EncryptMethod (98), which FIX requires of every Logon, is
-// refused: an acceptor's first Logon, and an initiator's Logon answer, the
-// connection closed without a word.
-func TestLogonWithoutEncryptMethodRefused(t *testing.T) {
+// FIX requires EncryptMethod (98) of every Logon: an acceptor refuses a
+// first Logon without it, the connection closed without a word; an
+// initiator accepts a Logon answer without it, as venues whose dictionary
+// makes it optional send.
+func TestLogonWithoutEncryptMethod(t *testing.T) {
 	t.Run("acceptor", func(t *testing.T) {
 		l := mem.Listen("acceptor")
 		a := session.NewAcceptor(session.AcceptorOptions{})
@@ -281,12 +282,9 @@ func TestLogonWithoutEncryptMethodRefused(t *testing.T) {
 		p := acceptPeer(t, l)
 		p.expect("A")
 		p.write(from(session.FIX44, 1), "A", "108", "30")
-		p.expectSilentEnd()
-		rec.mu.Lock()
-		defer rec.mu.Unlock()
-		if rec.logons != 0 {
-			t.Error("logged on")
-		}
+		rec.wait(t, func() bool { return rec.logons == 1 })
+		p.write(from(session.FIX44, 2), "1", "112", "PING")
+		p.expect("0", "112", "PING")
 	})
 }
 

@@ -178,11 +178,11 @@ func parseInto(msg *Message, data []byte, kinds []int32) error {
 	}
 	csVal := data[eqPos+1 : sohPos]
 	if len(csVal) != 3 {
-		return &ParseError{Err: fmt.Errorf("%w: %w: expected 3 bytes, got %d", ErrInvalidCheckSum, ErrInvalidTag, len(csVal)), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected 3 digits", ErrInvalidCheckSum, ErrInvalidTag), Offset: cursor}
 	}
 	expected, ok := parseUint(csVal)
 	if !ok || expected > 255 {
-		return &ParseError{Err: fmt.Errorf("%w: %w: expected 0-255, got %d", ErrInvalidCheckSum, ErrInvalidTag, expected), Offset: cursor}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected 000 to 255", ErrInvalidCheckSum, ErrInvalidTag), Offset: cursor}
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
 
@@ -192,7 +192,7 @@ func parseInto(msg *Message, data []byte, kinds []int32) error {
 	}
 	computed := csum % 256
 	if int(computed) != expected {
-		return &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(computed)), Offset: cursor}
+		return &ParseError{Err: ErrChecksumMismatch, Offset: cursor}
 	}
 
 	return nil
@@ -270,7 +270,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 		return msg, &ParseError{Err: ErrInvalidBodyLen, Offset: cursor}
 	}
 	if bodyLen > MaxBodyLength {
-		return msg, &ParseError{Err: fmt.Errorf("%w: BodyLength %d exceeds %d", ErrMessageTooLarge, bodyLen, MaxBodyLength), Offset: cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: BodyLength exceeds %d", ErrMessageTooLarge, MaxBodyLength), Offset: cursor}
 	}
 	msg.append(Field{Tag: tagBodyLen, Value: bodyLenVal})
 
@@ -343,11 +343,11 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	}
 	csVal := rest[eqPos+1 : sohPos]
 	if len(csVal) != 3 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 3 bytes, got %d", ErrInvalidCheckSum, ErrInvalidTag, len(csVal)), Offset: len(header) + cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 3 digits", ErrInvalidCheckSum, ErrInvalidTag), Offset: len(header) + cursor}
 	}
 	expected, ok := parseUint(csVal)
 	if !ok || expected > 255 {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 0-255, got %d", ErrInvalidCheckSum, ErrInvalidTag, expected), Offset: len(header) + cursor}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected 000 to 255", ErrInvalidCheckSum, ErrInvalidTag), Offset: len(header) + cursor}
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
 
@@ -357,7 +357,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 		csum += checksumBlock(rest[:bodyLen])
 	}
 	if int(csum%256) != expected {
-		return msg, &ParseError{Err: fmt.Errorf("%w: expected %d, got %d", ErrChecksumMismatch, expected, int(csum%256)), Offset: len(header) + bodyLen}
+		return msg, &ParseError{Err: ErrChecksumMismatch, Offset: len(header) + bodyLen}
 	}
 
 	return msg, nil
@@ -385,7 +385,7 @@ func (d dataField) end(data []byte, tag, cursor, valStart, bodyEnd int) (int, er
 		return 0, d.missing(cursor)
 	}
 	if d.length >= bodyEnd-valStart || data[valStart+d.length] != soh {
-		return 0, &ParseError{Err: fmt.Errorf("%w: DATA tag %d does not end after its declared %d bytes", ErrMalformedField, d.tag, d.length), Offset: cursor}
+		return 0, &ParseError{Err: fmt.Errorf("%w: DATA tag %d does not end where its LENGTH field says", ErrMalformedField, d.tag), Offset: cursor}
 	}
 	return valStart + d.length, nil
 }

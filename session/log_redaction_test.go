@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -128,19 +129,20 @@ func TestLogRedaction(t *testing.T) {
 		logon   []byte // the first message, a valid Logon if nil
 		msg     []byte
 		done    func(*session.Session, string) bool
-		garbled string // what the garbled log must show, beyond bytes and error
+		garbled bool // a garbled log shows bytes, error and offset, no MsgType nor MsgSeqNum
 		// misplaced tells the secret is in a field that is not sensitive
 		// too: the observer, which masks fields by tag, shows it there.
 		misplaced bool
+		secret    string // what must not be logged, secret if empty
 	}
 	cases := []tc{
-		{name: "CheckSum out of range", msg: order("554="+secret+"|", "999"), done: garbled(1), garbled: "msg_type=D seq=2"},
-		{name: "CheckSum mismatch", msg: order("554="+secret+"|", "000"), done: garbled(1), garbled: "msg_type=D seq=2"},
+		{name: "CheckSum out of range", msg: order("554="+secret+"|", "999"), done: garbled(1), garbled: true},
+		{name: "CheckSum mismatch", msg: order("554="+secret+"|", "000"), done: garbled(1), garbled: true},
 		{name: "reset Logon, bad CheckSum", msg: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|141=Y|553=U|554="+secret+"|", "001"),
-			done: garbled(1), garbled: "msg_type=A seq=1"},
+			done: garbled(1), garbled: true},
 		{name: "UserRequest NewPassword, bad CheckSum", msg: rawFrame("35=BE|49=C|56=S|34=2|52="+sendingTime()+"|923=1|924=3|553=U|554=old|925="+secret+"|", "002"),
-			done: garbled(1), garbled: "msg_type=BE seq=2"},
-		{name: "malformed tag, bad CheckSum", msg: order("abc=1|554="+secret+"|", "004"), done: garbled(1), garbled: "msg_type=D seq=2"},
+			done: garbled(1), garbled: true},
+		{name: "malformed tag, bad CheckSum", msg: order("abc=1|554="+secret+"|", "004"), done: garbled(1), garbled: true},
 		{name: "malformed tag", msg: order("abc=1|554="+secret+"|", ""),
 			done: func(s *session.Session, _ string) bool { return s.Stats().RejectsSent.Load() >= 1 }},
 		{name: "field without equal sign", msg: order("554"+secret+"|", ""),
@@ -150,13 +152,19 @@ func TestLogRedaction(t *testing.T) {
 		{name: "BodyLength too small", msg: withBodyLength(order("554="+secret+"|", ""), -5), done: garbled(1)},
 		// Followed by a valid message, for the framer to see this one end.
 		{name: "BodyLength too large", msg: slices.Concat(withBodyLength(order("554="+secret+"|", ""), 20), rawFrame("35=0|49=C|56=S|34=2|52="+sendingTime()+"|", "")), done: garbled(1)},
-		{name: "secret after 256 bytes", msg: order("58="+strings.Repeat("x", 260)+"|554="+secret+"|", "999"), done: garbled(1), garbled: "msg_type=D seq=2"},
+		{name: "secret after 256 bytes", msg: order("58="+strings.Repeat("x", 260)+"|554="+secret+"|", "999"), done: garbled(1), garbled: true},
 		{name: "valid", msg: order("554="+secret+"|", ""),
 			done: func(s *session.Session, _ string) bool { return s.Stats().MessagesReceived.Load() >= 2 }},
 		{name: "first Logon, bad CheckSum", logon: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|553=U|554="+secret+"|", "999"),
 			done: func(_ *session.Session, log string) bool { return strings.Contains(log, "connection refused") }},
 		// A LENGTH field's value, which is no number, is not quoted.
-		{name: "invalid LENGTH", msg: order("95="+secret+"|96="+secret+"|", ""), done: garbled(1), garbled: "msg_type=D seq=2"},
+		// A number, sensitive or not, is not quoted either.
+		{name: "LENGTH holding a number", msg: order("554=42424242|95=42424242|96=x|", ""), done: garbled(1), garbled: true, secret: "4242"},
+		// Neither are the MsgType and MsgSeqNum of a garbled message: the
+		// fields it holds cannot be told apart.
+		{name: "MsgType holding a credential, bad CheckSum", msg: rawFrame("35=ABCD|49=C|56=S|34=2|52="+sendingTime()+"|554=ABCD|", "999"),
+			done: garbled(1), garbled: true, secret: "ABCD"},
+		{name: "invalid LENGTH", msg: order("95="+secret+"|96="+secret+"|", ""), done: garbled(1), garbled: true},
 		{name: "invalid LENGTH, first Logon", logon: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|95="+secret+"|96="+secret+"|", ""),
 			done: func(_ *session.Session, log string) bool { return strings.Contains(log, "connection refused") }},
 		// A field holding a credential by mistake: what is said of it is
@@ -182,7 +190,7 @@ func TestLogRedaction(t *testing.T) {
 		{91, fmt.Sprintf("90=%d|91=%s|", len(secret), secret)},
 	} {
 		cases = append(cases,
-			tc{name: fmt.Sprintf("tag %d, bad CheckSum", f.tag), msg: order(f.fields, "005"), done: garbled(1), garbled: "msg_type=D seq=2"},
+			tc{name: fmt.Sprintf("tag %d, bad CheckSum", f.tag), msg: order(f.fields, "005"), done: garbled(1), garbled: true},
 			tc{name: fmt.Sprintf("tag %d, valid", f.tag), msg: order(f.fields, ""),
 				done: func(s *session.Session, _ string) bool { return s.Stats().MessagesReceived.Load() >= 2 }})
 	}
@@ -197,13 +205,14 @@ func TestLogRedaction(t *testing.T) {
 				msgs = append(msgs, c.msg)
 			}
 			out := logged(t, nil, first, c.done, msgs...)
+			secret := cmp.Or(c.secret, secret)
 			for l := range strings.SplitSeq(out, "\n") {
 				if strings.Contains(l, secret) && !(c.misplaced && strings.Contains(l, `msg="FIX in"`)) {
 					t.Errorf("secret logged:\n%s", out)
 					break
 				}
 			}
-			if c.garbled == "" {
+			if !c.garbled {
 				return
 			}
 			var line string
@@ -212,9 +221,14 @@ func TestLogRedaction(t *testing.T) {
 					line = l
 				}
 			}
-			for _, want := range []string{"bytes=", "error=", c.garbled} {
+			for _, want := range []string{"bytes=", "error=", "offset="} {
 				if !strings.Contains(line, want) {
 					t.Errorf("garbled log %q lacks %q", line, want)
+				}
+			}
+			for _, unwanted := range []string{"msg_type=", " seq="} {
+				if strings.Contains(line, unwanted) {
+					t.Errorf("garbled log %q shows %q", line, unwanted)
 				}
 			}
 		})
@@ -302,5 +316,22 @@ func TestRejectRedaction(t *testing.T) {
 				t.Errorf("secret logged:\n%s", out)
 			}
 		})
+	}
+}
+
+// A counterparty's DefaultApplVerID changed by a reset Logon is logged
+// withheld if it may show a credential: without dictionaries, any value is
+// accepted.
+func TestActiveResetDefaultApplVerIDRedaction(t *testing.T) {
+	const secret = "S3CRET-VALUE"
+	buf := &logBuffer{}
+	_, _, p := fixtSession(t, "9", func(c *session.Config) {
+		c.Dictionaries = session.Dictionaries{DefaultApplVerID: "9"}
+		c.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	})
+	p.write(from(session.FIXT11, 1), "A", "98", "0", "108", "30", "141", "Y", "1137", secret, "554", secret)
+	p.expect("A", "141", "Y")
+	if out := buf.String(); strings.Contains(out, secret) {
+		t.Errorf("secret logged:\n%s", out)
 	}
 }
