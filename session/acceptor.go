@@ -30,7 +30,10 @@ type AcceptorOptions struct {
 	// returning its configuration, or an error or nil to refuse it. The
 	// session stays until removed. A Logon arriving while another resolves
 	// the same wire identity waits for it: Resolve is never called twice
-	// at once for one wire identity, nor for one that has a session.
+	// at once for one wire identity, nor for one that has a session. A
+	// configuration refused, as when Add added its session meanwhile, is
+	// dropped with its store closed only if the acceptor opened it, as for
+	// Add.
 	Resolve func(ctx context.Context, req *LogonRequest) (*Config, error)
 	// Route, if set, picks among sessions whose wire identity is the same,
 	// told apart by their Qualifier, using what the transport knows of the
@@ -47,6 +50,7 @@ type Acceptor struct {
 
 	mu        sync.Mutex
 	sessions  map[SessionID]*Session
+	adding    map[SessionID]struct{}   // reserved by an Add opening the store
 	stopping  stoppingSessions         // removed, not yet done
 	byWire    map[SessionID][]*Session // keyed by the counterparty's view of the wire identity
 	listeners []transport.Listener
@@ -75,6 +79,7 @@ func NewAcceptor(opts AcceptorOptions) *Acceptor {
 		opts:      opts,
 		log:       opts.Logger,
 		sessions:  make(map[SessionID]*Session),
+		adding:    make(map[SessionID]struct{}),
 		stopping:  make(stoppingSessions),
 		byWire:    make(map[SessionID][]*Session),
 		pending:   make(chan struct{}, opts.MaxPendingConnections),
@@ -83,14 +88,16 @@ func NewAcceptor(opts AcceptorOptions) *Acceptor {
 }
 
 // Add creates a session from cfg, served once its counterparty connects.
-// The ID of a session removed is refused until that session's Done is
-// closed: its store may still be in use.
+// The ID of a session added, being added, or removed until that session's
+// Done is closed, is refused without opening cfg.Store: it may be in use.
+// If Add fails, cfg.Store is closed only if Add opened it.
 func (a *Acceptor) Add(cfg Config) (*Session, error) {
-	if err := a.checkStopping(cfg.ID); err != nil {
+	if err := a.reserve(cfg.ID); err != nil {
 		return nil, err
 	}
 	s, err := New(cfg)
 	if err != nil {
+		a.release(cfg.ID)
 		return nil, err
 	}
 	if err := a.add(s); err != nil {
@@ -100,17 +107,42 @@ func (a *Acceptor) Add(cfg Config) (*Session, error) {
 	return s, nil
 }
 
+// reserve reserves id for an Add, which add or release releases. It fails
+// if the acceptor shuts down, or a session has id, is being added with it,
+// or was removed and is still stopping.
+func (a *Acceptor) reserve(id SessionID) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_, adding := a.adding[id]
+	switch {
+	case a.closing:
+		return fmt.Errorf("session %s: acceptor shutting down", id)
+	case a.sessions[id] != nil:
+		return fmt.Errorf("session %s: already added", id)
+	case adding:
+		return fmt.Errorf("session %s: being added", id)
+	}
+	if err := a.stopping.check(id); err != nil {
+		return err
+	}
+	a.adding[id] = struct{}{}
+	return nil
+}
+
+// release releases id, reserved by an Add that failed before add.
+func (a *Acceptor) release(id SessionID) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.adding, id)
+}
+
+// add adds s, whose ID the caller reserved.
 func (a *Acceptor) add(s *Session) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	delete(a.adding, s.id)
 	if a.closing {
 		return fmt.Errorf("session %s: acceptor shutting down", s.id)
-	}
-	if _, ok := a.sessions[s.id]; ok {
-		return fmt.Errorf("session %s: already added", s.id)
-	}
-	if err := a.stopping.check(s.id); err != nil {
-		return err
 	}
 	wire := s.id.reversed()
 	if others := a.byWire[wire]; len(others) > 0 && a.opts.Route == nil {
@@ -167,33 +199,26 @@ func (a *Acceptor) resolve(ctx context.Context, wire SessionID, req *LogonReques
 	if cfg == nil {
 		return errors.New("no session for this Logon")
 	}
-	if err := a.checkStopping(cfg.ID); err != nil {
-		return err
+	if cfg.ID.reversed() != wire {
+		return fmt.Errorf("dynamic session %s does not match the Logon's identities", cfg.ID)
 	}
-	s, err := New(*cfg)
-	if err != nil {
-		return err
-	}
-	if s.id.reversed() != wire {
-		s.store.Close()
-		return fmt.Errorf("dynamic session %s does not match the Logon's identities", s.id)
-	}
-	if err := a.add(s); err != nil {
-		s.store.Close()
+	if err := a.reserve(cfg.ID); err != nil {
 		// Added meanwhile with Add: route finds it.
-		if a.Session(s.id) != nil {
+		if a.Session(cfg.ID) != nil {
 			return nil
 		}
 		return err
 	}
+	s, err := New(*cfg)
+	if err != nil {
+		a.release(cfg.ID)
+		return err
+	}
+	if err := a.add(s); err != nil {
+		s.store.Close()
+		return err
+	}
 	return nil
-}
-
-// checkStopping fails if session id was removed and is still stopping.
-func (a *Acceptor) checkStopping(id SessionID) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.stopping.check(id)
 }
 
 // Session returns session id, or nil.

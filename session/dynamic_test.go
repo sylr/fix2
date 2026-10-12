@@ -12,7 +12,6 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/session"
-	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport/mem"
 )
@@ -358,8 +357,8 @@ func TestDynamicSessionRace(t *testing.T) {
 
 // A session added with Acceptor.Add while Resolve creates it for a Logon
 // is the one the Logon gets, at once: Resolve's is dropped, its store
-// closed, and the Logon is not refused for the session being added
-// already.
+// neither opened nor closed, and the Logon is not refused for the session
+// being added already.
 func TestDynamicSessionRaceAdd(t *testing.T) {
 	added, resolved := newRecorder(), newRecorder()
 	entered, release := make(chan struct{}), make(chan struct{})
@@ -402,8 +401,8 @@ func TestDynamicSessionRaceAdd(t *testing.T) {
 		t.Errorf("Resolve's session logged on %d times", resolved.logons)
 	}
 	resolved.mu.Unlock()
-	if _, err := resolvedStore.Open(context.Background()); !errors.Is(err, store.ErrClosed) {
-		t.Errorf("Resolve's store reopened: %v, want %v", err, store.ErrClosed)
+	if _, err := resolvedStore.Open(context.Background()); err != nil {
+		t.Errorf("Resolve's store closed: opening it: %v", err)
 	}
 	// The Logon was served by its first connection.
 	for done := false; !done; {

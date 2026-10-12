@@ -47,9 +47,13 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 // messages are synced again, bounded by WriteTimeout, and the store is
 // closed, failures then being only logged; Done tells when. Stop called
 // again, or concurrently, waits for Done as well, until its ctx ends.
-// Called from a callback of the delivery goroutine (OnLogon, FromApp,
-// OnLogout, OnRecoveryLoss), Stop waits for that callback to return: its
-// ctx must end. Initiators and acceptors stop the sessions they remove.
+// Called with the ctx of one of the session's handler callbacks, whichever
+// goroutine runs it (Authenticate, ToAdmin, FromAdmin, OnResend, OnLogon,
+// FromApp, OnLogout, OnRecoveryLoss), Stop returns nil at once and the
+// session stops in the background, as if ctx ended: it logs out, within
+// LogoutTimeout, and the rest is done once the callback returned, failures
+// being only logged; Done tells when. Initiators and acceptors stop the
+// sessions they remove.
 func (s *Session) Stop(ctx context.Context) error {
 	return s.stop(ctx, "session stopped")
 }
@@ -58,23 +62,68 @@ func (s *Session) Stop(ctx context.Context) error {
 // callbacks returned: its delivery goroutine exited, its last connection
 // wound down, and its store is closed. No handler callback of the session
 // runs after. It is closed by the time Stop returns, unless Stop's ctx
-// ended first; the errors of the store's Sync and Close made then are only
-// logged.
+// ended first or Stop was called from a callback; the errors of the store's
+// Sync and Close made then are only logged.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) stop(ctx context.Context, text string) error {
 	s.mu.Lock()
 	s.stopping = true
 	s.mu.Unlock()
+	if s.ownCallback(ctx) {
+		// What stopping waits for includes the callback calling it.
+		go func() {
+			s.Logout(context.Background(), text)
+			if idle := s.markStopped(); idle != nil {
+				<-idle
+				s.closeLate()
+			}
+		}()
+		return nil
+	}
 	err := s.Logout(ctx, text)
-	s.mu.Lock()
-	if s.stopped {
-		s.mu.Unlock()
+	idle := s.markStopped()
+	if idle == nil {
 		select {
 		case <-s.done:
 		case <-ctx.Done():
 		}
 		return err
+	}
+	select {
+	case <-idle:
+	case <-ctx.Done():
+		s.log.LogAttrs(ctx, slog.LevelWarn, "stopping without waiting for the connection to wind down or a stuck handler callback: the store is closed once they are done")
+	}
+	serr := s.syncStored(ctx)
+	select {
+	case <-idle:
+		err = errors.Join(err, serr, s.store.Close())
+		close(s.done)
+		return err
+	default:
+	}
+	go func() {
+		<-idle
+		s.closeLate()
+	}()
+	return errors.Join(err, serr)
+}
+
+// ownCallback reports whether ctx is one of the session's handler
+// callbacks'.
+func (s *Session) ownCallback(ctx context.Context) bool {
+	return ctx != nil && ctx.Value(callbackKey{}) == s
+}
+
+// markStopped marks the session stopped and returns a channel closed once
+// nothing uses its store nor calls its handler any more, or nil if it was
+// stopped already.
+func (s *Session) markStopped() <-chan struct{} {
+	s.mu.Lock()
+	if s.stopped {
+		s.mu.Unlock()
+		return nil
 	}
 	s.stopped = true
 	if s.schedCancel != nil {
@@ -102,34 +151,24 @@ func (s *Session) stop(ctx context.Context, text string) error {
 			<-d.done
 		}
 	}()
-	select {
-	case <-idle:
-	case <-ctx.Done():
-		s.log.LogAttrs(ctx, slog.LevelWarn, "stopping without waiting for the connection to wind down or a stuck handler callback: the store is closed once they are done")
+	return idle
+}
+
+// closeLate makes the messages stored durable, bounded by WriteTimeout,
+// closes the store and then Done, once a stop that did not wait is idle:
+// failures are only logged.
+func (s *Session) closeLate() {
+	// What was stored since, or not synced as the stop's ctx ended, is
+	// synced again.
+	sctx, cancel := context.WithTimeout(context.Background(), s.cfg.WriteTimeout)
+	if err := s.syncStored(sctx); err != nil {
+		s.log.LogAttrs(context.Background(), slog.LevelError, "stopped late: making the messages sent durable failed", slog.Any("error", err))
 	}
-	serr := s.syncStored(ctx)
-	select {
-	case <-idle:
-		err = errors.Join(err, serr, s.store.Close())
-		close(s.done)
-		return err
-	default:
+	cancel()
+	if err := s.store.Close(); err != nil {
+		s.log.LogAttrs(context.Background(), slog.LevelError, "stopped late: closing the store failed", slog.Any("error", err))
 	}
-	go func() {
-		<-idle
-		// What was stored since, or not synced as ctx ended, is synced
-		// again.
-		sctx, cancel := context.WithTimeout(context.Background(), s.cfg.WriteTimeout)
-		if err := s.syncStored(sctx); err != nil {
-			s.log.LogAttrs(context.Background(), slog.LevelError, "stopped late: making the messages sent durable failed", slog.Any("error", err))
-		}
-		cancel()
-		if err := s.store.Close(); err != nil {
-			s.log.LogAttrs(context.Background(), slog.LevelError, "stopped late: closing the store failed", slog.Any("error", err))
-		}
-		close(s.done)
-	}()
-	return errors.Join(err, serr)
+	close(s.done)
 }
 
 // syncStored makes the messages stored durable (see store.Syncer).

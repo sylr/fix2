@@ -33,9 +33,10 @@ type Initiator struct {
 
 	mu       sync.Mutex
 	sessions map[SessionID]*initSession
-	stopping stoppingSessions // removed, not yet done
-	ctx      context.Context  // set while running
-	closing  bool             // Run is shutting down: no session added
+	adding   map[SessionID]struct{} // reserved by an Add opening the store
+	stopping stoppingSessions       // removed, not yet done
+	ctx      context.Context        // set while running
+	closing  bool                   // Run is shutting down: no session added
 	wg       sync.WaitGroup
 }
 
@@ -63,41 +64,41 @@ func NewInitiator(opts InitiatorOptions) *Initiator {
 	if opts.DialTimeout <= 0 {
 		opts.DialTimeout = 10 * time.Second
 	}
-	return &Initiator{opts: opts, log: opts.Logger, sessions: make(map[SessionID]*initSession), stopping: make(stoppingSessions)}
+	return &Initiator{
+		opts:     opts,
+		log:      opts.Logger,
+		sessions: make(map[SessionID]*initSession),
+		adding:   make(map[SessionID]struct{}),
+		stopping: make(stoppingSessions),
+	}
 }
 
 // Add creates a session from cfg, connected with dialer, now if the
-// initiator runs, else once it does. The ID of a session removed is
-// refused until that session's Done is closed: its store may still be in
-// use.
+// initiator runs, else once it does. The ID of a session added, being
+// added, or removed until that session's Done is closed, is refused
+// without opening cfg.Store: it may be in use. If Add fails, cfg.Store is
+// closed only if Add opened it.
 func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 	if dialer == nil {
 		return nil, fmt.Errorf("session %s: nil dialer", cfg.ID)
 	}
 	i.mu.Lock()
-	err := i.stopping.check(cfg.ID)
+	err := i.reserveLocked(cfg.ID)
 	i.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
 	s, err := New(cfg)
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	delete(i.adding, cfg.ID)
 	if err != nil {
 		return nil, err
 	}
 	s.initiator = true
-	i.mu.Lock()
-	defer i.mu.Unlock()
 	if i.closing {
 		s.store.Close()
 		return nil, fmt.Errorf("session %s: initiator shutting down", s.id)
-	}
-	if _, ok := i.sessions[s.id]; ok {
-		s.store.Close()
-		return nil, fmt.Errorf("session %s: already added", s.id)
-	}
-	if err := i.stopping.check(s.id); err != nil {
-		s.store.Close()
-		return nil, err
 	}
 	is := &initSession{s: s, dialer: dialer}
 	i.sessions[s.id] = is
@@ -105,6 +106,26 @@ func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 		i.start(i.ctx, is)
 	}
 	return s, nil
+}
+
+// reserveLocked reserves id for an Add, which releases it once done. It
+// fails if the initiator shuts down, or a session has id, is being added
+// with it, or was removed and is still stopping.
+func (i *Initiator) reserveLocked(id SessionID) error {
+	_, adding := i.adding[id]
+	switch {
+	case i.closing:
+		return fmt.Errorf("session %s: initiator shutting down", id)
+	case i.sessions[id] != nil:
+		return fmt.Errorf("session %s: already added", id)
+	case adding:
+		return fmt.Errorf("session %s: being added", id)
+	}
+	if err := i.stopping.check(id); err != nil {
+		return err
+	}
+	i.adding[id] = struct{}{}
+	return nil
 }
 
 // start runs is's connection loop. The caller holds i.mu.
@@ -120,7 +141,8 @@ func (i *Initiator) start(ctx context.Context, is *initSession) {
 }
 
 // Remove logs session id out, stops it and removes it. Its ID can be added
-// again once the session's Done is closed.
+// again once the session's Done is closed. Called from one of the
+// session's callbacks, it returns at once, as Stop does.
 func (i *Initiator) Remove(ctx context.Context, id SessionID) error {
 	i.mu.Lock()
 	is := i.sessions[id]
@@ -135,7 +157,10 @@ func (i *Initiator) Remove(ctx context.Context, id SessionID) error {
 	err := is.s.Stop(ctx)
 	if is.cancel != nil {
 		is.cancel()
-		<-is.done
+		// The connection loop may be running the callback calling.
+		if !is.s.ownCallback(ctx) {
+			<-is.done
+		}
 	}
 	return err
 }
