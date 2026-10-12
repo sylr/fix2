@@ -534,13 +534,14 @@ public final class Agent {
         }
     }
 
-    static void send(Message m, SessionID id, String what) {
+    /** send sends m, reporting a failure: what and ref name m, joined only then. */
+    static void send(Message m, SessionID id, String what, String ref) {
         try {
             if (!Session.sendToTarget(m, id)) {
-                anomaly(id + ": " + what + " not sent");
+                anomaly(id + ": " + what + " " + ref + " not sent");
             }
         } catch (Exception e) {
-            anomaly(id + ": sending " + what + ": " + e);
+            anomaly(id + ": sending " + what + " " + ref + ": " + e);
         }
     }
 
@@ -581,7 +582,7 @@ public final class Agent {
                     partyOut.set(partyIn.getPartyRole());
                     er.addGroup(partyOut);
                 }
-                send(er, id, "ExecutionReport " + orderID.getValue());
+                send(er, id, "ExecutionReport", orderID.getValue());
             }
 
             @Override
@@ -613,7 +614,7 @@ public final class Agent {
                         w.addGroup(entry);
                     }
                 }
-                send(w, id, "MarketDataSnapshotFullRefresh " + reqID.getValue());
+                send(w, id, "MarketDataSnapshotFullRefresh", reqID.getValue());
             }
         };
 

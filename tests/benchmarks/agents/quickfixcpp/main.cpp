@@ -483,13 +483,14 @@ protected:
   }
 };
 
-void send(FIX::Message &m, const FIX::SessionID &id, const std::string &what) {
+// send sends m, reporting a failure: what and ref name m, joined only then.
+void send(FIX::Message &m, const FIX::SessionID &id, const char *what, const std::string &ref) {
   try {
     if (!FIX::Session::sendToTarget(m, id)) {
-      anomaly(id.toString() + ": " + what + " not sent");
+      anomaly(id.toString() + ": " + what + " " + ref + " not sent");
     }
   } catch (const std::exception &e) {
-    anomaly(id.toString() + ": sending " + what + ": " + e.what());
+    anomaly(id.toString() + ": sending " + what + " " + ref + ": " + e.what());
   }
 }
 
@@ -539,7 +540,7 @@ public:
       partyOut_.set(FIX::PartyRole(role.getValue()));
       er.addGroup(partyOut_);
     }
-    send(er, id, "ExecutionReport " + orderID.getValue());
+    send(er, id, "ExecutionReport", orderID.getValue());
   }
 
   void onMessage(const FIX44::MarketDataRequest &m, const FIX::SessionID &id) override {
@@ -577,7 +578,7 @@ public:
         w.addGroup(entry_);
       }
     }
-    send(w, id, "MarketDataSnapshotFullRefresh " + reqID.getValue());
+    send(w, id, "MarketDataSnapshotFullRefresh", reqID.getValue());
   }
 
 private:
