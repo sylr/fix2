@@ -518,12 +518,14 @@ public:
     m.get(side);
     m.get(qty);
     m.get(px);
+    // A field's getValue parses its text at each call: once each.
+    const double quantity = qty.getValue();
     FIX::OrderID orderID(std::to_string(++n_));
     FIX44::ExecutionReport er(orderID, FIX::ExecID(orderID.getValue()), FIX::ExecType(EXEC_TYPE_NEW),
-                              FIX::OrdStatus(ORD_STATUS_NEW), side, FIX::LeavesQty(qty.getValue()), FIX::CumQty(0),
-                              FIX::AvgPx(0));
+                              FIX::OrdStatus(ORD_STATUS_NEW), FIX::Side(side.getValue()), FIX::LeavesQty(quantity),
+                              FIX::CumQty(0), FIX::AvgPx(0));
     er.set(clOrdID);
-    er.set(FIX::OrderQty(qty.getValue()));
+    er.set(FIX::OrderQty(quantity));
     er.set(FIX::Price(px.getValue()));
     er.set(symbol);
     er.set(FIX::TransactTime(3));
