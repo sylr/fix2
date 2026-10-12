@@ -1,4 +1,7 @@
-// Command fixgen generates typed Go code for FIX messages from a QuickFIX XML dictionary.
+// Command fixgen generates typed Go code for FIX messages from a QuickFIX XML
+// dictionary, or from a FIX Orchestra repository such as those the FIX
+// Trading Community publishes for FIX Latest, FIX 4.2, FIX 4.4 and the FIXT
+// session layer (see xmldict.Load).
 //
 // Usage:
 //
@@ -19,7 +22,7 @@ import (
 )
 
 func main() {
-	dictPath := flag.String("dict", "", "QuickFIX XML dictionary file (required)")
+	dictPath := flag.String("dict", "", "QuickFIX XML dictionary or Orchestra repository file (required)")
 	pkg := flag.String("pkg", "", "Go package name for output (required)")
 	outDir := flag.String("out", ".", "output directory")
 	dispatch := flag.Bool("dispatch", false, "generate a typed Handler interface and Dispatch")

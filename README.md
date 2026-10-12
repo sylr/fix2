@@ -15,11 +15,16 @@ typed code generation and a session engine.
   allocating; `RewriteForResend` turns a stored message into its
   retransmission.
 - **Dictionaries** (`dictionary`, `dictionary/xmldict`): validation against
-  QuickFIX XML dictionaries or generated ones, with the SessionRejectReason
-  of each error; `Compose` for FIXT 1.1 application messages.
+  QuickFIX XML dictionaries, the FIX Orchestra repositories the FIX Trading
+  Community publishes (FIX Latest, FIX 4.2, FIX 4.4 and the FIXT session
+  layer, from
+  [FIXTradingCommunity/orchestrations](https://github.com/FIXTradingCommunity/orchestrations)),
+  or generated ones, with the SessionRejectReason of each error; `Compose`
+  for FIXT 1.1 application messages.
 - **Code generation** (`cmd/fixgen`): typed readers, builders and the
-  dictionary as Go code; `-dispatch` adds a typed handler interface,
-  `-bytes` getters of raw values (exact decimal prices, for one).
+  dictionary as Go code, from a QuickFIX dictionary or an Orchestra
+  repository; `-dispatch` adds a typed handler interface, `-bytes` getters
+  of raw values (exact decimal prices, for one).
 - **Sessions** (`session`): initiators and acceptors for FIX 4.0 to 4.4 and
   FIXT 1.1, configured in Go:
   - many sessions per process and per listener, each with its own

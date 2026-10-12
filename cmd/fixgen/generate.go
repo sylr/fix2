@@ -357,10 +357,14 @@ func writeDoc(dict *dictionary.Dict, pkg, outDir string) error {
 }
 
 // versionOf returns the BeginString of dict's messages and, from FIX 5.0
-// on, their ApplVerID.
+// on, their ApplVerID. FIX Latest, whose major version is "Latest", has
+// ApplVerID 10.
 func versionOf(dict *dictionary.Dict) (beginString, applVerID string) {
 	if dict.Type == "FIXT" {
 		return "FIXT." + dict.Major + "." + dict.Minor, ""
+	}
+	if dict.Major == "Latest" {
+		return "FIXT.1.1", "10"
 	}
 	ids := map[string]string{"4.0": "2", "4.1": "3", "4.2": "4", "4.3": "5", "4.4": "6", "5.0": "7"}
 	v := dict.Major + "." + dict.Minor

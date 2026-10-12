@@ -50,7 +50,8 @@ func TestDecodeMatchesEncodingXML(t *testing.T) {
   <fields><field g:number="7" number="8" name="A" name="B"/></fields>
 </f:fix>`,
 	}
-	files, _ := filepath.Glob("../../cmd/fixgen/testdata/*.xml")
+	// The QuickFIX dictionaries: Orchestra repositories decode differently.
+	files, _ := filepath.Glob("../../cmd/fixgen/testdata/FIX*.xml")
 	if len(files) == 0 {
 		t.Fatal("no test dictionaries found")
 	}
@@ -112,7 +113,7 @@ func TestMarkupLimits(t *testing.T) {
 		err  string // "" when valid
 	}{
 		{"maxAttrs attributes", `<fix` + attrs(maxAttrs) + `/>`, ""},
-		{"maxAttrs+1 attributes", `<fix` + attrs(maxAttrs+1) + `/>`, "more than 8 attributes"},
+		{"maxAttrs+1 attributes", `<fix` + attrs(maxAttrs+1) + `/>`, "more than 16 attributes"},
 		{"= and > in quotes", `<fix a="==>==" b='>>='/>`, ""},
 		{"tag of maxTagLen bytes", `<fix a="` + strings.Repeat("x", maxTagLen-len(`<fix a=""/>`)) + `"/>`, ""},
 		{"tag over maxTagLen bytes", `<fix a="` + strings.Repeat("x", maxTagLen) + `"/>`, "tag longer than"},
@@ -127,9 +128,9 @@ func TestMarkupLimits(t *testing.T) {
 		{"long PI", `<?pi ` + strings.Repeat("<a b='c'>", maxTagLen) + `?><fix/>`, ""},
 		{"long text", `<fix>` + strings.Repeat("a=b ", maxTagLen) + `</fix>`, ""},
 		{"comment with dashes", `<!-- a-b- -x- --><fix` + attrs(maxAttrs) + `/>`, ""},
-		{"comment then too many attributes", `<!-- a-b- --><fix` + attrs(maxAttrs+1) + `/>`, "more than 8 attributes"},
-		{"CDATA ending in ]]]>", `<fix><![CDATA[ x ]]]><x` + attrs(maxAttrs+1) + `/></fix>`, "more than 8 attributes"},
-		{"PI ending in ??>", `<?pi x ??><fix` + attrs(maxAttrs+1) + `/>`, "more than 8 attributes"},
+		{"comment then too many attributes", `<!-- a-b- --><fix` + attrs(maxAttrs+1) + `/>`, "more than 16 attributes"},
+		{"CDATA ending in ]]]>", `<fix><![CDATA[ x ]]]><x` + attrs(maxAttrs+1) + `/></fix>`, "more than 16 attributes"},
+		{"PI ending in ??>", `<?pi x ??><fix` + attrs(maxAttrs+1) + `/>`, "more than 16 attributes"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -233,10 +234,12 @@ func FuzzLoad(f *testing.F) {
 		`<fix><header><group name="NoHops"><field name="HopCompID"/></group></header><fields><field number="627" name="NoHops" type="NUMINGROUP"/><field number="628" name="HopCompID" type="STRING"/></fields></fix>`,
 		`<fix><messages><message name="M" msgtype="M"><group name="NoG"><field name="Len"/><field name="Data"/></group></message></messages><fields><field number="1" name="NoG" type="NUMINGROUP"/><field number="95" name="Len" type="LENGTH"/><field number="96" name="Data" type="DATA"/></fields></fix>`,
 		`<`, ``, `<fix>`, `<fix><messages><message/></messages></fix>`,
+		testOrchestraXML,
+		`<fixr:repository xmlns:fixr="http://fixprotocol.io/2020/orchestra/repository" name="FIX.4.4"><fixr:fields><fixr:field id="1" name="A" type="String"/><fixr:field id="2" name="N" type="NumInGroup"/></fixr:fields><fixr:groups><fixr:group id="5" name="G"><fixr:numInGroup id="2"/><fixr:fieldRef id="1"/><fixr:groupRef id="5"/></fixr:group></fixr:groups><fixr:messages><fixr:message name="M" msgType="M"><fixr:structure><fixr:groupRef id="5"/></fixr:structure></fixr:message></fixr:messages></fixr:repository>`,
 	} {
 		f.Add([]byte(seed))
 	}
-	for _, name := range []string{"FIX40", "FIX44", "FIXT11"} {
+	for _, name := range []string{"FIX40", "FIX44", "FIXT11", "OrchestraFIXLatest"} {
 		if data, err := os.ReadFile("../../cmd/fixgen/testdata/" + name + ".xml"); err == nil {
 			f.Add(data)
 		}

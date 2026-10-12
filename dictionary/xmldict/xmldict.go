@@ -1,4 +1,5 @@
-// Package xmldict reads FIX data dictionaries from QuickFIX XML. fixgen uses
+// Package xmldict reads FIX data dictionaries from QuickFIX XML, or from the
+// FIX Orchestra repositories the FIX Trading Community publishes. fixgen uses
 // it to generate packages, whose dictionaries need no XML at run time; a
 // program that only learns its dictionary at run time can load it here.
 package xmldict
@@ -27,6 +28,12 @@ type xmlDict struct {
 	Messages    xmlMessages   `xml:"messages"`
 	Components  xmlComponents `xml:"components"`
 	Fields      xmlFieldDefs  `xml:"fields"`
+	// Groups are the groups of an Orchestra repository, which messages and
+	// components reference by name with <groupRef> items.
+	Groups []xmlGroup `xml:"-"`
+	// orchestra tells that the dictionary is an Orchestra repository, whose
+	// resolution has a larger budget.
+	orchestra bool
 }
 
 type xmlMessages struct {
@@ -49,7 +56,8 @@ type xmlBody struct {
 }
 
 // xmlItem is a <field>, <component> or <group> reference, told apart by
-// XMLName. Only groups have children.
+// XMLName. Only groups have children. Orchestra repositories also reference
+// groups defined apart, with <groupRef> items.
 type xmlItem struct {
 	XMLName  xml.Name
 	Name     string `xml:"name,attr"`
@@ -66,6 +74,13 @@ type xmlMessage struct {
 
 type xmlComponent struct {
 	Name string `xml:"name,attr"`
+	xmlBody
+}
+
+// xmlGroup is a group of an Orchestra repository: Counter names its
+// NumInGroup field, which names the group once resolved, as in QuickFIX.
+type xmlGroup struct {
+	Name, Counter string
 	xmlBody
 }
 
@@ -98,8 +113,14 @@ type rawCondition struct {
 // 1.5 MB.
 const maxDictSize = 64 << 20
 
-// Load parses a QuickFIX XML dictionary from r. It reads at most 64 MiB,
-// counting what the XML decoder buffers ahead, and at most 262,144 elements.
+// Load parses a QuickFIX XML dictionary, or an Orchestra repository, from r.
+// It reads at most 64 MiB, counting what the XML decoder buffers ahead, and
+// at most 262,144 elements, or 1,048,576 for an Orchestra repository.
+//
+// An Orchestra repository is recognized by its root element, <repository> in
+// the Orchestra 1.0 namespace. Load reads the base scenario of its messages
+// and the structure of their fields, components and groups: see
+// decodeOrchestra for how they are translated.
 func Load(r io.Reader) (*dictionary.Dict, error) {
 	lr := &io.LimitedReader{R: r, N: maxDictSize + 1}
 	xd, err := decode(lr)
@@ -114,7 +135,8 @@ func Load(r io.Reader) (*dictionary.Dict, error) {
 	return resolve(xd)
 }
 
-// LoadFile parses a QuickFIX XML dictionary from the file at path.
+// LoadFile parses a QuickFIX XML dictionary, or an Orchestra repository, from
+// the file at path.
 func LoadFile(path string) (*dictionary.Dict, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -175,7 +197,16 @@ func resolve(xd *xmlDict) (*dictionary.Dict, error) {
 		compMap[c.Name] = c
 	}
 
-	r := &resolver{byName: byName, compMap: compMap, visiting: map[string]bool{}}
+	groupMap := make(map[string]*xmlGroup, len(xd.Groups))
+	for i := range xd.Groups {
+		g := &xd.Groups[i]
+		groupMap[g.Name] = g
+	}
+
+	r := &resolver{byName: byName, compMap: compMap, groupMap: groupMap, visiting: map[visit]bool{}, maxVisits: maxVisits}
+	if xd.orchestra {
+		r.maxVisits = maxOrchestraVisits
+	}
 
 	// 3. Flatten header.
 	header, err := r.resolve(xd.Header.Items)
@@ -239,12 +270,18 @@ func countTags(counts map[int]int, refs []dictionary.FieldRef) {
 // GroupDefs. It walks items in XML order and expands components in place, so
 // fields and groups keep their position at any depth.
 type resolver struct {
-	byName   map[string]*dictionary.FieldDef
-	compMap  map[string]*xmlComponent
-	visiting map[string]bool // components on the current path, for cycle detection
-	visits   int             // items visited plus group refs copied, bounded by maxVisits
-	depth    int             // current component/group nesting, bounded by maxDepth
+	byName    map[string]*dictionary.FieldDef
+	compMap   map[string]*xmlComponent
+	groupMap  map[string]*xmlGroup
+	visiting  map[visit]bool // components and groupRefs on the current path, for cycle detection
+	visits    int            // items visited plus group refs copied, bounded by maxVisits
+	maxVisits int            // maxVisits or maxOrchestraVisits
+	depth     int            // current component/group nesting, bounded by maxDepth
 }
+
+// visit is a component or group the resolver is expanding: kind is the
+// element referencing it.
+type visit struct{ kind, name string }
 
 // maxVisits bounds the items (fields, groups and component references) the
 // resolver visits for a whole dictionary. Components are expanded in place,
@@ -253,6 +290,10 @@ type resolver struct {
 // Component references count too, so a chain of empty components is bounded
 // as well.
 const maxVisits = 1_000_000
+
+// maxOrchestraVisits bounds the items the resolver visits for an Orchestra
+// repository: FIX Latest as of Extension Pack 312 takes about 1,500,000.
+const maxOrchestraVisits = 4_000_000
 
 // maxDepth bounds component and group nesting. It keeps the recursion, and
 // the chain of wrapped errors built while unwinding it, small. The deepest
@@ -272,10 +313,10 @@ func checkName(kind, name string) error {
 	return nil
 }
 
-// spend charges n units of work against maxVisits.
+// spend charges n units of work against r.maxVisits.
 func (r *resolver) spend(n int) error {
-	if r.visits += n; r.visits > maxVisits {
-		return fmt.Errorf("expansion exceeds %d items: components are referenced too many times", maxVisits)
+	if r.visits += n; r.visits > r.maxVisits {
+		return fmt.Errorf("expansion exceeds %d items: components are referenced too many times", r.maxVisits)
 	}
 	return nil
 }
@@ -402,7 +443,8 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			if !ok {
 				return fmt.Errorf("unknown component %q", it.Name)
 			}
-			if r.visiting[it.Name] {
+			key := visit{"component", it.Name}
+			if r.visiting[key] {
 				return fmt.Errorf("cycle detected in component %q", it.Name)
 			}
 			// A required component keeps the enclosing context; an optional
@@ -415,9 +457,9 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 			if err := r.enter(); err != nil {
 				return err
 			}
-			r.visiting[it.Name] = true
+			r.visiting[key] = true
 			err := r.walk(comp.Items, b, child)
-			delete(r.visiting, it.Name)
+			delete(r.visiting, key)
 			r.leave()
 			if err != nil {
 				return fmt.Errorf("component %s: %w", it.Name, err)
@@ -425,54 +467,79 @@ func (r *resolver) walk(items []xmlItem, b *resolvedBody, ctx int) error {
 
 		case "group":
 			// The group name is also a field name (the counter tag).
-			fd, ok := r.byName[it.Name]
+			if err := r.group(b, ctx, it.Name, it.Required == "Y", it.Items); err != nil {
+				return err
+			}
+
+		case "groupRef":
+			g, ok := r.groupMap[it.Name]
 			if !ok {
-				return fmt.Errorf("unknown group field %q", it.Name)
+				return fmt.Errorf("unknown group %q", it.Name)
 			}
-			if err := r.enter(); err != nil {
-				return err
+			key := visit{"groupRef", it.Name}
+			if r.visiting[key] {
+				return fmt.Errorf("cycle detected in group %q", it.Name)
 			}
-			inner, err := r.resolve(it.Items)
-			r.leave()
+			r.visiting[key] = true
+			err := r.group(b, ctx, g.Counter, it.Required == "Y", g.Items)
+			delete(r.visiting, key)
 			if err != nil {
-				return fmt.Errorf("group %s: %w", it.Name, err)
-			}
-			// The group's contents are copied into this body: charge them, or
-			// a chain of nested groups would do quadratic uncharged work.
-			if err := r.spend(len(inner.all)); err != nil {
 				return err
 			}
-			if inner.first == 0 {
-				return fmt.Errorf("group %s: no child fields", it.Name)
-			}
-			// Charge recording the counter and every group child in the
-			// enclosing optional components before doing it.
-			if err := r.spend(b.condDepth(ctx) * (1 + len(inner.all))); err != nil {
-				return err
-			}
-			b.all = append(b.all, b.addField(ctx, fd.Tag, it.Required == "Y"))
-			// Group children are never required at this level since group
-			// instance validation is out of scope. They do show that their
-			// optional component is present.
-			for _, ref := range inner.all {
-				b.markPresent(ctx, ref.Tag)
-				b.all = append(b.all, dictionary.FieldRef{Tag: ref.Tag})
-			}
-			b.groups = append(b.groups, dictionary.GroupDef{
-				CounterTag: fd.Tag,
-				Name:       it.Name,
-				Required:   it.Required == "Y",
-				DelimTag:   inner.first,
-				Fields:     inner.direct,
-				Groups:     inner.groups,
-				Layout:     inner.layout,
-			})
-			b.layout = append(b.layout, fd.Tag)
-			b.setFirst(fd.Tag)
 
 		default:
 			return fmt.Errorf("unexpected element <%s>", it.XMLName.Local)
 		}
 	}
+	return nil
+}
+
+// group resolves the group counted by the field named counter, holding items,
+// into b. ctx is as for walk.
+func (r *resolver) group(b *resolvedBody, ctx int, counter string, required bool, items []xmlItem) error {
+	fd, ok := r.byName[counter]
+	if !ok {
+		return fmt.Errorf("unknown group field %q", counter)
+	}
+	if err := r.enter(); err != nil {
+		return err
+	}
+	inner, err := r.resolve(items)
+	r.leave()
+	if err != nil {
+		return fmt.Errorf("group %s: %w", counter, err)
+	}
+	// The group's contents are copied into this body: charge them, or
+	// a chain of nested groups would do quadratic uncharged work.
+	if err := r.spend(len(inner.all)); err != nil {
+		return err
+	}
+	if inner.first == 0 {
+		return fmt.Errorf("group %s: no child fields", counter)
+	}
+	// Charge recording the counter and every group child in the
+	// enclosing optional components before doing it.
+	if err := r.spend(b.condDepth(ctx) * (1 + len(inner.all))); err != nil {
+		return err
+	}
+	b.all = append(b.all, b.addField(ctx, fd.Tag, required))
+	// Group children are never required at this level since group
+	// instance validation is out of scope. They do show that their
+	// optional component is present.
+	for _, ref := range inner.all {
+		b.markPresent(ctx, ref.Tag)
+		b.all = append(b.all, dictionary.FieldRef{Tag: ref.Tag})
+	}
+	b.groups = append(b.groups, dictionary.GroupDef{
+		CounterTag: fd.Tag,
+		Name:       counter,
+		Required:   required,
+		DelimTag:   inner.first,
+		Fields:     inner.direct,
+		Groups:     inner.groups,
+		Layout:     inner.layout,
+	})
+	b.layout = append(b.layout, fd.Tag)
+	b.setFirst(fd.Tag)
 	return nil
 }

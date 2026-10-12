@@ -1912,7 +1912,7 @@ func TestGenerateRawGetterClash(t *testing.T) {
 // does not parse, for any dictionary xmldict.Load accepts: it returns an
 // error for the ones it cannot name safely.
 func FuzzGenerate(f *testing.F) {
-	for _, name := range []string{"FIX40", "FIX44", "FIXT11"} {
+	for _, name := range []string{"FIX40", "FIX44", "FIXT11", "OrchestraFIXLatest"} {
 		data, err := os.ReadFile("testdata/" + name + ".xml")
 		if err != nil {
 			f.Fatal(err)

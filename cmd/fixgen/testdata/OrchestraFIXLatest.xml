@@ -1,0 +1,2739 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Trimmed from FIX Standard/OrchestraFIXLatest.xml (FIX Latest as of Extension
+  Pack 312) of https://github.com/FIXTradingCommunity/orchestrations, under the
+  Apache License 2.0: messages 0, 1, 2, 3, 4, 5, A, j, n, 9, BE, BF, o and CX,
+  the header, the trailer and what they reference, without annotations,
+  categories, sections and datatypes.
+-->
+<fixr:repository xmlns:dcterms="http://purl.org/dc/terms/" xmlns:fixr="http://fixprotocol.io/2020/orchestra/repository" name="FIX.Latest" version="FIX.Latest_EP312">
+  <fixr:metadata>
+    <dcterms:creator>FIX Protocol Ltd.</dcterms:creator>
+    <dcterms:description>FIX Latest as of Extension Pack 312</dcterms:description>
+    <dcterms:publisher>FIX Protocol Ltd.</dcterms:publisher>
+    <dcterms:title>OrchestraFIXLatest</dcterms:title>
+    <dcterms:rights>Copyright (c) FIX Protocol Ltd. All Rights Reserved.</dcterms:rights>
+    <dcterms:format>application/xml</dcterms:format>
+    <dcterms:conformsTo>Orchestra v1.0</dcterms:conformsTo>
+    <dcterms:created>2026-09-08</dcterms:created>
+    <dcterms:source>Orchid</dcterms:source>
+  </fixr:metadata>
+  <fixr:codeSets>
+    <fixr:codeSet id="8" name="BeginStringCodeSet" type="String" added="FIX.2.7" updated="FIX.Latest" updatedEP="270">
+      <fixr:code id="8001" name="FIX42" value="FIX.4.2" sort="1" added="FIX.Latest" addedEP="270">
+        </fixr:code>
+      <fixr:code id="8002" name="FIX44" value="FIX.4.4" sort="2" added="FIX.Latest" addedEP="270">
+        </fixr:code>
+      <fixr:code id="8003" name="FIXT11" value="FIXT.1.1" sort="3" added="FIX.Latest" addedEP="270">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="35" name="MsgTypeCodeSet" type="String" added="FIX.2.7">
+      <fixr:code id="35001" name="Heartbeat" value="0" sort="1" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35002" name="TestRequest" value="1" sort="2" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35003" name="ResendRequest" value="2" sort="3" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35004" name="Reject" value="3" sort="4" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35005" name="SequenceReset" value="4" sort="5" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35006" name="Logout" value="5" sort="6" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35007" name="IOI" value="6" sort="7" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35008" name="Advertisement" value="7" sort="8" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35009" name="ExecutionReport" value="8" sort="9" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35010" name="OrderCancelReject" value="9" sort="10" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35011" name="Logon" value="A" sort="11" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35012" name="News" value="B" sort="12" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35013" name="Email" value="C" sort="13" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35014" name="NewOrderSingle" value="D" sort="14" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35015" name="NewOrderList" value="E" sort="15" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35016" name="OrderCancelRequest" value="F" sort="16" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35017" name="OrderCancelReplaceRequest" value="G" sort="17" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35018" name="OrderStatusRequest" value="H" sort="18" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35019" name="AllocationInstruction" value="J" sort="19" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35020" name="ListCancelRequest" value="K" sort="20" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35021" name="ListExecute" value="L" sort="21" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35022" name="ListStatusRequest" value="M" sort="22" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35023" name="ListStatus" value="N" sort="23" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35024" name="AllocationInstructionAck" value="P" sort="24" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35025" name="DontKnowTrade" value="Q" sort="25" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35026" name="QuoteRequest" value="R" sort="26" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35027" name="Quote" value="S" sort="27" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35028" name="SettlementInstructions" value="T" sort="28" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35029" name="MarketDataRequest" value="V" sort="29" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35030" name="MarketDataSnapshotFullRefresh" value="W" sort="30" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35031" name="MarketDataIncrementalRefresh" value="X" sort="31" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35032" name="MarketDataRequestReject" value="Y" sort="32" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35033" name="QuoteCancel" value="Z" sort="33" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35034" name="QuoteStatusRequest" value="a" sort="34" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35035" name="MassQuoteAck" value="b" sort="35" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35036" name="SecurityDefinitionRequest" value="c" sort="36" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35037" name="SecurityDefinition" value="d" sort="37" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35038" name="SecurityStatusRequest" value="e" sort="38" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35039" name="SecurityStatus" value="f" sort="39" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35040" name="TradingSessionStatusRequest" value="g" sort="40" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35041" name="TradingSessionStatus" value="h" sort="41" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35042" name="MassQuote" value="i" sort="42" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35043" name="BusinessMessageReject" value="j" sort="43" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35044" name="BidRequest" value="k" sort="44" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35045" name="BidResponse" value="l" sort="45" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35046" name="ListStrikePrice" value="m" sort="46" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35047" name="XMLnonFIX" value="n" sort="47" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35048" name="RegistrationInstructions" value="o" sort="48" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35049" name="RegistrationInstructionsResponse" value="p" sort="49" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35050" name="OrderMassCancelRequest" value="q" sort="50" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35051" name="OrderMassCancelReport" value="r" sort="51" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35052" name="NewOrderCross" value="s" sort="52" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35053" name="CrossOrderCancelReplaceRequest" value="t" sort="53" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35054" name="CrossOrderCancelRequest" value="u" sort="54" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35055" name="SecurityTypeRequest" value="v" sort="55" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35056" name="SecurityTypes" value="w" sort="56" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35057" name="SecurityListRequest" value="x" sort="57" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35058" name="SecurityList" value="y" sort="58" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35059" name="DerivativeSecurityListRequest" value="z" sort="59" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35060" name="DerivativeSecurityList" value="AA" sort="60" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35061" name="NewOrderMultileg" value="AB" sort="61" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35062" name="MultilegOrderCancelReplace" value="AC" sort="62" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35063" name="TradeCaptureReportRequest" value="AD" sort="63" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35064" name="TradeCaptureReport" value="AE" sort="64" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35065" name="OrderMassStatusRequest" value="AF" sort="65" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35066" name="QuoteRequestReject" value="AG" sort="66" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35067" name="RFQRequest" value="AH" sort="67" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35068" name="QuoteStatusReport" value="AI" sort="68" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35069" name="QuoteResponse" value="AJ" sort="69" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35070" name="Confirmation" value="AK" sort="70" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35071" name="PositionMaintenanceRequest" value="AL" sort="71" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35072" name="PositionMaintenanceReport" value="AM" sort="72" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35073" name="RequestForPositions" value="AN" sort="73" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35074" name="RequestForPositionsAck" value="AO" sort="74" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35075" name="PositionReport" value="AP" sort="75" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35076" name="TradeCaptureReportRequestAck" value="AQ" sort="76" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35077" name="TradeCaptureReportAck" value="AR" sort="77" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35078" name="AllocationReport" value="AS" sort="78" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35079" name="AllocationReportAck" value="AT" sort="79" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35080" name="ConfirmationAck" value="AU" sort="80" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35081" name="SettlementInstructionRequest" value="AV" sort="81" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35082" name="AssignmentReport" value="AW" sort="82" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35083" name="CollateralRequest" value="AX" sort="83" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35084" name="CollateralAssignment" value="AY" sort="84" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35085" name="CollateralResponse" value="AZ" sort="85" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35086" name="CollateralReport" value="BA" sort="86" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35087" name="CollateralInquiry" value="BB" sort="87" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35088" name="NetworkCounterpartySystemStatusRequest" value="BC" sort="88" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35089" name="NetworkCounterpartySystemStatusResponse" value="BD" sort="89" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35090" name="UserRequest" value="BE" sort="90" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35091" name="UserResponse" value="BF" sort="91" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35092" name="CollateralInquiryAck" value="BG" sort="92" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35093" name="ConfirmationRequest" value="BH" sort="93" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35094" name="ContraryIntentionReport" value="BO" sort="94" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35095" name="SecurityDefinitionUpdateReport" value="BP" sort="95" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35096" name="SecurityListUpdateReport" value="BK" sort="96" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35097" name="AdjustedPositionReport" value="BL" sort="97" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35098" name="AllocationInstructionAlert" value="BM" sort="98" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35099" name="ExecutionAck" value="BN" sort="99" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35100" name="TradingSessionList" value="BJ" sort="100" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35101" name="TradingSessionListRequest" value="BI" sort="101" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35102" name="SettlementObligationReport" value="BQ" sort="102">
+        </fixr:code>
+      <fixr:code id="35103" name="DerivativeSecurityListUpdateReport" value="BR" sort="103" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35104" name="TradingSessionListUpdateReport" value="BS" sort="104" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35105" name="MarketDefinitionRequest" value="BT" sort="105" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35106" name="MarketDefinition" value="BU" sort="106" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35107" name="MarketDefinitionUpdateReport" value="BV" sort="107" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35108" name="ApplicationMessageRequest" value="BW" sort="108" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35109" name="ApplicationMessageRequestAck" value="BX" sort="109" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35110" name="ApplicationMessageReport" value="BY" sort="110" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35111" name="OrderMassActionReport" value="BZ" sort="111" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35112" name="OrderMassActionRequest" value="CA" sort="112" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35113" name="UserNotification" value="CB" sort="113" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35114" name="StreamAssignmentRequest" value="CC" sort="114" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35115" name="StreamAssignmentReport" value="CD" sort="115" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35116" name="StreamAssignmentReportACK" value="CE" sort="116" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35117" name="PartyDetailsListRequest" value="CF" sort="117" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35118" name="PartyDetailsListReport" value="CG" sort="118" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35119" name="MarginRequirementInquiry" value="CH" sort="119" added="FIX.2.7" updated="FIX.Latest" updatedEP="306">
+        </fixr:code>
+      <fixr:code id="35120" name="MarginRequirementInquiryAck" value="CI" sort="120" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35121" name="MarginRequirementReport" value="CJ" sort="121" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35122" name="PartyDetailsListUpdateReport" value="CK" sort="122" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35123" name="PartyRiskLimitsRequest" value="CL" sort="123" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35124" name="PartyRiskLimitsReport" value="CM" sort="124" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35125" name="SecurityMassStatusRequest" value="CN" sort="125" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35126" name="SecurityMassStatus" value="CO" sort="126" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35127" name="AccountSummaryReport" value="CQ" sort="127" added="FIX.2.7" updated="FIX.Latest" updatedEP="306">
+        </fixr:code>
+      <fixr:code id="35128" name="PartyRiskLimitsUpdateReport" value="CR" sort="128" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35129" name="PartyRiskLimitsDefinitionRequest" value="CS" sort="129" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35130" name="PartyRiskLimitsDefinitionRequestAck" value="CT" sort="130" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35131" name="PartyEntitlementsRequest" value="CU" sort="131" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35132" name="PartyEntitlementsReport" value="CV" sort="132" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35133" name="QuoteAck" value="CW" sort="133" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35134" name="PartyDetailsDefinitionRequest" value="CX" sort="134" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35135" name="PartyDetailsDefinitionRequestAck" value="CY" sort="135" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35136" name="PartyEntitlementsUpdateReport" value="CZ" sort="136" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35137" name="PartyEntitlementsDefinitionRequest" value="DA" sort="137" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35138" name="PartyEntitlementsDefinitionRequestAck" value="DB" sort="138" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35139" name="TradeMatchReport" value="DC" sort="139" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35140" name="TradeMatchReportAck" value="DD" sort="140" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35141" name="PartyRiskLimitsReportAck" value="DE" sort="141" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35142" name="PartyRiskLimitCheckRequest" value="DF" sort="142" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35143" name="PartyRiskLimitCheckRequestAck" value="DG" sort="143" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35144" name="PartyActionRequest" value="DH" sort="144" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35145" name="PartyActionReport" value="DI" sort="145" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35146" name="MassOrder" value="DJ" sort="146" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35147" name="MassOrderAck" value="DK" sort="147" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35148" name="PositionTransferInstruction" value="DL" sort="148" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35149" name="PositionTransferInstructionAck" value="DM" sort="149" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35150" name="PositionTransferReport" value="DN" sort="150" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35151" name="MarketDataStatisticsRequest" value="DO" sort="151" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35152" name="MarketDataStatisticsReport" value="DP" sort="152" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35153" name="CollateralReportAck" value="DQ" sort="153" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35154" name="MarketDataReport" value="DR" sort="154" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35155" name="CrossRequest" value="DS" sort="155" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35156" name="CrossRequestAck" value="DT" sort="156" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35157" name="AllocationInstructionAlertRequest" value="DU" sort="157" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35158" name="AllocationInstructionAlertRequestAck" value="DV" sort="158" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35159" name="TradeAggregationRequest" value="DW" sort="159" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35160" name="TradeAggregationReport" value="DX" sort="160" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35161" name="PayManagementReport" value="EA" sort="161" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35162" name="PayManagementReportAck" value="EB" sort="162" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35163" name="PayManagementRequest" value="DY" sort="163" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35164" name="PayManagementRequestAck" value="DZ" sort="164" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35165" name="SettlementStatusRequest" value="EC" sort="165" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35166" name="SettlementStatusRequestAck" value="ED" sort="166" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35167" name="SettlementStatusReport" value="EE" sort="167" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35168" name="SettlementStatusReportAck" value="EF" sort="168" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35169" name="SecurityRiskMetricsReport" value="EG" sort="169" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="35170" name="AlgoCertificateRequest" value="EH" sort="170" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35171" name="AlgoCertificateRequestAck" value="EI" sort="171" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35172" name="AlgoCertificateReport" value="EJ" sort="172" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35173" name="AlgoCertificateReportAck" value="EK" sort="173" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35174" name="TestSuiteDefinitionRequest" value="EL" sort="174" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35175" name="TestSuiteDefinitionRequestAck" value="EM" sort="175" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35176" name="TestActionRequest" value="EN" sort="176" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35177" name="TestActionRequestAck" value="EO" sort="177" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35178" name="TestActionReport" value="EP" sort="178" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="35179" name="MarketDataAck" value="EQ" sort="179" added="FIX.Latest" addedEP="300">
+        </fixr:code>
+      <fixr:code id="35180" name="SecurityStatusAck" value="ER" sort="180" added="FIX.Latest" addedEP="300">
+        </fixr:code>
+      <fixr:code id="35181" name="TradingSessionStatusAck" value="ES" sort="181" added="FIX.Latest" addedEP="300">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="39" name="OrdStatusCodeSet" type="char" added="FIX.2.7">
+      <fixr:code id="39001" name="New" value="0" sort="1" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39002" name="PartiallyFilled" value="1" sort="2" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39003" name="Filled" value="2" sort="3" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39004" name="DoneForDay" value="3" sort="4" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39005" name="Canceled" value="4" sort="5" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39006" name="Replaced" value="5" sort="6" added="FIX.4.4" addedEP="35" deprecated="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="39007" name="PendingCancel" value="6" sort="7" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39008" name="Stopped" value="7" sort="8" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39009" name="Rejected" value="8" sort="9" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="39010" name="Suspended" value="9" sort="10" added="FIX.3.0">
+        </fixr:code>
+      <fixr:code id="39011" name="PendingNew" value="A" sort="11" added="FIX.3.0">
+        </fixr:code>
+      <fixr:code id="39012" name="Calculated" value="B" sort="12" added="FIX.4.0">
+        </fixr:code>
+      <fixr:code id="39013" name="Expired" value="C" sort="13" added="FIX.4.0">
+        </fixr:code>
+      <fixr:code id="39014" name="AcceptedForBidding" value="D" sort="14" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="39015" name="PendingReplace" value="E" sort="15" added="FIX.4.2">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="43" name="PossDupFlagCodeSet" type="Boolean" added="FIX.2.7">
+      <fixr:code id="43001" name="OriginalTransmission" value="N" sort="1" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="43002" name="PossibleDuplicate" value="Y" sort="2" added="FIX.2.7">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="97" name="PossResendCodeSet" type="Boolean" added="FIX.2.7">
+      <fixr:code id="97001" name="OriginalTransmission" value="N" sort="1" added="FIX.4.1">
+        </fixr:code>
+      <fixr:code id="97002" name="PossibleResend" value="Y" sort="2" added="FIX.4.1">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="98" name="EncryptMethodCodeSet" type="int" added="FIX.2.7">
+      <fixr:code id="98001" name="None" value="0" sort="1" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="98002" name="PKCS" value="1" sort="2" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="98003" name="DES" value="2" sort="3" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="98004" name="PKCSDES" value="3" sort="4" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="98005" name="PGPDES" value="4" sort="5" added="FIX.3.0">
+        </fixr:code>
+      <fixr:code id="98006" name="PGPDESMD5" value="5" sort="6" added="FIX.4.0">
+        </fixr:code>
+      <fixr:code id="98007" name="PEM" value="6" sort="7" added="FIX.4.0">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="102" name="CxlRejReasonCodeSet" type="int" added="FIX.2.7">
+      <fixr:code id="102001" name="TooLateToCancel" value="0" sort="1" added="FIX.2.7" updated="FIX.Latest" updatedEP="309">
+        </fixr:code>
+      <fixr:code id="102002" name="UnknownOrder" value="1" sort="2" added="FIX.2.7">
+        </fixr:code>
+      <fixr:code id="102003" name="BrokerCredit" value="2" sort="3" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="102004" name="OrderAlreadyInPendingStatus" value="3" sort="4" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="102005" name="UnableToProcessOrderMassCancelRequest" value="4" sort="5" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="102006" name="OrigOrdModTime" value="5" sort="6" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="102007" name="DuplicateClOrdID" value="6" sort="7" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="102008" name="PriceExceedsCurrentPrice" value="7" sort="8" added="FIX.5.0" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="102009" name="PriceExceedsCurrentPriceBand" value="8" sort="9" added="FIX.5.0" addedEP="43">
+        </fixr:code>
+      <fixr:code id="102010" name="InvalidPriceIncrement" value="18" sort="18" added="FIX.4.4" addedEP="6">
+        </fixr:code>
+      <fixr:code id="102011" name="Other" value="99" sort="99" added="FIX.4.4">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="123" name="GapFillFlagCodeSet" type="Boolean" added="FIX.4.0">
+      <fixr:code id="123001" name="SequenceReset" value="N" sort="1" added="FIX.4.0">
+        </fixr:code>
+      <fixr:code id="123002" name="GapFillMessage" value="Y" sort="2" added="FIX.4.0">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="141" name="ResetSeqNumFlagCodeSet" type="Boolean" added="FIX.4.1" updated="FIX.5.0SP2" updatedEP="204">
+      <fixr:code id="141001" name="No" value="N" sort="1" added="FIX.4.1">
+        </fixr:code>
+      <fixr:code id="141002" name="Yes" value="Y" sort="2" added="FIX.4.1">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="373" name="SessionRejectReasonCodeSet" type="int" added="FIX.4.2">
+      <fixr:code id="373001" name="InvalidTagNumber" value="0" sort="0" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373002" name="RequiredTagMissing" value="1" sort="1" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373003" name="TagNotDefinedForThisMessageType" value="2" sort="2" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373004" name="UndefinedTag" value="3" sort="3" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373005" name="TagSpecifiedWithoutAValue" value="4" sort="4" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373006" name="ValueIsIncorrect" value="5" sort="5" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373007" name="IncorrectDataFormatForValue" value="6" sort="6" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373008" name="DecryptionProblem" value="7" sort="7" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373009" name="SignatureProblem" value="8" sort="8" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373010" name="CompIDProblem" value="9" sort="9" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373011" name="SendingTimeAccuracyProblem" value="10" sort="10" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373012" name="InvalidMsgType" value="11" sort="11" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="373013" name="XMLValidationError" value="12" sort="12" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="373014" name="TagAppearsMoreThanOnce" value="13" sort="13" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="373015" name="TagSpecifiedOutOfRequiredOrder" value="14" sort="14" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="373016" name="RepeatingGroupFieldsOutOfOrder" value="15" sort="15" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="373017" name="IncorrectNumInGroupCountForRepeatingGroup" value="16" sort="16" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="373018" name="NonDataValueIncludesFieldDelimiter" value="17" sort="17" added="FIX.4.3" updated="FIX.Latest" updatedEP="271">
+        </fixr:code>
+      <fixr:code id="373019" name="InvalidUnsupportedApplVer" value="18" sort="19" added="FIX.5.0" addedEP="56" updated="FIX.Latest" updatedEP="271">
+        </fixr:code>
+      <fixr:code id="373020" name="Other" value="99" sort="99" added="FIX.4.4">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="380" name="BusinessRejectReasonCodeSet" type="int" added="FIX.4.2">
+      <fixr:code id="380001" name="Other" value="0" sort="1" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="380002" name="UnknownID" value="1" sort="2" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="380003" name="UnknownSecurity" value="2" sort="3" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="380004" name="UnsupportedMessageType" value="3" sort="4" added="FIX.4.2" updated="FIX.5.0SP1" updatedEP="95">
+        </fixr:code>
+      <fixr:code id="380005" name="ApplicationNotAvailable" value="4" sort="5" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="380006" name="ConditionallyRequiredFieldMissing" value="5" sort="6" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="380007" name="NotAuthorized" value="6" sort="7" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="380008" name="DeliverToFirmNotAvailableAtThisTime" value="7" sort="8" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="380009" name="ThrottleLimitExceeded" value="8" sort="9" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+      <fixr:code id="380010" name="ThrottleLimitExceededSessionDisconnected" value="9" sort="10" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+      <fixr:code id="380011" name="ThrottledMessagesRejectedOnRequest" value="10" sort="11" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+      <fixr:code id="380012" name="InvalidPriceIncrement" value="18" sort="19" added="FIX.4.4" addedEP="6" updated="FIX.5.0SP2" updatedEP="116">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="385" name="MsgDirectionCodeSet" type="char" added="FIX.4.2" updated="FIX.Latest" updatedEP="275">
+      <fixr:code id="385001" name="Receive" value="R" sort="1" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="385002" name="Send" value="S" sort="2" added="FIX.4.2">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="434" name="CxlRejResponseToCodeSet" type="char" added="FIX.4.2">
+      <fixr:code id="434001" name="OrderCancelRequest" value="1" sort="1" added="FIX.4.2">
+        </fixr:code>
+      <fixr:code id="434002" name="OrderCancelReplaceRequest" value="2" sort="2" added="FIX.4.2" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="447" name="PartyIDSourceCodeSet" type="char" added="FIX.4.3">
+      <fixr:code id="447001" name="UKNationalInsuranceOrPensionNumber" value="6" sort="1" group="For PartyRole = &quot;InvestorID&quot; and for CIV" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447002" name="USSocialSecurityNumber" value="7" sort="2" group="For PartyRole = &quot;InvestorID&quot; and for CIV" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447003" name="USEmployerOrTaxIDNumber" value="8" sort="3" group="For PartyRole = &quot;InvestorID&quot; and for CIV" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447004" name="AustralianBusinessNumber" value="9" sort="4" group="For PartyRole = &quot;InvestorID&quot; and for CIV" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447005" name="AustralianTaxFileNumber" value="A" sort="5" group="For PartyRole = &quot;InvestorID&quot; and for CIV" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447006" name="TaxID" value="J" sort="6" group="For PartyRole = &quot;InvestorID&quot; and for CIV" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="447007" name="KoreanInvestorID" value="1" sort="1" group="For PartyRole = &quot;InvestorID&quot; and for Equities" added="FIX.4.3" updated="FIX.Latest" updatedEP="296">
+        </fixr:code>
+      <fixr:code id="447008" name="TaiwaneseForeignInvestorID" value="2" sort="2" group="For PartyRole = &quot;InvestorID&quot; and for Equities" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447009" name="TaiwaneseTradingAcct" value="3" sort="3" group="For PartyRole = &quot;InvestorID&quot; and for Equities" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447010" name="MalaysianCentralDepository" value="4" sort="4" group="For PartyRole = &quot;InvestorID&quot; and for Equities" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447011" name="ChineseInvestorID" value="5" sort="5" group="For PartyRole = &quot;InvestorID&quot; and for Equities" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447012" name="ISITCAcronym" value="I" sort="1" group="For PartyRole=&quot;Broker of Credit&quot;" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="447013" name="BIC" value="B" sort="1" group="For all PartyRoles" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447014" name="GeneralIdentifier" value="C" sort="2" group="For all PartyRoles" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447015" name="Proprietary" value="D" sort="3" group="For all PartyRoles" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="192">
+        </fixr:code>
+      <fixr:code id="447016" name="ISOCountryCode" value="E" sort="4" group="For all PartyRoles" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447017" name="SettlementEntityLocation" value="F" sort="5" group="For all PartyRoles" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="447018" name="MIC" value="G" sort="6" group="For all PartyRoles" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="236">
+        </fixr:code>
+      <fixr:code id="447019" name="CSDParticipant" value="H" sort="7" group="For all PartyRoles" added="FIX.4.4" updated="FIX.Latest" updatedEP="282">
+        </fixr:code>
+      <fixr:code id="447020" name="AustralianCompanyNumber" value="K" sort="8" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="108">
+        </fixr:code>
+      <fixr:code id="447021" name="AustralianRegisteredBodyNumber" value="L" sort="9" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="108">
+        </fixr:code>
+      <fixr:code id="447022" name="CFTCReportingFirmIdentifier" value="M" sort="10" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="140">
+        </fixr:code>
+      <fixr:code id="447023" name="LegalEntityIdentifier" value="N" sort="11" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="156">
+        </fixr:code>
+      <fixr:code id="447024" name="InterimIdentifier" value="O" sort="12" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="192">
+        </fixr:code>
+      <fixr:code id="447025" name="ShortCodeIdentifier" value="P" sort="13" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="222" updated="FIX.Latest" updatedEP="303">
+        </fixr:code>
+      <fixr:code id="447026" name="NationalIDNaturalPerson" value="Q" sort="14" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="222">
+        </fixr:code>
+      <fixr:code id="447027" name="IndiaPermanentAccountNumber" value="R" sort="15" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="244">
+        </fixr:code>
+      <fixr:code id="447028" name="FDID" value="S" sort="16" group="For all PartyRoles" added="FIX.5.0SP2" addedEP="248" updated="FIX.Latest" updatedEP="262">
+        </fixr:code>
+      <fixr:code id="447029" name="SPSAID" value="T" sort="17" group="For all PartyRoles" added="FIX.Latest" addedEP="262">
+        </fixr:code>
+      <fixr:code id="447030" name="MasterSPSAID" value="U" sort="18" group="For all PartyRoles" added="FIX.Latest" addedEP="262">
+        </fixr:code>
+      <fixr:code id="447031" name="KoreaShortSellingRegistrationNumber" value="V" sort="19" group="For all PartyRoles" added="FIX.Latest" addedEP="296">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="452" name="PartyRoleCodeSet" type="int" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="256">
+      <fixr:code id="452001" name="ExecutingFirm" value="1" sort="0" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452002" name="BrokerOfCredit" value="2" sort="1" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452003" name="ClientID" value="3" sort="2" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452004" name="ClearingFirm" value="4" sort="3" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452005" name="InvestorID" value="5" sort="4" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452006" name="IntroducingFirm" value="6" sort="5" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452007" name="EnteringFirm" value="7" sort="6" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452008" name="Locate" value="8" sort="7" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452009" name="FundManagerClientID" value="9" sort="8" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452010" name="SettlementLocation" value="10" sort="9" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452011" name="OrderOriginationTrader" value="11" sort="10" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452012" name="ExecutingTrader" value="12" sort="11" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452013" name="OrderOriginationFirm" value="13" sort="12" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452014" name="GiveupClearingFirmDepr" value="14" sort="13" added="FIX.4.3" deprecated="FIX.5.0SP2" deprecatedEP="118" updated="FIX.5.0SP2" updatedEP="253">
+        </fixr:code>
+      <fixr:code id="452015" name="CorrespondantClearingFirm" value="15" sort="14" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452016" name="ExecutingSystem" value="16" sort="15" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452017" name="ContraFirm" value="17" sort="16" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452018" name="ContraClearingFirm" value="18" sort="17" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452019" name="SponsoringFirm" value="19" sort="18" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452020" name="UnderlyingContraFirm" value="20" sort="19" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="452021" name="ClearingOrganization" value="21" sort="20" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452022" name="Exchange" value="22" sort="21" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="139">
+        </fixr:code>
+      <fixr:code id="452023" name="CustomerAccount" value="24" sort="22" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452024" name="CorrespondentClearingOrganization" value="25" sort="23" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452025" name="CorrespondentBroker" value="26" sort="24" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452026" name="Buyer" value="27" sort="25" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452027" name="Custodian" value="28" sort="26" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452028" name="Intermediary" value="29" sort="27" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452029" name="Agent" value="30" sort="28" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452030" name="SubCustodian" value="31" sort="29" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452031" name="Beneficiary" value="32" sort="30" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452032" name="InterestedParty" value="33" sort="31" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452033" name="RegulatoryBody" value="34" sort="32" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="169">
+        </fixr:code>
+      <fixr:code id="452034" name="LiquidityProvider" value="35" sort="33" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452035" name="EnteringTrader" value="36" sort="34" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452036" name="ContraTrader" value="37" sort="35" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="452037" name="PositionAccount" value="38" sort="36" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="155">
+        </fixr:code>
+      <fixr:code id="452038" name="ContraInvestorID" value="39" sort="37" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="452039" name="TransferToFirm" value="40" sort="38" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="452040" name="ContraPositionAccount" value="41" sort="39" added="FIX.4.4" addedEP="5">
+        </fixr:code>
+      <fixr:code id="452041" name="ContraExchange" value="42" sort="40" added="FIX.4.4" addedEP="5">
+        </fixr:code>
+      <fixr:code id="452042" name="InternalCarryAccount" value="43" sort="41" added="FIX.4.4" addedEP="5">
+        </fixr:code>
+      <fixr:code id="452043" name="OrderEntryOperatorID" value="44" sort="42" added="FIX.4.4" addedEP="5">
+        </fixr:code>
+      <fixr:code id="452044" name="SecondaryAccountNumber" value="45" sort="43" added="FIX.4.4" addedEP="5">
+        </fixr:code>
+      <fixr:code id="452045" name="ForeignFirm" value="46" sort="44" added="FIX.4.4" addedEP="8" updated="FIX.5.0SP1" updatedEP="95">
+        </fixr:code>
+      <fixr:code id="452046" name="ThirdPartyAllocationFirm" value="47" sort="45" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452047" name="ClaimingAccount" value="48" sort="46" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452048" name="AssetManager" value="49" sort="47" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452049" name="PledgorAccount" value="50" sort="48" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452050" name="PledgeeAccount" value="51" sort="49" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452051" name="LargeTraderReportableAccount" value="52" sort="50" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452052" name="TraderMnemonic" value="53" sort="51" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452053" name="SenderLocation" value="54" sort="52" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452054" name="SessionID" value="55" sort="53" added="FIX.4.4" addedEP="8">
+        </fixr:code>
+      <fixr:code id="452055" name="AcceptableCounterparty" value="56" sort="54" added="FIX.4.4" addedEP="22">
+        </fixr:code>
+      <fixr:code id="452056" name="UnacceptableCounterparty" value="57" sort="55" added="FIX.4.4" addedEP="22">
+        </fixr:code>
+      <fixr:code id="452057" name="EnteringUnit" value="58" sort="56" added="FIX.4.4" addedEP="22">
+        </fixr:code>
+      <fixr:code id="452058" name="ExecutingUnit" value="59" sort="57" added="FIX.4.4" addedEP="22">
+        </fixr:code>
+      <fixr:code id="452059" name="IntroducingBroker" value="60" sort="58" added="FIX.4.4" addedEP="4">
+        </fixr:code>
+      <fixr:code id="452060" name="QuoteOriginator" value="61" sort="59" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452061" name="ReportOriginator" value="62" sort="60" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452062" name="SystematicInternaliser" value="63" sort="61" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452063" name="MultilateralTradingFacility" value="64" sort="62" added="FIX.4.4" addedEP="26" updated="FIX.5.0SP2" updatedEP="139">
+        </fixr:code>
+      <fixr:code id="452064" name="RegulatedMarket" value="65" sort="63" added="FIX.4.4" addedEP="26" updated="FIX.5.0SP2" updatedEP="139">
+        </fixr:code>
+      <fixr:code id="452065" name="MarketMaker" value="66" sort="64" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452066" name="InvestmentFirm" value="67" sort="65" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452067" name="HostCompetentAuthority" value="68" sort="66" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452068" name="HomeCompetentAuthority" value="69" sort="67" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452069" name="CompetentAuthorityLiquidity" value="70" sort="68" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452070" name="CompetentAuthorityTransactionVenue" value="71" sort="69" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452071" name="ReportingIntermediary" value="72" sort="70" added="FIX.4.4" addedEP="26" updated="FIX.5.0SP2" updatedEP="229">
+        </fixr:code>
+      <fixr:code id="452072" name="ExecutionVenue" value="73" sort="71" added="FIX.4.4" addedEP="26" updated="FIX.5.0SP2" updatedEP="139">
+        </fixr:code>
+      <fixr:code id="452073" name="MarketDataEntryOriginator" value="74" sort="72" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452074" name="LocationID" value="75" sort="73" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452075" name="DeskID" value="76" sort="74" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452076" name="MarketDataMarket" value="77" sort="75" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="452077" name="AllocationEntity" value="78" sort="76" added="FIX.4.4" addedEP="35">
+        </fixr:code>
+      <fixr:code id="452078" name="PrimeBroker" value="79" sort="77" added="FIX.5.0" addedEP="68">
+        </fixr:code>
+      <fixr:code id="452079" name="StepOutFirm" value="80" sort="78" added="FIX.5.0" addedEP="68">
+        </fixr:code>
+      <fixr:code id="452080" name="BrokerClearingID" value="81" sort="79" added="FIX.5.0" addedEP="68" updated="FIX.Latest" updatedEP="271">
+        </fixr:code>
+      <fixr:code id="452081" name="CentralRegistrationDepository" value="82" sort="80" added="FIX.5.0SP1" addedEP="79">
+        </fixr:code>
+      <fixr:code id="452082" name="ClearingAccount" value="83" sort="81" added="FIX.5.0SP1" addedEP="96">
+        </fixr:code>
+      <fixr:code id="452083" name="AcceptableSettlingCounterparty" value="84" sort="82" added="FIX.5.0SP1" addedEP="96">
+        </fixr:code>
+      <fixr:code id="452084" name="UnacceptableSettlingCounterparty" value="85" sort="83" added="FIX.5.0SP1" addedEP="96">
+        </fixr:code>
+      <fixr:code id="452085" name="CLSMemberBank" value="86" sort="84" added="FIX.5.0SP2" addedEP="100">
+        </fixr:code>
+      <fixr:code id="452086" name="InConcertGroup" value="87" sort="85" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="452087" name="InConcertControllingEntity" value="88" sort="86" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="452088" name="LargePositionsReportingAccount" value="89" sort="87" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="452089" name="SettlementFirm" value="90" sort="88" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="452090" name="SettlementAccount" value="91" sort="89" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="155">
+        </fixr:code>
+      <fixr:code id="452091" name="ReportingMarketCenter" value="92" sort="90" added="FIX.5.0SP2" addedEP="112">
+        </fixr:code>
+      <fixr:code id="452092" name="RelatedReportingMarketCenter" value="93" sort="91" added="FIX.5.0SP2" addedEP="112">
+        </fixr:code>
+      <fixr:code id="452093" name="AwayMarket" value="94" sort="92" added="FIX.5.0SP2" addedEP="112" updated="FIX.5.0SP2" updatedEP="139">
+        </fixr:code>
+      <fixr:code id="452094" name="GiveupTradingFirm" value="95" sort="93" added="FIX.5.0SP2" addedEP="118">
+        </fixr:code>
+      <fixr:code id="452095" name="TakeupTradingFirm" value="96" sort="94" added="FIX.5.0SP2" addedEP="118">
+        </fixr:code>
+      <fixr:code id="452096" name="GiveupClearingFirm" value="97" sort="95" added="FIX.5.0SP2" addedEP="118">
+        </fixr:code>
+      <fixr:code id="452097" name="TakeupClearingFirm" value="98" sort="96" added="FIX.5.0SP2" addedEP="118">
+        </fixr:code>
+      <fixr:code id="452098" name="OriginatingMarket" value="99" sort="97" added="FIX.5.0SP2" addedEP="139">
+        </fixr:code>
+      <fixr:code id="452099" name="MarginAccount" value="100" sort="98" added="FIX.5.0SP2" addedEP="155">
+        </fixr:code>
+      <fixr:code id="452100" name="CollateralAssetAccount" value="101" sort="99" added="FIX.5.0SP2" addedEP="155">
+        </fixr:code>
+      <fixr:code id="452101" name="DataRepository" value="102" sort="100" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452102" name="CalculationAgent" value="103" sort="101" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452103" name="ExerciseNoticeSender" value="104" sort="102" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452104" name="ExerciseNoticeReceiver" value="105" sort="103" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452105" name="RateReferenceBank" value="106" sort="104" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452106" name="Correspondent" value="107" sort="105" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452107" name="BeneficiaryBank" value="109" sort="106" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452108" name="Borrower" value="110" sort="107" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452109" name="PrimaryObligator" value="111" sort="108" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452110" name="Guarantor" value="112" sort="109" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452111" name="ExcludedReferenceEntity" value="113" sort="110" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452112" name="DeterminingParty" value="114" sort="111" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452113" name="HedgingParty" value="115" sort="112" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452114" name="ReportingEntity" value="116" sort="113" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="452115" name="SalesPerson" value="117" sort="114" added="FIX.5.0SP2" addedEP="173">
+        </fixr:code>
+      <fixr:code id="452116" name="Operator" value="118" sort="115" added="FIX.5.0SP2" addedEP="173">
+        </fixr:code>
+      <fixr:code id="452117" name="CSD" value="119" sort="116" added="FIX.5.0SP2" addedEP="187">
+        </fixr:code>
+      <fixr:code id="452118" name="ICSD" value="120" sort="117" added="FIX.5.0SP2" addedEP="187">
+        </fixr:code>
+      <fixr:code id="452119" name="TradingSubAccount" value="121" sort="118" added="FIX.5.0SP2" addedEP="217">
+        </fixr:code>
+      <fixr:code id="452120" name="InvestmentDecisionMaker" value="122" sort="119" added="FIX.5.0SP2" addedEP="222">
+        </fixr:code>
+      <fixr:code id="452121" name="PublishingIntermediary" value="123" sort="120" added="FIX.5.0SP2" addedEP="229">
+        </fixr:code>
+      <fixr:code id="452122" name="CSDParticipant" value="124" sort="121" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="452123" name="Issuer" value="125" sort="122" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="452124" name="ContraCustomerAccount" value="126" sort="123" added="FIX.5.0SP2" addedEP="256">
+        </fixr:code>
+      <fixr:code id="452125" name="ContraInvestmentDecisionMaker" value="127" sort="124" added="FIX.5.0SP2" addedEP="256">
+        </fixr:code>
+      <fixr:code id="452126" name="AuthorizingPerson" value="128" sort="125" added="FIX.Latest" addedEP="292">
+        </fixr:code>
+      <fixr:code id="452127" name="PrimaryPlaceOfListing" value="129" sort="126" added="FIX.Latest" addedEP="300">
+        </fixr:code>
+      <fixr:code id="452128" name="SecondaryPlaceOfListing" value="130" sort="127" added="FIX.Latest" addedEP="300">
+        </fixr:code>
+      <fixr:code id="452129" name="Algorithm" value="131" sort="128" added="FIX.Latest" addedEP="303">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="464" name="TestMessageIndicatorCodeSet" type="Boolean" added="FIX.4.3">
+      <fixr:code id="464001" name="False" value="N" sort="1" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:code>
+      <fixr:code id="464002" name="True" value="Y" sort="2" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="477" name="DistribPaymentMethodCodeSet" type="int" added="FIX.4.3" updated="FIX.Latest" updatedEP="271">
+      <fixr:code id="477001" name="CREST" value="1" sort="1" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477002" name="NSCC" value="2" sort="2" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477003" name="Euroclear" value="3" sort="3" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477004" name="Clearstream" value="4" sort="4" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477005" name="Cheque" value="5" sort="5" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477006" name="TelegraphicTransfer" value="6" sort="6" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477007" name="FedWire" value="7" sort="7" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477008" name="DirectCredit" value="8" sort="8" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477009" name="ACHCredit" value="9" sort="9" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477010" name="BPAY" value="10" sort="10" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477011" name="HighValueClearingSystemHVACS" value="11" sort="11" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477012" name="ReinvestInFund" value="12" sort="12" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="477013" name="Other" value="999" sort="999" added="FIX.Latest" addedEP="271">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="495" name="TaxAdvantageTypeCodeSet" type="int" added="FIX.4.3" updated="FIX.Latest" updatedEP="271">
+      <fixr:code id="495001" name="None" value="0" sort="0" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495002" name="MaxiISA" value="1" sort="1" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495003" name="TESSA" value="2" sort="2" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495004" name="MiniCashISA" value="3" sort="3" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495005" name="MiniStocksAndSharesISA" value="4" sort="4" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495006" name="MiniInsuranceISA" value="5" sort="5" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495007" name="CurrentYearPayment" value="6" sort="6" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495008" name="PriorYearPayment" value="7" sort="7" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495009" name="AssetTransfer" value="8" sort="8" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495010" name="EmployeePriorYear" value="9" sort="9" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495011" name="EmployeeCurrentYear" value="10" sort="10" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495012" name="EmployerPriorYear" value="11" sort="11" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495013" name="EmployerCurrentYear" value="12" sort="12" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495014" name="NonFundPrototypeIRA" value="13" sort="13" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495015" name="NonFundQualifiedPlan" value="14" sort="14" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495016" name="DefinedContributionPlan" value="15" sort="15" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495017" name="IRA" value="16" sort="16" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495018" name="IRARollover" value="17" sort="17" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495019" name="KEOGH" value="18" sort="18" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495020" name="ProfitSharingPlan" value="19" sort="19" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495021" name="US401K" value="20" sort="20" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495022" name="SelfDirectedIRA" value="21" sort="21" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495023" name="US403b" value="22" sort="22" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495024" name="US457" value="23" sort="23" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495025" name="RothIRAPrototype" value="24" sort="24" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495026" name="RothIRANonPrototype" value="25" sort="25" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495027" name="RothConversionIRAPrototype" value="26" sort="26" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495028" name="RothConversionIRANonPrototype" value="27" sort="27" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495029" name="EducationIRAPrototype" value="28" sort="28" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495030" name="EducationIRANonPrototype" value="29" sort="29" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="495031" name="Other" value="999" sort="99" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="514" name="RegistTransTypeCodeSet" type="char" added="FIX.4.3">
+      <fixr:code id="514001" name="New" value="0" sort="1" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="514002" name="Cancel" value="2" sort="2" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="514003" name="Replace" value="1" sort="3" added="FIX.4.3">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="517" name="OwnershipTypeCodeSet" type="char" added="FIX.4.3">
+      <fixr:code id="517001" name="JointInvestors" value="J" sort="1" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="517002" name="TenantsInCommon" value="T" sort="2" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="517003" name="JointTrustees" value="2" sort="3" added="FIX.4.4">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="522" name="OwnerTypeCodeSet" type="int" added="FIX.4.3">
+      <fixr:code id="522001" name="IndividualInvestor" value="1" sort="1" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522002" name="PublicCompany" value="2" sort="2" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522003" name="PrivateCompany" value="3" sort="3" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522004" name="IndividualTrustee" value="4" sort="4" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522005" name="CompanyTrustee" value="5" sort="5" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522006" name="PensionPlan" value="6" sort="6" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522007" name="CustodianUnderGiftsToMinorsAct" value="7" sort="7" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522008" name="Trusts" value="8" sort="8" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="522009" name="Fiduciaries" value="9" sort="9" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="522010" name="NetworkingSubAccount" value="10" sort="10" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522011" name="NonProfitOrganization" value="11" sort="11" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="522012" name="CorporateBody" value="12" sort="12" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="135">
+        </fixr:code>
+      <fixr:code id="522013" name="Nominee" value="13" sort="13" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="522014" name="InstitutionalCustomer" value="14" sort="14" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522015" name="Combined" value="15" sort="15" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522016" name="MemberFirmEmployee" value="16" sort="16" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522017" name="MarketMakingAccount" value="17" sort="17" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522018" name="ProprietaryAccount" value="18" sort="18" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522019" name="NonbrokerDealer" value="19" sort="19" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522020" name="UnknownBeneficialOwnerType" value="20" sort="20" added="FIX.5.0SP2" addedEP="135" updated="FIX.5.0SP2" updatedEP="253">
+        </fixr:code>
+      <fixr:code id="522021" name="FirmsErrorAccount" value="21" sort="21" added="FIX.5.0SP2" addedEP="135">
+        </fixr:code>
+      <fixr:code id="522022" name="FirmAgencyAveragePriceAccount" value="22" sort="22" added="FIX.5.0SP2" addedEP="253">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="581" name="AccountTypeCodeSet" type="int" added="FIX.4.3">
+      <fixr:code id="581001" name="CarriedCustomerSide" value="1" sort="1" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581002" name="CarriedNonCustomerSide" value="2" sort="2" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581003" name="HouseTrader" value="3" sort="3" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581004" name="FloorTrader" value="4" sort="4" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581005" name="CarriedNonCustomerSideCrossMargined" value="6" sort="5" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581006" name="HouseTraderCrossMargined" value="7" sort="6" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581007" name="JointBackOfficeAccount" value="8" sort="7" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="581008" name="EquitiesSpecialist" value="9" sort="8" added="FIX.5.0SP2" addedEP="101">
+        </fixr:code>
+      <fixr:code id="581009" name="OptionsMarketMaker" value="10" sort="9" added="FIX.5.0SP2" addedEP="101">
+        </fixr:code>
+      <fixr:code id="581010" name="OptionsFirmAccount" value="11" sort="10" added="FIX.5.0SP2" addedEP="101">
+        </fixr:code>
+      <fixr:code id="581011" name="AccountCustomerNonCustomerOrders" value="12" sort="12" added="FIX.5.0SP2" addedEP="256">
+        </fixr:code>
+      <fixr:code id="581012" name="AccountOrdersMultipleCustomers" value="13" sort="13" added="FIX.5.0SP2" addedEP="256">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="636" name="WorkingIndicatorCodeSet" type="Boolean" added="FIX.4.3">
+      <fixr:code id="636001" name="NotWorking" value="N" sort="1" added="FIX.4.3">
+        </fixr:code>
+      <fixr:code id="636002" name="Working" value="Y" sort="2" added="FIX.4.3">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="660" name="AcctIDSourceCodeSet" type="int" added="FIX.4.4">
+      <fixr:code id="660001" name="BIC" value="1" sort="1" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="660002" name="SIDCode" value="2" sort="2" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="660003" name="TFM" value="3" sort="3" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="660004" name="OMGEO" value="4" sort="4" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="660005" name="DTCCCode" value="5" sort="5" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="660006" name="SPSAID" value="6" sort="6" added="FIX.Latest" addedEP="262" updated="FIX.Latest" updatedEP="282">
+        </fixr:code>
+      <fixr:code id="660007" name="Other" value="99" sort="99" added="FIX.4.4">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="803" name="PartySubIDTypeCodeSet" type="int" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="204">
+      <fixr:code id="803001" name="Firm" value="1" sort="0" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803002" name="Person" value="2" sort="1" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803003" name="System" value="3" sort="2" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803004" name="Application" value="4" sort="3" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803005" name="FullLegalNameOfFirm" value="5" sort="4" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803006" name="PostalAddress" value="6" sort="5" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803007" name="PhoneNumber" value="7" sort="6" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803008" name="EmailAddress" value="8" sort="7" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803009" name="ContactName" value="9" sort="8" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803010" name="SecuritiesAccountNumber" value="10" sort="9" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803011" name="RegistrationNumber" value="11" sort="10" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803012" name="RegisteredAddressForConfirmation" value="12" sort="11" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803013" name="RegulatoryStatus" value="13" sort="12" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803014" name="RegistrationName" value="14" sort="13" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803015" name="CashAccountNumber" value="15" sort="14" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803016" name="BIC" value="16" sort="15" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803017" name="CSDParticipantMemberCode" value="17" sort="16" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803018" name="RegisteredAddress" value="18" sort="17" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803019" name="FundAccountName" value="19" sort="18" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803020" name="TelexNumber" value="20" sort="19" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803021" name="FaxNumber" value="21" sort="20" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803022" name="SecuritiesAccountName" value="22" sort="21" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803023" name="CashAccountName" value="23" sort="22" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803024" name="Department" value="24" sort="23" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803025" name="LocationDesk" value="25" sort="24" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803026" name="PositionAccountType" value="26" sort="25" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="803027" name="SecurityLocateID" value="27" sort="26" added="FIX.4.4" addedEP="1">
+        </fixr:code>
+      <fixr:code id="803028" name="MarketMaker" value="28" sort="27" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="803029" name="EligibleCounterparty" value="29" sort="28" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="803030" name="ProfessionalClient" value="30" sort="29" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="803031" name="Location" value="31" sort="30" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="803032" name="ExecutionVenue" value="32" sort="31" added="FIX.4.4" addedEP="26">
+        </fixr:code>
+      <fixr:code id="803033" name="CurrencyDeliveryIdentifier" value="33" sort="32" added="FIX.5.0" addedEP="44" updated="FIX.5.0SP2" updatedEP="103">
+        </fixr:code>
+      <fixr:code id="803034" name="AddressCity" value="34" sort="33" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="803035" name="AddressStateOrProvince" value="35" sort="34" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="803036" name="AddressPostalCode" value="36" sort="35" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="803037" name="AddressStreet" value="37" sort="36" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="803038" name="AddressISOCountryCode" value="38" sort="37" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="803039" name="ISOCountryCode" value="39" sort="38" added="FIX.5.0SP2" addedEP="103">
+        </fixr:code>
+      <fixr:code id="803040" name="MarketSegment" value="40" sort="39" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="187">
+        </fixr:code>
+      <fixr:code id="803041" name="CustomerAccountType" value="41" sort="40" added="FIX.5.0SP2" addedEP="155">
+        </fixr:code>
+      <fixr:code id="803042" name="OmnibusAccount" value="42" sort="41" added="FIX.5.0SP2" addedEP="155">
+        </fixr:code>
+      <fixr:code id="803043" name="FundsSegregationType" value="43" sort="42" added="FIX.5.0SP2" addedEP="155" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:code>
+      <fixr:code id="803044" name="GuaranteeFund" value="44" sort="43" added="FIX.5.0SP2" addedEP="157">
+        </fixr:code>
+      <fixr:code id="803045" name="SwapDealer" value="45" sort="44" added="FIX.5.0SP2" addedEP="161" updated="FIX.5.0SP2" updatedEP="192">
+        </fixr:code>
+      <fixr:code id="803046" name="MajorParticipant" value="46" sort="45" added="FIX.5.0SP2" addedEP="161" updated="FIX.5.0SP2" updatedEP="187">
+        </fixr:code>
+      <fixr:code id="803047" name="FinancialEntity" value="47" sort="46" added="FIX.5.0SP2" addedEP="161" updated="FIX.5.0SP2" updatedEP="208">
+        </fixr:code>
+      <fixr:code id="803048" name="USPerson" value="48" sort="47" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="803049" name="ReportingEntityIndicator" value="49" sort="48" added="FIX.5.0SP2" addedEP="161" updated="FIX.5.0SP2" updatedEP="229">
+        </fixr:code>
+      <fixr:code id="803050" name="ElectedClearingRequirementException" value="50" sort="49" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="803051" name="BusinessCenter" value="51" sort="50" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="803052" name="ReferenceText" value="52" sort="51" added="FIX.5.0SP2" addedEP="161">
+        </fixr:code>
+      <fixr:code id="803053" name="ShortMarkingExemptAccount" value="53" sort="52" added="FIX.5.0SP2" addedEP="164">
+        </fixr:code>
+      <fixr:code id="803054" name="ParentFirmIdentifier" value="54" sort="53" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803055" name="ParentFirmName" value="55" sort="54" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803056" name="DealIdentifier" value="56" sort="55" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803057" name="SystemTradeID" value="57" sort="56" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803058" name="SystemTradeSubID" value="58" sort="57" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803059" name="FCMCode" value="59" sort="58" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803060" name="DlvryTrmlCode" value="60" sort="59" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803061" name="VolntyRptEntity" value="61" sort="60" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803062" name="RptObligJursdctn" value="62" sort="61" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803063" name="VolntyRptJursdctn" value="63" sort="62" added="FIX.5.0SP2" addedEP="169">
+        </fixr:code>
+      <fixr:code id="803064" name="CompanyActivities" value="64" sort="63" added="FIX.5.0SP2" addedEP="179" updated="FIX.5.0SP2" updatedEP="254">
+        </fixr:code>
+      <fixr:code id="803065" name="EEAreaDomiciled" value="65" sort="64" added="FIX.5.0SP2" addedEP="179">
+        </fixr:code>
+      <fixr:code id="803066" name="ContractLinked" value="66" sort="65" added="FIX.5.0SP2" addedEP="179">
+        </fixr:code>
+      <fixr:code id="803067" name="ContractAbove" value="67" sort="66" added="FIX.5.0SP2" addedEP="179">
+        </fixr:code>
+      <fixr:code id="803068" name="VolntyRptPty" value="68" sort="67" added="FIX.5.0SP2" addedEP="187">
+        </fixr:code>
+      <fixr:code id="803069" name="EndUser" value="69" sort="68" added="FIX.5.0SP2" addedEP="187">
+        </fixr:code>
+      <fixr:code id="803070" name="LocationOrJurisdiction" value="70" sort="69" added="FIX.5.0SP2" addedEP="192" updated="FIX.5.0SP2" updatedEP="193">
+        </fixr:code>
+      <fixr:code id="803071" name="DerivativesDealer" value="71" sort="70" added="FIX.5.0SP2" addedEP="192">
+        </fixr:code>
+      <fixr:code id="803072" name="Domicile" value="72" sort="71" added="FIX.5.0SP2" addedEP="192">
+        </fixr:code>
+      <fixr:code id="803073" name="ExemptFromRecognition" value="73" sort="72" added="FIX.5.0SP2" addedEP="192">
+        </fixr:code>
+      <fixr:code id="803074" name="Payer" value="74" sort="73" added="FIX.5.0SP2" addedEP="203">
+        </fixr:code>
+      <fixr:code id="803075" name="Receiver" value="75" sort="74" added="FIX.5.0SP2" addedEP="203">
+        </fixr:code>
+      <fixr:code id="803076" name="SystematicInternaliser" value="76" sort="75" added="FIX.5.0SP2" addedEP="228">
+        </fixr:code>
+      <fixr:code id="803077" name="PublishingEntityIndicator" value="77" sort="76" added="FIX.5.0SP2" addedEP="229">
+        </fixr:code>
+      <fixr:code id="803078" name="FirstName" value="78" sort="77" added="FIX.5.0SP2" addedEP="232">
+        </fixr:code>
+      <fixr:code id="803079" name="Surname" value="79" sort="78" added="FIX.5.0SP2" addedEP="232">
+        </fixr:code>
+      <fixr:code id="803080" name="DateOfBirth" value="80" sort="79" added="FIX.5.0SP2" addedEP="232">
+        </fixr:code>
+      <fixr:code id="803081" name="OrderTransmittingFirm" value="81" sort="80" added="FIX.5.0SP2" addedEP="232">
+        </fixr:code>
+      <fixr:code id="803082" name="OrderTransmittingFirmBuyer" value="82" sort="81" added="FIX.5.0SP2" addedEP="232">
+        </fixr:code>
+      <fixr:code id="803083" name="OrderTransmitterSeller" value="83" sort="82" added="FIX.5.0SP2" addedEP="232">
+        </fixr:code>
+      <fixr:code id="803084" name="LegalEntityIdentifier" value="84" sort="83" added="FIX.5.0SP2" addedEP="235">
+        </fixr:code>
+      <fixr:code id="803085" name="SubSectorClassification" value="85" sort="84" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="803086" name="PartySide" value="86" sort="85" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="803087" name="LegalRegistrationCountry" value="87" sort="86" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="803088" name="AlgorithmVersion" value="88" sort="87" added="FIX.Latest" addedEP="303">
+        </fixr:code>
+      <fixr:code id="803089" name="CertificateRegistrationStatus" value="89" sort="88" added="FIX.Latest" addedEP="303">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="924" name="UserRequestTypeCodeSet" type="int" added="FIX.4.4">
+      <fixr:code id="924001" name="LogOnUser" value="1" sort="1" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="924002" name="LogOffUser" value="2" sort="2" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="924003" name="ChangePasswordForUser" value="3" sort="3" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="924004" name="RequestIndividualUserStatus" value="4" sort="4" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="924005" name="RequestThrottleLimit" value="5" sort="5" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="926" name="UserStatusCodeSet" type="int" added="FIX.4.4">
+      <fixr:code id="926001" name="LoggedIn" value="1" sort="1" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="926002" name="NotLoggedIn" value="2" sort="2" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="926003" name="UserNotRecognised" value="3" sort="3" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="926004" name="PasswordIncorrect" value="4" sort="4" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="926005" name="PasswordChanged" value="5" sort="5" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="926006" name="Other" value="6" sort="6" added="FIX.4.4">
+        </fixr:code>
+      <fixr:code id="926007" name="ForcedUserLogoutByExchange" value="7" sort="7" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="926008" name="SessionShutdownWarning" value="8" sort="8" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="926009" name="ThrottleParametersChanged" value="9" sort="9" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1128" name="ApplVerIDCodeSet" type="String" added="FIX.4.4" addedEP="16" updated="FIX.Latest" updatedEP="270">
+      <fixr:code id="1128001" name="FIX27" value="0" sort="0" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128002" name="FIX30" value="1" sort="1" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128003" name="FIX40" value="2" sort="2" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128004" name="FIX41" value="3" sort="3" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128005" name="FIX42" value="4" sort="4" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128006" name="FIX43" value="5" sort="5" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128007" name="FIX44" value="6" sort="6" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128008" name="FIX50" value="7" sort="7" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128009" name="FIX50SP1" value="8" sort="8" added="FIX.5.0" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1128010" name="FIX50SP2" value="9" sort="9" added="FIX.5.0SP1" addedEP="97">
+        </fixr:code>
+      <fixr:code id="1128011" name="FIXLatest" value="10" sort="10" added="FIX.Latest" addedEP="260">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1133" name="ExDestinationIDSourceCodeSet" type="char" added="FIX.4.4" addedEP="26">
+      <fixr:code id="1133001" name="BIC" value="B" sort="1" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1133002" name="GeneralIdentifier" value="C" sort="2" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1133003" name="Proprietary" value="D" sort="3" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1133004" name="ISOCountryCode" value="E" sort="4" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+      <fixr:code id="1133005" name="MIC" value="G" sort="5" added="FIX.4.4" addedEP="-1">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1324" name="ListUpdateActionCodeSet" type="char" added="FIX.5.0" addedEP="52" updated="FIX.5.0SP2" updatedEP="128">
+      <fixr:code id="1324001" name="Add" value="A" sort="1" added="FIX.5.0SP2" addedEP="128">
+        </fixr:code>
+      <fixr:code id="1324002" name="Delete" value="D" sort="2" added="FIX.5.0SP2" addedEP="128">
+        </fixr:code>
+      <fixr:code id="1324003" name="Modify" value="M" sort="3" added="FIX.5.0SP2" addedEP="128">
+        </fixr:code>
+      <fixr:code id="1324004" name="Snapshot" value="S" sort="4" added="FIX.5.0SP2" addedEP="128">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1409" name="SessionStatusCodeSet" type="int" added="FIX.5.0" addedEP="56">
+      <fixr:code id="1409001" name="SessionActive" value="0" sort="1" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409002" name="SessionPasswordChanged" value="1" sort="2" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409003" name="SessionPasswordDueToExpire" value="2" sort="3" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409004" name="NewSessionPasswordDoesNotComplyWithPolicy" value="3" sort="4" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409005" name="SessionLogoutComplete" value="4" sort="5" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409006" name="InvalidUsernameOrPassword" value="5" sort="6" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409007" name="AccountLocked" value="6" sort="7" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409008" name="LogonsAreNotAllowedAtThisTime" value="7" sort="8" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409009" name="PasswordExpired" value="8" sort="9" added="FIX.5.0" addedEP="56">
+        </fixr:code>
+      <fixr:code id="1409010" name="ReceivedMsgSeqNumTooLow" value="9" sort="10" added="FIX.5.0SP2" addedEP="124">
+        </fixr:code>
+      <fixr:code id="1409011" name="ReceivedNextExpectedMsgSeqNumTooHigh" value="10" sort="11" added="FIX.5.0SP2" addedEP="124">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1429" name="OrderDelayUnitCodeSet" type="int" added="FIX.5.0SP1" addedEP="77">
+      <fixr:code id="1429001" name="Seconds" value="0" sort="0" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429002" name="TenthsOfASecond" value="1" sort="1" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429003" name="HundredthsOfASecond" value="2" sort="2" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429004" name="Milliseconds" value="3" sort="3" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429005" name="Microseconds" value="4" sort="4" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429006" name="Nanoseconds" value="5" sort="5" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429007" name="Minutes" value="10" sort="10" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429008" name="Hours" value="11" sort="11" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429009" name="Days" value="12" sort="12" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429010" name="Weeks" value="13" sort="13" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429011" name="Months" value="14" sort="14" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+      <fixr:code id="1429012" name="Years" value="15" sort="15" added="FIX.5.0SP1" addedEP="77">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1515" name="PartyRelationshipCodeSet" type="int" added="FIX.5.0SP2" addedEP="105">
+      <fixr:code id="1515001" name="IsAlso" value="0" sort="0" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515002" name="ClearsFor" value="1" sort="1" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515003" name="ClearsThrough" value="2" sort="2" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515004" name="TradesFor" value="3" sort="3" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515005" name="TradesThrough" value="4" sort="4" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515006" name="Sponsors" value="5" sort="5" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515007" name="SponsoredThrough" value="6" sort="6" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515008" name="ProvidesGuaranteeFor" value="7" sort="7" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515009" name="IsGuaranteedBy" value="8" sort="8" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515010" name="MemberOf" value="9" sort="9" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515011" name="HasMembers" value="10" sort="10" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515012" name="ProvidesMarketplaceFor" value="11" sort="11" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515013" name="ParticipantOfMarketplace" value="12" sort="12" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515014" name="CarriesPositionsFor" value="13" sort="13" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515015" name="PostsTradesTo" value="14" sort="14" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515016" name="EntersTradesFor" value="15" sort="15" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515017" name="EntersTradesThrough" value="16" sort="16" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515018" name="ProvidesQuotesTo" value="17" sort="17" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515019" name="RequestsQuotesFrom" value="18" sort="18" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515020" name="InvestsFor" value="19" sort="19" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515021" name="InvestsThrough" value="20" sort="20" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515022" name="BrokersTradesFor" value="21" sort="21" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515023" name="BrokersTradesThrough" value="22" sort="22" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515024" name="ProvidesTradingServicesFor" value="23" sort="23" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515025" name="UsesTradingServicesOf" value="24" sort="24" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515026" name="ApprovesOf" value="25" sort="25" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515027" name="ApprovedBy" value="26" sort="26" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515028" name="ParentFirmFor" value="27" sort="27" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515029" name="SubsidiaryOf" value="28" sort="28" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515030" name="RegulatoryOwnerOf" value="29" sort="29" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515031" name="OwnedByRegulatory" value="30" sort="30" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515032" name="Controls" value="31" sort="31" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515033" name="IsControlledBy" value="32" sort="32" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515034" name="LegalOwnerOf" value="33" sort="33" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515035" name="OwnedByLegal" value="34" sort="34" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515036" name="BeneficialOwnerOf" value="35" sort="35" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515037" name="OwnedByBeneficial" value="36" sort="36" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515038" name="SettlesFor" value="37" sort="37" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1515039" name="SettlesThrough" value="38" sort="38" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1611" name="ThrottleActionCodeSet" type="int" added="FIX.5.0SP2" addedEP="116">
+      <fixr:code id="1611001" name="QueueInbound" value="0" sort="0" added="FIX.5.0SP2" addedEP="116" updated="FIX.5.0SP2" updatedEP="128">
+        </fixr:code>
+      <fixr:code id="1611002" name="QueueOutbound" value="1" sort="1" added="FIX.5.0SP2" addedEP="116" updated="FIX.5.0SP2" updatedEP="128">
+        </fixr:code>
+      <fixr:code id="1611003" name="Reject" value="2" sort="2" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+      <fixr:code id="1611004" name="Disconnect" value="3" sort="3" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+      <fixr:code id="1611005" name="Warning" value="4" sort="4" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1612" name="ThrottleTypeCodeSet" type="int" added="FIX.5.0SP2" addedEP="116">
+      <fixr:code id="1612001" name="InboundRate" value="0" sort="0" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+      <fixr:code id="1612002" name="OutstandingRequests" value="1" sort="1" added="FIX.5.0SP2" addedEP="116">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1672" name="PartyDetailStatusCodeSet" type="int" added="FIX.5.0SP2" addedEP="105">
+      <fixr:code id="1672001" name="Active" value="0" sort="0" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1672002" name="Suspended" value="1" sort="1" added="FIX.5.0SP2" addedEP="105">
+        </fixr:code>
+      <fixr:code id="1672003" name="Halted" value="2" sort="2" added="FIX.5.0SP2" addedEP="171">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1674" name="PartyDetailRoleQualifierCodeSet" type="int" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+      <fixr:code id="1674001" name="FirmOrLegalEntity" value="23" sort="23" group="For all firm / broker type party roles" added="FIX.5.0SP2" addedEP="222">
+        </fixr:code>
+      <fixr:code id="1674002" name="Current" value="18" sort="18" group="For all party roles" added="FIX.5.0SP2" addedEP="213" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674003" name="New" value="19" sort="19" group="For all party roles" added="FIX.5.0SP2" addedEP="213" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674004" name="NaturalPerson" value="24" sort="24" group="For all trader / customer type party roles" added="FIX.5.0SP2" addedEP="222">
+        </fixr:code>
+      <fixr:code id="1674005" name="Agency" value="0" sort="0" group="For party role 1 (Executing Firm)" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674006" name="Principal" value="1" sort="1" group="For party role 1 (Executing Firm)" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674007" name="RisklessPrincipal" value="2" sort="2" group="For party role 1 (Executing Firm)" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674008" name="ExchangeOrderSubmitter" value="30" sort="3" group="For party role 1 (Executing Firm)" added="FIX.Latest" addedEP="279">
+        </fixr:code>
+      <fixr:code id="1674009" name="PrimaryTrdRepository" value="9" sort="9" group="For party role 102 (Data repository)" added="FIX.5.0SP2" addedEP="193" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674010" name="OrigTrdRepository" value="10" sort="10" group="For party role 102 (Data repository)" added="FIX.5.0SP2" addedEP="193" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674011" name="AddtnlIntlTrdRepository" value="11" sort="11" group="For party role 102 (Data repository)" added="FIX.5.0SP2" addedEP="193" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674012" name="AddtnlDomesticTrdRepository" value="12" sort="12" group="For party role 102 (Data repository)" added="FIX.5.0SP2" addedEP="193" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674013" name="RegularTrader" value="25" sort="25" group="For party role 11 (Order Origination Trader), 12 (Executing Trader), 36 (Entering Trader), 37 (Contra Trader)" added="FIX.5.0SP2" addedEP="223">
+        </fixr:code>
+      <fixr:code id="1674014" name="HeadTrader" value="26" sort="26" group="For party role 11 (Order Origination Trader), 12 (Executing Trader), 36 (Entering Trader), 37 (Contra Trader)" added="FIX.5.0SP2" addedEP="223">
+        </fixr:code>
+      <fixr:code id="1674015" name="Supervisor" value="27" sort="27" group="For party role 11 (Order Origination Trader), 12 (Executing Trader), 36 (Entering Trader), 37 (Contra Trader)" added="FIX.5.0SP2" addedEP="223">
+        </fixr:code>
+      <fixr:code id="1674016" name="Algorithm" value="22" sort="22" group="For party role 12 (Executing trader) or 122 (Investment decision maker)" added="FIX.5.0SP2" addedEP="222" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674017" name="RelatedExchange" value="13" sort="13" group="For party role 22 (Exchange)" added="FIX.5.0SP2" addedEP="208" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674018" name="OptionsExchange" value="14" sort="14" group="For party role 22 (Exchange)" added="FIX.5.0SP2" addedEP="208" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674019" name="SpecifiedExchange" value="15" sort="15" group="For party role 22 (Exchange)" added="FIX.5.0SP2" addedEP="208" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674020" name="ConstituentExchange" value="16" sort="16" group="For party role 22 (Exchange)" added="FIX.5.0SP2" addedEP="208" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674021" name="Bank" value="7" sort="7" group="For party role 29 (Intermediary), 32 (Beneficiary) and 107 (Correspondent)" added="FIX.5.0SP2" addedEP="161" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674022" name="Hub" value="8" sort="8" group="For party role 29 (Intermediary), 32 (Beneficiary) and 107 (Correspondent)" added="FIX.5.0SP2" addedEP="171" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674023" name="TriParty" value="28" sort="28" group="For party role 30 (Agent)" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="1674024" name="Lender" value="29" sort="29" group="For party role 30 (Agent)" added="FIX.5.0SP2" addedEP="254">
+        </fixr:code>
+      <fixr:code id="1674025" name="GeneralClearingMember" value="3" sort="3" group="For party role 4 (Clearing Firm)" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674026" name="IndividualClearingMember" value="4" sort="4" group="For party role 4 (Clearing Firm)" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674027" name="PreferredMarketMaker" value="5" sort="5" group="For party role 66 (Market Maker)" added="FIX.5.0SP2" addedEP="131" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674028" name="DirectedMarketMaker" value="6" sort="6" group="For party role 66 (Market Maker)" added="FIX.5.0SP2" addedEP="131" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674029" name="DesignatedSponsor" value="20" sort="20" group="For party role 66 (Market Maker)" added="FIX.5.0SP2" addedEP="219" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674030" name="Specialist" value="21" sort="21" group="For party role 66 (Market Maker)" added="FIX.5.0SP2" addedEP="219" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+      <fixr:code id="1674031" name="ExemptFromTradeReporting" value="17" sort="17" group="For party role 73 (Execution Venue)" added="FIX.5.0SP2" addedEP="209" updated="FIX.5.0SP2" updatedEP="223">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="1744" name="ApplLevelRecoveryIndicatorCodeSet" type="int" added="FIX.5.0SP2" addedEP="124">
+      <fixr:code id="1744001" name="NoApplRecoveryNeeded" value="0" sort="0" added="FIX.5.0SP2" addedEP="124">
+        </fixr:code>
+      <fixr:code id="1744002" name="ApplRecoveryNeeded" value="1" sort="1" added="FIX.5.0SP2" addedEP="124">
+        </fixr:code>
+    </fixr:codeSet>
+    <fixr:codeSet id="2109" name="AttachmentEncodingTypeCodeSet" type="int" added="FIX.5.0SP2" addedEP="167" updated="FIX.Latest" updatedEP="271">
+      <fixr:code id="2109001" name="Base64" value="0" sort="0" added="FIX.5.0SP2" addedEP="167" updated="FIX.Latest" updatedEP="271">
+        </fixr:code>
+      <fixr:code id="2109002" name="RawBinary" value="1" sort="1" added="FIX.5.0SP2" addedEP="167" updated="FIX.Latest" updatedEP="271">
+        </fixr:code>
+    </fixr:codeSet>
+  </fixr:codeSets>
+  <fixr:fields>
+    <fixr:field id="1" name="Account" abbrName="Acct" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="7" name="BeginSeqNo" abbrName="BeginSeqNo" type="SeqNum" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="8" name="BeginString" abbrName="BeginString" type="BeginStringCodeSet" added="FIX.2.7" updated="FIX.Latest" updatedEP="270">
+      </fixr:field>
+    <fixr:field id="9" name="BodyLength" abbrName="BodyLength" type="Length" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="10" name="CheckSum" abbrName="CheckSum" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="11" name="ClOrdID" abbrName="ClOrdID" type="String" baseCategory="SingleGeneralOrderHandling" baseCategoryAbbrName="ID" added="FIX.2.7" updated="FIX.Latest" updatedEP="282">
+      </fixr:field>
+    <fixr:field id="16" name="EndSeqNo" abbrName="EndSeqNo" type="SeqNum" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="34" name="MsgSeqNum" abbrName="SeqNum" type="SeqNum" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="35" name="MsgType" abbrName="MsgTyp" type="MsgTypeCodeSet" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="36" name="NewSeqNo" abbrName="NewSeqNo" type="SeqNum" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="37" name="OrderID" abbrName="OrdID" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="39" name="OrdStatus" abbrName="OrdStat" type="OrdStatusCodeSet" baseCategory="SingleGeneralOrderHandling" baseCategoryAbbrName="Stat" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="41" name="OrigClOrdID" abbrName="OrigClOrdID" type="String" baseCategory="SingleGeneralOrderHandling" baseCategoryAbbrName="OrigID" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="43" name="PossDupFlag" abbrName="PosDup" type="PossDupFlagCodeSet" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="45" name="RefSeqNum" abbrName="RefSeqNum" type="SeqNum" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="49" name="SenderCompID" abbrName="SID" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="50" name="SenderSubID" abbrName="SSub" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="52" name="SendingTime" abbrName="Snt" type="UTCTimestamp" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="56" name="TargetCompID" abbrName="TID" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="57" name="TargetSubID" abbrName="TSub" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="58" name="Text" abbrName="Txt" type="String" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="60" name="TransactTime" abbrName="TxnTm" type="UTCTimestamp" added="FIX.2.7" updated="FIX.5.0SP1" updatedEP="94">
+      </fixr:field>
+    <fixr:field id="66" name="ListID" abbrName="ListID" type="String" baseCategory="ProgramTrading" baseCategoryAbbrName="ID" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="75" name="TradeDate" abbrName="TrdDt" type="LocalMktDate" added="FIX.2.7" updated="FIX.5.0SP2" updatedEP="190">
+      </fixr:field>
+    <fixr:field id="89" name="Signature" abbrName="Signature" type="data" lengthId="93" added="FIX.2.7" deprecated="FIXT.1.1">
+      </fixr:field>
+    <fixr:field id="90" name="SecureDataLen" abbrName="SecureDataLen" type="Length" added="FIX.2.7" deprecated="FIXT.1.1">
+      </fixr:field>
+    <fixr:field id="91" name="SecureData" abbrName="SecureData" type="data" lengthId="90" added="FIX.2.7" deprecated="FIXT.1.1">
+      </fixr:field>
+    <fixr:field id="93" name="SignatureLength" abbrName="SignatureLength" type="Length" added="FIX.2.7" deprecated="FIXT.1.1">
+      </fixr:field>
+    <fixr:field id="95" name="RawDataLength" abbrName="RawDataLength" type="Length" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="96" name="RawData" abbrName="RawData" type="data" lengthId="95" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="97" name="PossResend" abbrName="PosRsnd" type="PossResendCodeSet" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="98" name="EncryptMethod" abbrName="EncryptMethod" type="EncryptMethodCodeSet" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="100" name="ExDestination" abbrName="ExDest" type="Exchange" added="FIX.2.7">
+      </fixr:field>
+    <fixr:field id="102" name="CxlRejReason" abbrName="CxlRejRsn" type="CxlRejReasonCodeSet" unionDataType="Reserved100Plus" added="FIX.2.7" updated="FIX.Latest" updatedEP="309">
+      </fixr:field>
+    <fixr:field id="108" name="HeartBtInt" abbrName="HeartBtInt" type="int" added="FIX.3.0">
+      </fixr:field>
+    <fixr:field id="112" name="TestReqID" abbrName="TestReqID" type="String" added="FIX.3.0">
+      </fixr:field>
+    <fixr:field id="115" name="OnBehalfOfCompID" abbrName="OBID" type="String" added="FIX.4.0">
+      </fixr:field>
+    <fixr:field id="116" name="OnBehalfOfSubID" abbrName="OBSub" type="String" added="FIX.4.0">
+      </fixr:field>
+    <fixr:field id="122" name="OrigSendingTime" abbrName="OrigSnt" type="UTCTimestamp" added="FIX.4.0">
+      </fixr:field>
+    <fixr:field id="123" name="GapFillFlag" abbrName="GapFillFlag" type="GapFillFlagCodeSet" added="FIX.4.0">
+      </fixr:field>
+    <fixr:field id="128" name="DeliverToCompID" abbrName="D2ID" type="String" added="FIX.4.0">
+      </fixr:field>
+    <fixr:field id="129" name="DeliverToSubID" abbrName="D2Sub" type="String" added="FIX.4.0">
+      </fixr:field>
+    <fixr:field id="141" name="ResetSeqNumFlag" abbrName="ResetSeqNumFlag" type="ResetSeqNumFlagCodeSet" added="FIX.4.1" updated="FIX.5.0SP2" updatedEP="204">
+      </fixr:field>
+    <fixr:field id="142" name="SenderLocationID" abbrName="SLoc" type="String" added="FIX.4.1">
+      </fixr:field>
+    <fixr:field id="143" name="TargetLocationID" abbrName="TLoc" type="String" added="FIX.4.1">
+      </fixr:field>
+    <fixr:field id="144" name="OnBehalfOfLocationID" abbrName="OBLoc" type="String" added="FIX.4.1">
+      </fixr:field>
+    <fixr:field id="145" name="DeliverToLocationID" abbrName="D2Loc" type="String" added="FIX.4.1">
+      </fixr:field>
+    <fixr:field id="198" name="SecondaryOrderID" abbrName="OrdID2" type="String" added="FIX.4.1">
+      </fixr:field>
+    <fixr:field id="212" name="XmlDataLen" abbrName="XmlDataLen" type="Length" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="213" name="XmlData" abbrName="XmlData" type="XMLData" lengthId="212" added="FIX.4.2" updated="FIX.Latest" updatedEP="271">
+      </fixr:field>
+    <fixr:field id="229" name="TradeOriginationDate" abbrName="OrignDt" type="LocalMktDate" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="347" name="MessageEncoding" abbrName="MsgEncd" type="String" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="354" name="EncodedTextLen" abbrName="EncTxtLen" type="Length" added="FIX.4.2" updated="FIX.5.0SP2" updatedEP="192">
+      </fixr:field>
+    <fixr:field id="355" name="EncodedText" abbrName="EncTxt" type="data" lengthId="354" added="FIX.4.2" updated="FIX.5.0SP2" updatedEP="192">
+      </fixr:field>
+    <fixr:field id="369" name="LastMsgSeqNumProcessed" abbrName="LastMsgSeqNumProced" type="SeqNum" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="371" name="RefTagID" abbrName="RefTagID" type="int" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="372" name="RefMsgType" abbrName="RefMsgTyp" type="MsgTypeCodeSet" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="373" name="SessionRejectReason" abbrName="SessRejRsn" type="SessionRejectReasonCodeSet" unionDataType="Reserved100Plus" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="379" name="BusinessRejectRefID" abbrName="BizRejRefID" type="String" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="380" name="BusinessRejectReason" abbrName="BizRejRsn" type="BusinessRejectReasonCodeSet" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="383" name="MaxMessageSize" abbrName="MaxMsgSz" type="Length" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="384" name="NoMsgTypes" type="NumInGroup" added="FIX.4.2" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="385" name="MsgDirection" abbrName="MsgDirctn" type="MsgDirectionCodeSet" added="FIX.4.2" updated="FIX.Latest" updatedEP="275">
+      </fixr:field>
+    <fixr:field id="434" name="CxlRejResponseTo" abbrName="CxlRejRspTo" type="CxlRejResponseToCodeSet" added="FIX.4.2">
+      </fixr:field>
+    <fixr:field id="447" name="PartyIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="448" name="PartyID" abbrName="ID" type="String" discriminatorId="447" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="452" name="PartyRole" abbrName="R" type="PartyRoleCodeSet" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="256">
+      </fixr:field>
+    <fixr:field id="453" name="NoPartyIDs" type="NumInGroup" added="FIX.4.3" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="464" name="TestMessageIndicator" abbrName="TestMsgInd" type="TestMessageIndicatorCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="473" name="NoRegistDtls" type="NumInGroup" added="FIX.4.3" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="474" name="MailingDtls" abbrName="MailingDtls" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="475" name="InvestorCountryOfResidence" abbrName="InvestorCtryOfResidence" type="Country" added="FIX.4.3" updated="FIX.Latest" updatedEP="271">
+      </fixr:field>
+    <fixr:field id="477" name="DistribPaymentMethod" abbrName="DistribPmtMethod" type="DistribPaymentMethodCodeSet" unionDataType="Reserved1000Plus" added="FIX.4.3" updated="FIX.Latest" updatedEP="271">
+      </fixr:field>
+    <fixr:field id="478" name="CashDistribCurr" abbrName="CshDistribCurr" type="Currency" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="482" name="MailingInst" abbrName="MailingInst" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="486" name="DateOfBirth" abbrName="DtOfBirth" type="LocalMktDate" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="493" name="RegistAcctType" abbrName="AcctTyp" type="String" baseCategory="RegistrationInstruction" baseCategoryAbbrName="AcctTyp" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="495" name="TaxAdvantageType" abbrName="TaxAdvantageTyp" type="TaxAdvantageTypeCodeSet" unionDataType="Reserved1000Plus" added="FIX.4.3" updated="FIX.Latest" updatedEP="271">
+      </fixr:field>
+    <fixr:field id="498" name="CashDistribAgentName" abbrName="CshDistribAgentName" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="499" name="CashDistribAgentCode" abbrName="CshDistribAgentCode" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="500" name="CashDistribAgentAcctNumber" abbrName="CshDistribAgentAcctNum" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="501" name="CashDistribPayRef" abbrName="CshDistribPayRef" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="502" name="CashDistribAgentAcctName" abbrName="CshDistribAgentAcctName" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="508" name="RegistRefID" abbrName="RefID" type="String" baseCategory="RegistrationInstruction" baseCategoryAbbrName="RefID" added="FIX.4.3" updated="FIX.Latest" updatedEP="282">
+      </fixr:field>
+    <fixr:field id="509" name="RegistDtls" abbrName="Dtls" type="String" baseCategory="RegistrationInstruction" baseCategoryAbbrName="RejRsnTxt" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="510" name="NoDistribInsts" type="NumInGroup" added="FIX.4.3" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="511" name="RegistEmail" abbrName="Email" type="String" baseCategory="RegistrationInstruction" baseCategoryAbbrName="Email" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="512" name="DistribPercentage" abbrName="DistribPctage" type="Percentage" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="513" name="RegistID" abbrName="RegistID" type="String" baseCategory="RegistrationInstruction" baseCategoryAbbrName="ID" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="514" name="RegistTransType" abbrName="TransTyp" type="RegistTransTypeCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="517" name="OwnershipType" abbrName="OwnershipTyp" type="OwnershipTypeCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="522" name="OwnerType" abbrName="OwnerTyp" type="OwnerTypeCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="523" name="PartySubID" abbrName="ID" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="524" name="NestedPartyID" abbrName="ID" type="String" discriminatorId="525" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="525" name="NestedPartyIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="526" name="SecondaryClOrdID" abbrName="ClOrdID2" type="String" baseCategory="SingleGeneralOrderHandling" baseCategoryAbbrName="ID2" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="538" name="NestedPartyRole" abbrName="R" type="PartyRoleCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="539" name="NoNestedPartyIDs" type="NumInGroup" added="FIX.4.3" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="545" name="NestedPartySubID" abbrName="ID" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="553" name="Username" abbrName="Username" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="554" name="Password" abbrName="Password" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="581" name="AccountType" abbrName="AcctTyp" type="AccountTypeCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="583" name="ClOrdLinkID" abbrName="ClOrdLinkID" type="String" baseCategory="SingleGeneralOrderHandling" baseCategoryAbbrName="LnkID" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="586" name="OrigOrdModTime" abbrName="OrigOrdModTm" type="UTCTimestamp" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="627" name="NoHops" type="NumInGroup" added="FIX.4.3" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="628" name="HopCompID" abbrName="ID" type="String" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="629" name="HopSendingTime" abbrName="Snt" type="UTCTimestamp" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="630" name="HopRefID" abbrName="Ref" type="SeqNum" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="636" name="WorkingIndicator" abbrName="WorkingInd" type="WorkingIndicatorCodeSet" added="FIX.4.3">
+      </fixr:field>
+    <fixr:field id="660" name="AcctIDSource" abbrName="AcctIDSrc" type="AcctIDSourceCodeSet" unionDataType="Reserved100Plus" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="715" name="ClearingBusinessDate" abbrName="BizDt" type="LocalMktDate" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="150">
+      </fixr:field>
+    <fixr:field id="789" name="NextExpectedMsgSeqNum" abbrName="NextExpectedMsgSeqNum" type="SeqNum" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="802" name="NoPartySubIDs" type="NumInGroup" added="FIX.4.4" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="803" name="PartySubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.4.4" updated="FIX.5.0SP2" updatedEP="204">
+      </fixr:field>
+    <fixr:field id="804" name="NoNestedPartySubIDs" type="NumInGroup" added="FIX.4.4" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="805" name="NestedPartySubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.4.4" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="923" name="UserRequestID" abbrName="UserReqID" type="String" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="924" name="UserRequestType" abbrName="UserReqTyp" type="UserRequestTypeCodeSet" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="925" name="NewPassword" abbrName="NewPassword" type="String" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="926" name="UserStatus" abbrName="UserStat" type="UserStatusCodeSet" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="927" name="UserStatusText" abbrName="UserStatText" type="String" added="FIX.4.4">
+      </fixr:field>
+    <fixr:field id="1128" name="ApplVerID" abbrName="ApplVerID" type="ApplVerIDCodeSet" added="FIX.4.4" addedEP="16" updated="FIX.Latest" updatedEP="270">
+      </fixr:field>
+    <fixr:field id="1129" name="CstmApplVerID" abbrName="CstmApplVerID" type="String" added="FIX.4.4" addedEP="16">
+      </fixr:field>
+    <fixr:field id="1130" name="RefApplVerID" abbrName="RefApplVerID" type="ApplVerIDCodeSet" added="FIX.4.4" addedEP="16">
+      </fixr:field>
+    <fixr:field id="1131" name="RefCstmApplVerID" abbrName="RefCstmApplVerID" type="String" added="FIX.4.4" addedEP="16">
+      </fixr:field>
+    <fixr:field id="1133" name="ExDestinationIDSource" abbrName="ExDestIDSrc" type="ExDestinationIDSourceCodeSet" added="FIX.4.4" addedEP="26">
+      </fixr:field>
+    <fixr:field id="1137" name="DefaultApplVerID" abbrName="DefApplVerID" type="ApplVerIDCodeSet" added="FIX.4.4" addedEP="16">
+      </fixr:field>
+    <fixr:field id="1156" name="ApplExtID" abbrName="ApplExtID" type="int" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1324" name="ListUpdateAction" abbrName="ListUpdActn" type="ListUpdateActionCodeSet" added="FIX.5.0" addedEP="52" updated="FIX.5.0SP2" updatedEP="128">
+      </fixr:field>
+    <fixr:field id="1328" name="RejectText" abbrName="RejTxt" type="String" added="FIX.5.0" addedEP="55" updated="FIX.5.0SP2" updatedEP="103">
+      </fixr:field>
+    <fixr:field id="1400" name="EncryptedPasswordMethod" abbrName="EncPwdMethod" type="int" unionDataType="Reserved100Plus" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1401" name="EncryptedPasswordLen" abbrName="EncPwdLen" type="Length" added="FIX.5.0" addedEP="56" updated="FIX.5.0SP2" updatedEP="208">
+      </fixr:field>
+    <fixr:field id="1402" name="EncryptedPassword" abbrName="EncPwd" type="data" lengthId="1401" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1403" name="EncryptedNewPasswordLen" abbrName="EncNewPwdLen" type="Length" added="FIX.5.0" addedEP="56" updated="FIX.5.0SP2" updatedEP="208">
+      </fixr:field>
+    <fixr:field id="1404" name="EncryptedNewPassword" abbrName="EncNewPwd" type="data" lengthId="1403" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1406" name="RefApplExtID" abbrName="RefApplExtID" type="int" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1407" name="DefaultApplExtID" abbrName="DfltApplExtID" type="int" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1408" name="DefaultCstmApplVerID" abbrName="DefaultCstmApplVerID" type="String" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1409" name="SessionStatus" abbrName="SessStat" type="SessionStatusCodeSet" unionDataType="Reserved100Plus" added="FIX.5.0" addedEP="56">
+      </fixr:field>
+    <fixr:field id="1410" name="DefaultVerIndicator" abbrName="DfltVerInd" type="Boolean" added="FIX.5.0" addedEP="56" updated="FIX.Latest" updatedEP="275">
+      </fixr:field>
+    <fixr:field id="1505" name="PartyDetailsListRequestID" abbrName="ReqID" type="String" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1514" name="NoPartyRelationships" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1515" name="PartyRelationship" abbrName="Rltnshp" type="PartyRelationshipCodeSet" unionDataType="Reserved4000Plus" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1516" name="NoPartyDetailAltID" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1517" name="PartyDetailAltID" abbrName="ID" type="String" discriminatorId="1518" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1518" name="PartyDetailAltIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1519" name="NoPartyDetailAltSubIDs" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1520" name="PartyDetailAltSubID" abbrName="ID" type="String" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1521" name="PartyDetailAltSubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1562" name="NoRelatedPartyDetailID" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1563" name="RelatedPartyDetailID" abbrName="ID" type="String" discriminatorId="1564" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1564" name="RelatedPartyDetailIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1565" name="RelatedPartyDetailRole" abbrName="R" type="PartyRoleCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1566" name="NoRelatedPartyDetailSubIDs" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1567" name="RelatedPartyDetailSubID" abbrName="ID" type="String" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1568" name="RelatedPartyDetailSubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1569" name="NoRelatedPartyDetailAltID" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1570" name="RelatedPartyDetailAltID" abbrName="ID" type="String" discriminatorId="1571" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1571" name="RelatedPartyDetailAltIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1572" name="NoRelatedPartyDetailAltSubIDs" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1573" name="RelatedPartyDetailAltSubID" abbrName="ID" type="String" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1574" name="RelatedPartyDetailAltSubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1600" name="FIXEngineName" type="String" added="FIX.5.0SP2" addedEP="113">
+      </fixr:field>
+    <fixr:field id="1601" name="FIXEngineVersion" type="String" added="FIX.5.0SP2" addedEP="113">
+      </fixr:field>
+    <fixr:field id="1602" name="FIXEngineVendor" type="String" added="FIX.5.0SP2" addedEP="113">
+      </fixr:field>
+    <fixr:field id="1603" name="ApplicationSystemName" type="String" added="FIX.5.0SP2" addedEP="113">
+      </fixr:field>
+    <fixr:field id="1604" name="ApplicationSystemVersion" type="String" added="FIX.5.0SP2" addedEP="113">
+      </fixr:field>
+    <fixr:field id="1605" name="ApplicationSystemVendor" type="String" added="FIX.5.0SP2" addedEP="113">
+      </fixr:field>
+    <fixr:field id="1610" name="NoThrottles" type="NumInGroup" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1611" name="ThrottleAction" abbrName="Actn" type="ThrottleActionCodeSet" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1612" name="ThrottleType" abbrName="Typ" type="ThrottleTypeCodeSet" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1613" name="ThrottleNoMsgs" abbrName="NoMsgs" type="int" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1614" name="ThrottleTimeInterval" abbrName="TmIntvl" type="int" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1615" name="ThrottleTimeUnit" abbrName="TmUnit" type="OrderDelayUnitCodeSet" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1618" name="NoThrottleMsgType" type="NumInGroup" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1619" name="ThrottleMsgType" abbrName="MsgTyp" type="MsgTypeCodeSet" added="FIX.5.0SP2" addedEP="116">
+      </fixr:field>
+    <fixr:field id="1657" name="NoRequestingPartyIDs" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1658" name="RequestingPartyID" abbrName="ID" type="String" discriminatorId="1659" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1659" name="RequestingPartyIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1660" name="RequestingPartyRole" abbrName="R" type="PartyRoleCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1661" name="NoRequestingPartySubIDs" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1662" name="RequestingPartySubID" abbrName="ID" type="String" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1663" name="RequestingPartySubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.5.0SP2" addedEP="105" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="1664" name="EncodedRejectTextLen" abbrName="EncRejTxtLen" type="Length" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="192">
+      </fixr:field>
+    <fixr:field id="1665" name="EncodedRejectText" abbrName="EncRejTxt" type="data" lengthId="1664" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="192">
+      </fixr:field>
+    <fixr:field id="1671" name="NoPartyDetails" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1672" name="PartyDetailStatus" abbrName="Stat" type="PartyDetailStatusCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1674" name="PartyDetailRoleQualifier" abbrName="Qual" type="PartyDetailRoleQualifierCodeSet" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="223">
+      </fixr:field>
+    <fixr:field id="1675" name="RelatedPartyDetailRoleQualifier" abbrName="Qual" type="PartyDetailRoleQualifierCodeSet" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="173">
+      </fixr:field>
+    <fixr:field id="1676" name="NoPartyUpdates" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1691" name="PartyDetailID" abbrName="ID" type="String" discriminatorId="1692" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1692" name="PartyDetailIDSource" abbrName="Src" type="PartyIDSourceCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1693" name="PartyDetailRole" abbrName="R" type="PartyRoleCodeSet" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1694" name="NoPartyDetailSubIDs" type="NumInGroup" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1695" name="PartyDetailSubID" abbrName="ID" type="String" added="FIX.5.0SP2" addedEP="105">
+      </fixr:field>
+    <fixr:field id="1696" name="PartyDetailSubIDType" abbrName="Typ" type="PartySubIDTypeCodeSet" unionDataType="Reserved4000Plus" added="FIX.5.0SP2" addedEP="105" updated="FIX.Latest" updatedEP="294">
+      </fixr:field>
+    <fixr:field id="1744" name="ApplLevelRecoveryIndicator" type="ApplLevelRecoveryIndicatorCodeSet" added="FIX.5.0SP2" addedEP="124">
+      </fixr:field>
+    <fixr:field id="2104" name="NoAttachments" type="NumInGroup" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2105" name="AttachmentName" abbrName="Name" type="String" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2106" name="AttachmentMediaType" abbrName="MediaTyp" type="String" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2107" name="AttachmentClassification" abbrName="Clsfn" type="String" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2108" name="AttachmentExternalURL" abbrName="URL" type="String" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2109" name="AttachmentEncodingType" abbrName="EncTyp" type="AttachmentEncodingTypeCodeSet" unionDataType="Reserved100Plus" added="FIX.5.0SP2" addedEP="167" updated="FIX.Latest" updatedEP="271">
+      </fixr:field>
+    <fixr:field id="2110" name="UnencodedAttachmentLen" abbrName="UnencAttchmntLen" type="int" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2111" name="EncodedAttachmentLen" abbrName="EncAttchmntLen" type="Length" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2112" name="EncodedAttachment" abbrName="EncAttchmnt" type="data" lengthId="2111" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2113" name="NoAttachmentKeywords" type="NumInGroup" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2114" name="AttachmentKeyword" abbrName="Keywd" type="String" added="FIX.5.0SP2" addedEP="167">
+      </fixr:field>
+    <fixr:field id="2338" name="RequestingPartyRoleQualifier" abbrName="Qual" type="PartyDetailRoleQualifierCodeSet" added="FIX.5.0SP2" addedEP="171">
+      </fixr:field>
+    <fixr:field id="2376" name="PartyRoleQualifier" abbrName="Qual" type="PartyDetailRoleQualifierCodeSet" added="FIX.5.0SP2" addedEP="179">
+      </fixr:field>
+    <fixr:field id="2384" name="NestedPartyRoleQualifier" abbrName="Qual" type="PartyDetailRoleQualifierCodeSet" added="FIX.5.0SP2" addedEP="179">
+      </fixr:field>
+    <fixr:field id="2422" name="OrderRequestID" abbrName="OrdReqID" type="int" added="FIX.5.0SP2" addedEP="188">
+      </fixr:field>
+  </fixr:fields>
+  <fixr:components>
+    <fixr:component id="1024" name="StandardHeader" abbrName="Hdr" added="FIX.4.0" updated="FIX.Latest" updatedEP="271" category="Session">
+      <fixr:fieldRef id="8" presence="required" added="FIX.4.0" updated="FIX.Latest" updatedEP="306">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="9" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="35" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1128" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1156" added="FIX.5.0" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1129" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="49" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="56" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="115" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="128" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="90" added="FIX.4.0" deprecated="FIX.5.0SP2" deprecatedEP="195" updated="FIX.5.0SP2" updatedEP="195">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="91" added="FIX.4.0" deprecated="FIX.5.0SP2" deprecatedEP="195" updated="FIX.5.0SP2" updatedEP="195">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="34" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="50" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="142" added="FIX.4.1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="57" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="143" added="FIX.4.1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="116" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="144" added="FIX.4.1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="129" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="145" added="FIX.4.1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="43" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="97" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="52" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="122" added="FIX.4.0">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="212" added="FIX.4.2">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="213" added="FIX.4.2">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="347" added="FIX.4.2">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="369" added="FIX.4.2">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2085" added="FIX.4.4" addedEP="-1">
+        </fixr:groupRef>
+    </fixr:component>
+    <fixr:component id="1025" name="StandardTrailer" abbrName="Trlr" added="FIX.4.0" category="Session">
+      <fixr:fieldRef id="93" added="FIX.4.0" deprecated="FIX.5.0SP2" deprecatedEP="195" updated="FIX.5.0SP2" updatedEP="195">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="89" added="FIX.4.0" deprecated="FIX.5.0SP2" deprecatedEP="195" updated="FIX.5.0SP2" updatedEP="195">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="10" presence="required" added="FIX.4.0">
+        </fixr:fieldRef>
+    </fixr:component>
+  </fixr:components>
+  <fixr:groups>
+    <fixr:group id="1008" name="NestedParties" abbrName="Pty" added="FIX.4.3" updated="FIX.Latest" updatedEP="282" category="Common">
+      <fixr:numInGroup id="539" added="FIX.4.3">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="524" added="FIX.4.3">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="525" added="FIX.4.3">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="538" added="FIX.4.3">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2384" added="FIX.5.0SP2" addedEP="179">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2078" added="FIX.4.4">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="1012" name="Parties" abbrName="Pty" added="FIX.4.3" category="Common">
+      <fixr:numInGroup id="453" added="FIX.4.3">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="448" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="447" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="452" added="FIX.4.3" updated="FIX.5.0SP2" updatedEP="204">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2376" added="FIX.5.0SP2" addedEP="179">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2077" added="FIX.4.4">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="1067" name="ThrottleParamsGrp" abbrName="ThrttlPrm" added="FIX.5.0SP2" addedEP="116" category="Common">
+      <fixr:numInGroup id="1610" added="FIX.5.0SP2" addedEP="116">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1611" added="FIX.5.0SP2" addedEP="116">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1612" added="FIX.5.0SP2" addedEP="116">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1613" added="FIX.5.0SP2" addedEP="116">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1614" added="FIX.5.0SP2" addedEP="116">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1615" added="FIX.5.0SP2" addedEP="116">
+        </fixr:fieldRef>
+      <fixr:groupRef id="1068" added="FIX.5.0SP2" addedEP="116">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="1068" name="ThrottleMsgTypeGrp" abbrName="ThrttlMsgTyp" added="FIX.5.0SP2" addedEP="116" category="Common">
+      <fixr:numInGroup id="1618" added="FIX.5.0SP2" addedEP="116">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1619" added="FIX.5.0SP2" addedEP="116">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2052" name="RgstDistInstGrp" abbrName="RgDtlInst" added="FIX.4.4" category="RegistrationInstruction">
+      <fixr:numInGroup id="510" added="FIX.4.4">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="477" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="512" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="478" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="498" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="499" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="500" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="501" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="502" added="FIX.4.4">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2053" name="RgstDtlsGrp" abbrName="RgDtl" added="FIX.4.4" category="RegistrationInstruction">
+      <fixr:numInGroup id="473" added="FIX.4.4">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="509" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="511" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="474" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="482" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:groupRef id="1008" added="FIX.4.4">
+        </fixr:groupRef>
+      <fixr:fieldRef id="522" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="486" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="475" added="FIX.4.4">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2077" name="PtysSubGrp" abbrName="Sub" added="FIX.4.4" category="Common">
+      <fixr:numInGroup id="802" added="FIX.4.4">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="523" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="803" added="FIX.4.4">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2078" name="NstdPtysSubGrp" abbrName="Sub" added="FIX.4.4" category="Common">
+      <fixr:numInGroup id="804" added="FIX.4.4">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="545" added="FIX.4.4">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="805" added="FIX.4.4">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2085" name="HopGrp" abbrName="Hop" added="FIX.4.3" updated="FIX.5.0SP1" updatedEP="95" category="Session">
+      <fixr:numInGroup id="627" added="FIX.4.4" addedEP="-1">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="628" added="FIX.4.4" addedEP="-1" updated="FIX.Latest" updatedEP="312">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="629" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="630" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2098" name="MsgTypeGrp" abbrName="MsgTypeGrp" added="FIX.4.4" addedEP="-1" updated="FIX.Latest" updatedEP="271" category="Session">
+      <fixr:numInGroup id="384" added="FIX.4.4" addedEP="-1">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="372" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="385" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1130" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1406" added="FIX.5.0" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1131" added="FIX.4.4" addedEP="-1">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1410" added="FIX.5.0" addedEP="-1">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2154" name="PartyRelationshipGrp" abbrName="Rltnshp" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1514" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1515" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2156" name="PartyDetailGrp" abbrName="PtyDetl" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1671" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1691" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="128">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1692" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="128">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1693" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="128">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1674" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2189" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+      <fixr:groupRef id="2157" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+      <fixr:groupRef id="2166" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="128">
+        </fixr:groupRef>
+      <fixr:fieldRef id="1672" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="171">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2157" name="PartyDetailAltIDGrp" abbrName="AltPty" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1516" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1517" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1518" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2158" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="2158" name="PartyDetailAltSubGrp" abbrName="Sub" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1519" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1520" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1521" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2166" name="RelatedPartyDetailGrp" abbrName="ReltdPtyDetl" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1562" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1563" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1564" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1565" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1675" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2167" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+      <fixr:groupRef id="2168" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+      <fixr:groupRef id="2154" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="2167" name="RelatedPartyDetailSubGrp" abbrName="Sub" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1566" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1567" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1568" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2168" name="RelatedPartyDetailAltIDGrp" abbrName="AltPty" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1569" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1570" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1571" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2169" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="2169" name="RelatedPartyDetailAltSubGrp" abbrName="Sub" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1572" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1573" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1574" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2180" name="RequestingPartyGrp" abbrName="ReqPty" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="171" category="Common">
+      <fixr:numInGroup id="1657" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1658" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1659" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1660" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2338" added="FIX.5.0SP2" addedEP="171">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2181" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="171">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="2181" name="RequestingPartySubGrp" abbrName="Sub" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="171" category="Common">
+      <fixr:numInGroup id="1661" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1662" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1663" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2182" name="PartyDetailsUpdateGrp" abbrName="PtyDetlUpd" added="FIX.5.0SP2" addedEP="105" category="PartiesReferenceData">
+      <fixr:numInGroup id="1676" added="FIX.5.0SP2" addedEP="105">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1324" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2156" added="FIX.5.0SP2" addedEP="105">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="2189" name="PartyDetailSubGrp" abbrName="Sub" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="217" category="Common">
+      <fixr:numInGroup id="1694" added="FIX.5.0SP2" addedEP="105" updated="FIX.5.0SP2" updatedEP="208">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="1695" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="1696" added="FIX.5.0SP2" addedEP="105">
+        </fixr:fieldRef>
+    </fixr:group>
+    <fixr:group id="2234" name="AttachmentGrp" abbrName="Attchmnt" added="FIX.5.0SP2" addedEP="167" category="Common">
+      <fixr:numInGroup id="2104" added="FIX.5.0SP2" addedEP="167">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="2105" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2106" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2107" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2108" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2109" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2110" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2111" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:fieldRef id="2112" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+      <fixr:groupRef id="2235" added="FIX.5.0SP2" addedEP="167">
+        </fixr:groupRef>
+    </fixr:group>
+    <fixr:group id="2235" name="AttachmentKeywordGrp" abbrName="Keywd" added="FIX.5.0SP2" addedEP="167" category="Common">
+      <fixr:numInGroup id="2113" added="FIX.5.0SP2" addedEP="167">
+        </fixr:numInGroup>
+      <fixr:fieldRef id="2114" added="FIX.5.0SP2" addedEP="167">
+        </fixr:fieldRef>
+    </fixr:group>
+  </fixr:groups>
+  <fixr:messages>
+    <fixr:message id="1" name="Heartbeat" abbrName="Heartbeat" msgType="0" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="112" added="FIX.4.0">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="2" name="TestRequest" abbrName="TestRequest" msgType="1" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="112" presence="required" added="FIX.4.0">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="3" name="ResendRequest" abbrName="ResendRequest" msgType="2" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="7" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="16" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="4" name="Reject" abbrName="Reject" msgType="3" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="45" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="371" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="372" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1130" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1406" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1131" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="373" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="58" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="354" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="355" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="5" name="SequenceReset" abbrName="SequenceReset" msgType="4" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="123" added="FIX.4.0">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="36" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1744" added="FIX.5.0SP2" addedEP="124" />
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="6" name="Logout" abbrName="Logout" msgType="5" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="1409" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="789" added="FIX.5.0SP2" addedEP="124" />
+        <fixr:fieldRef id="58" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="354" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="355" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="10" name="OrderCancelReject" abbrName="OrdCxlRej" msgType="9" added="FIX.2.7" updated="FIX.Latest" updatedEP="306" category="SingleGeneralOrderHandling">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="37" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="2422" added="FIX.5.0SP2" addedEP="188">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="198" added="FIX.4.1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="526" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="11" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="583" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="41" added="FIX.4.1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="39" presence="required" added="FIX.4.1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="636" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="586" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="66" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="660" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="581" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="229" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="75" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="60" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="434" presence="required" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="102" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1328" added="FIX.5.0SP2" addedEP="134">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1664" added="FIX.5.0SP2" addedEP="134">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1665" added="FIX.5.0SP2" addedEP="134">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="100" added="FIX.5.0SP2" addedEP="115">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1133" added="FIX.5.0SP2" addedEP="115">
+          </fixr:fieldRef>
+        <fixr:groupRef id="1012" added="FIX.5.0SP2" addedEP="115">
+          </fixr:groupRef>
+        <fixr:fieldRef id="58" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="354" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="355" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="11" name="Logon" abbrName="Logon" msgType="A" added="FIX.2.7" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+        <fixr:fieldRef id="98" presence="required" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="108" presence="required" added="FIX.3.0">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="95" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="96" added="FIX.2.7">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="141" added="FIX.4.1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="789" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="383" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:groupRef id="2098" added="FIX.4.4" addedEP="-1">
+          </fixr:groupRef>
+        <fixr:fieldRef id="464" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="553" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="554" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="925" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1400" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1401" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1402" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1403" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1404" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1409" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1137" presence="required" added="FIX.4.4" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1407" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1408" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1600" added="FIX.5.0SP2" addedEP="113" />
+        <fixr:fieldRef id="1601" added="FIX.5.0SP2" addedEP="113" />
+        <fixr:fieldRef id="1602" added="FIX.5.0SP2" addedEP="113" />
+        <fixr:fieldRef id="1603" added="FIX.5.0SP2" addedEP="113" />
+        <fixr:fieldRef id="1604" added="FIX.5.0SP2" addedEP="113" />
+        <fixr:fieldRef id="1605" added="FIX.5.0SP2" addedEP="113" />
+        <fixr:fieldRef id="58" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="354" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="355" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.2.7">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="43" name="BusinessMessageReject" abbrName="BizMsgRej" msgType="j" added="FIX.4.2" category="BusinessReject">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.4.2" updated="FIX.Latest" updatedEP="306">
+          </fixr:componentRef>
+        <fixr:fieldRef id="45" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="372" presence="required" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1130" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1406" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1131" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="379" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="380" presence="required" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="58" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="354" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="355" added="FIX.4.2">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.4.2">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="47" name="XMLnonFIX" abbrName="XMLnonFIX" msgType="n" added="FIX.4.3" category="Session">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.4.3">
+          </fixr:componentRef>
+        <fixr:groupRef id="2234" added="FIX.5.0SP2" addedEP="167">
+          </fixr:groupRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.4.3">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="48" name="RegistrationInstructions" abbrName="RgstInstrctns" msgType="o" added="FIX.4.3" category="RegistrationInstruction">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.4.3">
+          </fixr:componentRef>
+        <fixr:fieldRef id="513" presence="required" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="715" added="FIX.5.0SP2" addedEP="103">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="514" presence="required" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="508" presence="required" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="11" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:groupRef id="1012" added="FIX.4.3">
+          </fixr:groupRef>
+        <fixr:fieldRef id="1" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="660" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="493" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="495" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="517" added="FIX.4.3">
+          </fixr:fieldRef>
+        <fixr:groupRef id="2053" added="FIX.4.4">
+          </fixr:groupRef>
+        <fixr:groupRef id="2052" added="FIX.4.4">
+          </fixr:groupRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.4.3">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="90" name="UserRequest" abbrName="UserReq" msgType="BE" added="FIX.4.4" category="UserManagement">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.4.4" updated="FIX.Latest" updatedEP="306">
+          </fixr:componentRef>
+        <fixr:fieldRef id="923" presence="required" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="924" presence="required" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="553" presence="required" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="554" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="925" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1400" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1401" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1402" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1403" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="1404" added="FIX.5.0" addedEP="-1">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="95" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="96" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.4.4">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="91" name="UserResponse" abbrName="UserRsp" msgType="BF" added="FIX.4.4" category="UserManagement">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.4.4" updated="FIX.Latest" updatedEP="306">
+          </fixr:componentRef>
+        <fixr:fieldRef id="923" presence="required" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="553" presence="required" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="926" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:groupRef id="1067" added="FIX.5.0SP2" addedEP="116">
+          </fixr:groupRef>
+        <fixr:fieldRef id="927" added="FIX.4.4">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.4.4">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+    <fixr:message id="134" name="PartyDetailsDefinitionRequest" abbrName="PtyDetlDefReq" msgType="CX" added="FIX.5.0SP2" addedEP="146" category="PartiesReferenceData">
+      <fixr:structure>
+        <fixr:componentRef id="1024" presence="required" added="FIX.5.0SP2" addedEP="146" updated="FIX.Latest" updatedEP="306">
+          </fixr:componentRef>
+        <fixr:fieldRef id="1505" presence="required" added="FIX.5.0SP2" addedEP="146">
+          </fixr:fieldRef>
+        <fixr:groupRef id="2180" added="FIX.5.0SP2" addedEP="146">
+          </fixr:groupRef>
+        <fixr:groupRef id="2182" presence="required" added="FIX.5.0SP2" addedEP="146">
+          </fixr:groupRef>
+        <fixr:fieldRef id="58" added="FIX.5.0SP2" addedEP="146">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="354" added="FIX.5.0SP2" addedEP="146">
+          </fixr:fieldRef>
+        <fixr:fieldRef id="355" added="FIX.5.0SP2" addedEP="146">
+          </fixr:fieldRef>
+        <fixr:componentRef id="1025" presence="required" added="FIX.5.0SP2" addedEP="146">
+          </fixr:componentRef>
+      </fixr:structure>
+    </fixr:message>
+  </fixr:messages>
+</fixr:repository>

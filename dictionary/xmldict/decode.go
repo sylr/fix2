@@ -9,23 +9,30 @@ import (
 	"strings"
 )
 
-// maxElements bounds the XML elements Load decodes. They are counted as they
-// are read, so a dictionary cannot make the decoder build a tree the resolver
-// limits would only reject afterwards. The full FIX 5.0 SP2 dictionary has
-// about 10,000 elements.
+// maxElements bounds the XML elements Load decodes from a QuickFIX
+// dictionary. They are counted as they are read, so a dictionary cannot make
+// the decoder build a tree the resolver limits would only reject afterwards.
+// The full FIX 5.0 SP2 dictionary has about 10,000 elements.
 const maxElements = 1 << 18
+
+// maxOrchestraElements bounds the XML elements Load decodes from an
+// Orchestra repository. Most are documentation, skipped but counted: FIX
+// Latest as of Extension Pack 312 has about 155,000 elements.
+const maxOrchestraElements = 1 << 20
 
 // decoder fills the xml* types from XML tokens, counting elements and group
 // nesting as it reads them.
 type decoder struct {
 	d        *xml.Decoder
 	elements int
+	limit    int // elements allowed
 }
 
-// decode reads a QuickFIX dictionary. Like encoding/xml, it takes the first
-// element whatever its name as the root, and skips unknown elements.
+// decode reads a QuickFIX dictionary, or an Orchestra repository (see
+// decodeOrchestra). Like encoding/xml, it takes the first element whatever
+// its name as the root, and skips unknown elements.
 func decode(r io.Reader) (*xmlDict, error) {
-	dec := &decoder{d: xml.NewDecoder(&markupLimiter{r: r})}
+	dec := &decoder{d: xml.NewDecoder(&markupLimiter{r: r}), limit: maxElements}
 	var root xml.StartElement
 	for {
 		tok, err := dec.d.Token()
@@ -38,6 +45,12 @@ func decode(r io.Reader) (*xmlDict, error) {
 		}
 	}
 	dec.elements++
+	if ok, err := isOrchestra(root); err != nil {
+		return nil, err
+	} else if ok {
+		dec.limit = maxOrchestraElements
+		return dec.orchestra(root)
+	}
 	xd := &xmlDict{
 		Type:        attr(root, "type"),
 		Major:       attr(root, "major"),
@@ -194,8 +207,8 @@ func (dec *decoder) next() (xml.StartElement, bool, error) {
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			if dec.elements++; dec.elements > maxElements {
-				return xml.StartElement{}, false, fmt.Errorf("more than %d elements", maxElements)
+			if dec.elements++; dec.elements > dec.limit {
+				return xml.StartElement{}, false, fmt.Errorf("more than %d elements", dec.limit)
 			}
 			return t, true, nil
 		case xml.EndElement:
@@ -219,10 +232,10 @@ func attr(start xml.StartElement, name string) string {
 // maxTagLen and maxAttrs bound one tag before encoding/xml
 // decodes it: it builds a tag's whole attribute list at once, before any
 // element budget can stop it. QuickFIX dictionaries use at most four
-// attributes per element.
+// attributes per element, Orchestra repositories eleven.
 const (
 	maxTagLen = 64 << 10
-	maxAttrs  = 8
+	maxAttrs  = 16
 )
 
 // Lexer states of markupLimiter.
@@ -241,7 +254,8 @@ const (
 // sections and processing instructions end exactly where encoding/xml ends
 // them, and pass through unbounded since decoding them costs about their
 // size. Directives such as <!DOCTYPE ...>, whose end depends on a grammar of
-// their own, are rejected: QuickFIX dictionaries do not use them.
+// their own, are rejected: QuickFIX dictionaries and Orchestra repositories
+// do not use them.
 type markupLimiter struct {
 	r      io.Reader
 	state  int

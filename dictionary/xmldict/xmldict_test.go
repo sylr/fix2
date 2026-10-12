@@ -454,9 +454,10 @@ func TestResolver_ChargesBeforeRecording(t *testing.T) {
 	field := func(name string) xmlItem { return xmlItem{XMLName: xml.Name{Local: "field"}, Name: name} }
 	group := xmlItem{XMLName: xml.Name{Local: "group"}, Name: "NoG", xmlBody: xmlBody{Items: []xmlItem{field("X"), field("Y")}}}
 	r := &resolver{
-		byName:   map[string]*dictionary.FieldDef{"NoG": {Tag: 100}, "X": {Tag: 101}, "Y": {Tag: 102}},
-		compMap:  map[string]*xmlComponent{},
-		visiting: map[string]bool{},
+		byName:    map[string]*dictionary.FieldDef{"NoG": {Tag: 100}, "X": {Tag: 101}, "Y": {Tag: 102}},
+		compMap:   map[string]*xmlComponent{},
+		visiting:  map[visit]bool{},
+		maxVisits: maxVisits,
 	}
 	// Inside one optional component, the group costs 1 visit + 2 field visits
 	// + 2 copied refs, then 1 x (1 counter + 2 children) condition updates.
