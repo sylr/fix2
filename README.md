@@ -125,6 +125,11 @@ On an Apple M4: parsing a 24-field message into a reused `Message` takes
 280 ns and no allocation; validating it 85 ns; sending an order between an
 initiator and an acceptor in memory, 730 ns and one allocation.
 
+`tests/benchmarks` compares fix2 with other engines, QuickFIX/Go and
+QuickFIX/J, on orders and their acknowledgements over TCP, each end in a
+process of its own, either engine on either end, their toolchains pinned
+by a Nix flake: `cd tests/benchmarks && nix develop -c make bench`.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
