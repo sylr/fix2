@@ -12,7 +12,7 @@ generates from one dictionary, `spec/FIX44.xml`.
     make bench                      # the whole matrix, every run in results.txt
     make bench RUNS=20 WINDOWS=1,100 SCENARIOS=marketdata
     make bench AGENTS="fix2 quickfixj"          # AGENTS holds BASELINE, fix2
-    go run golang.org/x/perf/cmd/benchstat@latest -col /initiator results.txt
+    make stats                      # benchstat: every pair against fix2/fix2
 
 The engines: fix2, [QuickFIX/Go](https://github.com/quickfixgo/quickfix)
 v0.9.12, [QuickFIX/J](https://github.com/quickfix-j/quickfixj) 3.0.2 and
@@ -120,7 +120,17 @@ its ratios to the baseline those of medians, with no statistical test.
 `-o` writes every run in the Go benchmark format (`BenchmarkOrders`,
 `BenchmarkMarketData`) for benchstat to compare them: it gives a
 confidence interval of a median from 6 runs, and tells whether two pairs
-differ significantly. `-runs` is 10 by default.
+differ significantly. `-runs` is 10 by default. `make stats` runs it with
+a row for each scenario and window and a column for each pair, the
+baseline's first, which every other is compared to:
+
+    go run golang.org/x/perf/cmd/benchstat@latest -row '.name,/window' \
+        -col '/acceptor@(fix2 quickfixgo quickfixj quickfixcpp),/initiator@(fix2 quickfixgo quickfixj quickfixcpp)' \
+        results.txt
+
+Its columns follow the order given, not the shuffled order of the runs:
+with benchstat's default rows, the full benchmark name, each acceptor
+would have a row of its own, and the first pair to have run the baseline.
 
 ## Matrix
 

@@ -37,7 +37,7 @@ BASELINE    ?= fix2
 CXX_PATH       := $(shell command -v $(CXX))
 CMAKE_BUILD_ID := $(shell printf '%s\n%s\n' '$(CXX_PATH)' '$(QUICKFIX_CPP)' | cksum | cut -d' ' -f1)
 
-.PHONY: generate build bench vet clean
+.PHONY: generate build bench stats vet clean
 
 # generate generates the Go engines' code from $(DICT), into gen/: fix2's
 # with fixgen, QuickFIX/Go's with its generate-fix, both Go tools of the
@@ -73,12 +73,22 @@ build: generate
 		install -m 755 $$b/$$a bin/$$a || exit 1; \
 	done
 
-# bench runs the matrix and writes every run to $(OUTPUT), for benchstat:
-# go run golang.org/x/perf/cmd/benchstat@latest -col /initiator results.txt
+# bench runs the matrix and writes every run to $(OUTPUT), for make stats.
 bench: build
 	bin/fixbench $(foreach a,$(AGENTS),-impl $(a)=bin/$(a)) -baseline $(BASELINE) \
 		-scenarios $(SCENARIOS) -messages $(MESSAGES) -warmup $(WARMUP) -windows $(WINDOWS) -runs $(RUNS) \
 		-dict $(DICT) -o $(OUTPUT) $(BENCH_FLAGS)
+
+# stats compares the runs of $(OUTPUT) with benchstat: a row for each
+# scenario and window, a column for each pair, the baseline's first, which
+# every other is compared to. Without -row, each acceptor would have rows of
+# its own; without the order, the first pair to have run, shuffled, would be
+# the baseline.
+STATS_ORDER := $(BASELINE) $(filter-out $(BASELINE),$(AGENTS))
+
+stats:
+	$(GO) run golang.org/x/perf/cmd/benchstat@latest -row '.name,/window' \
+		-col '/acceptor@($(STATS_ORDER)),/initiator@($(STATS_ORDER))' $(OUTPUT)
 
 vet: generate
 	$(GO) vet ./...
