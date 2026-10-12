@@ -607,6 +607,7 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 	case seqIgnore, seqDone:
 		return in, false
 	}
+	s.lastProcessedLocked(m, in)
 	msgType := m.MsgType()
 	admin := isAdmin(msgType)
 	if verr := s.validateLocked(m, &in); verr != nil {
@@ -858,6 +859,7 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 		s.tooHighLocked(c, in, frame)
 		return
 	}
+	s.lastProcessedLocked(m, in)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty logged out", slog.String("text", text))
 	if in.Seq == s.st.NextTarget {
 		s.markLocked(in.Seq)
@@ -946,6 +948,10 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 	case err2 != nil || end < 0:
 		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagEndSeqNo, rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagEndSeqNo)+" is "+quoteValue(m.Get(tagEndSeqNo))))
 	default:
+		// The counterparty has our messages up to the one before begin,
+		// and none after: what it asks for is not to be evicted.
+		s.lastProcessedLocked(m, in)
+		s.ackedLocked(uint64(begin)-1, tagBeginSeqNo, in.Seq)
 		last := s.st.NextSender - 1
 		e := uint64(end)
 		if s.prof.isInfinity(e) || e > last {

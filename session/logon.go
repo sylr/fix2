@@ -213,6 +213,11 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		s.closeAfterFlushLocked(c, &LogoutError{Text: "Logon MsgSeqNum too low"})
 		return
 	}
+	// 789, what the counterparty expects next, prevails over its 369.
+	s.lastProcessedLocked(m, in)
+	if peerNext > 0 {
+		s.ackedLocked(peerNext-1, tagNextExpectedMsgSeqNum, in.Seq)
+	}
 
 	if s.initiator {
 		s.heartBt = s.cfg.HeartBtInt
@@ -261,7 +266,9 @@ func (s *Session) activeResetLocked(c *conn, m *fix2.Message, in Inbound) {
 	s.resetting = true
 	c.resetReq = true
 	// What is not yet handed to the writer belongs to the old generation,
-	// which the counterparty is leaving: dropped, as is any replay.
+	// which the counterparty is leaving: dropped, as is any replay, but
+	// kept from eviction should the reset be refused.
+	s.unsentLocked(c)
 	c.replay, c.replayQueue = nil, nil
 	c.pending, c.frames = c.pending[:0], c.frames[:0]
 	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
@@ -336,6 +343,7 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	s.recov = recovery{}
 	clear(s.stash)
 	s.receipts.newGeneration(gen, st.Generation)
+	s.ret.newGeneration()
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "sequence numbers reset", slog.String("why", why), slog.Uint64("generation", st.Generation))
 	return nil
 }

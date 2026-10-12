@@ -35,6 +35,10 @@ typed code generation and a session engine.
     resets, NextExpectedMsgSeqNum, LastMsgSeqNumProcessed;
   - receipts telling when a sent message was written, and when the
     counterparty's engine provably read it;
+  - retention, evicting from the store the messages the counterparty
+    acknowledged (LastMsgSeqNumProcessed, NextExpectedMsgSeqNum,
+    ResendRequest) beyond the last few and a minimum age, and any written
+    beyond a bound;
   - schedules (`session/schedule`) with boundaries fired on time;
   - stores (`session/store`, an in-memory one for now), transports
     (`session/transport`: TCP, TLS, in-memory), logging through `log/slog`

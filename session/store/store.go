@@ -132,7 +132,9 @@ type Syncer interface {
 }
 
 // Truncater is a Store that can drop old messages to bound its size; Range
-// reports them as HoleRetention.
+// reports them as HoleRetention. The session calls Truncate under its lock,
+// as it does Append, so it must be quick; a Range already started keeps
+// seeing the messages it drops.
 type Truncater interface {
 	// Truncate drops the messages of generation gen below seq before.
 	Truncate(ctx context.Context, gen, before uint64) error

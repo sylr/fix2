@@ -75,6 +75,48 @@ const (
 	AckProbeNever
 )
 
+// Retention bounds the messages a session keeps in its store for resending.
+// Every Interval, the session evicts the messages its counterparty
+// acknowledged, but the last Keep and those younger than MinAge, and, beyond
+// Max, older ones even unacknowledged. Keep and Max count sequence numbers,
+// session-level messages included. A message evicted is gap-filled if the
+// counterparty asks for it again: it is lost to it, which the session tells
+// Handler.OnRecoveryLoss with ErrBeyondRetention.
+//
+// A message never written, or that a ResendRequest asked for and was not
+// completely served, is never evicted, Max or not, until the counterparty
+// acknowledges it, asks for messages after it, or a replay resends it: a
+// connection that ends before writing what it queued holds evictions back
+// until then, as do the messages a persistent store holds when the session
+// starts.
+//
+// The counterparty acknowledges our messages up to a MsgSeqNum with
+// LastMsgSeqNumProcessed (369) on the messages it sends, PossDup ones
+// excepted, and with NextExpectedMsgSeqNum (789) on its Logon if the session
+// honours it; the BeginSeqNo (7) of a ResendRequest moves the
+// acknowledgement back, or sets the first. The last the counterparty sent
+// counts, even if it is lower than an earlier one: a counterparty that
+// restored an older state and says so keeps what it may ask for again. Its acknowledgements say
+// it processed our messages, or, with some engines, received them, not that
+// it can never ask for them again: Keep and MinAge are the margin for its
+// crashes. With a counterparty that sends neither 369 nor 789, only Max
+// evicts, past its first ResendRequest.
+type Retention struct {
+	// Interval is the time between two evictions, 0 to keep every message
+	// until the sequence numbers are reset.
+	Interval time.Duration
+	// Keep is how many of the last sequence numbers are kept, acknowledged
+	// or not.
+	Keep int
+	// MinAge keeps the messages sent less than MinAge ago, acknowledged or
+	// not, to within an Interval.
+	MinAge time.Duration
+	// Max bounds the sequence numbers kept, 0 for no bound: older messages
+	// are evicted, acknowledged or not, whatever Keep and MinAge. Up to an
+	// eighth more are kept between evictions, which copy what stays.
+	Max int
+}
+
 // Leniency relaxes checks some counterparties fail.
 type Leniency struct {
 	// SequenceResetWithoutOrigSendingTime accepts a PossDup SequenceReset
@@ -178,6 +220,9 @@ type Config struct {
 	// MaxTrackedReceipts bounds the messages whose acknowledgement is
 	// tracked, 1<<20 if 0.
 	MaxTrackedReceipts int
+	// Retention evicts sent messages from the store, which must then
+	// implement store.Truncater: none by default.
+	Retention Retention
 }
 
 // withDefaults returns c with its zero fields set to their defaults.
@@ -305,6 +350,7 @@ func (c *Config) Validate() error {
 			add(n.field, "must be >= 0, got %d", n.v)
 		}
 	}
+	c.validateRetention(add)
 	if p != nil {
 		d := c.Dictionaries
 		if p.fixt {
@@ -327,6 +373,32 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	return &ConfigError{Session: c.ID.String(), Errs: errs}
+}
+
+// validateRetention checks c.Retention.
+func (c *Config) validateRetention(add func(field, format string, args ...any)) {
+	r := c.Retention
+	if r.Interval < 0 {
+		add("Retention.Interval", "must be >= 0, got %v", r.Interval)
+	}
+	if r.MinAge < 0 {
+		add("Retention.MinAge", "must be >= 0, got %v", r.MinAge)
+	}
+	if r.Keep < 0 {
+		add("Retention.Keep", "must be >= 0, got %d", r.Keep)
+	}
+	if r.Max < 0 {
+		add("Retention.Max", "must be >= 0, got %d", r.Max)
+	}
+	if r.Interval == 0 && (r.Keep != 0 || r.MinAge != 0 || r.Max != 0) {
+		add("Retention.Interval", "required to evict messages: 0 keeps every message")
+	}
+	if r.Max > 0 && r.Keep > r.Max {
+		add("Retention.Keep", "%d is above Retention.Max %d", r.Keep, r.Max)
+	}
+	if _, ok := c.Store.(store.Truncater); r.Interval > 0 && c.Store != nil && !ok {
+		add("Retention", "the store, %T, cannot evict messages: it does not implement store.Truncater", c.Store)
+	}
 }
 
 // errConfig wraps a Config.Validate error for New.

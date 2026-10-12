@@ -126,6 +126,7 @@ type Session struct {
 	window      schedule.Window
 	windowOpen  chan struct{}
 	schedCancel context.CancelFunc
+	ret         retention
 
 	stats Stats
 }
@@ -137,6 +138,11 @@ type Stats struct {
 	Resent, GapFilled              atomic.Uint64
 	RejectsSent, Garbled           atomic.Uint64
 	Connections                    atomic.Uint64
+	// Evicted counts the sequence numbers Config.Retention evicted from the
+	// store, since the process started; BeyondRetention, the messages
+	// gap-filled because they were evicted, each time the counterparty
+	// asked for one.
+	Evicted, BeyondRetention atomic.Uint64
 }
 
 // New returns a session configured by cfg, which it validates.
@@ -171,6 +177,8 @@ func New(cfg Config) (*Session, error) {
 	s.st = st
 	s.committed = st.NextTarget - 1
 	s.receipts.init(cfg.MaxTrackedReceipts, st.Generation)
+	s.ret.floor = 1
+	s.storedLocked()
 	return s, nil
 }
 

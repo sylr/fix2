@@ -57,6 +57,9 @@ func (s *Session) stop(ctx context.Context, text string) error {
 	if s.schedCancel != nil {
 		s.schedCancel()
 	}
+	if s.ret.timer != nil {
+		s.ret.timer.Stop()
+	}
 	d := s.deliv
 	s.receipts.notify()
 	s.mu.Unlock()
@@ -109,6 +112,7 @@ func (s *Session) SetNextTargetSeqNum(next uint64) error {
 	}
 	s.st.NextTarget = next
 	s.committed = next - 1
+	s.ret.ackFrom = 0 // the counterparty's MsgSeqNum may go back
 	s.recov = recovery{}
 	clear(s.stash)
 	s.log.LogAttrs(context.Background(), slog.LevelWarn, "NextTargetSeqNum set by hand", slog.Uint64("next", next))

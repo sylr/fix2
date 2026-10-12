@@ -18,6 +18,13 @@ type replayJob struct {
 	running    bool
 }
 
+// coveredRun is a run of messages beyond retention a GapFill covers, the
+// GapFill ending at offset end of the replay's buffer.
+type coveredRun struct {
+	run [2]uint64
+	end int
+}
+
 // maxQueuedReplays bounds the ResendRequests queued behind a running replay.
 const maxQueuedReplays = 16
 
@@ -46,6 +53,8 @@ func (s *Session) startReplayLocked(c *conn, begin, end uint64, keepPending bool
 		} else {
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "too many ResendRequests queued: one dropped",
 				slog.Uint64("begin", begin), slog.Uint64("end", end))
+			// Not served: the counterparty will ask again.
+			s.ret.holdLocked(begin, end)
 		}
 		return
 	}
@@ -74,15 +83,24 @@ func (c *conn) runReplay(job *replayJob) {
 		sending  = fix2.AppendUTCTimestamp(nil, now, s.prec)
 		writeErr error
 		gaps     [][2]uint64
+		evicted  [][2]uint64  // runs of messages beyond retention, inclusive
+		covered  []coveredRun // those of them a GapFill in buf covers
+		lost     [][2]uint64  // those of them a GapFill written covers
 	)
 	flush := func() {
 		if len(buf) == 0 || writeErr != nil {
-			buf, frames = buf[:0], frames[:0]
+			buf, frames, covered = buf[:0], frames[:0], covered[:0]
 			return
 		}
 		c.tc.SetWriteDeadline(time.Now().Add(s.cfg.WriteTimeout))
 		n, err := c.tc.Write(buf)
 		c.wrote(buf, frames, n, gen, epoch, true)
+		for _, r := range covered {
+			if r.end <= n {
+				lost = append(lost, r.run)
+			}
+		}
+		covered = covered[:0]
 		writeErr = err
 		buf, frames = buf[:0], frames[:0]
 	}
@@ -96,6 +114,10 @@ func (c *conn) runReplay(job *replayJob) {
 		frames = append(frames, pendingFrame{end: len(buf), seq: gapStart, gapFill: true})
 		s.stats.GapFilled.Add(next - gapStart)
 		gaps = append(gaps, [2]uint64{gapStart, next})
+		for len(evicted) > 0 && evicted[0][0] < next {
+			covered = append(covered, coveredRun{run: evicted[0], end: len(buf)})
+			evicted = evicted[1:]
+		}
 		gapStart = 0
 	}
 	var missing uint64 // a message missing from the store: the replay stops there
@@ -112,7 +134,11 @@ func (c *conn) runReplay(job *replayJob) {
 			return errMissing
 		case hole != store.HoleNone:
 			if hole == store.HoleRetention {
-				s.log.LogAttrs(context.Background(), slog.LevelWarn, "message beyond retention gap-filled", slog.Uint64("seq", seq))
+				if n := len(evicted); n > 0 && evicted[n-1][1]+1 == seq {
+					evicted[n-1][1] = seq
+				} else {
+					evicted = append(evicted, [2]uint64{seq, seq})
+				}
 			}
 			skip = true
 		case isAdmin(msgTypeOf(raw)):
@@ -159,6 +185,13 @@ func (c *conn) runReplay(job *replayJob) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, e := range lost {
+		// Gap-filled: the counterparty moves past them for good.
+		s.stats.BeyondRetention.Add(e[1] - e[0] + 1)
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "messages beyond retention gap-filled",
+			slog.Uint64("from", e[0]), slog.Uint64("to", e[1]))
+		s.deliv.push(item{kind: itemLoss, gen: gen, seq: e[0], end: e[1], err: ErrBeyondRetention})
+	}
 	if (missing != 0 || readErr != nil) && writeErr == nil && !c.closed {
 		var text string
 		var cause error
@@ -171,6 +204,8 @@ func (c *conn) runReplay(job *replayJob) {
 			cause = readErr
 		}
 		s.log.LogAttrs(context.Background(), slog.LevelError, "resend aborted", slog.String("reason", text), slog.Any("error", cause))
+		// What it did not resend stays unwritten.
+		s.unsentLocked(c)
 		c.replay, c.replayQueue = nil, nil
 		s.logoutLocked(c, text)
 		return
@@ -184,6 +219,9 @@ func (c *conn) runReplay(job *replayJob) {
 		}
 		c.replay = nil
 		return
+	}
+	if missing == 0 && readErr == nil {
+		s.ret.deliveredLocked(job.begin, job.end)
 	}
 	c.replay = nil
 	for c.replay == nil && len(c.replayQueue) > 0 {

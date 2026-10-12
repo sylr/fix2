@@ -43,6 +43,7 @@ type conn struct {
 	spare       []byte // the buffer the writer last wrote, for reuse
 	spareFrames []pendingFrame
 	replay      *replayJob // replay waiting for the writer, or running
+	writing     uint64     // lowest MsgSeqNum of the application messages the writer is writing, 0 if none
 	replayQueue []replayJob
 	room        chan struct{} // closed when room frees in pending; nil if no Send waits
 	closing     bool          // close once pending is written
@@ -166,6 +167,7 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 	c.logonDeadline = now.Add(s.cfg.LogonTimeout)
 	c.timer = time.AfterFunc(s.cfg.LogonTimeout, func() { s.onTimer(c) })
 	s.stats.Connections.Add(1)
+	s.startRetentionLocked()
 	c.startWriterLocked()
 	return c, nil
 }
@@ -246,6 +248,7 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 	if c.reason == nil {
 		c.reason = reason
 	}
+	s.unsentLocked(c)
 	c.timer.Stop()
 	c.tc.Close()
 	c.wakeWriter()
@@ -316,6 +319,14 @@ func (c *conn) writeLoop() {
 		buf, frames := c.pending, c.frames
 		c.pending, c.frames = c.spare[:0], c.spareFrames[:0]
 		c.spare, c.spareFrames = nil, nil
+		if s.cfg.Retention.Interval > 0 {
+			// Not evicted until written.
+			for _, f := range frames {
+				if !f.admin && (c.writing == 0 || f.seq < c.writing) {
+					c.writing = f.seq
+				}
+			}
+		}
 		c.signalRoomLocked()
 		gen, epoch := s.st.Generation, c.epoch
 		s.mu.Unlock()
@@ -327,8 +338,11 @@ func (c *conn) writeLoop() {
 		s.mu.Lock()
 		c.spare, c.spareFrames = buf[:0], frames[:0]
 		if err != nil && !c.closed {
+			// What it did not write stays unwritten: disconnectLocked notes
+			// it.
 			s.disconnectLocked(c, &LogoutError{Text: "write failed", Err: err})
 		}
+		c.writing = 0
 		s.mu.Unlock()
 	}
 }

@@ -36,6 +36,10 @@ var (
 	ErrUnknownDelivery = errors.New("session: delivery unknown, sequence numbers reset or session ended first")
 	// ErrReceiptUntracked reports a receipt too old to be tracked.
 	ErrReceiptUntracked = errors.New("session: receipt no longer tracked")
+	// ErrBeyondRetention reports messages of ours the counterparty asked
+	// for again after they were evicted from the store, by Config.Retention
+	// or the store itself: they were gap-filled.
+	ErrBeyondRetention = errors.New("session: messages evicted from the store gap-filled")
 )
 
 // RejectError, returned by Handler.FromApp, makes the session reject the
