@@ -76,6 +76,7 @@ type Framer struct {
 	// frames found inside.
 	checked, checkedEnd int
 	searched            int // bytes skipToCheckSum searched, for tests
+	moved               int // bytes fill moved in or to a new buffer, for tests
 }
 
 // NewFramer returns a Framer reading from r.
@@ -242,6 +243,13 @@ func (f *Framer) header() (int, int, error) {
 
 // fill ensures n bytes are buffered from f.start, moving and growing the
 // buffer as needed. It returns the read error if the stream ends first.
+//
+// It moves the buffered bytes to the front only if they are no more than
+// the bytes consumed before them, or if the buffer is half as large again
+// as the largest window a frame needs: then those are at least half the
+// window. It grows the buffer otherwise, or malformed frames resyncing a few
+// bytes apart, each needing as large a window, would move it again and
+// again.
 func (f *Framer) fill(n int) error {
 	for f.end-f.start < n {
 		if f.err != nil {
@@ -249,8 +257,13 @@ func (f *Framer) fill(n int) error {
 		}
 		if f.start+n > len(f.buf) {
 			f.checked, f.checkedEnd = max(0, f.checked-f.start), max(0, f.checkedEnd-f.start)
-			if n > len(f.buf) {
-				nb := make([]byte, max(n, 2*len(f.buf)))
+			f.moved += f.end - f.start
+			// A frame's header, body and trailer, and as many bytes again
+			// searched for its CheckSum (see skipToCheckSum).
+			window := maxHeaderLen + 2*f.maxBody + trailerLen
+			bound := window + window/2
+			if n > len(f.buf) || f.end-f.start > f.start && len(f.buf) < bound {
+				nb := make([]byte, max(n, min(2*len(f.buf), bound)))
 				f.end = copy(nb, f.buf[f.start:f.end])
 				f.buf = nb
 			} else {
@@ -302,19 +315,26 @@ func (f *Framer) skipToCheckSum(from int) {
 	eof := false
 	for {
 		buffered := f.end - f.start
+		// The bytes past the limit are not searched, however many were read:
+		// which CheckSum field ends the frame does not depend on the reads.
+		view := min(buffered, limit)
 		lo, hi := f.checked-f.start, f.checkedEnd-f.start
-		stop := buffered
+		stop, gap := view, false
 		switch {
 		case from >= lo && from < hi:
 			from = hi // searched for a previous frame
-		case from < lo && lo < hi:
-			stop = lo + len(checkSumField) - 1 // up to the bytes searched before
+		case from < lo && lo < hi && lo+len(checkSumField)-1 < view:
+			stop, gap = lo+len(checkSumField)-1, true // up to the bytes searched before
 		}
-		f.searched += stop - from
-		if i := bytes.Index(f.buf[f.start+from:f.start+stop], checkSumField); i >= 0 {
+		i := -1
+		if from < stop {
+			f.searched += stop - from
+			i = bytes.Index(f.buf[f.start+from:f.start+stop], checkSumField)
+		}
+		if i >= 0 {
 			from += i
 			value := from + len(checkSumField) // offset of the value
-			rest := f.buf[f.start+value : f.end]
+			rest := f.buf[f.start+value : f.start+view]
 			f.searched += min(len(rest), maxValue)
 			if j := bytes.IndexByte(rest[:min(len(rest), maxValue)], soh); j >= 0 {
 				f.skip(value + j + 1)
@@ -325,14 +345,14 @@ func (f *Framer) skipToCheckSum(from int) {
 				continue
 			}
 			// The value is incomplete: search it again once read.
-		} else if stop < buffered {
+		} else if gap {
 			from = hi // none before the bytes searched before either
 			continue
 		} else {
 			from = max(from, stop-(len(checkSumField)-1)) // the tail may begin one
 		}
 		if first <= hi && from >= lo {
-			first, from = min(first, lo), max(from, hi)
+			first, from = max(0, min(first, lo)), max(from, hi) // none before f.start matters
 		}
 		f.checked, f.checkedEnd = f.start+first, f.start+from
 		if eof || buffered >= limit {

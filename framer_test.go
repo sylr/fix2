@@ -353,19 +353,22 @@ func TestFramer_SkipToCheckSum(t *testing.T) {
 
 // TestFramer_SkipToCheckSumLimit covers a malformed frame without a CheckSum
 // field within MaxBodyLength: the Framer resyncs on the next frame start,
-// reporting the bytes up to it.
+// reporting the bytes up to it, even when it read past the limit, as far as
+// the next frame's CheckSum field.
 func TestFramer_SkipToCheckSumLimit(t *testing.T) {
 	good := buildMsg("FIX.4.4", "35=0\x0149=A\x01")
 	for _, filler := range []string{"a", "\x011", "\x0110=" + strings.Repeat("7", 16)} {
 		garbled := badFrame + strings.Repeat(filler, 100/len(filler)+1)
-		for _, n := range readSizes {
-			r := chunkReader{strings.NewReader(garbled + string(good)), n}
-			frames, skipped, reports, err := frameAll(t, r, FramerOptions{BufferSize: 16, MaxBodyLength: 64})
-			if err != io.EOF || len(frames) != 1 || !bytes.Equal(frames[0], good) {
-				t.Fatalf("filler %q, %d-byte reads: frames %q, err %v; want the good frame, io.EOF", filler, n, frames, err)
-			}
-			if skipped != len(garbled) || !errors.Is(reports[0], ErrBodyLenMismatch) {
-				t.Errorf("filler %q, %d-byte reads: skipped %d bytes in %v, want %d from a BodyLength mismatch", filler, n, skipped, reports, len(garbled))
+		for _, size := range []int{16, DefaultFramerBufferSize} {
+			for _, n := range readSizes {
+				r := chunkReader{strings.NewReader(garbled + string(good)), n}
+				frames, skipped, reports, err := frameAll(t, r, FramerOptions{BufferSize: size, MaxBodyLength: 64})
+				if err != io.EOF || len(frames) != 1 || !bytes.Equal(frames[0], good) {
+					t.Fatalf("filler %q, %d-byte buffer, %d-byte reads: frames %q, err %v; want the good frame, io.EOF", filler, size, n, frames, err)
+				}
+				if skipped != len(garbled) || !errors.Is(reports[0], ErrBodyLenMismatch) {
+					t.Errorf("filler %q, %d-byte buffer, %d-byte reads: skipped %d bytes in %v, want %d from a BodyLength mismatch", filler, size, n, skipped, reports, len(garbled))
+				}
 			}
 		}
 	}
@@ -425,6 +428,40 @@ func TestFramer_SkipToCheckSumIsLinear(t *testing.T) {
 			large := searched(tc.stream(4*n, tc.filler, tc.checkSum), tc.read, FramerOptions{})
 			if large > 5*small || large > 8*4*n {
 				t.Errorf("searched %d bytes for %d bytes of input, %d for %d: want linear growth", small, n, large, 4*n)
+			}
+		})
+	}
+}
+
+// TestFramer_FillIsLinear checks that the bytes a Framer moves in its
+// buffer grow with the input, not with the input times MaxBodyLength:
+// malformed frames back to back, each declaring the largest BodyLength,
+// each resyncing a few bytes further and needing as many bytes buffered.
+// The buffer stays within half as much again as that window.
+func TestFramer_FillIsLinear(t *testing.T) {
+	moved := func(t *testing.T, maxBody, read int) (moved, input int) {
+		frame := fmt.Sprintf("8=FIX.4.4\x019=%d\x01xxxxxxxx", maxBody)
+		stream := bytes.Repeat([]byte(frame), 8*maxBody/len(frame))
+		f := NewFramer(chunkReader{bytes.NewReader(stream), read}, FramerOptions{MaxBodyLength: maxBody})
+		for {
+			_, err := f.Next()
+			var g *GarbledError
+			if err != nil && !errors.As(err, &g) {
+				break
+			}
+		}
+		if window := maxHeaderLen + 2*maxBody + trailerLen; len(f.buf) > window+window/2 {
+			t.Errorf("MaxBodyLength %d: buffer of %d bytes, want at most %d", maxBody, len(f.buf), window+window/2)
+		}
+		return f.moved, len(stream)
+	}
+	const n = 16 << 10
+	for _, read := range []int{1, 1460} {
+		t.Run(fmt.Sprintf("%dB reads", read), func(t *testing.T) {
+			small, smallInput := moved(t, n, read)
+			large, largeInput := moved(t, 4*n, read)
+			if large > 5*small || large > 4*largeInput {
+				t.Errorf("moved %d bytes for %d bytes of input, %d for %d: want linear growth", small, smallInput, large, largeInput)
 			}
 		})
 	}
