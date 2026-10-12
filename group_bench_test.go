@@ -114,3 +114,26 @@ func BenchmarkGroups(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkGroupsOf(b *testing.B) {
+	for _, tc := range []struct {
+		instances int
+		fields    int
+	}{
+		{1, 4},
+		{2, 4},
+		{10, 4},
+		{50, 4},
+		{200, 4},
+		{10, 16},
+	} {
+		msg, childTags := groupMsg(b, tc.instances, tc.fields)
+		spec := &GroupSpec{Counter: 78, Delim: childTags[0], Tags: childTags}
+		b.Run(fmt.Sprintf("instances=%d/fields=%d", tc.instances, tc.fields), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				msg.GroupsOf(spec)
+			}
+		})
+	}
+}

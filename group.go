@@ -171,7 +171,12 @@ func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
 // entries reads up to count entries starting at fields[i] and returns them
 // with the index just past the block.
 func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
-	var groups []Group
+	if i >= len(fields) || fields[i].Tag != s.Delim {
+		return nil, i
+	}
+	// Every entry holds at least one field: the fields left bound a count
+	// read off the wire.
+	groups := make([]Group, 0, min(count, len(fields)-i))
 	wide := s.wideScratch()
 	defer releaseScratch(wide)
 	for len(groups) < count && i < len(fields) && fields[i].Tag == s.Delim {
