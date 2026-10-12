@@ -183,7 +183,10 @@ func (d *Dict) compile() {
 	d.trailerConds = compileConds(d.TrailerConditions, &env)
 	d.envSlots = env.n
 
-	envCounters := specsByCounter(slices.Concat(d.groupSpecs(d.HeaderGroups), d.groupSpecs(d.TrailerGroups)))
+	// The envelope's groups are every message's: their entries keep only
+	// the tags no message nor the envelope allows (see DefinesAny).
+	envUnknown := func(tag int) bool { return d.anyTags.get(tag) == nil }
+	envCounters := specsByCounter(slices.Concat(d.groupSpecs(d.HeaderGroups, envUnknown), d.groupSpecs(d.TrailerGroups, envUnknown)))
 	envEntries := map[int]tagEntry{}
 	addAllowed(d.profile, envEntries, d.Header, sectionHeader, env.of, nil, envCounters, nil)
 	addAllowed(d.profile, envEntries, d.Trailer, sectionTrailer, env.of, nil, envCounters, nil)
@@ -196,6 +199,10 @@ func (d *Dict) compile() {
 		envEntries[tag] = e
 	}
 	d.envelope = newTagTable(envEntries)
+	anyTags := map[int]tagEntry{}
+	for tag := range envEntries {
+		anyTags[tag] = tagEntry{slot: -1}
+	}
 
 	// Each message: its own slots, after the envelope's, and its table. A tag
 	// the envelope tracks keeps the envelope's slot, so that one lookup in
@@ -228,7 +235,8 @@ func (d *Dict) compile() {
 		m.slots = env.n + body.n
 
 		entries := map[int]tagEntry{}
-		addAllowed(d.profile, entries, m.Fields, sectionBody, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups)), envCounters)
+		unknown := func(tag int) bool { return d.lookup(m, tag) == nil }
+		addAllowed(d.profile, entries, m.Fields, sectionBody, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups, unknown)), envCounters)
 		for tag, e := range entries {
 			if env, ok := envEntries[tag]; ok && !env.structural {
 				e.section = sectionAny
@@ -236,7 +244,11 @@ func (d *Dict) compile() {
 			}
 		}
 		m.body = newTagTable(entries)
+		for tag := range entries {
+			anyTags[tag] = tagEntry{slot: -1}
+		}
 	}
+	d.anyTags = newTagTable(anyTags)
 }
 
 // requiredOf returns the required tags of refs, in order, with their slots.

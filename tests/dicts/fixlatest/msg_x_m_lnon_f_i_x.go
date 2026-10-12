@@ -178,10 +178,33 @@ func (m *XMLnonFIX) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// xMLnonFIX_unknown reports whether XMLnonFIX does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func xMLnonFIX_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagPossDupFlag, TagSenderCompID, TagSenderSubID,
+		TagSendingTime, TagTargetCompID, TagTargetSubID, TagSignature,
+		TagSecureDataLen, TagSecureData, TagSignatureLength, TagPossResend,
+		TagOnBehalfOfCompID, TagOnBehalfOfSubID, TagOrigSendingTime, TagDeliverToCompID,
+		TagDeliverToSubID, TagSenderLocationID, TagTargetLocationID, TagOnBehalfOfLocationID,
+		TagDeliverToLocationID, TagXmlDataLen, TagXmlData, TagMessageEncoding,
+		TagLastMsgSeqNumProcessed, TagNoHops, TagHopCompID, TagHopSendingTime,
+		TagHopRefID, TagApplVerID, TagCstmApplVerID, TagApplExtID,
+		TagNoAttachments, TagAttachmentName, TagAttachmentMediaType, TagAttachmentClassification,
+		TagAttachmentExternalURL, TagAttachmentEncodingType, TagUnencodedAttachmentLen, TagEncodedAttachmentLen,
+		TagEncodedAttachment, TagNoAttachmentKeywords, TagAttachmentKeyword:
+		return false
+	}
+	return true
+}
+
 var xMLnonFIX_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var xMLnonFIX_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
@@ -205,8 +228,10 @@ var xMLnonFIX_NoAttachments_spec = &fix2.GroupSpec{
 		Counter: TagNoAttachmentKeywords,
 		Delim:   TagAttachmentKeyword,
 		Tags:    []int{TagAttachmentKeyword},
+		Unknown: xMLnonFIX_unknown,
 	}},
-	Tags: []int{TagAttachmentName, TagAttachmentMediaType, TagAttachmentClassification, TagAttachmentExternalURL, TagAttachmentEncodingType, TagUnencodedAttachmentLen, TagEncodedAttachmentLen, TagEncodedAttachment},
+	Tags:    []int{TagAttachmentName, TagAttachmentMediaType, TagAttachmentClassification, TagAttachmentExternalURL, TagAttachmentEncodingType, TagUnencodedAttachmentLen, TagEncodedAttachmentLen, TagEncodedAttachment},
+	Unknown: xMLnonFIX_unknown,
 }
 var xMLnonFIX_NoAttachments_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoAttachmentKeywords: &groupLayout{tags: []int{TagAttachmentKeyword}}},

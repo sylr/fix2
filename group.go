@@ -73,16 +73,24 @@ func (g *Group) Groups(counterTag int, childTags []int) []Group {
 
 // GroupSpec describes a repeating group for GroupsOf: its counter, the
 // delimiter every entry starts with, the tags an entry holds directly and the
-// groups it can contain. A group's fields can differ between messages, so
-// generated code declares a spec tree per message group, from that message's
-// own definition. A spec must not be changed or copied once used: large
-// ones build an index of their tags on first use, which go vet's copylocks
-// check guards.
+// groups it can contain. A tag the group does not hold ends an entry, and
+// the group, unless Unknown reports it, as QuickFIX/J has it: FIX says
+// nothing of where a tag the message does not define belongs, and taking it
+// for the entry's keeps the entry's other fields in it. A group's fields can
+// differ between messages, so generated code declares a spec tree per
+// message group, from that message's own definition. A spec must not be
+// changed or copied once used: large ones build an index of their tags on
+// first use, which go vet's copylocks check guards.
 type GroupSpec struct {
 	Counter int          // NUMINGROUP tag
 	Delim   int          // first tag of every entry
 	Tags    []int        // tags an entry holds directly, Delim included
 	Nested  []*GroupSpec // groups an entry can contain
+	// Unknown reports whether the message does not define tag, which an
+	// entry then keeps rather than ending at it; nil if none is kept. It
+	// must report no tag the message defines, its header, trailer and
+	// enclosing groups included: a nested entry would keep it.
+	Unknown func(tag int) bool
 
 	// index maps a tag to its position in Tags, or to -1-i for the counter of
 	// Nested[i], for specs of at least indexedSpec tags and groups.
@@ -198,7 +206,7 @@ func entries[E any](s *GroupSpec, fields []Field, i, count int, wrap func(Group)
 // entry consumes the entry whose delimiter is at fields[i] and returns the
 // index just past it. FIX does not allow a tag twice in one entry, so a
 // repeated tag ends it: the field belongs to the next entry or to the
-// enclosing message.
+// enclosing message. A tag s.Unknown reports may repeat.
 //
 // wide is the scratch of a spec of more than 256 tags and groups (see
 // wideScratch), or nil; entry leaves its bitset zeroed.
@@ -227,7 +235,7 @@ func (s *GroupSpec) entry(fields []Field, i int, wide *scratch) int {
 			// A nested counter, possibly the delimiter itself: it cannot
 			// repeat within the entry either, then skip its entries by count.
 			k = len(s.Tags) + c
-		case k < 0 && !first:
+		case k < 0 && !first && (s.Unknown == nil || !s.Unknown(tag)):
 			end = i // not part of this group
 		}
 		if end != len(fields) {

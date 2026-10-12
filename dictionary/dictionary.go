@@ -98,6 +98,7 @@ type Dict struct {
 
 	// Compiled for Validate (see compiled.go).
 	envelope     tagTable // header, trailer and structural tags
+	anyTags      tagTable // tags any message or the envelope allows, see DefinesAny
 	envSlots     int32    // presence slots of the envelope's tracked tags
 	headerReq    []tracked
 	trailerReq   []tracked

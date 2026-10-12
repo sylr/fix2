@@ -7,8 +7,9 @@ import (
 	fix2 "github.com/sylr/fix2"
 )
 
-// Checks selects the validations ValidateWith adds to Validate's. A session
-// enables them all by default, as QuickFIX does.
+// Checks selects the validations ValidateWith runs besides those Validate
+// always does. Validate runs CheckUnknownTags and CheckUserDefinedTags too.
+// A session enables them all by default, as QuickFIX does.
 type Checks uint
 
 const (
@@ -27,16 +28,41 @@ const (
 	// CheckGroupCounts rejects repeating groups whose NumInGroup does not
 	// match their entries (reason 16).
 	CheckGroupCounts
+	// CheckUnknownTags rejects tags below 5000 the message does not define,
+	// its header and trailer included: a tag the dictionary does not define
+	// (reason 0), or not for the message's type (reason 2). Without it, they
+	// are accepted, as QuickFIX/J's AllowUnknownMsgFields=Y does.
+	CheckUnknownTags
+	// CheckUserDefinedTags rejects user-defined tags, 5000 and up, the
+	// message does not define, as CheckUnknownTags those below. Without it,
+	// they are accepted, as QuickFIX/J's ValidateUserDefinedFields=N does.
+	CheckUserDefinedTags
 
 	// CheckAll enables every check.
-	CheckAll = CheckEmptyValues | CheckFormats | CheckRepeatedTags | CheckOrder | CheckGroupCounts
+	CheckAll = CheckEmptyValues | CheckFormats | CheckRepeatedTags | CheckOrder | CheckGroupCounts | CheckUnknownTags | CheckUserDefinedTags
+
+	// checksValidate are the checks Validate runs.
+	checksValidate = CheckUnknownTags | CheckUserDefinedTags
+	// checksValue are the checks of a field's value.
+	checksValue = CheckEmptyValues | CheckFormats
 )
 
-// ValidateWith checks msg as Validate does, plus the checks selected. A
-// repeated tag or a field out of order is reported first, as QuickFIX
-// engines find them while parsing; then missing required tags; then field
-// errors in message order; then group counts. Unlike Validate, the extra
-// checks may allocate.
+// userDefinedTagMin is the first user-defined tag.
+const userDefinedTagMin = 5000
+
+// ValidateWith checks msg as Validate does, with the checks selected rather
+// than CheckUnknownTags and CheckUserDefinedTags. A repeated tag or a field
+// out of order is reported first, as QuickFIX engines find them while
+// parsing; then missing required tags; then field errors in message order;
+// then group counts. Unlike Validate, the extra checks may allocate. To
+// reject unknown tags as Validate does, select their checks too:
+//
+//	d.ValidateWith(msg, dictionary.CheckFormats|dictionary.CheckUnknownTags|dictionary.CheckUserDefinedTags)
+//
+// A group entry keeps a tag the message does not define, whether checked
+// or not: FIX does not say where such a tag belongs, and QuickFIX/J takes
+// it for the entry's. One right after a group's last entry is taken for its
+// too.
 func (d *Dict) ValidateWith(msg *fix2.Message, checks Checks) error {
 	return d.validate(msg, checks)
 }
@@ -226,16 +252,18 @@ func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks
 		f := fields[i]
 		e := d.lookup(mdef, f.Tag)
 		if e == nil {
-			continue // reported by Validate
+			// Reported by validate if checked; a repeated one otherwise.
+			if seen != nil && checks&unknownCheck(f.Tag) == 0 {
+				if seen[f.Tag] {
+					return d.repeated(f.Tag, mdef)
+				}
+				seen[f.Tag] = true
+			}
+			continue
 		}
 		if seen != nil {
 			if seen[f.Tag] {
-				return &ValidationError{
-					Err:    ErrRepeatedTag,
-					Tag:    f.Tag,
-					Reason: ReasonTagAppearsMoreThanOnce,
-					Msg:    fmt.Sprintf("tag %d%s appears more than once in message %s", f.Tag, d.fieldName(f.Tag), mdef.Name),
-				}
+				return d.repeated(f.Tag, mdef)
 			}
 			seen[f.Tag] = true
 		}
@@ -262,6 +290,17 @@ func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks
 	return nil
 }
 
+// repeated reports tag, which appears more than once in a message of type
+// mdef outside group entries.
+func (d *Dict) repeated(tag int, mdef *MessageDef) *ValidationError {
+	return &ValidationError{
+		Err:    ErrRepeatedTag,
+		Tag:    tag,
+		Reason: ReasonTagAppearsMoreThanOnce,
+		Msg:    fmt.Sprintf("tag %d%s appears more than once in message %s", tag, d.fieldName(tag), mdef.Name),
+	}
+}
+
 // walkGroup walks the entries of the group whose counter is fields[at], of
 // spec, and returns the index of the first field after them. If check is
 // set, it returns an error when the counter does not match the number of
@@ -272,7 +311,7 @@ func (d *Dict) walkGroup(fields []fix2.Field, at int, spec *fix2.GroupSpec, mdef
 		tag := fields[i].Tag
 		if tag == spec.Delim {
 			entries++
-		} else if entries == 0 || !slices.Contains(spec.Tags, tag) && spec.Child(tag) == nil {
+		} else if entries == 0 || !slices.Contains(spec.Tags, tag) && spec.Child(tag) == nil && (spec.Unknown == nil || !spec.Unknown(tag)) {
 			break
 		}
 		// The delimiter itself may be a nested group's counter.

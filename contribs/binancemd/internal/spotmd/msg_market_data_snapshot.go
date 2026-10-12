@@ -94,10 +94,25 @@ func (m *MarketDataSnapshot) NoMDEntries() (int, bool, error) {
 	return n, true, err
 }
 
+// marketDataSnapshot_unknown reports whether MarketDataSnapshot does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func marketDataSnapshot_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagSenderCompID, TagSendingTime, TagSymbol,
+		TagTargetCompID, TagMDReqID, TagNoMDEntries, TagMDEntryType,
+		TagMDEntryPx, TagMDEntrySize, TagRecvWindow, TagLastBookUpdateID:
+		return false
+	}
+	return true
+}
+
 var marketDataSnapshot_NoMDEntries_spec = &fix2.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDEntryType,
 	Tags:    []int{TagMDEntryType, TagMDEntryPx, TagMDEntrySize},
+	Unknown: marketDataSnapshot_unknown,
 }
 var marketDataSnapshot_NoMDEntries_layout = &groupLayout{tags: []int{TagMDEntryType, TagMDEntryPx, TagMDEntrySize}}
 

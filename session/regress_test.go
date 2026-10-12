@@ -452,3 +452,39 @@ func TestUnsupportedBusinessMessageRejectNotRejected(t *testing.T) {
 		t.Errorf("the acceptor sent %d rejects", n)
 	}
 }
+
+// Tags the dictionary does not define are rejected unless SkipChecks lets
+// them through, as QuickFIX/J's AllowUnknownMsgFields and
+// ValidateUserDefinedFields do: below 5000 and from 5000 on apart. A group
+// entry keeps them, so the next entries are its group's still.
+func TestSkipUnknownTags(t *testing.T) {
+	order := []string{"11", "O1",
+		"78", "2", "79", "A", "9001", "x", "80", "1", "79", "B", "4999", "y", "80", "2",
+		"55", "EUR/USD", "54", "1", "60", "20240101-00:00:00.000", "38", "3", "40", "1"}
+	for _, tc := range []struct {
+		name   string
+		skip   dictionary.Checks
+		reject []string // the Reject's RefTagID and SessionRejectReason, if rejected
+	}{
+		{"rejected", 0, []string{"371", "9001", "373", "0"}},
+		{"user-defined accepted", dictionary.CheckUserDefinedTags, []string{"371", "4999", "373", "0"}},
+		{"below 5000 accepted", dictionary.CheckUnknownTags, []string{"371", "9001", "373", "0"}},
+		{"accepted", dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, p := loggedOn(t, func(c *session.Config) {
+				c.Dictionaries.Session = fix44.Dictionary()
+				c.SkipChecks = tc.skip
+			})
+			p.send("D", 0, order...)
+			if tc.reject != nil {
+				p.expect("3", tc.reject...)
+				return
+			}
+			rec.wait(t, func() bool { return len(rec.apps) == 1 })
+			if n := s.Stats().RejectsSent.Load(); n != 0 {
+				t.Errorf("%d rejects sent", n)
+			}
+		})
+	}
+}

@@ -57,9 +57,28 @@ func (e *ValidationError) Unwrap() error {
 //  6. Enum values are valid for fields that define enums
 //
 // Required tags (2-4) must be present outside group entries: a tag a group
-// entry holds does not stand for the message's own.
+// entry holds does not stand for the message's own. Validate is ValidateWith
+// with CheckUnknownTags and CheckUserDefinedTags, which 5 is.
 func (d *Dict) Validate(msg *fix2.Message) error {
-	return d.validate(msg, 0)
+	return d.validate(msg, checksValidate)
+}
+
+// Defines reports whether messages of type msgType may hold tag: one of
+// their fields, group entries' included, of the standard header or trailer,
+// or the LENGTH or DATA field one of them pairs with. An application
+// dictionary of FIX 5.0 or later has no header or trailer of its own but
+// BeginString, BodyLength and CheckSum: Compose gives it the session
+// dictionary's.
+func (d *Dict) Defines(msgType string, tag int) bool {
+	mdef, ok := d.Messages[msgType]
+	return ok && d.lookup(mdef, tag) != nil
+}
+
+// DefinesAny reports whether a message of any type may hold tag, as Defines
+// reports it. The entries of the header's and trailer's groups, which every
+// message carries, keep the tags it does not report.
+func (d *Dict) DefinesAny(tag int) bool {
+	return d.anyTags.get(tag) != nil
 }
 
 // validate checks msg as Validate does, plus checks (see ValidateWith).
@@ -78,7 +97,7 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	// Repeated tags and fields out of order first: QuickFIX engines find
 	// them while parsing, before validating against the dictionary.
 	if structure := checks & (CheckRepeatedTags | CheckOrder); structure != 0 {
-		if err := d.checkStructure(msg, mdef, structure); err != nil {
+		if err := d.checkStructure(msg, mdef, structure|checks&checksValidate); err != nil {
 			return err
 		}
 	}
@@ -99,8 +118,11 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	for _, f := range msg.Fields() {
 		e := d.lookup(mdef, f.Tag)
 		if e == nil {
-			if fieldErr == nil {
+			if fieldErr == nil && checks&unknownCheck(f.Tag) != 0 {
 				fieldErr = d.unexpected(mdef, f.Tag)
+			}
+			if fieldErr == nil && checks&checksValue != 0 {
+				fieldErr = d.checkValue(f, checks)
 			}
 			continue
 		}
@@ -108,7 +130,7 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 			present[e.slot/64] |= 1 << (e.slot % 64)
 		}
 		groups = groups || e.counter
-		if fieldErr == nil && !e.structural && checks != 0 {
+		if fieldErr == nil && !e.structural && checks&checksValue != 0 {
 			fieldErr = d.checkValue(f, checks)
 		}
 		if fieldErr == nil && !e.structural {
@@ -213,6 +235,16 @@ func (d *Dict) unexpected(mdef *MessageDef, tag int) *ValidationError {
 	}
 }
 
+// unknownCheck returns the check rejecting tag when the message does not
+// define it: CheckUserDefinedTags for a user-defined tag, CheckUnknownTags
+// otherwise.
+func unknownCheck(tag int) Checks {
+	if tag >= userDefinedTagMin {
+		return CheckUserDefinedTags
+	}
+	return CheckUnknownTags
+}
+
 // lookup returns what the message, then the envelope, knows of tag, or nil
 // if the message does not allow it.
 func (d *Dict) lookup(mdef *MessageDef, tag int) *tagEntry {
@@ -272,14 +304,15 @@ func isMultipleValue(fixType string) bool {
 	return false
 }
 
-// groupSpecs returns the specs of groups. An entry may also hold the LENGTH
-// field of its DATA fields, which the parser requires right before them, and
-// the DATA field of its LENGTH fields: generated builders write both, even
-// when the dictionary declares only one.
-func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
+// groupSpecs returns the specs of groups, whose entries keep the tags
+// unknown reports. An entry may also hold the LENGTH field of its DATA
+// fields, which the parser requires right before them, and the DATA field of
+// its LENGTH fields: generated builders write both, even when the dictionary
+// declares only one.
+func (d *Dict) groupSpecs(groups []GroupDef, unknown func(int) bool) []*fix2.GroupSpec {
 	specs := make([]*fix2.GroupSpec, 0, len(groups))
 	for _, gd := range groups {
-		s := &fix2.GroupSpec{Counter: gd.CounterTag, Delim: gd.DelimTag}
+		s := &fix2.GroupSpec{Counter: gd.CounterTag, Delim: gd.DelimTag, Unknown: unknown}
 		// LENGTH comes right before its DATA field, declared or not, so an
 		// entry whose first field is DATA starts with LENGTH.
 		if l := d.profile.DataLengthTag(gd.DelimTag); l != 0 {
@@ -301,7 +334,7 @@ func (d *Dict) groupSpecs(groups []GroupDef) []*fix2.GroupSpec {
 				add(dt)
 			}
 		}
-		s.Nested = d.groupSpecs(gd.Groups)
+		s.Nested = d.groupSpecs(gd.Groups, unknown)
 		specs = append(specs, s)
 	}
 	return specs

@@ -478,6 +478,13 @@ func writeFields(dict *dictionary.Dict, pkg, outDir string) error {
 	writeSectionVar("standardHeader", "standardHeader lists the standard header tags, written first.", dict.Header, dict.HeaderGroups)
 	writeSectionVar("standardTrailer", "standardTrailer lists the standard trailer tags, written last.", dict.Trailer, dict.TrailerGroups)
 
+	if len(dict.HeaderGroups)+len(dict.TrailerGroups) > 0 {
+		f.Comment(envelopeUnknown + " reports whether no message defines tag, header and trailer")
+		f.Comment("included: the entries of their groups, which every message carries, then")
+		f.Comment("keep it (see fix2.GroupSpec).")
+		writeUnknownFunc(f, dict, envelopeUnknown, envelopeTags(dict))
+	}
+
 	if len(dict.HeaderGroups)+len(dict.TrailerGroups) > 0 || slices.ContainsFunc(slices.Collect(maps.Values(dict.Messages)), func(md *dictionary.MessageDef) bool { return len(md.Groups) > 0 }) {
 		f.Comment("groupLayout is the order of a group entry's tags in one message's")
 		f.Comment("definition, with the layouts of its nested groups by counter tag: the same")
@@ -690,6 +697,12 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 	}
 	headerGroups := groups[:len(dict.HeaderGroups)]
 	bodyGroups := groups[len(dict.HeaderGroups):]
+	// Validation reads a group by its counter as the header's or trailer's
+	// first, the message's own then.
+	envelopeCounters := map[int]bool{}
+	for _, gd := range slices.Concat(dict.HeaderGroups, dict.TrailerGroups) {
+		envelopeCounters[gd.CounterTag] = true
+	}
 
 	// Build sets of group child tags and counter tags from this message's groups.
 	// Use the message's own definitions (not merged) so we only exclude fields
@@ -798,10 +811,23 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 
 	// --- Group iteration methods on message reader ---
 	// Specs come from this message's own group definitions: the same group
-	// can hold different fields in other messages.
+	// can hold different fields in other messages. Their entries keep the
+	// tags the message does not define, as validating it does.
+	// The header's and trailer's groups, every message's, keep the tags no
+	// message defines, as validating it does.
+	unknown := unexport(name) + "_unknown"
+	if slices.ContainsFunc(groups, func(gd dictionary.GroupDef) bool { return !envelopeCounters[gd.CounterTag] }) {
+		f.Comment(unknown + " reports whether " + name + " does not define tag, its header and")
+		f.Comment("trailer included, which a group entry then keeps (see fix2.GroupSpec).")
+		writeUnknownFunc(f, dict, unknown, messageTags(dict, md))
+	}
 	for _, gd := range groups {
 		v := unexport(name) + "_" + gd.Name + "_spec"
-		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd))
+		predicate := unknown
+		if envelopeCounters[gd.CounterTag] {
+			predicate = envelopeUnknown
+		}
+		f.Var().Id(v).Op("=").Add(specLiteral(dict, gd, jen.Id(predicate)))
 		f.Var().Id(unexport(name) + "_" + gd.Name + "_layout").Op("=").Add(layoutLiteral(dict, gd))
 		writeIterationMethod(f, name, "m", "msg", gd.Name, jen.Id(v), jen.Id(specsVar))
 	}
@@ -989,9 +1015,88 @@ func unexport(s string) string {
 // child tags var + iteration method (split from former writeGroupIterator)
 // ---------------------------------------------------------------------------
 
+// fixtEnvelope lists the tags of the FIXT 1.1 standard header and trailer,
+// which application dictionaries of FIX 5.0 and later leave to the session
+// dictionary: their messages carry them all the same.
+var fixtEnvelope = []int{
+	8, 9, 10, 34, 35, 43, 49, 50, 52, 56, 57, 89, 90, 91, 93, 97, 115, 116, 122, 128, 129,
+	142, 143, 144, 145, 212, 213, 347, 369, 627, 628, 629, 630, 1128, 1129, 1156,
+}
+
+// envelopeUnknown names the generated predicate of the header's and
+// trailer's groups.
+const envelopeUnknown = "envelopeUnknown"
+
+// messageTags returns, in order, the tags messages of md's type may hold,
+// as Dict.Defines reports them, and the FIXT 1.1 header and trailer's if
+// dict has no header of its own.
+func messageTags(dict *dictionary.Dict, md *dictionary.MessageDef) []int {
+	var tags []int
+	if len(dict.Header) == 0 {
+		tags = slices.Clone(fixtEnvelope)
+	}
+	for _, tag := range candidateTags(dict) {
+		if dict.Defines(md.MsgType, tag) {
+			tags = append(tags, tag)
+		}
+	}
+	slices.Sort(tags)
+	return slices.Compact(tags)
+}
+
+// envelopeTags returns, in order, the tags a message of any type may hold,
+// as Dict.DefinesAny reports them.
+func envelopeTags(dict *dictionary.Dict) []int {
+	var tags []int
+	for _, tag := range candidateTags(dict) {
+		if dict.DefinesAny(tag) {
+			tags = append(tags, tag)
+		}
+	}
+	return tags
+}
+
+// candidateTags returns, in order, the tags dict may allow: those it
+// defines, the LENGTH or DATA field each pairs with, defined or not, and
+// BeginString, BodyLength and CheckSum.
+func candidateTags(dict *dictionary.Dict) []int {
+	tags := []int{8, 9, 10}
+	for tag := range dict.Fields {
+		tags = append(tags, tag)
+		for _, p := range []int{dict.Profile().DataTag(tag), dict.Profile().DataLengthTag(tag)} {
+			if p != 0 {
+				tags = append(tags, p)
+			}
+		}
+	}
+	slices.Sort(tags)
+	return slices.Compact(tags)
+}
+
+// writeUnknownFunc writes the function name, reporting whether a tag is
+// not one of known: a GroupSpec's Unknown.
+func writeUnknownFunc(f *jen.File, dict *dictionary.Dict, name string, known []int) {
+	var cases []jen.Code
+	for _, tag := range known {
+		if fd := dict.Fields[tag]; fd != nil {
+			cases = append(cases, tagID(fd.Name))
+		} else {
+			cases = append(cases, jen.Lit(tag))
+		}
+	}
+	cases = lines(cases)
+	cases = cases[:len(cases)-1] // no comma after the last case
+	f.Func().Id(name).Params(jen.Id("tag").Int()).Bool().Block(
+		jen.Switch(jen.Id("tag")).Block(
+			jen.Case(cases...).Block(jen.Return(jen.False())),
+		),
+		jen.Return(jen.True()),
+	)
+}
+
 // specLiteral returns a &fix2.GroupSpec literal for gd and, recursively,
-// its nested groups.
-func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
+// its nested groups, whose entries keep the tags unknown reports.
+func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef, unknown jen.Code) *jen.Statement {
 	var tags []jen.Code
 	added := map[int]bool{}
 	addTag := func(tag int) {
@@ -1016,11 +1121,12 @@ func specLiteral(dict *dictionary.Dict, gd dictionary.GroupDef) *jen.Statement {
 		jen.Id("Counter"): tagID(gd.Name),
 		jen.Id("Delim"):   tagID(dict.Fields[gd.DelimTag].Name),
 		jen.Id("Tags"):    jen.Index().Int().Values(tags...),
+		jen.Id("Unknown"): unknown,
 	}
 	if len(gd.Groups) > 0 {
 		var nested []jen.Code
 		for _, child := range gd.Groups {
-			nested = append(nested, specLiteral(dict, child))
+			nested = append(nested, specLiteral(dict, child, unknown))
 		}
 		values[jen.Id("Nested")] = jen.Index().Op("*").Qual(fix2Pkg, "GroupSpec").Values(nested...)
 	}

@@ -3028,6 +3028,70 @@ var standardHeader = []int{TagApplVerID, TagApplExtID, TagCstmApplVerID, TagSend
 // standardTrailer lists the standard trailer tags, written last.
 var standardTrailer = []int{TagSignatureLength, TagSignature}
 
+// envelopeUnknown reports whether no message defines tag, header and trailer
+// included: the entries of their groups, which every message carries, then
+// keep it (see fix2.GroupSpec).
+func envelopeUnknown(tag int) bool {
+	switch tag {
+	case
+		TagAccount, TagBeginSeqNo, TagBeginString, TagBodyLength,
+		TagCheckSum, TagClOrdID, TagEndSeqNo, TagMsgSeqNum,
+		TagMsgType, TagNewSeqNo, TagOrderID, TagOrdStatus,
+		TagOrigClOrdID, TagPossDupFlag, TagRefSeqNum, TagSenderCompID,
+		TagSenderSubID, TagSendingTime, TagTargetCompID, TagTargetSubID,
+		TagText, TagTransactTime, TagListID, TagTradeDate,
+		TagSignature, TagSecureDataLen, TagSecureData, TagSignatureLength,
+		TagRawDataLength, TagRawData, TagPossResend, TagEncryptMethod,
+		TagExDestination, TagCxlRejReason, TagHeartBtInt, TagTestReqID,
+		TagOnBehalfOfCompID, TagOnBehalfOfSubID, TagOrigSendingTime, TagGapFillFlag,
+		TagDeliverToCompID, TagDeliverToSubID, TagResetSeqNumFlag, TagSenderLocationID,
+		TagTargetLocationID, TagOnBehalfOfLocationID, TagDeliverToLocationID, TagSecondaryOrderID,
+		TagXmlDataLen, TagXmlData, TagTradeOriginationDate, TagMessageEncoding,
+		TagEncodedTextLen, TagEncodedText, TagLastMsgSeqNumProcessed, TagRefTagID,
+		TagRefMsgType, TagSessionRejectReason, TagBusinessRejectRefID, TagBusinessRejectReason,
+		TagMaxMessageSize, TagNoMsgTypes, TagMsgDirection, TagCxlRejResponseTo,
+		TagPartyIDSource, TagPartyID, TagPartyRole, TagNoPartyIDs,
+		TagTestMessageIndicator, TagNoRegistDtls, TagMailingDtls, TagInvestorCountryOfResidence,
+		TagDistribPaymentMethod, TagCashDistribCurr, TagMailingInst, TagDateOfBirth,
+		TagRegistAcctType, TagTaxAdvantageType, TagCashDistribAgentName, TagCashDistribAgentCode,
+		TagCashDistribAgentAcctNumber, TagCashDistribPayRef, TagCashDistribAgentAcctName, TagRegistRefID,
+		TagRegistDtls, TagNoDistribInsts, TagRegistEmail, TagDistribPercentage,
+		TagRegistID, TagRegistTransType, TagOwnershipType, TagOwnerType,
+		TagPartySubID, TagNestedPartyID, TagNestedPartyIDSource, TagSecondaryClOrdID,
+		TagNestedPartyRole, TagNoNestedPartyIDs, TagNestedPartySubID, TagUsername,
+		TagPassword, TagAccountType, TagClOrdLinkID, TagOrigOrdModTime,
+		TagNoHops, TagHopCompID, TagHopSendingTime, TagHopRefID,
+		TagWorkingIndicator, TagAcctIDSource, TagClearingBusinessDate, TagNextExpectedMsgSeqNum,
+		TagNoPartySubIDs, TagPartySubIDType, TagNoNestedPartySubIDs, TagNestedPartySubIDType,
+		TagUserRequestID, TagUserRequestType, TagNewPassword, TagUserStatus,
+		TagUserStatusText, TagApplVerID, TagCstmApplVerID, TagRefApplVerID,
+		TagRefCstmApplVerID, TagExDestinationIDSource, TagDefaultApplVerID, TagApplExtID,
+		TagListUpdateAction, TagRejectText, TagEncryptedPasswordMethod, TagEncryptedPasswordLen,
+		TagEncryptedPassword, TagEncryptedNewPasswordLen, TagEncryptedNewPassword, TagRefApplExtID,
+		TagDefaultApplExtID, TagDefaultCstmApplVerID, TagSessionStatus, TagDefaultVerIndicator,
+		TagPartyDetailsListRequestID, TagNoPartyRelationships, TagPartyRelationship, TagNoPartyDetailAltID,
+		TagPartyDetailAltID, TagPartyDetailAltIDSource, TagNoPartyDetailAltSubIDs, TagPartyDetailAltSubID,
+		TagPartyDetailAltSubIDType, TagNoRelatedPartyDetailID, TagRelatedPartyDetailID, TagRelatedPartyDetailIDSource,
+		TagRelatedPartyDetailRole, TagNoRelatedPartyDetailSubIDs, TagRelatedPartyDetailSubID, TagRelatedPartyDetailSubIDType,
+		TagNoRelatedPartyDetailAltID, TagRelatedPartyDetailAltID, TagRelatedPartyDetailAltIDSource, TagNoRelatedPartyDetailAltSubIDs,
+		TagRelatedPartyDetailAltSubID, TagRelatedPartyDetailAltSubIDType, TagFIXEngineName, TagFIXEngineVersion,
+		TagFIXEngineVendor, TagApplicationSystemName, TagApplicationSystemVersion, TagApplicationSystemVendor,
+		TagNoThrottles, TagThrottleAction, TagThrottleType, TagThrottleNoMsgs,
+		TagThrottleTimeInterval, TagThrottleTimeUnit, TagNoThrottleMsgType, TagThrottleMsgType,
+		TagNoRequestingPartyIDs, TagRequestingPartyID, TagRequestingPartyIDSource, TagRequestingPartyRole,
+		TagNoRequestingPartySubIDs, TagRequestingPartySubID, TagRequestingPartySubIDType, TagEncodedRejectTextLen,
+		TagEncodedRejectText, TagNoPartyDetails, TagPartyDetailStatus, TagPartyDetailRoleQualifier,
+		TagRelatedPartyDetailRoleQualifier, TagNoPartyUpdates, TagPartyDetailID, TagPartyDetailIDSource,
+		TagPartyDetailRole, TagNoPartyDetailSubIDs, TagPartyDetailSubID, TagPartyDetailSubIDType,
+		TagApplLevelRecoveryIndicator, TagNoAttachments, TagAttachmentName, TagAttachmentMediaType,
+		TagAttachmentClassification, TagAttachmentExternalURL, TagAttachmentEncodingType, TagUnencodedAttachmentLen,
+		TagEncodedAttachmentLen, TagEncodedAttachment, TagNoAttachmentKeywords, TagAttachmentKeyword,
+		TagRequestingPartyRoleQualifier, TagPartyRoleQualifier, TagNestedPartyRoleQualifier, TagOrderRequestID:
+		return false
+	}
+	return true
+}
+
 // groupLayout is the order of a group entry's tags in one message's
 // definition, with the layouts of its nested groups by counter tag: the same
 // group can order its fields differently in other messages.

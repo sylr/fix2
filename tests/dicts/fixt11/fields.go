@@ -246,6 +246,33 @@ var standardHeader = []int{TagSenderCompID, TagTargetCompID, TagOnBehalfOfCompID
 // standardTrailer lists the standard trailer tags, written last.
 var standardTrailer = []int{TagSignatureLength, TagSignature}
 
+// envelopeUnknown reports whether no message defines tag, header and trailer
+// included: the entries of their groups, which every message carries, then
+// keep it (see fix2.GroupSpec).
+func envelopeUnknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginSeqNo, TagBeginString, TagBodyLength, TagCheckSum,
+		TagEndSeqNo, TagMsgSeqNum, TagMsgType, TagNewSeqNo,
+		TagPossDupFlag, TagRefSeqNum, TagSenderCompID, TagSenderSubID,
+		TagSendingTime, TagTargetCompID, TagTargetSubID, TagText,
+		TagSignature, TagSecureDataLen, TagSecureData, TagSignatureLength,
+		TagRawDataLength, TagRawData, TagPossResend, TagEncryptMethod,
+		TagHeartBtInt, TagTestReqID, TagOnBehalfOfCompID, TagOnBehalfOfSubID,
+		TagOrigSendingTime, TagGapFillFlag, TagDeliverToCompID, TagDeliverToSubID,
+		TagResetSeqNumFlag, TagSenderLocationID, TagTargetLocationID, TagOnBehalfOfLocationID,
+		TagDeliverToLocationID, TagXmlDataLen, TagXmlData, TagMessageEncoding,
+		TagEncodedTextLen, TagEncodedText, TagLastMsgSeqNumProcessed, TagRefTagID,
+		TagRefMsgType, TagSessionRejectReason, TagMaxMessageSize, TagNoMsgTypes,
+		TagMsgDirection, TagTestMessageIndicator, TagUsername, TagPassword,
+		TagNoHops, TagHopCompID, TagHopSendingTime, TagHopRefID,
+		TagNextExpectedMsgSeqNum, TagApplVerID, TagCstmApplVerID, TagRefApplVerID,
+		TagRefCstmApplVerID, TagDefaultApplVerID:
+		return false
+	}
+	return true
+}
+
 // groupLayout is the order of a group entry's tags in one message's
 // definition, with the layouts of its nested groups by counter tag: the same
 // group can order its fields differently in other messages.

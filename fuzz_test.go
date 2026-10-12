@@ -168,6 +168,7 @@ func FuzzGroups(f *testing.F) {
 	f.Add([]byte("268=3\x01269=0\x01270=1\x01269=1\x01270=2\x01"), []byte{0, 1, 1, 2, 0})
 	f.Add([]byte("268=-1\x01269=0\x01268=99999999999999999999\x01269=0\x01"), []byte{0, 1, 0, 0})
 	f.Add([]byte("1=1\x011=1\x011=1\x011=1\x01"), []byte{0, 0, 255, 2, 0, 0, 0, 0, 0, 0})
+	f.Add([]byte("78=2\x0179=A\x019001=x\x0180=1\x0179=B\x019001=y\x0155=X\x01"), []byte{0, 1, 1, 4, 0, 3})
 	f.Fuzz(func(t *testing.T, raw, shape []byte) {
 		fields := splitFields(raw)
 		tags := make([]int, len(fields))
@@ -242,6 +243,10 @@ func (r *specReader) spec(depth int) *GroupSpec {
 		for range r.next() % 3 {
 			s.Nested = append(s.Nested, r.spec(depth+1))
 		}
+	}
+	// Entries keep some of the tags they do not hold.
+	if k := r.next(); k%2 == 1 {
+		s.Unknown = func(tag int) bool { return tag%4 == k/2%4 }
 	}
 	return s
 }

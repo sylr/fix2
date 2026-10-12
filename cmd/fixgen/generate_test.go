@@ -1938,6 +1938,64 @@ func FuzzGenerate(f *testing.F) {
 	})
 }
 
+// TestMessageTags checks that generated readers split groups as validation
+// does: the tags they know a message holds are those Defines reports, with
+// the FIXT 1.1 header and trailer's for an application dictionary, which has
+// none of its own; those of the header's and trailer's groups are those
+// DefinesAny reports.
+func TestMessageTags(t *testing.T) {
+	dicts := map[string]*dictionary.Dict{}
+	for _, name := range []string{"FIX40", "FIX44", "FIX50SP2", "FIXT11", "OrchestraFIXLatest"} {
+		dict, err := xmldict.LoadFile("testdata/" + name + ".xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		dicts[name] = dict
+	}
+	// EncodedText(355) is declared, its LENGTH, EncodedTextLen(354), is
+	// not: messages allow it all the same.
+	dict, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header>
+  <trailer/>
+  <messages>
+    <message name="M" msgtype="M" msgcat="app">
+      <group name="NoG" required="N"><field name="A" required="N"/><field name="EncodedText" required="N"/></group>
+    </message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="500" name="NoG" type="NUMINGROUP"/>
+    <field number="100" name="A" type="STRING"/>
+    <field number="355" name="EncodedText" type="DATA"/>
+  </fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dicts["undeclared LENGTH"] = dict
+	if !slices.Contains(messageTags(dict, dict.Messages["M"]), 354) {
+		t.Errorf("undeclared LENGTH: 354 missing from M's tags")
+	}
+
+	for name, dict := range dicts {
+		envelope := envelopeTags(dict)
+		for _, md := range dict.Messages {
+			tags := messageTags(dict, md)
+			for tag := range 10000 {
+				if dict.Defines(md.MsgType, tag) != slices.Contains(tags, tag) && !(len(dict.Header) == 0 && slices.Contains(fixtEnvelope, tag)) {
+					t.Errorf("%s %s: tag %d: Defines and messageTags disagree", name, md.MsgType, tag)
+				}
+			}
+		}
+		for tag := range 10000 {
+			if dict.DefinesAny(tag) != slices.Contains(envelope, tag) {
+				t.Errorf("%s: tag %d: DefinesAny and envelopeTags disagree", name, tag)
+			}
+		}
+	}
+}
+
 // rejected reports whether err is the generator refusing a dictionary, not
 // failing to write valid Go for it.
 func rejected(err error) bool {

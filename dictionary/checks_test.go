@@ -36,6 +36,22 @@ func TestValidateWith(t *testing.T) {
 		{"header after body", "35=D\x0149=S\x0156=T\x0134=1\x01" + body + "52=20231001-12:00:00\x0155=A\x01", dictionary.CheckOrder, dictionary.ErrOutOfOrder, 52, dictionary.ReasonTagSpecifiedOutOfOrder},
 		{"too few entries", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x01", dictionary.CheckGroupCounts, dictionary.ErrGroupCount, 78, dictionary.ReasonIncorrectNumInGroupCount},
 		{"count not a number", "35=D\x01" + header + body + "55=A\x0178=x\x0179=A\x01", dictionary.CheckGroupCounts, dictionary.ErrGroupCount, 78, dictionary.ReasonIncorrectNumInGroupCount},
+		{"undefined tag", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 4999, dictionary.ReasonInvalidTagNumber},
+		{"undefined tag accepted", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, nil, 0, 0},
+		{"tag of another message", "35=D\x01" + header + body + "55=A\x01112=x\x01", dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 112, dictionary.ReasonTagNotDefinedForMessageType},
+		{"tag of another message accepted", "35=D\x01" + header + body + "55=A\x01112=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, nil, 0, 0},
+		{"unknown tag in the header accepted", "35=D\x014999=x\x01" + header + body + "55=A\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, nil, 0, 0},
+		{"user-defined tag not accepted with tags below 5000", "35=D\x01" + header + body + "55=A\x019001=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonInvalidTagNumber},
+		{"user-defined tag accepted", "35=D\x01" + header + body + "55=A\x019001=x\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, nil, 0, 0},
+		{"tag below 5000 not accepted with user-defined tags", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrUnexpectedTag, 4999, dictionary.ReasonInvalidTagNumber},
+		{"accepted unknown tag repeated", "35=D\x01" + header + body + "55=A\x019001=x\x019001=y\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrRepeatedTag, 9001, dictionary.ReasonTagAppearsMoreThanOnce},
+		{"rejected unknown tag repeated", "35=D\x01" + header + body + "55=A\x019001=x\x019001=y\x01", dictionary.CheckAll, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonInvalidTagNumber},
+		{"unknown tag still checked for a value", "35=D\x01" + header + body + "55=A\x019001=\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrEmptyValue, 9001, dictionary.ReasonTagSpecifiedWithoutAValue},
+		// An entry keeps the unknown tags it holds: they neither end the
+		// group nor make its other entries' tags repeat outside it.
+		{"unknown tags in group entries accepted", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x019001=x\x019001=y\x0179=B\x014999=z\x01", dictionary.CheckAll &^ (dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags), nil, 0, 0},
+		{"unknown tag in a group entry reported", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x019001=x\x0179=B\x01", dictionary.CheckAll, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonInvalidTagNumber},
+		{"required tag after an unknown tag in a group entry", "35=D\x01" + header + body + "78=1\x0179=A\x019001=x\x0155=A\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, nil, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			msg := parseMsg(t, buildFIXMsg(tc.msg))
@@ -56,6 +72,86 @@ func TestValidateWith(t *testing.T) {
 	msg := parseMsg(t, buildFIXMsg("35=D\x01"+header+body+"55=A\x0155=B\x01"))
 	if err := d.Validate(&msg); err != nil {
 		t.Errorf("Validate with a repeated tag: %v", err)
+	}
+	// But it rejects unknown tags.
+	for _, tag := range []string{"4999", "9001"} {
+		msg := parseMsg(t, buildFIXMsg("35=D\x01"+header+body+"55=A\x01"+tag+"=x\x01"))
+		if err := d.Validate(&msg); !errors.Is(err, dictionary.ErrUnexpectedTag) {
+			t.Errorf("Validate with tag %s = %v, want ErrUnexpectedTag", tag, err)
+		}
+	}
+}
+
+func TestDefines(t *testing.T) {
+	d := loadTestDict(t)
+	for _, tc := range []struct {
+		msgType string
+		tag     int
+		want    bool
+	}{
+		{"D", 11, true},   // the message's
+		{"D", 79, true},   // a group entry's
+		{"D", 49, true},   // the header's
+		{"D", 10, true},   // the trailer's
+		{"D", 112, false}, // another message's
+		{"D", 4999, false},
+		{"Z", 11, false}, // no such message
+	} {
+		if got := d.Defines(tc.msgType, tc.tag); got != tc.want {
+			t.Errorf("Defines(%q, %d) = %v, want %v", tc.msgType, tc.tag, got, tc.want)
+		}
+	}
+	for tag, want := range map[int]bool{11: true, 112: true, 49: true, 4999: false} {
+		if got := d.DefinesAny(tag); got != want {
+			t.Errorf("DefinesAny(%d) = %v, want %v", tag, got, want)
+		}
+	}
+}
+
+// The entries of the header's groups, which every message carries, keep the
+// tags no message allows, those the dictionary declares but no message uses
+// included; one some message allows ends them.
+func TestValidateWith_UnknownTagsInHeaderGroups(t *testing.T) {
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4">
+  <header>
+    <field name="MsgType" required="Y"/>
+    <group name="NoHops" required="N"><field name="HopCompID" required="N"/><field name="HopSendingTime" required="N"/></group>
+  </header>
+  <trailer/>
+  <messages>
+    <message name="Heartbeat" msgtype="0" msgcat="admin"><field name="TestReqID" required="N"/></message>
+    <message name="TestRequest" msgtype="1" msgcat="admin"><field name="TestReqID" required="Y"/></message>
+  </messages>
+  <components/>
+  <fields>
+    <field number="35" name="MsgType" type="STRING"/>
+    <field number="627" name="NoHops" type="NUMINGROUP"/>
+    <field number="628" name="HopCompID" type="STRING"/>
+    <field number="629" name="HopSendingTime" type="STRING"/>
+    <field number="112" name="TestReqID" type="STRING"/>
+    <field number="999" name="Unused" type="STRING"/>
+  </fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const accept = dictionary.CheckAll &^ (dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags)
+	for _, tc := range []struct {
+		name string
+		hop  string // a field inside the first entry
+		err  error
+	}{
+		{"declared, unused", "999=x", nil},
+		{"undefined", "4999=x", nil},
+		{"user-defined", "9001=x", nil},
+		// TestReqID ends the group, whose next entry's tags then come after
+		// the body.
+		{"another message's", "112=x", dictionary.ErrOutOfOrder},
+	} {
+		msg := parseMsg(t, buildFIXMsg("35=0\x01627=2\x01628=A\x01"+tc.hop+"\x01629=t\x01628=B\x01629=t\x01"))
+		if err := d.ValidateWith(&msg, accept); !errors.Is(err, tc.err) && (tc.err != nil || err != nil) {
+			t.Errorf("%s: ValidateWith = %v, want %v", tc.name, err, tc.err)
+		}
 	}
 }
 

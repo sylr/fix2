@@ -146,6 +146,26 @@ func (m *NewOrderSingle) Text() (string, bool) {
 	return string(v), v != nil
 }
 
+// newOrderSingle_unknown reports whether NewOrderSingle does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func newOrderSingle_unknown(tag int) bool {
+	switch tag {
+	case
+		TagAccount, TagBeginString, TagBodyLength, TagCheckSum,
+		TagClOrdID, TagHandlInst, TagMsgSeqNum, TagMsgType,
+		TagOrderQty, TagOrdType, TagPossDupFlag, TagPrice,
+		TagSenderCompID, TagSenderSubID, TagSendingTime, TagSide,
+		TagSymbol, TagTargetCompID, TagTargetSubID, TagText,
+		TagTimeInForce, TagTransactTime, TagNoAllocs, TagAllocAccount,
+		TagAllocQty, TagPossResend, TagOnBehalfOfCompID, TagOrigSendingTime,
+		TagDeliverToCompID, TagAllocPrice, TagLastMsgSeqNumProcessed, TagIndividualAllocID,
+		TagNoDlvyInst, TagDlvyInst, TagDlvyInstCode, TagDlvyInstCountry,
+		TagDlvyInstPhone, TagDlvyInstEmail, TagDlvyInstFax, TagDlvyInstContact:
+		return false
+	}
+	return true
+}
+
 var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{
 	Counter: TagNoAllocs,
 	Delim:   TagAllocAccount,
@@ -153,8 +173,10 @@ var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{
 		Counter: TagNoDlvyInst,
 		Delim:   TagDlvyInst,
 		Tags:    []int{TagDlvyInst, TagDlvyInstCode, TagDlvyInstCountry, TagDlvyInstPhone, TagDlvyInstEmail, TagDlvyInstFax, TagDlvyInstContact},
+		Unknown: newOrderSingle_unknown,
 	}},
-	Tags: []int{TagAllocAccount, TagAllocQty, TagAllocPrice, TagIndividualAllocID},
+	Tags:    []int{TagAllocAccount, TagAllocQty, TagAllocPrice, TagIndividualAllocID},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoAllocs_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoDlvyInst: &groupLayout{tags: []int{TagDlvyInst, TagDlvyInstCode, TagDlvyInstCountry, TagDlvyInstPhone, TagDlvyInstEmail, TagDlvyInstFax, TagDlvyInstContact}}},

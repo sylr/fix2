@@ -206,10 +206,42 @@ func (m *PartyDetailsDefinitionRequest) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// partyDetailsDefinitionRequest_unknown reports whether PartyDetailsDefinitionRequest does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func partyDetailsDefinitionRequest_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagPossDupFlag, TagSenderCompID, TagSenderSubID,
+		TagSendingTime, TagTargetCompID, TagTargetSubID, TagText,
+		TagSignature, TagSecureDataLen, TagSecureData, TagSignatureLength,
+		TagPossResend, TagOnBehalfOfCompID, TagOnBehalfOfSubID, TagOrigSendingTime,
+		TagDeliverToCompID, TagDeliverToSubID, TagSenderLocationID, TagTargetLocationID,
+		TagOnBehalfOfLocationID, TagDeliverToLocationID, TagXmlDataLen, TagXmlData,
+		TagMessageEncoding, TagEncodedTextLen, TagEncodedText, TagLastMsgSeqNumProcessed,
+		TagNoHops, TagHopCompID, TagHopSendingTime, TagHopRefID,
+		TagApplVerID, TagCstmApplVerID, TagApplExtID, TagListUpdateAction,
+		TagPartyDetailsListRequestID, TagNoPartyRelationships, TagPartyRelationship, TagNoPartyDetailAltID,
+		TagPartyDetailAltID, TagPartyDetailAltIDSource, TagNoPartyDetailAltSubIDs, TagPartyDetailAltSubID,
+		TagPartyDetailAltSubIDType, TagNoRelatedPartyDetailID, TagRelatedPartyDetailID, TagRelatedPartyDetailIDSource,
+		TagRelatedPartyDetailRole, TagNoRelatedPartyDetailSubIDs, TagRelatedPartyDetailSubID, TagRelatedPartyDetailSubIDType,
+		TagNoRelatedPartyDetailAltID, TagRelatedPartyDetailAltID, TagRelatedPartyDetailAltIDSource, TagNoRelatedPartyDetailAltSubIDs,
+		TagRelatedPartyDetailAltSubID, TagRelatedPartyDetailAltSubIDType, TagNoRequestingPartyIDs, TagRequestingPartyID,
+		TagRequestingPartyIDSource, TagRequestingPartyRole, TagNoRequestingPartySubIDs, TagRequestingPartySubID,
+		TagRequestingPartySubIDType, TagNoPartyDetails, TagPartyDetailStatus, TagPartyDetailRoleQualifier,
+		TagRelatedPartyDetailRoleQualifier, TagNoPartyUpdates, TagPartyDetailID, TagPartyDetailIDSource,
+		TagPartyDetailRole, TagNoPartyDetailSubIDs, TagPartyDetailSubID, TagPartyDetailSubIDType,
+		TagRequestingPartyRoleQualifier:
+		return false
+	}
+	return true
+}
+
 var partyDetailsDefinitionRequest_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var partyDetailsDefinitionRequest_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
@@ -233,8 +265,10 @@ var partyDetailsDefinitionRequest_NoRequestingPartyIDs_spec = &fix2.GroupSpec{
 		Counter: TagNoRequestingPartySubIDs,
 		Delim:   TagRequestingPartySubID,
 		Tags:    []int{TagRequestingPartySubID, TagRequestingPartySubIDType},
+		Unknown: partyDetailsDefinitionRequest_unknown,
 	}},
-	Tags: []int{TagRequestingPartyID, TagRequestingPartyIDSource, TagRequestingPartyRole, TagRequestingPartyRoleQualifier},
+	Tags:    []int{TagRequestingPartyID, TagRequestingPartyIDSource, TagRequestingPartyRole, TagRequestingPartyRoleQualifier},
+	Unknown: partyDetailsDefinitionRequest_unknown,
 }
 var partyDetailsDefinitionRequest_NoRequestingPartyIDs_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoRequestingPartySubIDs: &groupLayout{tags: []int{TagRequestingPartySubID, TagRequestingPartySubIDType}}},
@@ -264,6 +298,7 @@ var partyDetailsDefinitionRequest_NoPartyUpdates_spec = &fix2.GroupSpec{
 			Counter: TagNoPartyDetailSubIDs,
 			Delim:   TagPartyDetailSubID,
 			Tags:    []int{TagPartyDetailSubID, TagPartyDetailSubIDType},
+			Unknown: partyDetailsDefinitionRequest_unknown,
 		}, &fix2.GroupSpec{
 			Counter: TagNoPartyDetailAltID,
 			Delim:   TagPartyDetailAltID,
@@ -271,8 +306,10 @@ var partyDetailsDefinitionRequest_NoPartyUpdates_spec = &fix2.GroupSpec{
 				Counter: TagNoPartyDetailAltSubIDs,
 				Delim:   TagPartyDetailAltSubID,
 				Tags:    []int{TagPartyDetailAltSubID, TagPartyDetailAltSubIDType},
+				Unknown: partyDetailsDefinitionRequest_unknown,
 			}},
-			Tags: []int{TagPartyDetailAltID, TagPartyDetailAltIDSource},
+			Tags:    []int{TagPartyDetailAltID, TagPartyDetailAltIDSource},
+			Unknown: partyDetailsDefinitionRequest_unknown,
 		}, &fix2.GroupSpec{
 			Counter: TagNoRelatedPartyDetailID,
 			Delim:   TagRelatedPartyDetailID,
@@ -280,6 +317,7 @@ var partyDetailsDefinitionRequest_NoPartyUpdates_spec = &fix2.GroupSpec{
 				Counter: TagNoRelatedPartyDetailSubIDs,
 				Delim:   TagRelatedPartyDetailSubID,
 				Tags:    []int{TagRelatedPartyDetailSubID, TagRelatedPartyDetailSubIDType},
+				Unknown: partyDetailsDefinitionRequest_unknown,
 			}, &fix2.GroupSpec{
 				Counter: TagNoRelatedPartyDetailAltID,
 				Delim:   TagRelatedPartyDetailAltID,
@@ -287,18 +325,24 @@ var partyDetailsDefinitionRequest_NoPartyUpdates_spec = &fix2.GroupSpec{
 					Counter: TagNoRelatedPartyDetailAltSubIDs,
 					Delim:   TagRelatedPartyDetailAltSubID,
 					Tags:    []int{TagRelatedPartyDetailAltSubID, TagRelatedPartyDetailAltSubIDType},
+					Unknown: partyDetailsDefinitionRequest_unknown,
 				}},
-				Tags: []int{TagRelatedPartyDetailAltID, TagRelatedPartyDetailAltIDSource},
+				Tags:    []int{TagRelatedPartyDetailAltID, TagRelatedPartyDetailAltIDSource},
+				Unknown: partyDetailsDefinitionRequest_unknown,
 			}, &fix2.GroupSpec{
 				Counter: TagNoPartyRelationships,
 				Delim:   TagPartyRelationship,
 				Tags:    []int{TagPartyRelationship},
+				Unknown: partyDetailsDefinitionRequest_unknown,
 			}},
-			Tags: []int{TagRelatedPartyDetailID, TagRelatedPartyDetailIDSource, TagRelatedPartyDetailRole, TagRelatedPartyDetailRoleQualifier},
+			Tags:    []int{TagRelatedPartyDetailID, TagRelatedPartyDetailIDSource, TagRelatedPartyDetailRole, TagRelatedPartyDetailRoleQualifier},
+			Unknown: partyDetailsDefinitionRequest_unknown,
 		}},
-		Tags: []int{TagPartyDetailID, TagPartyDetailIDSource, TagPartyDetailRole, TagPartyDetailRoleQualifier, TagPartyDetailStatus},
+		Tags:    []int{TagPartyDetailID, TagPartyDetailIDSource, TagPartyDetailRole, TagPartyDetailRoleQualifier, TagPartyDetailStatus},
+		Unknown: partyDetailsDefinitionRequest_unknown,
 	}},
-	Tags: []int{TagListUpdateAction},
+	Tags:    []int{TagListUpdateAction},
+	Unknown: partyDetailsDefinitionRequest_unknown,
 }
 var partyDetailsDefinitionRequest_NoPartyUpdates_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoPartyDetails: &groupLayout{

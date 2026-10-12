@@ -71,10 +71,34 @@ func (m *MarketDataSnapshotFullRefresh) NoMDEntries() (int, bool, error) {
 	return n, true, err
 }
 
+// marketDataSnapshotFullRefresh_unknown reports whether MarketDataSnapshotFullRefresh does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func marketDataSnapshotFullRefresh_unknown(tag int) bool {
+	switch tag {
+	case
+		8, 9, 10, TagMsgSeqNum,
+		35, 43, 49, 50,
+		52, TagSymbol, 56, 57,
+		TagRptSeq, 89, 90, 91,
+		93, 97, 115, 116,
+		122, 128, 129, 142,
+		143, 144, 145, TagSecurityType,
+		TagPutOrCall, TagStrikePrice, TagXmlDataLen, TagXmlData,
+		TagMDReqID, TagNoMDEntries, TagMDEntryType, TagMDEntryPx,
+		TagMDEntrySize, TagMDEntryID, TagMessageEncoding, 369,
+		TagNoHops, TagHopCompID, TagHopSendingTime, TagHopRefID,
+		TagSecuritySubType, TagLastFragment, 1128, 1129,
+		1156, TagMDSecurityTradingStatus:
+		return false
+	}
+	return true
+}
+
 var marketDataSnapshotFullRefresh_NoMDEntries_spec = &fix2.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDEntryType,
 	Tags:    []int{TagMDEntryType, TagMDEntryID, TagMDEntryPx, TagMDEntrySize},
+	Unknown: marketDataSnapshotFullRefresh_unknown,
 }
 var marketDataSnapshotFullRefresh_NoMDEntries_layout = &groupLayout{tags: []int{TagMDEntryType, TagMDEntryID, TagMDEntryPx, TagMDEntrySize}}
 

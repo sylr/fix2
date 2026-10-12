@@ -194,10 +194,33 @@ func (m *UserResponse) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// userResponse_unknown reports whether UserResponse does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func userResponse_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagPossDupFlag, TagSenderCompID, TagSenderSubID,
+		TagSendingTime, TagTargetCompID, TagTargetSubID, TagSignature,
+		TagSecureDataLen, TagSecureData, TagSignatureLength, TagPossResend,
+		TagOnBehalfOfCompID, TagOnBehalfOfSubID, TagOrigSendingTime, TagDeliverToCompID,
+		TagDeliverToSubID, TagSenderLocationID, TagTargetLocationID, TagOnBehalfOfLocationID,
+		TagDeliverToLocationID, TagXmlDataLen, TagXmlData, TagMessageEncoding,
+		TagLastMsgSeqNumProcessed, TagUsername, TagNoHops, TagHopCompID,
+		TagHopSendingTime, TagHopRefID, TagUserRequestID, TagUserStatus,
+		TagUserStatusText, TagApplVerID, TagCstmApplVerID, TagApplExtID,
+		TagNoThrottles, TagThrottleAction, TagThrottleType, TagThrottleNoMsgs,
+		TagThrottleTimeInterval, TagThrottleTimeUnit, TagNoThrottleMsgType, TagThrottleMsgType:
+		return false
+	}
+	return true
+}
+
 var userResponse_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var userResponse_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
@@ -221,8 +244,10 @@ var userResponse_NoThrottles_spec = &fix2.GroupSpec{
 		Counter: TagNoThrottleMsgType,
 		Delim:   TagThrottleMsgType,
 		Tags:    []int{TagThrottleMsgType},
+		Unknown: userResponse_unknown,
 	}},
-	Tags: []int{TagThrottleAction, TagThrottleType, TagThrottleNoMsgs, TagThrottleTimeInterval, TagThrottleTimeUnit},
+	Tags:    []int{TagThrottleAction, TagThrottleType, TagThrottleNoMsgs, TagThrottleTimeInterval, TagThrottleTimeUnit},
+	Unknown: userResponse_unknown,
 }
 var userResponse_NoThrottles_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoThrottleMsgType: &groupLayout{tags: []int{TagThrottleMsgType}}},

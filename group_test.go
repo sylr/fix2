@@ -348,6 +348,38 @@ func TestGroupsOfRepeatedTagEndsEntry(t *testing.T) {
 	}
 }
 
+func TestGroupsOfUnknownTags(t *testing.T) {
+	// Tags the message does not define, 9000 and up here, stay in the entry
+	// they appear in, repeated or in a nested entry, rather than ending it:
+	// the entry's other fields and the next entries are its group's still.
+	unknown := func(tag int) bool { return tag >= 9000 }
+	child := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201, 202}, Unknown: unknown}
+	spec := &GroupSpec{Counter: 78, Delim: 79, Tags: []int{79, 80}, Nested: []*GroupSpec{child}, Unknown: unknown}
+	m := fieldsMsg(t, "78=2", "79=A", "9001=x", "80=1", "9001=y",
+		"79=B", "200=1", "201=c", "9002=z", "202=d", "80=2", "9003=w", "55=after")
+
+	entries := m.GroupsOf(spec)
+	if got, want := entryTags(entries), [][]int{{79, 9001, 80, 9001}, {79, 200, 201, 9002, 202, 80, 9003}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("entries = %v, want %v", got, want)
+	}
+	if got, want := entryTags(entries[1].GroupsOf(child)), [][]int{{201, 9002, 202}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("nested entries = %v, want %v", got, want)
+	}
+	var top []int
+	for f := range m.TopLevelFields(spec) {
+		top = append(top, f.Tag)
+	}
+	if want := []int{78, 55}; !reflect.DeepEqual(top, want) {
+		t.Errorf("top-level tags = %v, want %v", top, want)
+	}
+
+	// Without Unknown, the first such tag ends the entry, and the group.
+	plain := &GroupSpec{Counter: 78, Delim: 79, Tags: []int{79, 80}}
+	if got, want := entryTags(m.GroupsOf(plain)), [][]int{{79}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("entries without Unknown = %v, want %v", got, want)
+	}
+}
+
 func TestGroupsOfRepeatedNestedCounterEndsEntry(t *testing.T) {
 	child := &GroupSpec{Counter: 200, Delim: 201, Tags: []int{201}}
 	parent := &GroupSpec{Counter: 900, Delim: 100, Tags: []int{100}, Nested: []*GroupSpec{child}}

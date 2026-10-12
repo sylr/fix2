@@ -146,10 +146,29 @@ func (m *Logon) Password() (string, bool) {
 	return string(v), v != nil
 }
 
+// logon_unknown reports whether Logon does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func logon_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagPossDupFlag, TagSenderCompID, TagSenderSubID,
+		TagSendingTime, TagTargetCompID, TagTargetSubID, TagRawDataLength,
+		TagRawData, TagPossResend, TagEncryptMethod, TagHeartBtInt,
+		TagOnBehalfOfCompID, TagOrigSendingTime, TagDeliverToCompID, TagResetSeqNumFlag,
+		TagLastMsgSeqNumProcessed, TagRefMsgType, TagMaxMessageSize, TagNoMsgTypes,
+		TagMsgDirection, TagTestMessageIndicator, TagUsername, TagPassword,
+		TagNextExpectedMsgSeqNum:
+		return false
+	}
+	return true
+}
+
 var logon_NoMsgTypes_spec = &fix2.GroupSpec{
 	Counter: TagNoMsgTypes,
 	Delim:   TagRefMsgType,
 	Tags:    []int{TagRefMsgType, TagMsgDirection},
+	Unknown: logon_unknown,
 }
 var logon_NoMsgTypes_layout = &groupLayout{tags: []int{TagRefMsgType, TagMsgDirection}}
 

@@ -47,10 +47,32 @@ func (m *MarketDataRequest) NoRelatedSym() (int, bool, error) {
 	return n, true, err
 }
 
+// marketDataRequest_unknown reports whether MarketDataRequest does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func marketDataRequest_unknown(tag int) bool {
+	switch tag {
+	case
+		8, 9, 10, TagMsgSeqNum,
+		35, 43, 49, 50,
+		52, TagSymbol, 56, 57,
+		89, 90, 91, 93,
+		97, 115, 116, 122,
+		128, 129, 142, 143,
+		144, 145, TagNoRelatedSym, TagXmlDataLen,
+		TagXmlData, TagMDReqID, TagSubscriptionRequestType, TagMarketDepth,
+		TagMessageEncoding, 369, TagNoHops, TagHopCompID,
+		TagHopSendingTime, TagHopRefID, 1128, 1129,
+		1156:
+		return false
+	}
+	return true
+}
+
 var marketDataRequest_NoRelatedSym_spec = &fix2.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
 	Tags:    []int{TagSymbol},
+	Unknown: marketDataRequest_unknown,
 }
 var marketDataRequest_NoRelatedSym_layout = &groupLayout{tags: []int{TagSymbol}}
 

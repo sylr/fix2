@@ -330,10 +330,39 @@ func (m *Logon) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// logon_unknown reports whether Logon does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func logon_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagPossDupFlag, TagSenderCompID, TagSenderSubID,
+		TagSendingTime, TagTargetCompID, TagTargetSubID, TagText,
+		TagSignature, TagSecureDataLen, TagSecureData, TagSignatureLength,
+		TagRawDataLength, TagRawData, TagPossResend, TagEncryptMethod,
+		TagHeartBtInt, TagOnBehalfOfCompID, TagOnBehalfOfSubID, TagOrigSendingTime,
+		TagDeliverToCompID, TagDeliverToSubID, TagResetSeqNumFlag, TagSenderLocationID,
+		TagTargetLocationID, TagOnBehalfOfLocationID, TagDeliverToLocationID, TagXmlDataLen,
+		TagXmlData, TagMessageEncoding, TagEncodedTextLen, TagEncodedText,
+		TagLastMsgSeqNumProcessed, TagRefMsgType, TagMaxMessageSize, TagNoMsgTypes,
+		TagMsgDirection, TagTestMessageIndicator, TagUsername, TagPassword,
+		TagNoHops, TagHopCompID, TagHopSendingTime, TagHopRefID,
+		TagNextExpectedMsgSeqNum, TagNewPassword, TagApplVerID, TagCstmApplVerID,
+		TagRefApplVerID, TagRefCstmApplVerID, TagDefaultApplVerID, TagApplExtID,
+		TagEncryptedPasswordMethod, TagEncryptedPasswordLen, TagEncryptedPassword, TagEncryptedNewPasswordLen,
+		TagEncryptedNewPassword, TagRefApplExtID, TagDefaultApplExtID, TagDefaultCstmApplVerID,
+		TagSessionStatus, TagDefaultVerIndicator, TagFIXEngineName, TagFIXEngineVersion,
+		TagFIXEngineVendor, TagApplicationSystemName, TagApplicationSystemVersion, TagApplicationSystemVendor:
+		return false
+	}
+	return true
+}
+
 var logon_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var logon_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
@@ -354,6 +383,7 @@ var logon_NoMsgTypes_spec = &fix2.GroupSpec{
 	Counter: TagNoMsgTypes,
 	Delim:   TagRefMsgType,
 	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefApplExtID, TagRefCstmApplVerID, TagDefaultVerIndicator},
+	Unknown: logon_unknown,
 }
 var logon_NoMsgTypes_layout = &groupLayout{tags: []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefApplExtID, TagRefCstmApplVerID, TagDefaultVerIndicator}}
 

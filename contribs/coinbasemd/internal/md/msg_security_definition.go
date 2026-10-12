@@ -291,10 +291,42 @@ func (m *SecurityDefinition) NoLegs() (int, bool, error) {
 	return n, true, err
 }
 
+// securityDefinition_unknown reports whether SecurityDefinition does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func securityDefinition_unknown(tag int) bool {
+	switch tag {
+	case
+		8, 9, 10, TagCurrency,
+		TagMsgSeqNum, 35, 43, 49,
+		50, 52, TagSymbol, 56,
+		57, 89, 90, 91,
+		93, 97, TagSecurityDesc, 115,
+		116, TagSettlCurrency, 122, 128,
+		129, 142, 143, 144,
+		145, TagSecurityType, TagMaturityMonthYear, TagPutOrCall,
+		TagStrikePrice, TagXmlDataLen, TagXmlData, TagContractMultiplier,
+		TagUnderlyingSymbol, TagMessageEncoding, 369, TagCFICode,
+		TagUnderlyingProduct, TagNoLegs, TagLegCurrency, TagMinTradeVol,
+		TagLegSymbol, TagLegCFICode, TagLegSecurityType, TagLegSecurityDesc,
+		TagLegSide, TagNoHops, TagHopCompID, TagHopSendingTime,
+		TagHopRefID, TagNoUnderlyings, TagSettlPrice, TagSettlPriceType,
+		TagPriorSettlPrice, TagSecuritySubType, TagLastUpdateTime, TagNoEvents,
+		TagEventType, TagMinPriceIncrement, TagSecurityUpdateAction, TagUnitOfMeasure,
+		1128, 1129, TagMaxTradeVol, TagMaxPriceVariation,
+		TagEventTime, TagUnitOfMeasureQty, TagLowLimitPrice, TagHighLimitPrice,
+		1156, TagMDSecurityTradingStatus, TagClearedVolume, TagOpenInterestQty,
+		TagTradingReferenceDate, TagAsset, TagLargeTickThreshold, TagLargeTick,
+		TagMinSizeIncrement:
+		return false
+	}
+	return true
+}
+
 var securityDefinition_NoEvents_spec = &fix2.GroupSpec{
 	Counter: TagNoEvents,
 	Delim:   TagEventType,
 	Tags:    []int{TagEventType, TagEventTime},
+	Unknown: securityDefinition_unknown,
 }
 var securityDefinition_NoEvents_layout = &groupLayout{tags: []int{TagEventType, TagEventTime}}
 
@@ -315,6 +347,7 @@ var securityDefinition_NoLegs_spec = &fix2.GroupSpec{
 	Counter: TagNoLegs,
 	Delim:   TagLegSymbol,
 	Tags:    []int{TagLegSymbol, TagLegSecurityDesc, TagLegSecurityType, TagLegSide, TagLegCFICode, TagLegCurrency},
+	Unknown: securityDefinition_unknown,
 }
 var securityDefinition_NoLegs_layout = &groupLayout{tags: []int{TagLegSymbol, TagLegSecurityDesc, TagLegSecurityType, TagLegSide, TagLegCFICode, TagLegCurrency}}
 

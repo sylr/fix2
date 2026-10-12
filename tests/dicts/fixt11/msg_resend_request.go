@@ -182,6 +182,7 @@ var resendRequest_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var resendRequest_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 

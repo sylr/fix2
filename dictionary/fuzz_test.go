@@ -94,7 +94,9 @@ func FuzzValidate(f *testing.F) {
 		}
 		verr := d.Validate(&msg)
 		checkValidationError(t, verr)
-		cs := dictionary.Checks(checks) & dictionary.CheckAll
+		// Validate's checks: ValidateWith adds the others to them.
+		const unknown = dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags
+		cs := dictionary.Checks(checks)&dictionary.CheckAll | unknown
 		werr := d.ValidateWith(&msg, cs)
 		checkValidationError(t, werr)
 		if verr != nil && werr == nil {
@@ -103,8 +105,11 @@ func FuzzValidate(f *testing.F) {
 		if werr := d.ValidateWith(&msg, dictionary.CheckAll); werr == nil && verr != nil {
 			t.Fatalf("Validate = %v, but ValidateWith(CheckAll) = nil", verr)
 		}
-		if e := d.ValidateWith(&msg, 0); fmt.Sprint(e) != fmt.Sprint(verr) {
-			t.Fatalf("Validate = %v, ValidateWith(0) = %v", verr, e)
+		if e := d.ValidateWith(&msg, unknown); fmt.Sprint(e) != fmt.Sprint(verr) {
+			t.Fatalf("Validate = %v, ValidateWith(%d) = %v", verr, unknown, e)
+		}
+		if e := d.ValidateWith(&msg, cs&^unknown); errors.Is(e, dictionary.ErrUnexpectedTag) {
+			t.Fatalf("ValidateWith(%d) = %v, though it accepts unknown tags", cs&^unknown, e)
 		}
 
 		fields := msg.Fields()

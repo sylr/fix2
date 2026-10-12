@@ -354,10 +354,39 @@ func (m *ExecutionReport) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// executionReport_unknown reports whether ExecutionReport does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func executionReport_unknown(tag int) bool {
+	switch tag {
+	case
+		TagAccount, TagAvgPx, TagBeginString, TagBodyLength,
+		TagCheckSum, TagClOrdID, TagCommission, TagCommType,
+		TagCumQty, TagCurrency, TagExecID, TagExecInst,
+		TagExecRefID, TagExecTransType, TagIDSource, TagLastCapacity,
+		TagLastMkt, TagLastPx, TagLastShares, TagMsgSeqNum,
+		TagMsgType, TagOrderID, TagOrderQty, TagOrdStatus,
+		TagOrdType, TagPossDupFlag, TagPrice, TagRule80A,
+		TagSecurityID, TagSenderCompID, TagSenderSubID, TagSendingTime,
+		TagSide, TagSymbol, TagTargetCompID, TagTargetSubID,
+		TagText, TagTimeInForce, TagTransactTime, TagSettlmntTyp,
+		TagFutSettDate, TagSymbolSfx, TagListID, TagTradeDate,
+		TagExecBroker, TagSignature, TagSecureDataLen, TagSecureData,
+		TagSignatureLength, TagPossResend, TagStopPx, TagOrdRejReason,
+		TagIssuer, TagSecurityDesc, TagClientID, TagReportToExch,
+		TagOnBehalfOfCompID, TagOnBehalfOfSubID, TagNetMoney, TagSettlCurrAmt,
+		TagSettlCurrency, TagOrigSendingTime, TagExpireTime, TagDeliverToCompID,
+		TagDeliverToSubID, TagNoMiscFees, TagMiscFeeAmt, TagMiscFeeCurr,
+		TagMiscFeeType:
+		return false
+	}
+	return true
+}
+
 var executionReport_NoMiscFees_spec = &fix2.GroupSpec{
 	Counter: TagNoMiscFees,
 	Delim:   TagMiscFeeAmt,
 	Tags:    []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType},
+	Unknown: executionReport_unknown,
 }
 var executionReport_NoMiscFees_layout = &groupLayout{tags: []int{TagMiscFeeAmt, TagMiscFeeCurr, TagMiscFeeType}}
 

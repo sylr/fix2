@@ -314,10 +314,39 @@ func (m *OrderCancelReject) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// orderCancelReject_unknown reports whether OrderCancelReject does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func orderCancelReject_unknown(tag int) bool {
+	switch tag {
+	case
+		TagAccount, TagBeginString, TagBodyLength, TagCheckSum,
+		TagClOrdID, TagMsgSeqNum, TagMsgType, TagOrderID,
+		TagOrdStatus, TagOrigClOrdID, TagPossDupFlag, TagSenderCompID,
+		TagSenderSubID, TagSendingTime, TagTargetCompID, TagTargetSubID,
+		TagText, TagTransactTime, TagListID, TagTradeDate,
+		TagSignature, TagSecureDataLen, TagSecureData, TagSignatureLength,
+		TagPossResend, TagExDestination, TagCxlRejReason, TagOnBehalfOfCompID,
+		TagOnBehalfOfSubID, TagOrigSendingTime, TagDeliverToCompID, TagDeliverToSubID,
+		TagSenderLocationID, TagTargetLocationID, TagOnBehalfOfLocationID, TagDeliverToLocationID,
+		TagSecondaryOrderID, TagXmlDataLen, TagXmlData, TagTradeOriginationDate,
+		TagMessageEncoding, TagEncodedTextLen, TagEncodedText, TagLastMsgSeqNumProcessed,
+		TagCxlRejResponseTo, TagPartyIDSource, TagPartyID, TagPartyRole,
+		TagNoPartyIDs, TagPartySubID, TagSecondaryClOrdID, TagAccountType,
+		TagClOrdLinkID, TagOrigOrdModTime, TagNoHops, TagHopCompID,
+		TagHopSendingTime, TagHopRefID, TagWorkingIndicator, TagAcctIDSource,
+		TagNoPartySubIDs, TagPartySubIDType, TagApplVerID, TagCstmApplVerID,
+		TagExDestinationIDSource, TagApplExtID, TagRejectText, TagEncodedRejectTextLen,
+		TagEncodedRejectText, TagPartyRoleQualifier, TagOrderRequestID:
+		return false
+	}
+	return true
+}
+
 var orderCancelReject_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var orderCancelReject_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
@@ -341,8 +370,10 @@ var orderCancelReject_NoPartyIDs_spec = &fix2.GroupSpec{
 		Counter: TagNoPartySubIDs,
 		Delim:   TagPartySubID,
 		Tags:    []int{TagPartySubID, TagPartySubIDType},
+		Unknown: orderCancelReject_unknown,
 	}},
-	Tags: []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagPartyRoleQualifier},
+	Tags:    []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagPartyRoleQualifier},
+	Unknown: orderCancelReject_unknown,
 }
 var orderCancelReject_NoPartyIDs_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoPartySubIDs: &groupLayout{tags: []int{TagPartySubID, TagPartySubIDType}}},

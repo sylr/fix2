@@ -110,10 +110,26 @@ func (m *MarketDataRequest) AggregatedBook() (AggregatedBook, bool) {
 	return AggregatedBook(v), v != nil
 }
 
+// marketDataRequest_unknown reports whether MarketDataRequest does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func marketDataRequest_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagSenderCompID, TagSendingTime, TagSymbol,
+		TagTargetCompID, TagNoRelatedSym, TagMDReqID, TagSubscriptionRequestType,
+		TagMarketDepth, TagAggregatedBook, TagNoMDEntryTypes, TagMDEntryType,
+		TagRecvWindow:
+		return false
+	}
+	return true
+}
+
 var marketDataRequest_NoRelatedSym_spec = &fix2.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
 	Tags:    []int{TagSymbol},
+	Unknown: marketDataRequest_unknown,
 }
 var marketDataRequest_NoRelatedSym_layout = &groupLayout{tags: []int{TagSymbol}}
 
@@ -134,6 +150,7 @@ var marketDataRequest_NoMDEntryTypes_spec = &fix2.GroupSpec{
 	Counter: TagNoMDEntryTypes,
 	Delim:   TagMDEntryType,
 	Tags:    []int{TagMDEntryType},
+	Unknown: marketDataRequest_unknown,
 }
 var marketDataRequest_NoMDEntryTypes_layout = &groupLayout{tags: []int{TagMDEntryType}}
 

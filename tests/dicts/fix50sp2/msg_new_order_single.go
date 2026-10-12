@@ -1350,6 +1350,121 @@ func (m *NewOrderSingle) ExDestinationIDSource() (ExDestinationIDSource, bool) {
 	return ExDestinationIDSource(v), v != nil
 }
 
+// newOrderSingle_unknown reports whether NewOrderSingle does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func newOrderSingle_unknown(tag int) bool {
+	switch tag {
+	case
+		TagAccount, 8, 9, 10,
+		TagClOrdID, TagCommission, TagCommType, TagCurrency,
+		TagExecInst, TagHandlInst, TagSecurityIDSource, TagIOIID,
+		34, 35, TagOrderQty, TagOrdType,
+		43, TagPrice, TagSecurityID, 49,
+		50, 52, TagSide, TagSymbol,
+		56, 57, TagText, TagTimeInForce,
+		TagTransactTime, TagSettlType, TagSettlDate, TagSymbolSfx,
+		TagAllocID, TagTradeDate, TagPositionEffect, TagNoAllocs,
+		TagAllocAccount, TagAllocQty, TagProcessCode, 89,
+		90, 91, 93, 97,
+		TagStopPx, TagExDestination, TagIssuer, TagSecurityDesc,
+		TagMinQty, TagMaxFloor, TagLocateReqd, 115,
+		116, TagQuoteID, TagSettlCurrency, TagForexReq,
+		122, TagExpireTime, 128, 129,
+		TagPrevClosePx, 142, 143, 144,
+		145, TagCashOrderQty, TagSecurityType, TagEffectiveTime,
+		TagOrderQty2, TagSettlDate2, TagMaturityMonthYear, TagPutOrCall,
+		TagStrikePrice, TagCoveredOrUncovered, TagOptAttribute, TagSecurityExchange,
+		TagMaxShow, TagPegOffsetValue, 212, 213,
+		TagSpread, TagBenchmarkCurveCurrency, TagBenchmarkCurveName, TagBenchmarkCurvePoint,
+		TagCouponRate, TagCouponPaymentDate, TagIssueDate, TagRepurchaseTerm,
+		TagRepurchaseRate, TagFactor, TagTradeOriginationDate, TagContractMultiplier,
+		TagNoStipulations, TagStipulationType, TagStipulationValue, TagYieldType,
+		TagYield, TagRepoCollateralSecurityType, TagRedemptionDate, TagUnderlyingCouponPaymentDate,
+		TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate,
+		TagUnderlyingFactor, TagUnderlyingRedemptionDate, TagCreditRating, TagUnderlyingCreditRating,
+		TagUnderlyingSecurityIDSource, TagUnderlyingIssuer, TagUnderlyingSecurityDesc, TagUnderlyingSecurityExchange,
+		TagUnderlyingSecurityID, TagUnderlyingSecurityType, TagUnderlyingSymbol, TagUnderlyingSymbolSfx,
+		TagUnderlyingMaturityMonthYear, TagUnderlyingPutOrCall, TagUnderlyingStrikePrice, TagUnderlyingOptAttribute,
+		TagUnderlyingCurrency, TagTradingSessionID, 347, TagEncodedIssuerLen,
+		TagEncodedIssuer, TagEncodedSecurityDescLen, TagEncodedSecurityDesc, TagEncodedTextLen,
+		TagEncodedText, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagEncodedUnderlyingSecurityDescLen,
+		TagEncodedUnderlyingSecurityDesc, 369, TagComplianceID, TagSolicitedFlag,
+		TagNoTradingSessions, TagDiscretionInst, TagDiscretionOffsetValue, TagPriceType,
+		TagGTBookingInst, TagExpireDate, TagUnderlyingCouponRate, TagUnderlyingContractMultiplier,
+		TagPartyIDSource, TagPartyID, TagPartyRole, TagNoPartyIDs,
+		TagNoSecurityAltID, TagSecurityAltID, TagSecurityAltIDSource, TagNoUnderlyingSecurityAltID,
+		TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource, TagProduct, TagCFICode,
+		TagUnderlyingProduct, TagUnderlyingCFICode, TagIndividualAllocID, TagRoundingDirection,
+		TagRoundingModulus, TagCountryOfIssue, TagStateOrProvinceOfIssue, TagLocaleOfIssue,
+		TagCommCurrency, TagCancellationRights, TagMoneyLaunderingStatus, TagDesignation,
+		TagFundRenewWaiv, TagRegistID, TagOrderPercent, TagPartySubID,
+		TagNestedPartyID, TagNestedPartyIDSource, TagSecondaryClOrdID, TagOrderCapacity,
+		TagOrderRestrictions, TagNestedPartyRole, TagNoNestedPartyIDs, TagMaturityDate,
+		TagUnderlyingMaturityDate, TagInstrRegistry, TagCashMargin, TagNestedPartySubID,
+		TagAccountType, TagCustOrderCapacity, TagClOrdLinkID, TagDayBookingInst,
+		TagBookingUnit, TagPreallocMethod, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue,
+		TagUnderlyingLocaleOfIssue, TagUnderlyingInstrRegistry, TagTradingSessionSubID, 627,
+		628, 629, 630, TagClearingFeeIndicator,
+		TagPrice2, TagAcctIDSource, TagAllocAcctIDSource, TagBenchmarkPrice,
+		TagBenchmarkPriceType, TagContractSettlMonth, TagPool, TagYieldRedemptionDate,
+		TagYieldRedemptionPrice, TagYieldRedemptionPriceType, TagBenchmarkSecurityID, TagYieldCalcDate,
+		TagNoUnderlyings, TagAllocSettlCurrency, TagBenchmarkSecurityIDSource, TagSecuritySubType,
+		TagUnderlyingSecuritySubType, TagNoTrdRegTimestamps, TagTrdRegTimestamp, TagTrdRegTimestampType,
+		TagTrdRegTimestampOrigin, TagBookingType, TagTerminationType, TagNoPartySubIDs,
+		TagPartySubIDType, TagNoNestedPartySubIDs, TagNestedPartySubIDType, TagUnderlyingPx,
+		TagPegMoveType, TagPegOffsetType, TagPegLimitType, TagPegRoundDirection,
+		TagPegScope, TagDiscretionMoveType, TagDiscretionOffsetType, TagDiscretionLimitType,
+		TagDiscretionRoundDirection, TagDiscretionScope, TagTargetStrategy, TagTargetStrategyParameters,
+		TagParticipationRate, TagQtyType, TagNoEvents, TagEventType,
+		TagEventDate, TagEventPx, TagEventText, TagDatedDate,
+		TagInterestAccrualDate, TagCPProgram, TagCPRegType, TagUnderlyingCPProgram,
+		TagUnderlyingCPRegType, TagUnderlyingQty, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice,
+		TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagNoUnderlyingStips,
+		TagUnderlyingStipType, TagUnderlyingStipValue, TagMarginRatio, TagAgreementDesc,
+		TagAgreementID, TagAgreementDate, TagStartDate, TagEndDate,
+		TagAgreementCurrency, TagDeliveryType, TagUnderlyingStrikeCurrency, TagStrikeCurrency,
+		TagNoStrategyParameters, TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue,
+		TagSecurityStatus, TagSettleOnOpenFlag, TagStrikeMultiplier, TagStrikeValue,
+		TagMinPriceIncrement, TagPositionLimit, TagNTPositionLimit, TagUnderlyingAllocationPercent,
+		TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingSettlementType, TagUnitOfMeasure,
+		TagTimeUnit, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagNoInstrumentParties,
+		TagInstrumentPartyID, TagManualOrderIndicator, TagCustDirectedOrder, TagReceivedDeptID,
+		TagCustOrderHandlingInst, TagOrderHandlingInstSource, TagDeskType, TagDeskTypeSource,
+		TagDeskOrderHandlingInst, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity,
+		TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagInstrmtAssignmentMethod, TagInstrumentPartyIDSource,
+		TagInstrumentPartyRole, TagNoInstrumentPartySubIDs, TagInstrumentPartySubID, TagInstrumentPartySubIDType,
+		TagNoUndlyInstrumentParties, TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole,
+		TagNoUndlyInstrumentPartySubIDs, TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType, TagMaturityTime,
+		TagRefOrderID, TagRefOrderIDSource, TagSecondaryDisplayQty, TagDisplayWhen,
+		TagDisplayMethod, TagDisplayLowQty, TagDisplayHighQty, TagDisplayMinIncr,
+		TagRefreshQty, TagMatchIncrement, TagMaxPriceLevels, TagPreTradeAnonymity,
+		TagPriceProtectionScope, TagPegPriceType, TagPegSecurityIDSource, TagPegSecurityID,
+		TagPegSymbol, TagPegSecurityDesc, TagTriggerType, TagTriggerAction,
+		TagTriggerPrice, TagTriggerSymbol, TagTriggerSecurityID, TagTriggerSecurityIDSource,
+		TagTriggerSecurityDesc, TagTriggerPriceType, TagTriggerPriceTypeScope, TagTriggerPriceDirection,
+		TagTriggerNewPrice, TagTriggerOrderType, TagTriggerNewQty, TagTriggerTradingSessionID,
+		TagTriggerTradingSessionSubID, 1128, 1129, TagExDestinationIDSource,
+		TagDisplayQty, TagEventTime, TagMinPriceIncrementAmount, TagUnitOfMeasureQty,
+		TagSecurityGroup, 1156, TagSecurityXMLLen, TagSecurityXML,
+		TagSecurityXMLSchema, TagPriceUnitOfMeasure, TagPriceUnitOfMeasureQty, TagSettlMethod,
+		TagExerciseStyle, TagOptPayoutAmount, TagPriceQuoteMethod, TagValuationMethod,
+		TagListMethod, TagCapPrice, TagFloorPrice, TagUnderlyingMaturityTime,
+		TagProductComplex, TagFlexProductEligibilityIndicator, TagFlexibleIndicator, TagUnderlyingExerciseStyle,
+		TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagContractMultiplierUnit,
+		TagUnderlyingContractMultiplierUnit, TagFlowScheduleType, TagUnderlyingFlowScheduleType, TagRestructuringType,
+		TagSeniority, TagNotionalPercentageOutstanding, TagOriginalNotionalPercentageOutstanding, TagUnderlyingRestructuringType,
+		TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagAttachmentPoint,
+		TagDetachmentPoint, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint, TagStrikePriceDeterminationMethod,
+		TagStrikePriceBoundaryMethod, TagStrikePriceBoundaryPrecision, TagUnderlyingPriceDeterminationMethod, TagOptPayoutType,
+		TagNoComplexEvents, TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice,
+		TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition,
+		TagNoComplexEventDates, TagComplexEventStartDate, TagComplexEventEndDate, TagNoComplexEventTimes,
+		TagComplexEventStartTime, TagComplexEventEndTime:
+		return false
+	}
+	return true
+}
+
 var newOrderSingle_NoPartyIDs_spec = &fix2.GroupSpec{
 	Counter: TagNoPartyIDs,
 	Delim:   TagPartyID,
@@ -1357,8 +1472,10 @@ var newOrderSingle_NoPartyIDs_spec = &fix2.GroupSpec{
 		Counter: TagNoPartySubIDs,
 		Delim:   TagPartySubID,
 		Tags:    []int{TagPartySubID, TagPartySubIDType},
+		Unknown: newOrderSingle_unknown,
 	}},
-	Tags: []int{TagPartyID, TagPartyIDSource, TagPartyRole},
+	Tags:    []int{TagPartyID, TagPartyIDSource, TagPartyRole},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoPartyIDs_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoPartySubIDs: &groupLayout{tags: []int{TagPartySubID, TagPartySubIDType}}},
@@ -1388,10 +1505,13 @@ var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{
 			Counter: TagNoNestedPartySubIDs,
 			Delim:   TagNestedPartySubID,
 			Tags:    []int{TagNestedPartySubID, TagNestedPartySubIDType},
+			Unknown: newOrderSingle_unknown,
 		}},
-		Tags: []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole},
+		Tags:    []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole},
+		Unknown: newOrderSingle_unknown,
 	}},
-	Tags: []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagAllocQty},
+	Tags:    []int{TagAllocAccount, TagAllocAcctIDSource, TagAllocSettlCurrency, TagIndividualAllocID, TagAllocQty},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoAllocs_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoNestedPartyIDs: &groupLayout{
@@ -1418,6 +1538,7 @@ var newOrderSingle_NoTradingSessions_spec = &fix2.GroupSpec{
 	Counter: TagNoTradingSessions,
 	Delim:   TagTradingSessionID,
 	Tags:    []int{TagTradingSessionID, TagTradingSessionSubID},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoTradingSessions_layout = &groupLayout{tags: []int{TagTradingSessionID, TagTradingSessionSubID}}
 
@@ -1438,6 +1559,7 @@ var newOrderSingle_NoSecurityAltID_spec = &fix2.GroupSpec{
 	Counter: TagNoSecurityAltID,
 	Delim:   TagSecurityAltID,
 	Tags:    []int{TagSecurityAltID, TagSecurityAltIDSource},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoSecurityAltID_layout = &groupLayout{tags: []int{TagSecurityAltID, TagSecurityAltIDSource}}
 
@@ -1458,6 +1580,7 @@ var newOrderSingle_NoEvents_spec = &fix2.GroupSpec{
 	Counter: TagNoEvents,
 	Delim:   TagEventType,
 	Tags:    []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoEvents_layout = &groupLayout{tags: []int{TagEventType, TagEventDate, TagEventPx, TagEventText, TagEventTime}}
 
@@ -1481,8 +1604,10 @@ var newOrderSingle_NoInstrumentParties_spec = &fix2.GroupSpec{
 		Counter: TagNoInstrumentPartySubIDs,
 		Delim:   TagInstrumentPartySubID,
 		Tags:    []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType},
+		Unknown: newOrderSingle_unknown,
 	}},
-	Tags: []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole},
+	Tags:    []int{TagInstrumentPartyID, TagInstrumentPartyIDSource, TagInstrumentPartyRole},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoInstrumentParties_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoInstrumentPartySubIDs: &groupLayout{tags: []int{TagInstrumentPartySubID, TagInstrumentPartySubIDType}}},
@@ -1512,10 +1637,13 @@ var newOrderSingle_NoComplexEvents_spec = &fix2.GroupSpec{
 			Counter: TagNoComplexEventTimes,
 			Delim:   TagComplexEventStartTime,
 			Tags:    []int{TagComplexEventStartTime, TagComplexEventEndTime},
+			Unknown: newOrderSingle_unknown,
 		}},
-		Tags: []int{TagComplexEventStartDate, TagComplexEventEndDate},
+		Tags:    []int{TagComplexEventStartDate, TagComplexEventEndDate},
+		Unknown: newOrderSingle_unknown,
 	}},
-	Tags: []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition},
+	Tags:    []int{TagComplexEventType, TagComplexOptPayoutAmount, TagComplexEventPrice, TagComplexEventPriceBoundaryMethod, TagComplexEventPriceBoundaryPrecision, TagComplexEventPriceTimeType, TagComplexEventCondition},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoComplexEvents_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoComplexEventDates: &groupLayout{
@@ -1545,10 +1673,12 @@ var newOrderSingle_NoUnderlyings_spec = &fix2.GroupSpec{
 		Counter: TagNoUnderlyingSecurityAltID,
 		Delim:   TagUnderlyingSecurityAltID,
 		Tags:    []int{TagUnderlyingSecurityAltID, TagUnderlyingSecurityAltIDSource},
+		Unknown: newOrderSingle_unknown,
 	}, &fix2.GroupSpec{
 		Counter: TagNoUnderlyingStips,
 		Delim:   TagUnderlyingStipType,
 		Tags:    []int{TagUnderlyingStipType, TagUnderlyingStipValue},
+		Unknown: newOrderSingle_unknown,
 	}, &fix2.GroupSpec{
 		Counter: TagNoUndlyInstrumentParties,
 		Delim:   TagUnderlyingInstrumentPartyID,
@@ -1556,10 +1686,13 @@ var newOrderSingle_NoUnderlyings_spec = &fix2.GroupSpec{
 			Counter: TagNoUndlyInstrumentPartySubIDs,
 			Delim:   TagUnderlyingInstrumentPartySubID,
 			Tags:    []int{TagUnderlyingInstrumentPartySubID, TagUnderlyingInstrumentPartySubIDType},
+			Unknown: newOrderSingle_unknown,
 		}},
-		Tags: []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole},
+		Tags:    []int{TagUnderlyingInstrumentPartyID, TagUnderlyingInstrumentPartyIDSource, TagUnderlyingInstrumentPartyRole},
+		Unknown: newOrderSingle_unknown,
 	}},
-	Tags: []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
+	Tags:    []int{TagUnderlyingSymbol, TagUnderlyingSymbolSfx, TagUnderlyingSecurityID, TagUnderlyingSecurityIDSource, TagUnderlyingProduct, TagUnderlyingCFICode, TagUnderlyingSecurityType, TagUnderlyingSecuritySubType, TagUnderlyingMaturityMonthYear, TagUnderlyingMaturityDate, TagUnderlyingCouponPaymentDate, TagUnderlyingIssueDate, TagUnderlyingRepoCollateralSecurityType, TagUnderlyingRepurchaseTerm, TagUnderlyingRepurchaseRate, TagUnderlyingFactor, TagUnderlyingCreditRating, TagUnderlyingInstrRegistry, TagUnderlyingCountryOfIssue, TagUnderlyingStateOrProvinceOfIssue, TagUnderlyingLocaleOfIssue, TagUnderlyingRedemptionDate, TagUnderlyingStrikePrice, TagUnderlyingStrikeCurrency, TagUnderlyingOptAttribute, TagUnderlyingContractMultiplier, TagUnderlyingCouponRate, TagUnderlyingSecurityExchange, TagUnderlyingIssuer, TagEncodedUnderlyingIssuerLen, TagEncodedUnderlyingIssuer, TagUnderlyingSecurityDesc, TagEncodedUnderlyingSecurityDescLen, TagEncodedUnderlyingSecurityDesc, TagUnderlyingCPProgram, TagUnderlyingCPRegType, TagUnderlyingCurrency, TagUnderlyingQty, TagUnderlyingPx, TagUnderlyingDirtyPrice, TagUnderlyingEndPrice, TagUnderlyingStartValue, TagUnderlyingCurrentValue, TagUnderlyingEndValue, TagUnderlyingAllocationPercent, TagUnderlyingSettlementType, TagUnderlyingCashAmount, TagUnderlyingCashType, TagUnderlyingUnitOfMeasure, TagUnderlyingTimeUnit, TagUnderlyingCapValue, TagUnderlyingSettlMethod, TagUnderlyingAdjustedQuantity, TagUnderlyingFXRate, TagUnderlyingFXRateCalc, TagUnderlyingMaturityTime, TagUnderlyingPutOrCall, TagUnderlyingExerciseStyle, TagUnderlyingUnitOfMeasureQty, TagUnderlyingPriceUnitOfMeasure, TagUnderlyingPriceUnitOfMeasureQty, TagUnderlyingContractMultiplierUnit, TagUnderlyingFlowScheduleType, TagUnderlyingRestructuringType, TagUnderlyingSeniority, TagUnderlyingNotionalPercentageOutstanding, TagUnderlyingOriginalNotionalPercentageOutstanding, TagUnderlyingAttachmentPoint, TagUnderlyingDetachmentPoint},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoUnderlyings_layout = &groupLayout{
 	nested: map[int]*groupLayout{
@@ -1590,6 +1723,7 @@ var newOrderSingle_NoStipulations_spec = &fix2.GroupSpec{
 	Counter: TagNoStipulations,
 	Delim:   TagStipulationType,
 	Tags:    []int{TagStipulationType, TagStipulationValue},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoStipulations_layout = &groupLayout{tags: []int{TagStipulationType, TagStipulationValue}}
 
@@ -1610,6 +1744,7 @@ var newOrderSingle_NoStrategyParameters_spec = &fix2.GroupSpec{
 	Counter: TagNoStrategyParameters,
 	Delim:   TagStrategyParameterName,
 	Tags:    []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoStrategyParameters_layout = &groupLayout{tags: []int{TagStrategyParameterName, TagStrategyParameterType, TagStrategyParameterValue}}
 
@@ -1630,6 +1765,7 @@ var newOrderSingle_NoTrdRegTimestamps_spec = &fix2.GroupSpec{
 	Counter: TagNoTrdRegTimestamps,
 	Delim:   TagTrdRegTimestamp,
 	Tags:    []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst},
+	Unknown: newOrderSingle_unknown,
 }
 var newOrderSingle_NoTrdRegTimestamps_layout = &groupLayout{tags: []int{TagTrdRegTimestamp, TagTrdRegTimestampType, TagTrdRegTimestampOrigin, TagDeskType, TagDeskTypeSource, TagDeskOrderHandlingInst}}
 

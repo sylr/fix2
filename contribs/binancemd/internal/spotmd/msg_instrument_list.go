@@ -78,10 +78,27 @@ func (m *InstrumentList) NoRelatedSym() (int, bool, error) {
 	return n, true, err
 }
 
+// instrumentList_unknown reports whether InstrumentList does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func instrumentList_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagCurrency,
+		TagMsgSeqNum, TagMsgType, TagSenderCompID, TagSendingTime,
+		TagSymbol, TagTargetCompID, TagNoRelatedSym, TagInstrumentReqID,
+		TagMinTradeVol, TagMinPriceIncrement, TagMaxTradeVol, TagStartPriceRange,
+		TagEndPriceRange, TagRecvWindow, TagMinQtyIncrement, TagMarketMinTradeVol,
+		TagMarketMaxTradeVol, TagMarketMinQtyIncrement:
+		return false
+	}
+	return true
+}
+
 var instrumentList_NoRelatedSym_spec = &fix2.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
 	Tags:    []int{TagSymbol, TagCurrency, TagMinTradeVol, TagMaxTradeVol, TagMinQtyIncrement, TagMarketMinTradeVol, TagMarketMaxTradeVol, TagMarketMinQtyIncrement, TagStartPriceRange, TagEndPriceRange, TagMinPriceIncrement},
+	Unknown: instrumentList_unknown,
 }
 var instrumentList_NoRelatedSym_layout = &groupLayout{tags: []int{TagSymbol, TagCurrency, TagMinTradeVol, TagMaxTradeVol, TagMinQtyIncrement, TagMarketMinTradeVol, TagMarketMaxTradeVol, TagMarketMinQtyIncrement, TagStartPriceRange, TagEndPriceRange, TagMinPriceIncrement}}
 

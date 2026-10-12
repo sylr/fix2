@@ -238,10 +238,41 @@ func (m *RegistrationInstructions) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
+// registrationInstructions_unknown reports whether RegistrationInstructions does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func registrationInstructions_unknown(tag int) bool {
+	switch tag {
+	case
+		TagAccount, TagBeginString, TagBodyLength, TagCheckSum,
+		TagClOrdID, TagMsgSeqNum, TagMsgType, TagPossDupFlag,
+		TagSenderCompID, TagSenderSubID, TagSendingTime, TagTargetCompID,
+		TagTargetSubID, TagSignature, TagSecureDataLen, TagSecureData,
+		TagSignatureLength, TagPossResend, TagOnBehalfOfCompID, TagOnBehalfOfSubID,
+		TagOrigSendingTime, TagDeliverToCompID, TagDeliverToSubID, TagSenderLocationID,
+		TagTargetLocationID, TagOnBehalfOfLocationID, TagDeliverToLocationID, TagXmlDataLen,
+		TagXmlData, TagMessageEncoding, TagLastMsgSeqNumProcessed, TagPartyIDSource,
+		TagPartyID, TagPartyRole, TagNoPartyIDs, TagNoRegistDtls,
+		TagMailingDtls, TagInvestorCountryOfResidence, TagDistribPaymentMethod, TagCashDistribCurr,
+		TagMailingInst, TagDateOfBirth, TagRegistAcctType, TagTaxAdvantageType,
+		TagCashDistribAgentName, TagCashDistribAgentCode, TagCashDistribAgentAcctNumber, TagCashDistribPayRef,
+		TagCashDistribAgentAcctName, TagRegistRefID, TagRegistDtls, TagNoDistribInsts,
+		TagRegistEmail, TagDistribPercentage, TagRegistID, TagRegistTransType,
+		TagOwnershipType, TagOwnerType, TagPartySubID, TagNestedPartyID,
+		TagNestedPartyIDSource, TagNestedPartyRole, TagNoNestedPartyIDs, TagNestedPartySubID,
+		TagNoHops, TagHopCompID, TagHopSendingTime, TagHopRefID,
+		TagAcctIDSource, TagClearingBusinessDate, TagNoPartySubIDs, TagPartySubIDType,
+		TagNoNestedPartySubIDs, TagNestedPartySubIDType, TagApplVerID, TagCstmApplVerID,
+		TagApplExtID, TagPartyRoleQualifier, TagNestedPartyRoleQualifier:
+		return false
+	}
+	return true
+}
+
 var registrationInstructions_NoHops_spec = &fix2.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
+	Unknown: envelopeUnknown,
 }
 var registrationInstructions_NoHops_layout = &groupLayout{tags: []int{TagHopCompID, TagHopSendingTime, TagHopRefID}}
 
@@ -265,8 +296,10 @@ var registrationInstructions_NoPartyIDs_spec = &fix2.GroupSpec{
 		Counter: TagNoPartySubIDs,
 		Delim:   TagPartySubID,
 		Tags:    []int{TagPartySubID, TagPartySubIDType},
+		Unknown: registrationInstructions_unknown,
 	}},
-	Tags: []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagPartyRoleQualifier},
+	Tags:    []int{TagPartyID, TagPartyIDSource, TagPartyRole, TagPartyRoleQualifier},
+	Unknown: registrationInstructions_unknown,
 }
 var registrationInstructions_NoPartyIDs_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoPartySubIDs: &groupLayout{tags: []int{TagPartySubID, TagPartySubIDType}}},
@@ -296,10 +329,13 @@ var registrationInstructions_NoRegistDtls_spec = &fix2.GroupSpec{
 			Counter: TagNoNestedPartySubIDs,
 			Delim:   TagNestedPartySubID,
 			Tags:    []int{TagNestedPartySubID, TagNestedPartySubIDType},
+			Unknown: registrationInstructions_unknown,
 		}},
-		Tags: []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNestedPartyRoleQualifier},
+		Tags:    []int{TagNestedPartyID, TagNestedPartyIDSource, TagNestedPartyRole, TagNestedPartyRoleQualifier},
+		Unknown: registrationInstructions_unknown,
 	}},
-	Tags: []int{TagRegistDtls, TagRegistEmail, TagMailingDtls, TagMailingInst, TagOwnerType, TagDateOfBirth, TagInvestorCountryOfResidence},
+	Tags:    []int{TagRegistDtls, TagRegistEmail, TagMailingDtls, TagMailingInst, TagOwnerType, TagDateOfBirth, TagInvestorCountryOfResidence},
+	Unknown: registrationInstructions_unknown,
 }
 var registrationInstructions_NoRegistDtls_layout = &groupLayout{
 	nested: map[int]*groupLayout{TagNoNestedPartyIDs: &groupLayout{
@@ -326,6 +362,7 @@ var registrationInstructions_NoDistribInsts_spec = &fix2.GroupSpec{
 	Counter: TagNoDistribInsts,
 	Delim:   TagDistribPaymentMethod,
 	Tags:    []int{TagDistribPaymentMethod, TagDistribPercentage, TagCashDistribCurr, TagCashDistribAgentName, TagCashDistribAgentCode, TagCashDistribAgentAcctNumber, TagCashDistribPayRef, TagCashDistribAgentAcctName},
+	Unknown: registrationInstructions_unknown,
 }
 var registrationInstructions_NoDistribInsts_layout = &groupLayout{tags: []int{TagDistribPaymentMethod, TagDistribPercentage, TagCashDistribCurr, TagCashDistribAgentName, TagCashDistribAgentCode, TagCashDistribAgentAcctNumber, TagCashDistribPayRef, TagCashDistribAgentAcctName}}
 

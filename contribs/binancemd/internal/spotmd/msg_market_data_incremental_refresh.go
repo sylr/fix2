@@ -78,10 +78,27 @@ func (m *MarketDataIncrementalRefresh) NoMDEntries() (int, bool, error) {
 	return n, true, err
 }
 
+// marketDataIncrementalRefresh_unknown reports whether MarketDataIncrementalRefresh does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func marketDataIncrementalRefresh_unknown(tag int) bool {
+	switch tag {
+	case
+		TagBeginString, TagBodyLength, TagCheckSum, TagMsgSeqNum,
+		TagMsgType, TagSenderCompID, TagSendingTime, TagSymbol,
+		TagTargetCompID, TagTransactTime, TagMDReqID, TagNoMDEntries,
+		TagMDEntryType, TagMDEntryPx, TagMDEntrySize, TagMDUpdateAction,
+		TagTradeID, TagAggressorSide, TagRecvWindow, TagFirstBookUpdateID,
+		TagLastBookUpdateID:
+		return false
+	}
+	return true
+}
+
 var marketDataIncrementalRefresh_NoMDEntries_spec = &fix2.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDUpdateAction,
 	Tags:    []int{TagMDUpdateAction, TagMDEntryPx, TagMDEntrySize, TagMDEntryType, TagSymbol, TagTransactTime, TagTradeID, TagAggressorSide, TagFirstBookUpdateID, TagLastBookUpdateID},
+	Unknown: marketDataIncrementalRefresh_unknown,
 }
 var marketDataIncrementalRefresh_NoMDEntries_layout = &groupLayout{tags: []int{TagMDUpdateAction, TagMDEntryPx, TagMDEntrySize, TagMDEntryType, TagSymbol, TagTransactTime, TagTradeID, TagAggressorSide, TagFirstBookUpdateID, TagLastBookUpdateID}}
 

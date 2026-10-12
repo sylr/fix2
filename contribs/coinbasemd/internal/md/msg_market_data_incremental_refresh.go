@@ -31,10 +31,36 @@ func (m *MarketDataIncrementalRefresh) NoMDEntries() (int, bool, error) {
 	return n, true, err
 }
 
+// marketDataIncrementalRefresh_unknown reports whether MarketDataIncrementalRefresh does not define tag, its header and
+// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+func marketDataIncrementalRefresh_unknown(tag int) bool {
+	switch tag {
+	case
+		8, 9, 10, TagClOrdID,
+		TagMsgSeqNum, 35, TagOrderID, TagOrdType,
+		43, 49, 50, 52,
+		TagSymbol, 56, 57, TagText,
+		TagTransactTime, TagRptSeq, 89, 90,
+		91, 93, 97, 115,
+		116, 122, 128, 129,
+		142, 143, 144, 145,
+		TagSecurityType, TagPutOrCall, TagStrikePrice, TagXmlDataLen,
+		TagXmlData, TagMDReqID, TagNoMDEntries, TagMDEntryType,
+		TagMDEntryPx, TagMDEntrySize, TagMDEntryID, TagMDUpdateAction,
+		TagMessageEncoding, 369, TagNoHops, TagHopCompID,
+		TagHopSendingTime, TagHopRefID, TagSecuritySubType, TagTradeID,
+		1128, 1129, 1156, TagMDSecurityTradingStatus,
+		TagAggressorSide, TagFunds:
+		return false
+	}
+	return true
+}
+
 var marketDataIncrementalRefresh_NoMDEntries_spec = &fix2.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDUpdateAction,
 	Tags:    []int{TagMDUpdateAction, TagMDEntryType, TagMDEntryID, TagRptSeq, TagSymbol, TagSecurityType, TagSecuritySubType, TagPutOrCall, TagStrikePrice, TagMDSecurityTradingStatus, TagMDEntryPx, TagMDEntrySize, TagFunds, TagTransactTime, TagOrdType, TagClOrdID, TagOrderID, TagAggressorSide, TagText, TagTradeID},
+	Unknown: marketDataIncrementalRefresh_unknown,
 }
 var marketDataIncrementalRefresh_NoMDEntries_layout = &groupLayout{tags: []int{TagMDUpdateAction, TagMDEntryType, TagMDEntryID, TagRptSeq, TagSymbol, TagSecurityType, TagSecuritySubType, TagPutOrCall, TagStrikePrice, TagMDSecurityTradingStatus, TagMDEntryPx, TagMDEntrySize, TagFunds, TagTransactTime, TagOrdType, TagClOrdID, TagOrderID, TagAggressorSide, TagText, TagTradeID}}
 

@@ -132,7 +132,10 @@ type Config struct {
 	// Compatibility selects behaviours where specifications differ.
 	Compatibility Compatibility
 	// SkipChecks disables validations the dictionaries would run: all run
-	// by default (see dictionary.Checks).
+	// by default (see dictionary.Checks). Skipping
+	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
+	// accepts tags the dictionaries do not define, as QuickFIX/J's
+	// AllowUnknownMsgFields=Y and ValidateUserDefinedFields=N do.
 	SkipChecks dictionary.Checks
 	// Leniency relaxes checks.
 	Leniency Leniency
