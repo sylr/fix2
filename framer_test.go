@@ -103,6 +103,21 @@ func TestFramer_Garbled(t *testing.T) {
 	}
 }
 
+// A garbled report tells what is wrong, never the bytes received.
+func TestFramer_GarbledWithoutValues(t *testing.T) {
+	const secret = "S3CRET"
+	stream := append([]byte("8=FIX"+secret+"\x019=40\x01"), buildMsg("FIX.4.4", "35=0\x01")...)
+	_, _, garbled, _ := frameAll(t, bytes.NewReader(stream), FramerOptions{})
+	if len(garbled) == 0 {
+		t.Fatal("nothing reported garbled")
+	}
+	for _, g := range garbled {
+		if strings.Contains(g.Error(), secret) {
+			t.Errorf("garbled report %q shows the bytes received", g)
+		}
+	}
+}
+
 func TestFramer_EndOfStream(t *testing.T) {
 	good := buildMsg("FIX.4.4", "35=0\x01")
 	for _, tc := range []struct {

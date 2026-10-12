@@ -12,6 +12,7 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/transport"
 )
 
@@ -398,7 +399,9 @@ func (c *conn) writeLoop() {
 // lock, as Sync may run alongside the store's other calls, bounded by
 // WriteTimeout (see watchSync) and c closing. A failure keeps them from being
 // written: it disconnects c, and halts the session if the outcome is
-// uncertain. Otherwise the next Sync, which covers them again, retries.
+// uncertain, unless the session cancelled the Sync itself and the store says
+// no more than that it did not finish. Otherwise the next Sync, which covers
+// them again, retries.
 func (c *conn) sync(gen, upTo uint64) error {
 	s := c.s
 	if !c.syncWatched {
@@ -415,12 +418,15 @@ func (c *conn) sync(gen, upTo uint64) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// The store moved on, or was closed: the cancellation does not do that.
+	diverged := uncertain(err) && !errors.Is(err, store.ErrUnknownOutcome)
 	switch cause := context.Cause(c.syncCtx); {
-	case cause != nil:
+	case cause != nil && !diverged:
 		// The session cancelled the Sync itself, the connection closing
-		// or the Sync taking too long: whatever the store says, no halt.
-		// The batch is not written, and Sync being cumulative, the next
-		// one, the next connection's, makes it durable again.
+		// or the Sync taking too long, and its outcome is unknown at
+		// worst: no halt. The batch is not written, and Sync being
+		// cumulative, the next one, the next connection's, makes it
+		// durable again.
 		level := slog.LevelDebug
 		if errors.Is(cause, errSyncTimeout) {
 			level = slog.LevelWarn

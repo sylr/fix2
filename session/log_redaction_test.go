@@ -129,6 +129,9 @@ func TestLogRedaction(t *testing.T) {
 		msg     []byte
 		done    func(*session.Session, string) bool
 		garbled string // what the garbled log must show, beyond bytes and error
+		// misplaced tells the secret is in a field that is not sensitive
+		// too: the observer, which masks fields by tag, shows it there.
+		misplaced bool
 	}
 	cases := []tc{
 		{name: "CheckSum out of range", msg: order("554="+secret+"|", "999"), done: garbled(1), garbled: "msg_type=D seq=2"},
@@ -152,6 +155,18 @@ func TestLogRedaction(t *testing.T) {
 			done: func(s *session.Session, _ string) bool { return s.Stats().MessagesReceived.Load() >= 2 }},
 		{name: "first Logon, bad CheckSum", logon: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|553=U|554="+secret+"|", "999"),
 			done: func(_ *session.Session, log string) bool { return strings.Contains(log, "connection refused") }},
+		// A LENGTH field's value, which is no number, is not quoted.
+		{name: "invalid LENGTH", msg: order("95="+secret+"|96="+secret+"|", ""), done: garbled(1), garbled: "msg_type=D seq=2"},
+		{name: "invalid LENGTH, first Logon", logon: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|95="+secret+"|96="+secret+"|", ""),
+			done: func(_ *session.Session, log string) bool { return strings.Contains(log, "connection refused") }},
+		// A field holding a credential by mistake: what is said of it is
+		// withheld.
+		{name: "first Logon, HeartBtInt invalid", misplaced: true, logon: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108="+secret+"|554="+secret+"|", ""),
+			done: func(_ *session.Session, log string) bool { return strings.Contains(log, "disconnected") }},
+		{name: "reset Logon, HeartBtInt invalid", misplaced: true, msg: rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108="+secret+"|141=Y|554="+secret+"|", ""),
+			done: func(s *session.Session, _ string) bool { return s.Stats().RejectsSent.Load() >= 1 }},
+		{name: "MsgSeqNum invalid", misplaced: true, msg: rawFrame("35=D|49=C|56=S|34="+secret+"|52="+sendingTime()+"|11=O1|554="+secret+"|", ""),
+			done: func(_ *session.Session, log string) bool { return strings.Contains(log, "logging out") }},
 	}
 	// Each sensitive field, in a message valid but for its CheckSum, and in
 	// a valid one.
@@ -182,8 +197,11 @@ func TestLogRedaction(t *testing.T) {
 				msgs = append(msgs, c.msg)
 			}
 			out := logged(t, nil, first, c.done, msgs...)
-			if strings.Contains(out, secret) {
-				t.Errorf("secret logged:\n%s", out)
+			for l := range strings.SplitSeq(out, "\n") {
+				if strings.Contains(l, secret) && !(c.misplaced && strings.Contains(l, `msg="FIX in"`)) {
+					t.Errorf("secret logged:\n%s", out)
+					break
+				}
 			}
 			if c.garbled == "" {
 				return

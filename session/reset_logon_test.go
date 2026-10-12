@@ -171,6 +171,25 @@ func TestResetOnLogon_StrictAnnouncedWhenSequenceMoved(t *testing.T) {
 	}
 }
 
+// Under CompatStrict2020, an acceptor with ResetOnLogon at the start of its
+// sequence still announces the reset to an initiator whose Logon shows it
+// expects the sequences to go on: both restart at 1.
+func TestResetOnLogon_StrictAnnouncedToStaleInitiator(t *testing.T) {
+	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
+		t.Run(begin, func(t *testing.T) {
+			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, session.CompatStrict2020, 1, 5)
+			answer := seen.first(t)
+			if got := string(answer.Get(34)); got != "1" {
+				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
+			}
+			if got := string(answer.Get(141)); got != "Y" {
+				t.Errorf("Logon answer ResetSeqNumFlag %q, want Y", got)
+			}
+			exchange(t, begin, ini, acc, ir, ar, 2, 3)
+		})
+	}
+}
+
 // By default, an acceptor with ResetOnLogon answers as QuickFIX does, without
 // ResetSeqNumFlag, whatever its sequence numbers were: an initiator at the
 // start of its sequence goes on, its Logon counted; one that expected the

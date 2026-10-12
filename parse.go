@@ -71,7 +71,7 @@ func parseInto(msg *Message, data []byte, kinds []int32) error {
 
 	// --- Tag 8: BeginString ---
 	if data[0] != '8' || data[1] != '=' {
-		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got %q", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr, data[:2]), Offset: 0}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\"", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr), Offset: 0}
 	}
 	sohPos := findByte(data, 2, soh)
 	if sohPos < 0 {
@@ -79,7 +79,7 @@ func parseInto(msg *Message, data []byte, kinds []int32) error {
 	}
 	beginVal := data[2:sohPos]
 	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\" got %q", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
+		return &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\"", ErrInvalidBeginTag, ErrInvalidTag), Offset: 0}
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 	cursor = sohPos + 1
@@ -236,7 +236,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 
 	// --- Tag 8: BeginString (from header) ---
 	if len(header) < 4 || header[0] != '8' || header[1] != '=' {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\" got %q", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr, header[:2]), Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"%d=\"", ErrInvalidBeginTag, ErrInvalidTag, tagBeginStr), Offset: 0}
 	}
 	firstSOH := findByte(header, 2, soh)
 	if firstSOH < 0 {
@@ -244,7 +244,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	}
 	beginVal := header[2:firstSOH]
 	if !bytes.HasPrefix(beginVal, []byte("FIX.")) && !bytes.HasPrefix(beginVal, []byte("FIXT.")) {
-		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\" got %q", ErrInvalidBeginTag, ErrInvalidTag, beginVal), Offset: 0}
+		return msg, &ParseError{Err: fmt.Errorf("%w: %w: expected \"FIX.\" or \"FIXT.\"", ErrInvalidBeginTag, ErrInvalidTag), Offset: 0}
 	}
 	msg.append(Field{Tag: tagBeginStr, Value: beginVal})
 
@@ -409,7 +409,7 @@ func (d dataField) missing(cursor int) error {
 func announceData(tag, dataTag int, value []byte, cursor int) (dataField, error) {
 	n, ok := parseUint(value)
 	if !ok {
-		return dataField{}, &ParseError{Err: fmt.Errorf("%w: invalid length %q in tag %d", ErrMalformedField, value, tag), Offset: cursor}
+		return dataField{}, &ParseError{Err: fmt.Errorf("%w: LENGTH tag %d is not a number", ErrMalformedField, tag), Offset: cursor}
 	}
 	return dataField{lengthTag: tag, tag: dataTag, length: n}, nil
 }

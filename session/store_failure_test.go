@@ -496,9 +496,10 @@ func (c countLog) Handle(_ context.Context, r slog.Record) error {
 
 const deliveryQueue = 16
 
-// Received messages processed but not recorded stay within a batch and the
-// delivery queue: a failure to record them drops the connection, and no
-// new one starts until they are recorded.
+// Received messages processed but not recorded stay within a batch: a
+// failure to record them drops the connection and those queued, which the
+// session expects again, and no new connection starts until they are
+// recorded.
 func TestStoreTargetFailure(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -522,7 +523,7 @@ func TestStoreTargetFailure(t *testing.T) {
 			p.sendOrders(300)
 			p.expectEnd(5 * time.Second)
 			read, persisted := s.NextTargetSeqNum(), fs.persisted()
-			if read-persisted > 64+deliveryQueue+4 {
+			if read-persisted > 64 {
 				t.Errorf("%d messages read beyond the %d recorded", read-persisted, persisted)
 			}
 			if err := s.Err(); err != nil {
@@ -859,6 +860,28 @@ func TestStoreSyncTimeout(t *testing.T) {
 			p2 := acceptPeer(t, d.l)
 			p2.expect("A", "34", "3")
 			d.verify(t)
+		})
+	}
+}
+
+// A Sync the session cancels still halts it if the store says it moved on:
+// that is no outcome of the cancellation.
+func TestStoreSyncCancelledDivergenceHalts(t *testing.T) {
+	for _, err := range []error{store.ErrSeqMismatch, store.ErrClosed} {
+		t.Run(err.Error(), func(t *testing.T) {
+			st := newSyncStore()
+			st.hangErr = err
+			t.Cleanup(func() { close(st.release) })
+			d := &durableDialer{l: mem.Listen("acceptor"), st: st}
+			s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = 100 * time.Millisecond })
+			st.hang.Store(true)
+			if _, err := s.Send(context.Background(), order("O1")); err != nil {
+				t.Fatal(err)
+			}
+			p.expectSilentEnd()
+			waitFor(t, func() bool { return s.Err() != nil })
+			expectHalted(t, s, err)
+			expectNoRedial(t, d.l)
 		})
 	}
 }

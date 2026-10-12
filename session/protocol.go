@@ -276,7 +276,8 @@ func (s *Session) parseInbound(m *fix2.Message, frame []byte) (string, error) {
 // DefaultApplVerID. It tries peer's profile first, which reads the standard
 // header as any other does (see newDicts): a message of that version, the
 // usual one, is parsed once, its ApplVerID read from its parsed header rather
-// than looked for in frame.
+// than looked for in frame. A version without a dictionary keeps that parse:
+// validation rejects it.
 func (s *Session) parseApp(m *fix2.Message, frame []byte, peer string) (string, error) {
 	if !s.prof.fixt {
 		return "", fix2.ParseInto(m, frame, s.dicts.parse)
@@ -285,21 +286,16 @@ func (s *Session) parseApp(m *fix2.Message, frame []byte, peer string) (string, 
 	err := fix2.ParseInto(m, frame, first)
 	var v []byte
 	var ok bool
-	switch {
-	case s.dicts.parseApps == nil:
-		// A single profile, without a dictionary to tell the header.
-		v = m.Get(tagApplVerID)
-		ok = len(v) > 0
-	case err == nil:
+	if err == nil {
 		v, ok = s.dicts.headerApplVerID(m)
-	default:
+	} else {
 		v, ok = s.dicts.applVerID(frame)
 	}
 	if !ok {
 		return peer, err
 	}
 	version := s.dicts.version(v)
-	if p := s.dicts.appProfile(version); p != first {
+	if p := s.dicts.parseApps[version]; p != nil && p != first {
 		err = fix2.ParseInto(m, frame, p)
 	}
 	return version, err
@@ -311,11 +307,12 @@ func (s *Session) parseApp(m *fix2.Message, frame []byte, peer string) (string, 
 func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, applVerID string, now time.Time) (Inbound, bool) {
 	msgType := m.MsgType()
 	if string(m.BeginString()) != s.id.BeginString {
+		received := withhold(m, noTag, quoteValue(m.BeginString()), "withheld")
 		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
-			s.disconnectLocked(c, &LogoutError{Text: fmt.Sprintf("Logon with BeginString %s, expected %s", m.BeginString(), s.id.BeginString)})
+			s.disconnectLocked(c, &LogoutError{Text: fmt.Sprintf("Logon with BeginString %s, expected %s", received, s.id.BeginString)})
 			return Inbound{}, false
 		}
-		s.logoutLocked(c, fmt.Sprintf("Incorrect BeginString: expected %s, received %s", s.id.BeginString, m.BeginString()))
+		s.logoutLocked(c, fmt.Sprintf("Incorrect BeginString: expected %s, received %s", s.id.BeginString, received))
 		return Inbound{}, false
 	}
 	seq, err := fix2.ParseInt(m.Get(tagMsgSeqNum))
@@ -326,7 +323,8 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, applVe
 	if err != nil || seq <= 0 && !resetMode {
 		text := "MsgSeqNum (34) missing"
 		if m.Get(tagMsgSeqNum) != nil {
-			text = "MsgSeqNum (34) is not a positive integer: " + quoteValue(m.Get(tagMsgSeqNum))
+			text = withhold(m, tagMsgSeqNum, "MsgSeqNum (34) is not a positive integer: "+quoteValue(m.Get(tagMsgSeqNum)),
+				"MsgSeqNum (34) is not a positive integer")
 		}
 		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
 			s.disconnectLocked(c, &LogoutError{Text: text})
@@ -925,7 +923,8 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 	if s.phase == phaseLogoutSent {
 		// The answer to ours, if it comes from the counterparty.
 		if _, wrong := s.compIDProblem(m); wrong != "" {
-			s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logout answer with wrong identities ignored", slog.String("problem", wrong))
+			s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logout answer with wrong identities ignored",
+				slog.String("problem", withhold(m, noTag, wrong, "value withheld")))
 			return
 		}
 		if in.Seq == s.st.NextTarget {

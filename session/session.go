@@ -449,7 +449,16 @@ func newDicts(cfg Config, p *profile) (dicts, error) {
 	if d.session != nil {
 		d.parse = d.session.Profile()
 	}
-	if !p.fixt || d.session == nil {
+	if !p.fixt {
+		return d, nil
+	}
+	if d.session == nil {
+		// Without a dictionary, the standard header is FIXT 1.1's.
+		d.header = make([]bool, slices.Max(fixtHeader[:])+1)
+		for _, tag := range fixtHeader {
+			d.header[tag] = true
+		}
+		d.headerProf = d.parse
 		return d, nil
 	}
 	d.apps = make(map[string]*dictionary.Dict, len(cfg.Dictionaries.Apps))
@@ -487,6 +496,11 @@ func newDicts(cfg Config, p *profile) (dicts, error) {
 	}
 	return d, nil
 }
+
+// fixtHeader are the tags of the FIXT 1.1 standard header, NoHops (627) and
+// its entries' fields included.
+var fixtHeader = [...]int{8, 9, 35, 49, 56, 115, 128, 90, 91, 34, 50, 142, 57, 143, 116, 144, 129, 145,
+	43, 97, 52, 122, 212, 213, 347, 369, 627, 628, 629, 630, 1128, 1129, 1156}
 
 // applVerID returns the ApplVerID (1128) in frame's standard header: among
 // the fields before the first the header does not define, DATA fields read

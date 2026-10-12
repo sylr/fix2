@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -259,6 +260,32 @@ func TestResetPastHeld_LossBeforeCommit(t *testing.T) {
 	released = true
 	close(h.release)
 	waitFor(t, func() bool { return st.highest() == 102 })
+}
+
+// A failure to record the messages processed stops their processing, those
+// a Reset releases from the held ones included: no more than a batch is
+// processed unrecorded, and the next connection asks for the rest again.
+func TestResetPastHeld_RecordingFails(t *testing.T) {
+	const n, batch = 200, 64
+	fs := &targetStore{Store: memstore.New(), err: errors.New("disk full")}
+	s, rec, p := heldGap(t, 3, func(c *session.Config) { c.Store = fs; c.DeliveryQueue = 2 })
+	for i := range n {
+		p.order(4+i, fmt.Sprint("O", i))
+	}
+	fs.fail.Store(true)
+	p.resetTo(n+4, n+5)
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	time.Sleep(50 * time.Millisecond)
+	rec.mu.Lock()
+	delivered := len(rec.apps)
+	rec.mu.Unlock()
+	if delivered > batch {
+		t.Errorf("%d orders processed while recording failed, want at most %d", delivered, batch)
+	}
+	// What was not processed is asked for again.
+	if next, persisted := s.NextTargetSeqNum(), fs.persisted(); next > persisted+batch {
+		t.Errorf("NextTargetSeqNum %d, %d beyond the %d recorded", next, next-persisted, persisted)
+	}
 }
 
 // A Reset past many messages held between gaps looks at each once.

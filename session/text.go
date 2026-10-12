@@ -50,9 +50,11 @@ func cleanText(s string) string {
 // none), or fallback if text may show the value of one of m's SensitiveTags
 // fields: the session never repeats a credential. It does if tag is one, and
 // if text holds the beginning of one's value, as is or quoted (quoteValue,
-// %q), cut on a rune boundary to at most 64 bytes, as quoteValue keeps them.
+// %q), however it was cut: its first 4 bytes, to the end of their last rune.
 // A value shorter than 4 bytes is not looked for: it would match texts about
-// any other field.
+// any other field. The texts the session writes about a field quote no
+// value of a sensitive one, nor do parse errors quote any: this is a
+// backstop, for a credential sent in another field by mistake.
 func withhold(m *fix2.Message, tag int, text, fallback string) string {
 	if slices.Contains(SensitiveTags, tag) {
 		return fallback
@@ -61,9 +63,9 @@ func withhold(m *fix2.Message, tag int, text, fallback string) string {
 		if len(f.Value) < 4 || !slices.Contains(SensitiveTags, f.Tag) {
 			continue
 		}
-		n := min(len(f.Value), 64)
-		for n > 0 && n < len(f.Value) && !utf8.RuneStart(f.Value[n]) {
-			n--
+		n := 4
+		for n < len(f.Value) && !utf8.RuneStart(f.Value[n]) {
+			n++
 		}
 		v := string(f.Value[:n])
 		q := strconv.Quote(v)

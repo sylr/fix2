@@ -173,16 +173,20 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	// CompatStrict2020, that the reset moves its sequence numbers: its answer
 	// says so with ResetSeqNumFlag, and the counterparty, resetting in turn,
 	// restarts at 1, its Logon left in the sequence reset. One at the start
-	// of its sequence has nothing to announce: its answer is that of any
-	// first Logon. QuickFIX never announces, and its acceptance tests expect
-	// it not to.
+	// of its sequence, facing a counterparty at the start of its own, has
+	// nothing to announce: its answer is that of any first Logon. A Logon
+	// above 1, or expecting more than our first message, tells the
+	// counterparty is not. QuickFIX never announces, and its acceptance tests
+	// expect it not to.
 	announce := false
 	var resetErr error
 	switch {
 	case !s.initiator && reset:
 		resetErr = s.resetStoreLocked("Logon with ResetSeqNumFlag")
 	case !s.initiator && s.cfg.ResetOnLogon:
-		announce = s.cfg.Compatibility == CompatStrict2020 && s.prof.resetSeqNum && (s.st.NextSender > 1 || s.st.NextTarget > 1)
+		next, _ := fix2.ParseInt(m.Get(tagNextExpectedMsgSeqNum))
+		announce = s.cfg.Compatibility == CompatStrict2020 && s.prof.resetSeqNum &&
+			(s.st.NextSender > 1 || s.st.NextTarget > 1 || in.Seq > 1 || next > 1)
 		resetErr = s.resetStoreLocked("ResetOnLogon")
 	case s.initiator && reset && !s.sentReset:
 		resetErr = s.resetStoreLocked("Logon answer with ResetSeqNumFlag")
@@ -206,7 +210,8 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		if v, err := fix2.ParseInt(m.Get(tagNextExpectedMsgSeqNum)); err == nil && v > 0 {
 			peerNext = uint64(v)
 		} else if m.Get(tagNextExpectedMsgSeqNum) != nil {
-			s.log.LogAttrs(context.Background(), slog.LevelWarn, "malformed NextExpectedMsgSeqNum ignored", slog.String("value", string(m.Get(tagNextExpectedMsgSeqNum))))
+			s.log.LogAttrs(context.Background(), slog.LevelWarn, "malformed NextExpectedMsgSeqNum ignored",
+				slog.String("value", withhold(m, tagNextExpectedMsgSeqNum, quoteValue(m.Get(tagNextExpectedMsgSeqNum)), "withheld")))
 		}
 		if peerNext > nextBefore {
 			s.sendLogoutLocked(c, fmt.Sprintf("Tag 789 (NextExpectedMsgSeqNum) is higher than expected. Expected %d, Received %d", nextBefore, peerNext))
@@ -282,17 +287,22 @@ type logonProblem struct {
 }
 
 // checkLogon checks the fields of Logon m the session relies on: CompIDs,
-// SendingTime, EncryptMethod, HeartBtInt and, for FIXT, DefaultApplVerID. It
-// returns the HeartBtInt and the DefaultApplVerID, which may have no
-// dictionary unless CompatStrict2020 is set, or the problem.
+// SendingTime, EncryptMethod, which FIX requires of every Logon, HeartBtInt
+// and, for FIXT, DefaultApplVerID. It returns the HeartBtInt and the
+// DefaultApplVerID, which may have no dictionary unless CompatStrict2020 is
+// set, or the problem, its text withheld if it may show a credential: it is
+// logged.
 func (s *Session) checkLogon(m *fix2.Message, now time.Time) (int, string, *logonProblem) {
 	problem := func(reason dictionary.RejectReason, tag int, format string, args ...any) (int, string, *logonProblem) {
-		return 0, "", &logonProblem{reason, tag, rejectText(reason, fmt.Sprintf(format, args...))}
+		return 0, "", newLogonProblem(m, reason, tag, rejectText(reason, fmt.Sprintf(format, args...)))
 	}
 	if reason, tag, text := s.compIDOrTimeProblem(m, now); text != "" {
-		return 0, "", &logonProblem{reason, tag, text}
+		return 0, "", newLogonProblem(m, reason, tag, text)
 	}
-	if v := m.Get(tagEncryptMethod); v != nil && string(v) != "0" {
+	switch v := m.Get(tagEncryptMethod); {
+	case v == nil:
+		return problem(dictionary.ReasonRequiredTagMissing, tagEncryptMethod, "%s", fieldDesc(nil, tagEncryptMethod))
+	case string(v) != "0":
 		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))
 	}
 	v := m.Get(tagHeartBtInt)
@@ -330,10 +340,16 @@ func (s *Session) resetLogonProblem(m *fix2.Message, now time.Time) *logonProble
 	}
 	v := m.Get(tagMsgSeqNum)
 	if seq, err := fix2.ParseInt(v); err != nil || seq != 1 {
-		return &logonProblem{dictionary.ReasonValueIsIncorrect, tagMsgSeqNum,
-			rejectText(dictionary.ReasonValueIsIncorrect, "MsgSeqNum (34) "+quoteValue(v)+" of a Logon with ResetSeqNumFlag, expected 1")}
+		return newLogonProblem(m, dictionary.ReasonValueIsIncorrect, tagMsgSeqNum,
+			rejectText(dictionary.ReasonValueIsIncorrect, "MsgSeqNum (34) "+quoteValue(v)+" of a Logon with ResetSeqNumFlag, expected 1"))
 	}
 	return nil
+}
+
+// newLogonProblem returns the problem of Logon m about its field tag, its
+// text withheld if it may show a credential.
+func newLogonProblem(m *fix2.Message, reason dictionary.RejectReason, tag int, text string) *logonProblem {
+	return &logonProblem{reason, tag, withhold(m, tag, text, rejectText(reason, "value withheld"))}
 }
 
 // activeResetLocked handles a Logon with ResetSeqNumFlag on a logged on

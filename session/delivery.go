@@ -333,11 +333,13 @@ func (d *delivery) messagesAhead() bool {
 // persistLocked is persist with the session's lock held.
 //
 // Received messages are processed at least once: a restart processes again
-// those processed but not recorded, up to a batch of 64 and what the
-// delivery queue held. A failure to record them stops the connection to keep
-// it so; the next connection starts once they are recorded. A failure that
-// tells the store moved on halts the session. ErrUnknownOutcome does not:
-// setting the counter again settles it.
+// those processed but not recorded, a batch of 64 at most. A failure to
+// record them keeps it so: it stops their processing, those queued, held
+// ahead of a gap or released by a SequenceReset included, which the next
+// connection asks for again (see dropReceivedLocked), and stops the
+// connection; the next one starts once the processed ones are recorded. A
+// failure that tells the store moved on halts the session. ErrUnknownOutcome
+// does not: setting the counter again settles it.
 func (d *delivery) persistLocked(force bool) error {
 	s := d.s
 	if d.persistedGen != s.st.Generation {
@@ -363,7 +365,37 @@ func (d *delivery) persistLocked(force bool) error {
 	if s.c != nil {
 		s.disconnectLocked(s.c, &LogoutError{Text: "store failure", Err: err})
 	}
+	d.dropReceivedLocked()
 	return err
+}
+
+// dropReceivedLocked drops the received messages queued and not yet
+// processed, and the losses reported among them: the session expects them
+// again, the counterparty resending them once asked. Recording the processed
+// ones failed, and processing more would leave ever more of them to process
+// again after a restart. Notifications stay.
+func (d *delivery) dropReceivedLocked() {
+	s := d.s
+	d.mu.Lock()
+	kept := d.items[:d.head]
+	for _, it := range d.items[d.head:] {
+		switch it.kind {
+		case itemApp, itemMark, itemLoss:
+			if it.frame != nil {
+				d.releaseFrame(it.frame)
+			}
+		default:
+			kept = append(kept, it)
+		}
+	}
+	clear(d.items[len(kept):])
+	d.items = kept
+	if d.room != nil && len(d.items)-d.head < s.cfg.DeliveryQueue {
+		close(d.room)
+		d.room = nil
+	}
+	d.mu.Unlock()
+	s.st.NextTarget = s.committed + 1
 }
 
 // rejectInfo describes a Reject or BusinessMessageReject received.

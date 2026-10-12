@@ -206,7 +206,7 @@ func (f *Framer) header() (int, int, error) {
 		i++
 	}
 	if begin := f.buf[f.start+2 : f.start+i]; !bytes.HasPrefix(begin, []byte("FIX.")) && !bytes.HasPrefix(begin, []byte("FIXT.")) {
-		return 0, 0, fmt.Errorf("%w: BeginString %q is not FIX.x or FIXT.x", ErrInvalidBeginTag, begin)
+		return 0, 0, fmt.Errorf("%w: BeginString is not FIX.x or FIXT.x", ErrInvalidBeginTag)
 	}
 	i++ // past SOH
 	if f.fill(i+2) != nil {

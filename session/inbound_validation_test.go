@@ -17,6 +17,7 @@ import (
 	"github.com/sylr/fix2/dictionary/xmldict"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/tests/dicts/fix44"
 	"github.com/sylr/fix2/tests/dicts/fix50sp2"
 	"github.com/sylr/fix2/tests/dicts/fixlatest"
 	"github.com/sylr/fix2/tests/dicts/fixt11"
@@ -160,6 +161,9 @@ func TestActiveResetRefused(t *testing.T) {
 		{name: "HeartBtInt not a number", fields: []string{"98", "0", "108", "abc", "141", "Y"}, reason: "6", refTag: "108"},
 		{name: "HeartBtInt negative", fields: []string{"98", "0", "108", "-30", "141", "Y"}, reason: "5", refTag: "108"},
 		{name: "EncryptMethod 1", fields: []string{"98", "1", "108", "30", "141", "Y"}, reason: "5", refTag: "98"},
+		{name: "EncryptMethod missing", fields: []string{"108", "30", "141", "Y"}, reason: "1", refTag: "98"},
+		{name: "EncryptMethod missing, session dictionary", change: func(c *session.Config) { c.Dictionaries.Session = fix44.Dictionary() },
+			fields: []string{"108", "30", "141", "Y"}, reason: "1", refTag: "98"},
 		{name: "wrong BeginString", header: func(h *hdr) { h.begin = session.FIX42 }},
 		{name: "FIXT DefaultApplVerID missing", begin: session.FIXT11, fields: []string{"98", "0", "108", "30", "141", "Y"}, reason: "1", refTag: "1137"},
 		{name: "FIXT DefaultApplVerID unsupported", begin: session.FIXT11, change: strictApps,
@@ -244,6 +248,46 @@ func TestActiveResetRefused(t *testing.T) {
 			p.expectEnd(5 * time.Second)
 		})
 	}
+}
+
+// A Logon without EncryptMethod (98), which FIX requires of every Logon, is
+// refused: an acceptor's first Logon, and an initiator's Logon answer, the
+// connection closed without a word.
+func TestLogonWithoutEncryptMethodRefused(t *testing.T) {
+	t.Run("acceptor", func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		a := session.NewAcceptor(session.AcceptorOptions{})
+		rec := newRecorder()
+		if _, err := a.Add(session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"}, Handler: rec}); err != nil {
+			t.Fatal(err)
+		}
+		a.Listen(l)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); a.Run(ctx) }()
+		t.Cleanup(func() { cancel(); <-done })
+		p := dialPeer(t, l)
+		p.write(hdr{begin: session.FIX44, sender: "INI", target: "ACC", seq: 1, sent: time.Now()}, "A", "108", "30")
+		p.expectSilentEnd()
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if rec.logons != 0 {
+			t.Error("logged on")
+		}
+	})
+	t.Run("initiator", func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		_, rec := startInitiator(t, l, nil)
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.write(from(session.FIX44, 1), "A", "108", "30")
+		p.expectSilentEnd()
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if rec.logons != 0 {
+			t.Error("logged on")
+		}
+	})
 }
 
 // A valid Logon with ResetSeqNumFlag on an established session resets both
@@ -708,6 +752,40 @@ func TestHeaderFieldRetypedRefused(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "212") {
 		t.Errorf("New = %v, want an error about header field 212", err)
+	}
+}
+
+// Without dictionaries, an ApplVerID (1128) after the standard header does
+// not choose the application version: the counterparty's default does. One
+// in the header does.
+func TestApplVerIDWithoutDictionaries(t *testing.T) {
+	_, rec, p := fixtSession(t, "9", func(c *session.Config) { c.Dictionaries = session.Dictionaries{DefaultApplVerID: "9"} })
+	p.write(from(session.FIXT11, 2), "D", "11", "ORDER", "1128", "10")
+	p.write(from(session.FIXT11, 3), "D", "1128", "10", "11", "ORDER")
+	_, versions := rec.received(t, 2)
+	if versions[0] != "9" || versions[1] != "10" {
+		t.Errorf("ApplVerIDs %q, want 9 for the body's, 10 for the header's", versions)
+	}
+}
+
+// A message whose ApplVerID has no dictionary is rejected, though our
+// default's profile, which such a version would be parsed with, does not
+// parse it: it is not garbled.
+func TestUnknownApplVerIDNotGarbled(t *testing.T) {
+	s, rec, p := fixtSession(t, "10", nil)
+	// 1401 announces 1402 in the counterparty's default, 10, not in ours, 9.
+	p.writeRaw(userRequest(2, "99", "", "x\x01y"))
+	p.expect("3", "45", "2", "373", "18", "371", "1128")
+	if got := s.Stats().Garbled.Load(); got != 0 {
+		t.Errorf("Garbled = %d, want 0", got)
+	}
+	if got := s.NextTargetSeqNum(); got != 3 {
+		t.Errorf("NextTargetSeqNum = %d, want 3", got)
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.data) != 0 {
+		t.Errorf("delivered %q", rec.data)
 	}
 }
 

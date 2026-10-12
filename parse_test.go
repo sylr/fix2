@@ -456,12 +456,12 @@ func TestParseErrorMessages(t *testing.T) {
 		{
 			name: "wrong tag at begin",
 			raw:  []byte("9=123\x018=FIX.4.4\x0135=A\x0110=000\x01"),
-			want: `fix2: invalid BeginString (tag 8): invalid tag number: expected "8=" got "9="`,
+			want: `fix2: invalid BeginString (tag 8): invalid tag number: expected "8="`,
 		},
 		{
 			name: "invalid begin string prefix",
 			raw:  []byte("8=NOTFIX\x019=5\x0135=A\x0110=000\x01XXXXXX"),
-			want: `fix2: invalid BeginString (tag 8): invalid tag number: expected "FIX." or "FIXT." got "NOTFIX"`,
+			want: `fix2: invalid BeginString (tag 8): invalid tag number: expected "FIX." or "FIXT."`,
 		},
 		{
 			name: "invalid body length separator",
@@ -787,6 +787,40 @@ func TestParseDataFields(t *testing.T) {
 				}
 				if tt.count != 0 && msg.Count() != tt.count {
 					t.Errorf("%s: %d fields, want %d", p.name, msg.Count(), tt.count)
+				}
+			}
+		})
+	}
+}
+
+// TestParseErrorsWithoutValues checks that parse errors tell what is wrong
+// and where, never the values received: a malformed field may hold a
+// credential, and the errors are logged.
+func TestParseErrorsWithoutValues(t *testing.T) {
+	const secret = "S3CRET"
+	for _, tc := range []struct {
+		name string
+		raw  []byte
+		err  error
+	}{
+		{"invalid length", buildMsg("FIX.4.4", "35=A\x0195="+secret+"\x0196="+secret+"\x01"), ErrMalformedField},
+		{"BeginString not FIX", buildMsg(secret, "35=A\x01"), ErrInvalidBeginTag},
+		{"no BeginString", []byte(secret + "\x019=15\x0135=A\x0149=SENDER\x0110=000\x01"), ErrInvalidBeginTag},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, p := range []struct {
+				name  string
+				parse func([]byte) (Message, error)
+			}{
+				{"Parse", Parse},
+				{"ParseFromReader", func(b []byte) (Message, error) { return ParseFromReader(bytes.NewReader(b)) }},
+			} {
+				_, err := p.parse(tc.raw)
+				if !errors.Is(err, tc.err) {
+					t.Errorf("%s: got %v, want %v", p.name, err, tc.err)
+				}
+				if err != nil && strings.Contains(err.Error(), secret[:2]) {
+					t.Errorf("%s: error %q shows the value", p.name, err)
 				}
 			}
 		})

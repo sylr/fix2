@@ -155,9 +155,10 @@ type Config struct {
 	Schedule schedule.Schedule
 	// Store persists the session; a new memstore.Store if nil. Received
 	// messages are processed at least once: after a restart, those
-	// processed but not yet recorded, at most a batch of 64 and the
-	// DeliveryQueue, are delivered again. A failure to record them drops
-	// the connection; one that leaves the store in doubt halts the session
+	// processed but not yet recorded, a batch of 64 at most, are delivered
+	// again. A failure to record them drops the connection and stops the
+	// processing of those received after them, which the next connection
+	// asks for again; one that leaves the store in doubt halts the session
 	// (see Session.Err).
 	Store store.Store
 	// Logger receives the session's events; nothing is logged if nil.
