@@ -48,7 +48,9 @@ func (s *Session) logon(c *conn) error {
 	}
 	s.sentReset = false
 	if s.cfg.ResetOnLogon {
-		s.resetStoreLocked("ResetOnLogon")
+		if err := s.resetStoreLocked("ResetOnLogon"); err != nil {
+			return err
+		}
 		s.sentReset = true
 	}
 	h := &header{msgType: "A", sendingTime: time.Now()}
@@ -179,15 +181,20 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	}
 
 	reset := s.prof.resetSeqNum && bytes.Equal(m.Get(tagResetSeqNumFlag), yes)
+	var resetErr error
 	switch {
 	case !s.initiator && (reset || s.cfg.ResetOnLogon):
-		s.resetStoreLocked("Logon with ResetSeqNumFlag")
+		resetErr = s.resetStoreLocked("Logon with ResetSeqNumFlag")
 	case s.initiator && reset && !s.sentReset:
-		s.resetStoreLocked("Logon answer with ResetSeqNumFlag")
+		resetErr = s.resetStoreLocked("Logon answer with ResetSeqNumFlag")
 	case s.initiator && s.sentReset && !reset:
 		// Some venues, Binance for one, never do: their MsgSeqNum, checked
 		// next, tells whether they reset.
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty did not echo our ResetSeqNumFlag")
+	}
+	if resetErr != nil {
+		// Disconnected: not logged on.
+		return
 	}
 
 	// NextExpectedMsgSeqNum: what the counterparty expects of us, compared
@@ -233,6 +240,10 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		b := s.logonBody(reset, next)
 		b = append(b, c.logonExtra...)
 		s.sendAdminLocked(&header{msgType: "A"}, b)
+		if c.closed || s.c != c {
+			// The answer could not be stored: disconnected, not logged on.
+			return
+		}
 	}
 	s.sentReset = false
 	s.phase = phaseEstablished
@@ -308,10 +319,17 @@ func (s *Session) fenceReset(c *conn) {
 	// old generation too.
 	c.pending, c.frames = c.pending[:0], c.frames[:0]
 	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
-	s.resetStoreLocked("Logon with ResetSeqNumFlag on an established connection")
+	if err := s.resetStoreLocked("Logon with ResetSeqNumFlag on an established connection"); err != nil {
+		// Disconnected: not answered.
+		return
+	}
 	s.epoch++
 	c.epoch = s.epoch
 	s.sendAdminLocked(&header{msgType: "A"}, s.logonBody(true, 2))
+	if c.closed || s.c != c {
+		// The answer could not be stored: disconnected, not answered.
+		return
+	}
 	s.markLocked(1)
 	s.advanceLocked(c, 2)
 	c.startWriterLocked()
@@ -319,7 +337,9 @@ func (s *Session) fenceReset(c *conn) {
 
 // resetStoreLocked starts a new sequence number generation: both sides
 // restart at 1. Receipts of the previous generation without evidence end with
-// ErrUnknownDelivery.
+// ErrUnknownDelivery. A failure disconnects; one leaving the store's
+// generation uncertain halts the session, as does failing to reload the
+// state once reset: the session's own is stale, and it does not guess.
 func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	gen := s.st.Generation
 	id := s.st.WindowID
@@ -327,18 +347,27 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 		id = windowID[0]
 	}
 	if err := s.store.Reset(context.Background(), gen, time.Now(), id); err != nil {
-		s.log.LogAttrs(context.Background(), slog.LevelError, "resetting the store failed", slog.Any("error", err))
+		s.log.LogAttrs(context.Background(), slog.LevelError, "resetting the store failed", slog.String("why", why), slog.Any("error", err))
+		err = fmt.Errorf("resetting the store (%s): %w", why, err)
+		if uncertain(err) {
+			s.haltLocked(err)
+		}
 		if s.c != nil {
 			s.disconnectLocked(s.c, &LogoutError{Text: "store reset failed", Err: err})
 		}
-		return fmt.Errorf("session %s: resetting the store (%s): %w", s.id, why, err)
+		return fmt.Errorf("session %s: %w", s.id, err)
 	}
 	st, err := s.store.Open(context.Background())
 	if err != nil {
-		st = s.st
-		st.Generation, st.NextSender, st.NextTarget = gen+1, 1, 1
+		err = fmt.Errorf("reloading the state of the store reset (%s): %w", why, err)
+		s.haltLocked(err)
+		if s.c != nil {
+			s.disconnectLocked(s.c, &LogoutError{Text: "store reset failed", Err: err})
+		}
+		return fmt.Errorf("session %s: %w", s.id, err)
 	}
 	s.st = st
+	s.resetOwed = ""
 	s.committed = 0
 	s.recov = recovery{}
 	clear(s.stash)

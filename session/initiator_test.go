@@ -112,8 +112,8 @@ func (p *peer) expectEnd(within time.Duration) {
 	}
 }
 
-// startInitiator runs an initiator dialing l with cfg changes applied.
-func startInitiator(t *testing.T, l *mem.Listener, change func(*session.Config)) (*session.Session, *recorder) {
+// startInitiator runs an initiator dialing d with cfg changes applied.
+func startInitiator(t *testing.T, d transport.Dialer, change func(*session.Config)) (*session.Session, *recorder) {
 	t.Helper()
 	rec := newRecorder()
 	cfg := session.Config{
@@ -128,7 +128,7 @@ func startInitiator(t *testing.T, l *mem.Listener, change func(*session.Config))
 		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 	i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
-	s, err := i.Add(cfg, l)
+	s, err := i.Add(cfg, d)
 	if err != nil {
 		t.Fatal(err)
 	}

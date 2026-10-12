@@ -3,10 +3,12 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
@@ -34,8 +36,19 @@ type conn struct {
 	framer *fix2.Framer
 	msg    fix2.Message // reader-owned
 	rmsg   fix2.Message // writer-owned, for replays
+	// ctx is cancelled when the connection closes. syncCtx, the writer's
+	// Syncs', is cancelled by it too, and by watchSync once a Sync runs
+	// for WriteTimeout: syncs counts the Syncs started and ended, odd while
+	// one runs; syncWatched, writer-owned, tells watchSync runs.
+	ctx         context.Context
+	cancel      context.CancelFunc
+	syncCtx     context.Context
+	syncCancel  context.CancelCauseFunc
+	syncs       atomic.Uint64
+	syncWatched bool
 
-	// Guarded by s.mu.
+	// Guarded by s.mu. frames and heldFrames are in MsgSeqNum order: held
+	// frames, sequenced after the pending ones, are released after them.
 	pending     []byte // frames waiting for the writer
 	frames      []pendingFrame
 	held        []byte // frames sent while replaying, released after
@@ -135,10 +148,25 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 	if s.deliv == nil {
 		s.deliv = newDelivery(s)
 	}
-	if s.cfg.Schedule != nil && s.st.WindowID != s.window.ID {
+	// What the previous connection left undone is done first, or refuses
+	// this one: a reset on disconnection, which a new window's reset makes
+	// too, then the recording of the received messages processed, which
+	// would otherwise fall ever further behind. A reset discards those
+	// messages' generation: there is nothing left to record of it.
+	switch {
+	case s.cfg.Schedule != nil && s.st.WindowID != s.window.ID:
 		// A new window starts afresh; the previous connection is done.
 		if err := s.resetStoreLocked("new session window "+s.window.Start.Format(time.RFC3339), s.window.ID); err != nil {
 			return nil, err
+		}
+	case s.resetOwed != "":
+		if err := s.resetStoreLocked(s.resetOwed); err != nil {
+			return nil, err
+		}
+	}
+	if d := s.deliv; d.failed && d.persistedGen == s.st.Generation {
+		if err := d.persistLocked(true); err != nil {
+			return nil, fmt.Errorf("session %s: recording the received messages processed: %w", s.id, err)
 		}
 	}
 	s.epoch++
@@ -154,6 +182,10 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 		finished:   make(chan struct{}),
 		lastRead:   now,
 		lastWrite:  now,
+	}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	if s.syncer != nil {
+		c.syncCtx, c.syncCancel = context.WithCancelCause(c.ctx)
 	}
 	if c.framer == nil {
 		c.framer = fix2.NewFramer(tc, fix2.FramerOptions{})
@@ -185,7 +217,10 @@ func (c *conn) startWriterLocked() <-chan struct{} {
 	return done
 }
 
-var errAlreadyConnected = errors.New("session: already connected")
+var (
+	errAlreadyConnected = errors.New("session: already connected")
+	errSyncTimeout      = errors.New("session: store Sync took longer than WriteTimeout")
+)
 
 // run reads and handles the connection's messages until it closes, then
 // waits for its writer and returns why it closed.
@@ -212,8 +247,11 @@ func (c *conn) run() error {
 	defer c.s.mu.Unlock()
 	if c.resetAfter != "" {
 		// Once the writer is done: nothing of the old generation can be
-		// written after the reset.
-		c.s.resetStoreLocked(c.resetAfter)
+		// written after the reset. If it fails, the next connection makes
+		// it first.
+		if err := c.s.resetStoreLocked(c.resetAfter); err != nil {
+			c.s.resetOwed = c.resetAfter
+		}
 	}
 	return c.reason
 }
@@ -245,6 +283,7 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 	}
 	c.closed = true
 	close(c.closedCh)
+	c.cancel()
 	if c.reason == nil {
 		c.reason = reason
 	}
@@ -331,9 +370,16 @@ func (c *conn) writeLoop() {
 		gen, epoch := s.st.Generation, c.epoch
 		s.mu.Unlock()
 
-		c.tc.SetWriteDeadline(time.Now().Add(s.cfg.WriteTimeout))
-		n, err := c.tc.Write(buf)
-		c.wrote(buf, frames, n, gen, epoch, false)
+		var err error
+		if s.syncer != nil {
+			err = c.sync(gen, frames[len(frames)-1].seq)
+		}
+		if err == nil {
+			c.tc.SetWriteDeadline(time.Now().Add(s.cfg.WriteTimeout))
+			var n int
+			n, err = c.tc.Write(buf)
+			c.wrote(buf, frames, n, gen, epoch, false)
+		}
 
 		s.mu.Lock()
 		c.spare, c.spareFrames = buf[:0], frames[:0]
@@ -345,6 +391,77 @@ func (c *conn) writeLoop() {
 		c.writing = 0
 		s.mu.Unlock()
 	}
+}
+
+// sync makes the messages of generation gen up to upTo durable before they
+// are written, if the store needs it: from the writer, without the session's
+// lock, as Sync may run alongside the store's other calls, bounded by
+// WriteTimeout (see watchSync) and c closing. A failure keeps them from being
+// written: it disconnects c, and halts the session if the outcome is
+// uncertain. Otherwise the next Sync, which covers them again, retries.
+func (c *conn) sync(gen, upTo uint64) error {
+	s := c.s
+	if !c.syncWatched {
+		c.syncWatched = true
+		c.watchSync(0, 0)
+	}
+	// A counter, not a timer armed for each Sync: the default store syncs
+	// too, on the hot path.
+	c.syncs.Add(1)
+	err := s.syncer.Sync(c.syncCtx, gen, upTo)
+	c.syncs.Add(1)
+	if err == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch cause := context.Cause(c.syncCtx); {
+	case cause != nil:
+		// The session cancelled the Sync itself, the connection closing
+		// or the Sync taking too long: whatever the store says, no halt.
+		// The batch is not written, and Sync being cumulative, the next
+		// one, the next connection's, makes it durable again.
+		level := slog.LevelDebug
+		if errors.Is(cause, errSyncTimeout) {
+			level = slog.LevelWarn
+		}
+		if !errors.Is(err, cause) {
+			err = fmt.Errorf("%w: %w", cause, err)
+		}
+		s.log.LogAttrs(context.Background(), level, "making messages durable cancelled: not sent",
+			slog.Uint64("up_to", upTo), slog.Any("error", err))
+	default:
+		s.log.LogAttrs(context.Background(), slog.LevelError, "making messages durable failed: not sent",
+			slog.Uint64("up_to", upTo), slog.Any("error", err))
+		if uncertain(err) && gen == s.st.Generation {
+			s.haltLocked(fmt.Errorf("making messages up to %d durable: %w", upTo, err))
+		}
+	}
+	s.disconnectLocked(c, &LogoutError{Text: "store failure", Err: err})
+	return err
+}
+
+// watchSync checks, every half WriteTimeout (a millisecond at least) until c
+// closes, whether the writer's Sync running, the one counted seen, was
+// running seen times before: three times in a row, it has run for
+// WriteTimeout at least, and at most half more, and it is cancelled.
+func (c *conn) watchSync(seen uint64, times int) {
+	if c.ctx.Err() != nil {
+		return
+	}
+	switch n := c.syncs.Load(); {
+	case n%2 == 0:
+		times = 0
+	case n == seen:
+		times++
+	default:
+		seen, times = n, 1
+	}
+	if times >= 3 {
+		c.syncCancel(errSyncTimeout)
+		return
+	}
+	time.AfterFunc(max(c.s.cfg.WriteTimeout/2, time.Millisecond), func() { c.watchSync(seen, times) })
 }
 
 // wrote accounts for frames of buf, of which the first n bytes were written:

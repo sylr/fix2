@@ -25,7 +25,8 @@ type InitiatorOptions struct {
 }
 
 // Initiator connects sessions to their counterparties and keeps them
-// connected.
+// connected, except a session that halted (see Session.Err): it is no
+// longer dialed.
 type Initiator struct {
 	opts InitiatorOptions
 	log  *slog.Logger
@@ -185,6 +186,11 @@ func (i *Initiator) loop(ctx context.Context, is *initSession) {
 		if s.isStopped() {
 			return
 		}
+		if herr := s.Err(); herr != nil {
+			// No connection can succeed until the store is reconciled.
+			s.log.LogAttrs(ctx, slog.LevelError, "session halted: not reconnecting", slog.Any("error", herr))
+			return
+		}
 		select {
 		case <-s.windowSignal():
 		case <-ctx.Done():
@@ -202,6 +208,9 @@ func (i *Initiator) loop(ctx context.Context, is *initSession) {
 		}
 		if ctx.Err() != nil || s.isStopped() {
 			return
+		}
+		if s.Err() != nil {
+			continue // without waiting: the loop stops
 		}
 		if err != nil {
 			s.log.LogAttrs(ctx, slog.LevelInfo, "connection ended, reconnecting", slog.Duration("in", wait), slog.Any("reason", err))

@@ -57,14 +57,17 @@ func (h Hole) String() string {
 var (
 	// ErrSeqMismatch reports an Append whose sequence number is not the
 	// next one, or that would overwrite a different message: a bug, or a
-	// second writer on the same store. The session stops.
+	// second writer on the same store. The session halts.
 	ErrSeqMismatch = errors.New("store: sequence number mismatch")
 	// ErrGenerationGone reports a call for a generation that is no longer
-	// the current one.
+	// the current one. The session halts, unless it left that generation
+	// itself.
 	ErrGenerationGone = errors.New("store: generation no longer current")
 	// ErrUnknownOutcome reports that a write may or may not have been
-	// committed. The session stops sending and never reuses the sequence
-	// number.
+	// committed. From Append, SetNextSender, Sync or Reset, the session
+	// halts: it never reuses a sequence number that may be taken, nor
+	// carries on with a generation that may be gone. From SetNextTarget, a
+	// counter set again next time, it only disconnects.
 	ErrUnknownOutcome = errors.New("store: write outcome unknown")
 	// ErrBackwards reports a counter moved backwards within a generation.
 	ErrBackwards = errors.New("store: sequence number moved backwards")
@@ -78,6 +81,14 @@ var (
 // at a time. Range and Sync may run concurrently with them, from another
 // goroutine. A Store never calls back into the session, and never holds its
 // own locks while calling a Range callback.
+//
+// ErrUnknownOutcome, ErrSeqMismatch, ErrGenerationGone, ErrBackwards and
+// ErrClosed leave the persisted state in doubt: they halt the session (see
+// session.Session.Err), which stays down until the store is reconciled.
+// Except ErrUnknownOutcome from SetNextTarget, which its next call settles,
+// and errors about a generation the session itself left meanwhile, as a
+// Sync of the messages of a generation it just reset may return. Other
+// errors drop the connection, or fail the call that asked for the write.
 type Store interface {
 	// Open loads the state, creating generation 1 with both sequence
 	// numbers at 1 if the store is empty. The session calls it once, before
@@ -126,8 +137,19 @@ type Store interface {
 
 // Syncer is a Store whose Appends become durable only once Sync returns,
 // which lets it commit many messages at once.
+//
+// The session syncs before it writes: once for each batch its writer writes,
+// up to the batch's last MsgSeqNum, once before resending messages, up to
+// the last one, and once when it stops. Messages whose Sync fails are not
+// sent: the connection drops, and an outcome in doubt halts the session.
 type Syncer interface {
-	// Sync makes every message of generation gen up to upToSeq durable.
+	// Sync makes every message of generation gen up to upToSeq durable. It
+	// may be called again for messages already durable. It should return
+	// once ctx is done, with ctx.Err(): the session bounds it by its
+	// WriteTimeout, and by the connection staying open, or by the context
+	// Stop is given. A Sync the session cancelled is never taken as an
+	// uncertain outcome, whatever it returns: its messages are not sent,
+	// and the next Sync covers them again.
 	Sync(ctx context.Context, gen, upToSeq uint64) error
 }
 

@@ -78,6 +78,7 @@ type Session struct {
 	log     *slog.Logger
 	handler Handler
 	store   store.Store
+	syncer  store.Syncer // the store, if its Appends are durable only once synced
 
 	dicts dicts
 
@@ -95,9 +96,10 @@ type Session struct {
 	c         *conn // the current connection, nil when disconnected
 	prev      *conn // the last connection, whose end a new one waits for
 	stopped   bool
-	stopping  bool  // Stop runs: no new connection
-	halted    error // a store failure left a sequence number uncertain: no new connection
-	stalled   bool  // a handler callback is stuck, see Config.MaxDeliveryStall
+	stopping  bool   // Stop runs: no new connection
+	halted    error  // a store failure left the persisted state uncertain: no new connection
+	resetOwed string // why a reset on disconnection that failed is owed: the next connection makes it first
+	stalled   bool   // a handler callback is stuck, see Config.MaxDeliveryStall
 	resetting bool
 	heartBt   time.Duration
 	// peerApplVerID is the counterparty's DefaultApplVerID (FIXT).
@@ -166,6 +168,7 @@ func New(cfg Config) (*Session, error) {
 	if s.store == nil {
 		s.store = memstore.New()
 	}
+	s.syncer, _ = s.store.(store.Syncer)
 	var err error
 	if s.dicts, err = newDicts(cfg, p); err != nil {
 		return nil, fmt.Errorf("session %s: %w", cfg.ID, err)
@@ -209,6 +212,18 @@ func (s *Session) State() State {
 		return StateLoggingOut
 	}
 	return StateDisconnected
+}
+
+// Err returns why the session halted, nil if it did not: a store failure
+// left its persisted state uncertain (a sequence number perhaps taken, a
+// reset perhaps made, a generation moved under it), so it neither sends nor
+// connects again, and State reports it stopped. Reconcile the store, then
+// remove the session from its Initiator or Acceptor (Remove), which stops
+// it, and add it again.
+func (s *Session) Err() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.halted
 }
 
 // NextSenderSeqNum returns the MsgSeqNum of the next message sent.
@@ -335,11 +350,10 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 		*buf = (*buf)[:start]
 		s.log.LogAttrs(context.Background(), slog.LevelError, "storing a message failed",
 			slog.Uint64("seq", h.seq), slog.String("msg_type", h.msgType), slog.Any("error", err))
-		if errors.Is(err, store.ErrUnknownOutcome) || errors.Is(err, store.ErrSeqMismatch) {
+		if uncertain(err) {
 			// The sequence number may be taken: never reuse it. The
 			// session stays down until the store is sorted out.
-			s.halted = fmt.Errorf("session %s halted: storing message %d failed with an uncertain outcome, check the store before restarting: %w", s.id, h.seq, err)
-			s.disconnectLocked(c, &LogoutError{Text: "store failure", Err: err})
+			s.haltLocked(fmt.Errorf("storing message %d: %w", h.seq, err))
 		}
 		return 0, fmt.Errorf("session %s: storing message %d: %w", s.id, h.seq, err)
 	}
@@ -348,6 +362,31 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 	_ = control
 	c.wakeWriter()
 	return h.seq, nil
+}
+
+// uncertain reports whether a store error leaves the persisted state in
+// doubt: a write that may or may not have been made, or a store that moved
+// on without the session. Only reconciling the store settles it.
+func uncertain(err error) bool {
+	return errors.Is(err, store.ErrUnknownOutcome) || errors.Is(err, store.ErrSeqMismatch) ||
+		errors.Is(err, store.ErrGenerationGone) || errors.Is(err, store.ErrBackwards) || errors.Is(err, store.ErrClosed)
+}
+
+// haltLocked stops the session for err, a store failure that left its
+// persisted state uncertain: the connection is dropped and no new one made
+// (see Err). A stopped session closed its store itself: what fails after
+// does not halt it.
+func (s *Session) haltLocked(err error) {
+	if s.stopped {
+		return
+	}
+	if s.halted == nil {
+		s.halted = fmt.Errorf("session %s halted, check the store before restarting: %w", s.id, err)
+		s.log.LogAttrs(context.Background(), slog.LevelError, "session halted", slog.Any("error", err))
+	}
+	if s.c != nil {
+		s.disconnectLocked(s.c, &LogoutError{Text: "store failure", Err: err})
+	}
 }
 
 // queueProbeLocked queues a TestRequest probing for acknowledgements.

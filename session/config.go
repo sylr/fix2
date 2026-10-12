@@ -142,7 +142,12 @@ type Config struct {
 	// windows, logs out when one ends, and starts each afresh, at sequence
 	// number 1. Always, if nil.
 	Schedule schedule.Schedule
-	// Store persists the session; a new memstore.Store if nil.
+	// Store persists the session; a new memstore.Store if nil. Received
+	// messages are processed at least once: after a restart, those
+	// processed but not yet recorded, at most a batch of 64 and the
+	// DeliveryQueue, are delivered again. A failure to record them drops
+	// the connection; one that leaves the store in doubt halts the session
+	// (see Session.Err).
 	Store store.Store
 	// Logger receives the session's events; nothing is logged if nil.
 	Logger *slog.Logger

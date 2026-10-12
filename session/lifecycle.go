@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	"github.com/sylr/fix2/session/store"
 )
 
 // Logout logs the session out with text, waiting for the counterparty's
@@ -37,8 +39,10 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 }
 
 // Stop logs the session out, if connected, and stops it for good: its
-// delivery goroutine finishes delivering what it received, then its store is
-// closed. Initiators and acceptors stop the sessions they remove.
+// delivery goroutine finishes delivering what it received and its last
+// connection winds down, then the messages it stored are made durable (see
+// store.Syncer) and its store is closed. ctx bounds the waits and the Sync.
+// Initiators and acceptors stop the sessions they remove.
 func (s *Session) Stop(ctx context.Context) error {
 	return s.stop(ctx, "session stopped")
 }
@@ -60,9 +64,18 @@ func (s *Session) stop(ctx context.Context, text string) error {
 	if s.ret.timer != nil {
 		s.ret.timer.Stop()
 	}
-	d := s.deliv
+	d, prev := s.deliv, s.prev
 	s.receipts.notify()
 	s.mu.Unlock()
+	if prev != nil {
+		// Its writer joined and its reset on disconnection made: nothing
+		// of it uses the store any more.
+		select {
+		case <-prev.finished:
+		case <-ctx.Done():
+			s.log.LogAttrs(ctx, slog.LevelWarn, "stopping without waiting for the connection to wind down")
+		}
+	}
 	if d != nil {
 		d.close()
 		select {
@@ -71,7 +84,24 @@ func (s *Session) stop(ctx context.Context, text string) error {
 			s.log.LogAttrs(ctx, slog.LevelWarn, "stopping without waiting for a stuck handler callback")
 		}
 	}
-	return errors.Join(err, s.store.Close())
+	var serr error
+	s.mu.Lock()
+	gen, last := s.st.Generation, s.st.NextSender-1
+	s.mu.Unlock()
+	if s.syncer != nil && last > 0 {
+		serr = s.syncer.Sync(ctx, gen, last)
+		s.mu.Lock()
+		moved := s.st.Generation != gen
+		s.mu.Unlock()
+		switch {
+		case moved && errors.Is(serr, store.ErrGenerationGone):
+			// A reset, not waited for, dropped those messages meanwhile.
+			serr = nil
+		case serr != nil:
+			serr = fmt.Errorf("session %s: making the messages sent durable: %w", s.id, serr)
+		}
+	}
+	return errors.Join(err, serr, s.store.Close())
 }
 
 // isStopped reports whether the session is stopped, or stopping.
@@ -83,7 +113,8 @@ func (s *Session) isStopped() bool {
 
 // SetNextSenderSeqNum moves the MsgSeqNum of the next message sent forward
 // to next, as agreed with the counterparty out of band. The numbers skipped
-// are gap-filled if the counterparty asks for them.
+// are gap-filled if the counterparty asks for them. A store failure leaving
+// its NextSender uncertain halts the session (see Err).
 func (s *Session) SetNextSenderSeqNum(next uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -91,6 +122,11 @@ func (s *Session) SetNextSenderSeqNum(next uint64) error {
 		return fmt.Errorf("session %s: NextSenderSeqNum can only move forward: %d is below %d", s.id, next, s.st.NextSender)
 	}
 	if err := s.store.SetNextSender(context.Background(), s.st.Generation, next); err != nil {
+		if uncertain(err) {
+			// The store's NextSender may be ahead: the numbers below it may
+			// be taken.
+			s.haltLocked(fmt.Errorf("setting NextSenderSeqNum to %d: %w", next, err))
+		}
 		return fmt.Errorf("session %s: %w", s.id, err)
 	}
 	s.st.NextSender = next

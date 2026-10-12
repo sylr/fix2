@@ -3,11 +3,13 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session/store"
 )
 
 // itemKind is what a delivery item carries.
@@ -58,8 +60,10 @@ type delivery struct {
 	pool sync.Pool
 	msg  fix2.Message
 	// persisted is the NextTarget last recorded in the store, for
-	// generation persistedGen.
+	// generation persistedGen; failed tells recording it failed since.
+	// Guarded by the session's lock.
 	persisted, persistedGen uint64
+	failed                  bool
 }
 
 func newDelivery(s *Session) *delivery {
@@ -328,21 +332,39 @@ func (d *delivery) messagesAhead() bool {
 }
 
 // persistLocked is persist with the session's lock held.
-func (d *delivery) persistLocked(force bool) {
+//
+// Received messages are processed at least once: a restart processes again
+// those processed but not recorded, up to a batch of 64 and what the
+// delivery queue held. A failure to record them stops the connection to keep
+// it so; the next connection starts once they are recorded. A failure that
+// tells the store moved on halts the session. ErrUnknownOutcome does not:
+// setting the counter again settles it.
+func (d *delivery) persistLocked(force bool) error {
 	s := d.s
 	if d.persistedGen != s.st.Generation {
-		d.persisted, d.persistedGen = 0, s.st.Generation
+		d.persisted, d.persistedGen, d.failed = 0, s.st.Generation, false
 	}
 	next := s.committed + 1
 	if next == d.persisted || !force && next < d.persisted+64 {
-		return
+		return nil
 	}
-	if err := s.store.SetNextTarget(context.Background(), s.st.Generation, next); err != nil {
+	err := s.store.SetNextTarget(context.Background(), s.st.Generation, next)
+	if err == nil {
+		d.persisted, d.failed = next, false
+		return nil
+	}
+	if !d.failed {
+		d.failed = true
 		s.log.LogAttrs(context.Background(), slog.LevelError, "recording received messages processed failed",
 			slog.Uint64("next_target", next), slog.Any("error", err))
-		return
 	}
-	d.persisted = next
+	if uncertain(err) && !errors.Is(err, store.ErrUnknownOutcome) {
+		s.haltLocked(fmt.Errorf("recording the received messages processed up to %d: %w", next-1, err))
+	}
+	if s.c != nil {
+		s.disconnectLocked(s.c, &LogoutError{Text: "store failure", Err: err})
+	}
+	return err
 }
 
 // rejectInfo describes a Reject or BusinessMessageReject received.

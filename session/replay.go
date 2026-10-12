@@ -74,6 +74,16 @@ func (c *conn) runReplay(job *replayJob) {
 	s.mu.Lock()
 	gen, epoch := s.st.Generation, c.epoch
 	s.mu.Unlock()
+	if s.syncer != nil {
+		// What is resent may not be durable yet: the messages taken from
+		// those pending, for one.
+		if err := c.sync(gen, job.end); err != nil {
+			s.mu.Lock()
+			c.replay, c.replayQueue = nil, nil
+			s.mu.Unlock()
+			return
+		}
+	}
 
 	var (
 		buf      []byte
