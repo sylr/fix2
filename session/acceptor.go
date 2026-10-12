@@ -50,9 +50,9 @@ type Acceptor struct {
 
 	mu        sync.Mutex
 	sessions  map[SessionID]*Session
-	adding    map[SessionID]struct{}   // reserved by an Add opening the store
-	stopping  stoppingSessions         // removed, not yet done
-	byWire    map[SessionID][]*Session // keyed by the counterparty's view of the wire identity
+	adding    map[SessionID]chan struct{} // reserved by an Add opening the store, closed once done
+	stopping  stoppingSessions            // removed, not yet done
+	byWire    map[SessionID][]*Session    // keyed by the counterparty's view of the wire identity
 	listeners []transport.Listener
 	ctx       context.Context // set while running
 	closing   bool            // Run is shutting down: no session added
@@ -79,7 +79,7 @@ func NewAcceptor(opts AcceptorOptions) *Acceptor {
 		opts:      opts,
 		log:       opts.Logger,
 		sessions:  make(map[SessionID]*Session),
-		adding:    make(map[SessionID]struct{}),
+		adding:    make(map[SessionID]chan struct{}),
 		stopping:  make(stoppingSessions),
 		byWire:    make(map[SessionID][]*Session),
 		pending:   make(chan struct{}, opts.MaxPendingConnections),
@@ -95,9 +95,10 @@ func (a *Acceptor) Add(cfg Config) (*Session, error) {
 	if err := a.reserve(cfg.ID); err != nil {
 		return nil, err
 	}
+	// Once added, or not, New panicking included.
+	defer a.release(cfg.ID)
 	s, err := New(cfg)
 	if err != nil {
-		a.release(cfg.ID)
 		return nil, err
 	}
 	if err := a.add(s); err != nil {
@@ -107,9 +108,12 @@ func (a *Acceptor) Add(cfg Config) (*Session, error) {
 	return s, nil
 }
 
-// reserve reserves id for an Add, which add or release releases. It fails
-// if the acceptor shuts down, or a session has id, is being added with it,
-// or was removed and is still stopping.
+// errBeingAdded refuses an Add of an ID another Add reserved.
+var errBeingAdded = errors.New("being added")
+
+// reserve reserves id for an Add, which releases it once done. It fails if
+// the acceptor shuts down, or a session has id, is being added with it, or
+// was removed and is still stopping.
 func (a *Acceptor) reserve(id SessionID) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -120,27 +124,39 @@ func (a *Acceptor) reserve(id SessionID) error {
 	case a.sessions[id] != nil:
 		return fmt.Errorf("session %s: already added", id)
 	case adding:
-		return fmt.Errorf("session %s: being added", id)
+		return fmt.Errorf("session %s: %w", id, errBeingAdded)
 	}
 	if err := a.stopping.check(id); err != nil {
 		return err
 	}
-	a.adding[id] = struct{}{}
+	a.adding[id] = make(chan struct{})
 	return nil
 }
 
-// release releases id, reserved by an Add that failed before add.
+// release releases id, reserved by an Add, waking the Logons waiting for
+// it.
 func (a *Acceptor) release(id SessionID) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	close(a.adding[id])
 	delete(a.adding, id)
+}
+
+// addingLocked returns the channel release closes of an Add's reservation
+// for wire identity wire, or nil if there is none.
+func (a *Acceptor) addingLocked(wire SessionID) chan struct{} {
+	for id, done := range a.adding {
+		if id.reversed() == wire {
+			return done
+		}
+	}
+	return nil
 }
 
 // add adds s, whose ID the caller reserved.
 func (a *Acceptor) add(s *Session) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	delete(a.adding, s.id)
 	if a.closing {
 		return fmt.Errorf("session %s: acceptor shutting down", s.id)
 	}
@@ -203,15 +219,16 @@ func (a *Acceptor) resolve(ctx context.Context, wire SessionID, req *LogonReques
 		return fmt.Errorf("dynamic session %s does not match the Logon's identities", cfg.ID)
 	}
 	if err := a.reserve(cfg.ID); err != nil {
-		// Added meanwhile with Add: route finds it.
-		if a.Session(cfg.ID) != nil {
+		// Added, or being added, meanwhile with Add: route finds it, or
+		// waits for it.
+		if errors.Is(err, errBeingAdded) || a.Session(cfg.ID) != nil {
 			return nil
 		}
 		return err
 	}
+	defer a.release(cfg.ID)
 	s, err := New(*cfg)
 	if err != nil {
-		a.release(cfg.ID)
 		return err
 	}
 	if err := a.add(s); err != nil {
@@ -410,7 +427,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	if p, ok := tc.(transport.PrincipalConn); ok {
 		req.Principal = p.Principal()
 	}
-	s, err := a.route(ctx, wire, req)
+	s, err := a.route(ctx, wire, req, deadline)
 	if err != nil {
 		refuse(err.Error(), slog.String("logon_for", wire.reversed().String()))
 		return
@@ -450,19 +467,35 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	s.log.LogAttrs(ctx, slog.LevelDebug, "connection ended", slog.Any("reason", reason))
 }
 
-// route returns the session a Logon is for.
-func (a *Acceptor) route(ctx context.Context, wire SessionID, req *LogonRequest) (*Session, error) {
+// route returns the session a Logon is for. A session Add is adding is
+// waited for, until deadline.
+func (a *Acceptor) route(ctx context.Context, wire SessionID, req *LogonRequest, deadline time.Time) (*Session, error) {
 	var candidates []*Session
 	for {
 		a.mu.Lock()
 		candidates = append(candidates[:0], a.byWire[wire]...)
+		var adding chan struct{}
+		if len(candidates) == 0 {
+			adding = a.addingLocked(wire)
+		}
 		resolving, busy := a.resolving[wire]
-		if len(candidates) == 0 && !busy && a.opts.Resolve != nil {
+		if len(candidates) == 0 && adding == nil && !busy && a.opts.Resolve != nil {
 			a.resolving[wire] = make(chan struct{})
 		}
 		a.mu.Unlock()
 		if len(candidates) > 0 {
 			break
+		}
+		if adding != nil {
+			a.log.LogAttrs(ctx, slog.LevelDebug, "Logon waiting for its session being added", slog.String("logon_for", req.ID.String()))
+			select {
+			case <-adding:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Until(deadline)):
+				return nil, errors.New("session being added not ready within LogonTimeout")
+			}
 		}
 		if a.opts.Resolve == nil {
 			return nil, errors.New("no session for this Logon")

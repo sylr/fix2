@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 
+	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/session/store"
 )
 
@@ -47,13 +49,16 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 // messages are synced again, bounded by WriteTimeout, and the store is
 // closed, failures then being only logged; Done tells when. Stop called
 // again, or concurrently, waits for Done as well, until its ctx ends.
-// Called with the ctx of one of the session's handler callbacks, whichever
-// goroutine runs it (Authenticate, ToAdmin, FromAdmin, OnResend, OnLogon,
-// FromApp, OnLogout, OnRecoveryLoss), Stop returns nil at once and the
-// session stops in the background, as if ctx ended: it logs out, within
-// LogoutTimeout, and the rest is done once the callback returned, failures
-// being only logged; Done tells when. Initiators and acceptors stop the
-// sessions they remove.
+// Called, while it runs, with the ctx of one of the session's handler
+// callbacks or one derived from it, whichever goroutine runs the callback
+// (Authenticate, ToAdmin, SignLogon, FromAdmin, OnResend, OnLogon, FromApp,
+// OnLogout, OnRecoveryLoss), Stop returns nil at once and the session stops
+// in the background, as if ctx ended: it logs out, within LogoutTimeout,
+// and the rest is done once the callback returned, failures being only
+// logged; Done tells when. Once the callback returned, its ctx is an
+// ordinary one, except while a callback of the same kind runs, as FromApp
+// for a later message: Stop called with it then returns at once as well.
+// Initiators and acceptors stop the sessions they remove.
 func (s *Session) Stop(ctx context.Context) error {
 	return s.stop(ctx, "session stopped")
 }
@@ -110,10 +115,136 @@ func (s *Session) stop(ctx context.Context, text string) error {
 	return errors.Join(err, serr)
 }
 
-// ownCallback reports whether ctx is one of the session's handler
-// callbacks'.
+// ownCallback reports whether ctx is, or derives from, the ctx of one of the
+// session's handler callbacks while a callback of that kind runs.
 func (s *Session) ownCallback(ctx context.Context) bool {
-	return ctx != nil && ctx.Value(callbackKey{}) == s
+	if ctx == nil {
+		return false
+	}
+	c, _ := ctx.Value(callKey{}).(*callCtx)
+	return c != nil && c.s == s && c.running.Load() > 0
+}
+
+// callKey keys a callCtx in the ctx it is.
+type callKey struct{}
+
+// callCtx is the ctx of a kind of handler callback, as FromApp: it tells
+// whether one of that kind runs.
+type callCtx struct {
+	context.Context // the session's callback ctx
+	s               *Session
+	running         atomic.Int32 // calls in progress
+}
+
+func (c *callCtx) Value(key any) any {
+	if key == (callKey{}) {
+		return c
+	}
+	return c.Context.Value(key)
+}
+
+func (c *callCtx) end() { c.running.Add(-1) }
+
+// The kinds of handler callbacks.
+const (
+	cbAuthenticate = iota
+	cbOnLogon
+	cbOnLogout
+	cbToAdmin
+	cbFromAdmin
+	cbFromApp
+	cbOnResend
+	cbOnRecoveryLoss
+	cbSignLogon
+	numCallbacks
+)
+
+// callbacks is a session's handler as the session calls it: each kind of
+// callback gets a callCtx of its own, which tells Stop it is called from
+// within it, without allocating.
+type callbacks struct {
+	h   Handler
+	ctx [numCallbacks]callCtx
+}
+
+// signingCallbacks is callbacks for a handler that is a LogonSigner.
+type signingCallbacks struct {
+	*callbacks
+	signer LogonSigner
+}
+
+// trackCallbacks returns h as session s calls it, once s.cbCtx is set.
+func trackCallbacks(s *Session, h Handler) Handler {
+	cb := &callbacks{h: h}
+	for i := range cb.ctx {
+		cb.ctx[i].Context, cb.ctx[i].s = s.cbCtx, s
+	}
+	if signer, ok := h.(LogonSigner); ok {
+		return &signingCallbacks{cb, signer}
+	}
+	return cb
+}
+
+// begin returns the ctx of a callback of kind k starting; the caller ends
+// it once the callback returned.
+func (cb *callbacks) begin(k int) *callCtx {
+	c := &cb.ctx[k]
+	c.running.Add(1)
+	return c
+}
+
+func (cb *callbacks) Authenticate(_ context.Context, req *LogonRequest) error {
+	c := cb.begin(cbAuthenticate)
+	defer c.end()
+	return cb.h.Authenticate(c, req)
+}
+
+func (cb *callbacks) OnLogon(_ context.Context, s *Session) {
+	c := cb.begin(cbOnLogon)
+	defer c.end()
+	cb.h.OnLogon(c, s)
+}
+
+func (cb *callbacks) OnLogout(_ context.Context, s *Session, reason error) {
+	c := cb.begin(cbOnLogout)
+	defer c.end()
+	cb.h.OnLogout(c, s, reason)
+}
+
+func (cb *callbacks) ToAdmin(_ context.Context, s *Session, msgType string, b *fix2.Builder) error {
+	c := cb.begin(cbToAdmin)
+	defer c.end()
+	return cb.h.ToAdmin(c, s, msgType, b)
+}
+
+func (cb *callbacks) FromAdmin(_ context.Context, s *Session, m *fix2.Message, in Inbound) {
+	c := cb.begin(cbFromAdmin)
+	defer c.end()
+	cb.h.FromAdmin(c, s, m, in)
+}
+
+func (cb *callbacks) FromApp(_ context.Context, s *Session, m *fix2.Message, in Inbound) error {
+	c := cb.begin(cbFromApp)
+	defer c.end()
+	return cb.h.FromApp(c, s, m, in)
+}
+
+func (cb *callbacks) OnResend(_ context.Context, s *Session, seq uint64, m *fix2.Message) bool {
+	c := cb.begin(cbOnResend)
+	defer c.end()
+	return cb.h.OnResend(c, s, seq, m)
+}
+
+func (cb *callbacks) OnRecoveryLoss(_ context.Context, s *Session, begin, end uint64, cause error) {
+	c := cb.begin(cbOnRecoveryLoss)
+	defer c.end()
+	cb.h.OnRecoveryLoss(c, s, begin, end, cause)
+}
+
+func (sc *signingCallbacks) SignLogon(_ context.Context, s *Session, h LogonHeader, b *fix2.Builder) error {
+	c := sc.begin(cbSignLogon)
+	defer c.end()
+	return sc.signer.SignLogon(c, s, h, b)
 }
 
 // markStopped marks the session stopped and returns a channel closed once

@@ -88,10 +88,15 @@ func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Once added, or not, New panicking included.
+	defer func() {
+		i.mu.Lock()
+		delete(i.adding, cfg.ID)
+		i.mu.Unlock()
+	}()
 	s, err := New(cfg)
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	delete(i.adding, cfg.ID)
 	if err != nil {
 		return nil, err
 	}

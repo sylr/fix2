@@ -179,6 +179,7 @@ func New(cfg Config) (*Session, error) {
 	}
 	s.log = cfg.Logger.With(slog.String("session", cfg.ID.String()))
 	s.cbCtx = context.WithValue(context.Background(), callbackKey{}, s)
+	s.handler = trackCallbacks(s, cfg.Handler)
 	if s.store == nil {
 		s.store = memstore.New()
 	}
