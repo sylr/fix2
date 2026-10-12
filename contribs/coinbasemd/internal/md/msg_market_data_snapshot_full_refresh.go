@@ -83,15 +83,12 @@ func (m *MarketDataSnapshotFullRefresh) NoMDEntriesEntries() []NoMDEntriesEntry 
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, marketDataSnapshotFullRefresh_specs...)
-	entries := make([]NoMDEntriesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoMDEntriesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataSnapshotFullRefresh_specs, func(g fix2.Group) NoMDEntriesEntry {
+		return NoMDEntriesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type marketDataSnapshotFullRefresh_groups struct {

@@ -122,15 +122,12 @@ func (m *MarketDataRequest) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, marketDataRequest_specs...)
-	entries := make([]NoRelatedSymEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRelatedSymEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix2.Group) NoRelatedSymEntry {
+		return NoRelatedSymEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var marketDataRequest_NoMDEntryTypes_spec = &fix2.GroupSpec{
@@ -145,15 +142,12 @@ func (m *MarketDataRequest) NoMDEntryTypesEntries() []NoMDEntryTypesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, marketDataRequest_specs...)
-	entries := make([]NoMDEntryTypesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoMDEntryTypesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix2.Group) NoMDEntryTypesEntry {
+		return NoMDEntryTypesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type marketDataRequest_groups struct {

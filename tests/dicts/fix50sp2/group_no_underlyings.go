@@ -455,15 +455,12 @@ func (e *NoUnderlyingsEntry) NoUnderlyingSecurityAltIDEntries() []NoUnderlyingSe
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoUnderlyingSecurityAltIDEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoUnderlyingSecurityAltIDEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoUnderlyingSecurityAltIDEntry {
+		return NoUnderlyingSecurityAltIDEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoUnderlyingsEntry) NoUnderlyingStips() (int, bool, error) {
 	v := e.get(TagNoUnderlyingStips)
@@ -478,15 +475,12 @@ func (e *NoUnderlyingsEntry) NoUnderlyingStipsEntries() []NoUnderlyingStipsEntry
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoUnderlyingStipsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoUnderlyingStipsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoUnderlyingStipsEntry {
+		return NoUnderlyingStipsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoUnderlyingsEntry) NoUndlyInstrumentParties() (int, bool, error) {
 	v := e.get(TagNoUndlyInstrumentParties)
@@ -501,15 +495,12 @@ func (e *NoUnderlyingsEntry) NoUndlyInstrumentPartiesEntries() []NoUndlyInstrume
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoUndlyInstrumentPartiesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoUndlyInstrumentPartiesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoUndlyInstrumentPartiesEntry {
+		return NoUndlyInstrumentPartiesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoUnderlyingsEntryBuilder struct {

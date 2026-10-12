@@ -38,15 +38,12 @@ func (e *NoPartyDetailAltIDEntry) NoPartyDetailAltSubIDsEntries() []NoPartyDetai
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoPartyDetailAltSubIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyDetailAltSubIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoPartyDetailAltSubIDsEntry {
+		return NoPartyDetailAltSubIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoPartyDetailAltIDEntryBuilder struct {

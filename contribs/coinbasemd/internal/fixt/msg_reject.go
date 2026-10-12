@@ -266,15 +266,12 @@ func (m *Reject) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, reject_specs...)
-	entries := make([]NoHopsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoHopsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, reject_specs, func(g fix2.Group) NoHopsEntry {
+		return NoHopsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type reject_groups struct {

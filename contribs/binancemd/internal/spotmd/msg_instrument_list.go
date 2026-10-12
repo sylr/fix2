@@ -90,15 +90,12 @@ func (m *InstrumentList) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, instrumentList_specs...)
-	entries := make([]NoRelatedSymEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRelatedSymEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, instrumentList_specs, func(g fix2.Group) NoRelatedSymEntry {
+		return NoRelatedSymEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type instrumentList_groups struct {

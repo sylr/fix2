@@ -467,15 +467,12 @@ func (e *NoLegsEntry) NoLegAllocsEntries() []NoLegAllocsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoLegAllocsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLegAllocsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoLegAllocsEntry {
+		return NoLegAllocsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoLegsEntry) NoLegSecurityAltID() (int, bool, error) {
 	v := e.get(TagNoLegSecurityAltID)
@@ -490,15 +487,12 @@ func (e *NoLegsEntry) NoLegSecurityAltIDEntries() []NoLegSecurityAltIDEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoLegSecurityAltIDEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLegSecurityAltIDEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoLegSecurityAltIDEntry {
+		return NoLegSecurityAltIDEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoLegsEntry) NoLegStipulations() (int, bool, error) {
 	v := e.get(TagNoLegStipulations)
@@ -513,15 +507,12 @@ func (e *NoLegsEntry) NoLegStipulationsEntries() []NoLegStipulationsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoLegStipulationsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLegStipulationsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoLegStipulationsEntry {
+		return NoLegStipulationsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoLegsEntry) NoNested3PartyIDs() (int, bool, error) {
 	v := e.get(TagNoNested3PartyIDs)
@@ -536,15 +527,12 @@ func (e *NoLegsEntry) NoNested3PartyIDsEntries() []NoNested3PartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoNested3PartyIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoNested3PartyIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoNested3PartyIDsEntry {
+		return NoNested3PartyIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoLegsEntryBuilder struct {

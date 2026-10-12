@@ -250,15 +250,12 @@ func (m *RegistrationInstructions) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, registrationInstructions_specs...)
-	entries := make([]NoHopsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoHopsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, registrationInstructions_specs, func(g fix2.Group) NoHopsEntry {
+		return NoHopsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var registrationInstructions_NoPartyIDs_spec = &fix2.GroupSpec{
@@ -281,15 +278,12 @@ func (m *RegistrationInstructions) NoPartyIDsEntries() []NoPartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, registrationInstructions_specs...)
-	entries := make([]NoPartyIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, registrationInstructions_specs, func(g fix2.Group) NoPartyIDsEntry {
+		return NoPartyIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var registrationInstructions_NoRegistDtls_spec = &fix2.GroupSpec{
@@ -320,15 +314,12 @@ func (m *RegistrationInstructions) NoRegistDtlsEntries() []NoRegistDtlsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, registrationInstructions_specs...)
-	entries := make([]NoRegistDtlsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRegistDtlsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, registrationInstructions_specs, func(g fix2.Group) NoRegistDtlsEntry {
+		return NoRegistDtlsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var registrationInstructions_NoDistribInsts_spec = &fix2.GroupSpec{
@@ -343,15 +334,12 @@ func (m *RegistrationInstructions) NoDistribInstsEntries() []NoDistribInstsEntry
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, registrationInstructions_specs...)
-	entries := make([]NoDistribInstsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoDistribInstsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, registrationInstructions_specs, func(g fix2.Group) NoDistribInstsEntry {
+		return NoDistribInstsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type registrationInstructions_groups struct {

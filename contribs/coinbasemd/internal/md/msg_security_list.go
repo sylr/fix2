@@ -82,15 +82,12 @@ func (m *SecurityList) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, securityList_specs...)
-	entries := make([]NoRelatedSymEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRelatedSymEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, securityList_specs, func(g fix2.Group) NoRelatedSymEntry {
+		return NoRelatedSymEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type securityList_groups struct {

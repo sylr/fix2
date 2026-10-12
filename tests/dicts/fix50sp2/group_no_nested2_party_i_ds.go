@@ -49,15 +49,12 @@ func (e *NoNested2PartyIDsEntry) NoNested2PartySubIDsEntries() []NoNested2PartyS
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoNested2PartySubIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoNested2PartySubIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoNested2PartySubIDsEntry {
+		return NoNested2PartySubIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoNested2PartyIDsEntryBuilder struct {

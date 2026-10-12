@@ -49,15 +49,12 @@ func (e *NoUndlyInstrumentPartiesEntry) NoUndlyInstrumentPartySubIDsEntries() []
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoUndlyInstrumentPartySubIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoUndlyInstrumentPartySubIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoUndlyInstrumentPartySubIDsEntry {
+		return NoUndlyInstrumentPartySubIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoUndlyInstrumentPartiesEntryBuilder struct {

@@ -61,15 +61,12 @@ func (e *NoThrottlesEntry) NoThrottleMsgTypeEntries() []NoThrottleMsgTypeEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoThrottleMsgTypeEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoThrottleMsgTypeEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoThrottleMsgTypeEntry {
+		return NoThrottleMsgTypeEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoThrottlesEntryBuilder struct {

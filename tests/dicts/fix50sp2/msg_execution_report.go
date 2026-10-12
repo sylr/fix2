@@ -1894,15 +1894,12 @@ func (m *ExecutionReport) NoPartyIDsEntries() []NoPartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoPartyIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoPartyIDsEntry {
+		return NoPartyIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoContraBrokers_spec = &fix2.GroupSpec{
@@ -1917,15 +1914,12 @@ func (m *ExecutionReport) NoContraBrokersEntries() []NoContraBrokersEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoContraBrokersEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoContraBrokersEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoContraBrokersEntry {
+		return NoContraBrokersEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoSecurityAltID_spec = &fix2.GroupSpec{
@@ -1940,15 +1934,12 @@ func (m *ExecutionReport) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoSecurityAltIDEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoSecurityAltIDEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoSecurityAltIDEntry {
+		return NoSecurityAltIDEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoEvents_spec = &fix2.GroupSpec{
@@ -1963,15 +1954,12 @@ func (m *ExecutionReport) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoEventsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoEventsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoEventsEntry {
+		return NoEventsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoInstrumentParties_spec = &fix2.GroupSpec{
@@ -1994,15 +1982,12 @@ func (m *ExecutionReport) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntr
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoInstrumentPartiesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoInstrumentPartiesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoInstrumentPartiesEntry {
+		return NoInstrumentPartiesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoComplexEvents_spec = &fix2.GroupSpec{
@@ -2033,15 +2018,12 @@ func (m *ExecutionReport) NoComplexEventsEntries() []NoComplexEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoComplexEventsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoComplexEventsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoComplexEventsEntry {
+		return NoComplexEventsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoUnderlyings_spec = &fix2.GroupSpec{
@@ -2084,15 +2066,12 @@ func (m *ExecutionReport) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoUnderlyingsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoUnderlyingsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoUnderlyingsEntry {
+		return NoUnderlyingsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoStipulations_spec = &fix2.GroupSpec{
@@ -2107,15 +2086,12 @@ func (m *ExecutionReport) NoStipulationsEntries() []NoStipulationsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoStipulationsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoStipulationsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoStipulationsEntry {
+		return NoStipulationsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoContAmts_spec = &fix2.GroupSpec{
@@ -2130,15 +2106,12 @@ func (m *ExecutionReport) NoContAmtsEntries() []NoContAmtsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoContAmtsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoContAmtsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoContAmtsEntry {
+		return NoContAmtsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoLegs_spec = &fix2.GroupSpec{
@@ -2202,15 +2175,12 @@ func (m *ExecutionReport) NoLegsEntries() []NoLegsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoLegsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLegsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoLegsEntry {
+		return NoLegsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoMiscFees_spec = &fix2.GroupSpec{
@@ -2225,15 +2195,12 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoMiscFeesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoMiscFeesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoMiscFeesEntry {
+		return NoMiscFeesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoStrategyParameters_spec = &fix2.GroupSpec{
@@ -2248,15 +2215,12 @@ func (m *ExecutionReport) NoStrategyParametersEntries() []NoStrategyParametersEn
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoStrategyParametersEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoStrategyParametersEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoStrategyParametersEntry {
+		return NoStrategyParametersEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoTrdRegTimestamps_spec = &fix2.GroupSpec{
@@ -2271,15 +2235,12 @@ func (m *ExecutionReport) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry 
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoTrdRegTimestampsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoTrdRegTimestampsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoTrdRegTimestampsEntry {
+		return NoTrdRegTimestampsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoAllocs_spec = &fix2.GroupSpec{
@@ -2310,15 +2271,12 @@ func (m *ExecutionReport) NoAllocsEntries() []NoAllocsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoAllocsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoAllocsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoAllocsEntry {
+		return NoAllocsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoFills_spec = &fix2.GroupSpec{
@@ -2349,15 +2307,12 @@ func (m *ExecutionReport) NoFillsEntries() []NoFillsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoFillsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoFillsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoFillsEntry {
+		return NoFillsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var executionReport_NoRateSources_spec = &fix2.GroupSpec{
@@ -2372,15 +2327,12 @@ func (m *ExecutionReport) NoRateSourcesEntries() []NoRateSourcesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoRateSourcesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRateSourcesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoRateSourcesEntry {
+		return NoRateSourcesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type executionReport_groups struct {

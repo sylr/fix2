@@ -1039,15 +1039,17 @@ func writeIterationMethod(f *jen.File, ownerName, ownerRecv, ownerField, groupNa
 	).Id(groupName+"Entries").Params().Index().Id(entryName).Block(
 		jen.Id("spec").Op(":=").Add(spec),
 		jen.If(jen.Id("spec").Op("==").Nil()).Block(jen.Return(jen.Nil())),
-		jen.Id("groups").Op(":=").Id(ownerRecv).Dot(ownerField).Dot("GroupsOf").Call(jen.Id("spec"), jen.Add(others).Op("...")),
-		jen.Id("entries").Op(":=").Make(jen.Index().Id(entryName), jen.Len(jen.Id("groups"))),
-		jen.For(jen.Id("i").Op(":=").Range().Id("groups")).Block(
-			jen.Id("entries").Index(jen.Id("i")).Op("=").Id(entryName).Values(jen.Dict{
-				jen.Id("grp"):  jen.Id("groups").Index(jen.Id("i")),
-				jen.Id("spec"): jen.Id("spec"),
-			}),
-		),
-		jen.Return(jen.Id("entries")),
+		jen.Return(jen.Qual(fix2Pkg, "EntriesOf").Call(
+			jen.Id(ownerRecv).Dot(ownerField).Dot("Fields").Call(),
+			jen.Id("spec"),
+			others,
+			jen.Func().Params(jen.Id("g").Qual(fix2Pkg, "Group")).Id(entryName).Block(
+				jen.Return(jen.Id(entryName).Values(jen.Dict{
+					jen.Id("grp"):  jen.Id("g"),
+					jen.Id("spec"): jen.Id("spec"),
+				})),
+			),
+		)),
 	)
 }
 

@@ -1370,15 +1370,12 @@ func (m *NewOrderSingle) NoPartyIDsEntries() []NoPartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoPartyIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoPartyIDsEntry {
+		return NoPartyIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoAllocs_spec = &fix2.GroupSpec{
@@ -1409,15 +1406,12 @@ func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoAllocsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoAllocsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoAllocsEntry {
+		return NoAllocsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoTradingSessions_spec = &fix2.GroupSpec{
@@ -1432,15 +1426,12 @@ func (m *NewOrderSingle) NoTradingSessionsEntries() []NoTradingSessionsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoTradingSessionsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoTradingSessionsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoTradingSessionsEntry {
+		return NoTradingSessionsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoSecurityAltID_spec = &fix2.GroupSpec{
@@ -1455,15 +1446,12 @@ func (m *NewOrderSingle) NoSecurityAltIDEntries() []NoSecurityAltIDEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoSecurityAltIDEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoSecurityAltIDEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoSecurityAltIDEntry {
+		return NoSecurityAltIDEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoEvents_spec = &fix2.GroupSpec{
@@ -1478,15 +1466,12 @@ func (m *NewOrderSingle) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoEventsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoEventsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoEventsEntry {
+		return NoEventsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoInstrumentParties_spec = &fix2.GroupSpec{
@@ -1509,15 +1494,12 @@ func (m *NewOrderSingle) NoInstrumentPartiesEntries() []NoInstrumentPartiesEntry
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoInstrumentPartiesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoInstrumentPartiesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoInstrumentPartiesEntry {
+		return NoInstrumentPartiesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoComplexEvents_spec = &fix2.GroupSpec{
@@ -1548,15 +1530,12 @@ func (m *NewOrderSingle) NoComplexEventsEntries() []NoComplexEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoComplexEventsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoComplexEventsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoComplexEventsEntry {
+		return NoComplexEventsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoUnderlyings_spec = &fix2.GroupSpec{
@@ -1599,15 +1578,12 @@ func (m *NewOrderSingle) NoUnderlyingsEntries() []NoUnderlyingsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoUnderlyingsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoUnderlyingsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoUnderlyingsEntry {
+		return NoUnderlyingsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoStipulations_spec = &fix2.GroupSpec{
@@ -1622,15 +1598,12 @@ func (m *NewOrderSingle) NoStipulationsEntries() []NoStipulationsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoStipulationsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoStipulationsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoStipulationsEntry {
+		return NoStipulationsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoStrategyParameters_spec = &fix2.GroupSpec{
@@ -1645,15 +1618,12 @@ func (m *NewOrderSingle) NoStrategyParametersEntries() []NoStrategyParametersEnt
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoStrategyParametersEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoStrategyParametersEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoStrategyParametersEntry {
+		return NoStrategyParametersEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var newOrderSingle_NoTrdRegTimestamps_spec = &fix2.GroupSpec{
@@ -1668,15 +1638,12 @@ func (m *NewOrderSingle) NoTrdRegTimestampsEntries() []NoTrdRegTimestampsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoTrdRegTimestampsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoTrdRegTimestampsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoTrdRegTimestampsEntry {
+		return NoTrdRegTimestampsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type newOrderSingle_groups struct {

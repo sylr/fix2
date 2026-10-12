@@ -166,15 +166,12 @@ func (m *NewOrderSingle) NoAllocsEntries() []NoAllocsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, newOrderSingle_specs...)
-	entries := make([]NoAllocsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoAllocsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, func(g fix2.Group) NoAllocsEntry {
+		return NoAllocsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type newOrderSingle_groups struct {

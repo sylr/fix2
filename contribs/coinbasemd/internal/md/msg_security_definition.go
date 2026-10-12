@@ -303,15 +303,12 @@ func (m *SecurityDefinition) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, securityDefinition_specs...)
-	entries := make([]NoEventsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoEventsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, securityDefinition_specs, func(g fix2.Group) NoEventsEntry {
+		return NoEventsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var securityDefinition_NoLegs_spec = &fix2.GroupSpec{
@@ -326,15 +323,12 @@ func (m *SecurityDefinition) NoLegsEntries() []NoLegsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, securityDefinition_specs...)
-	entries := make([]NoLegsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLegsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, securityDefinition_specs, func(g fix2.Group) NoLegsEntry {
+		return NoLegsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type securityDefinition_groups struct {

@@ -281,15 +281,12 @@ func (e *NoRelatedSymEntry) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoEventsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoEventsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoEventsEntry {
+		return NoEventsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoRelatedSymEntry) NoLegsBytes() ([]byte, bool) {
 	v := e.get(TagNoLegs)
@@ -308,15 +305,12 @@ func (e *NoRelatedSymEntry) NoLegsEntries() []NoLegsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoLegsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLegsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoLegsEntry {
+		return NoLegsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoRelatedSymEntryBuilder struct {

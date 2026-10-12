@@ -34,15 +34,12 @@ func (e *NoPartyUpdatesEntry) NoPartyDetailsEntries() []NoPartyDetailsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoPartyDetailsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyDetailsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoPartyDetailsEntry {
+		return NoPartyDetailsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoPartyUpdatesEntryBuilder struct {

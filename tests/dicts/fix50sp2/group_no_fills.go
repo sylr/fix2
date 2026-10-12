@@ -61,15 +61,12 @@ func (e *NoFillsEntry) NoNested4PartyIDsEntries() []NoNested4PartyIDsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoNested4PartyIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoNested4PartyIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoNested4PartyIDsEntry {
+		return NoNested4PartyIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoFillsEntryBuilder struct {

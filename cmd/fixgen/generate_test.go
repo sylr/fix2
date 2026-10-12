@@ -549,7 +549,7 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 		"Delim:   TagAllocAccount,",
 		"Counter: TagNoDlvyInst,",
 		"spec := newOrderSingle_NoAllocs_spec",
-		"m.msg.GroupsOf(spec, newOrderSingle_specs...)",
+		"fix2.EntriesOf(m.msg.Fields(), spec, newOrderSingle_specs, ",
 		"var newOrderSingle_specs = []*fix2.GroupSpec{",
 	} {
 		if !strings.Contains(nos, want) {
@@ -560,7 +560,7 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 	if !strings.Contains(allocs, "spec := e.spec.Child(TagNoDlvyInst)") {
 		t.Error("NoAllocsEntry does not look up NoDlvyInst in its own spec")
 	}
-	for _, want := range []string{"e.grp.GroupsOf(spec, e.spec.Nested...)", "e.grp.GetTopLevel(tag, e.spec.Nested...)"} {
+	for _, want := range []string{"fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, ", "e.grp.GetTopLevel(tag, e.spec.Nested...)"} {
 		if !strings.Contains(allocs, want) {
 			t.Errorf("group_no_allocs.go missing %q", want)
 		}

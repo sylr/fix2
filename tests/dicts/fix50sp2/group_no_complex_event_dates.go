@@ -49,15 +49,12 @@ func (e *NoComplexEventDatesEntry) NoComplexEventTimesEntries() []NoComplexEvent
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoComplexEventTimesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoComplexEventTimesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoComplexEventTimesEntry {
+		return NoComplexEventTimesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoComplexEventDatesEntryBuilder struct {

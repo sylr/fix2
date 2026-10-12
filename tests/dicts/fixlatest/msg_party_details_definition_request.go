@@ -218,15 +218,12 @@ func (m *PartyDetailsDefinitionRequest) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, partyDetailsDefinitionRequest_specs...)
-	entries := make([]NoHopsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoHopsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, partyDetailsDefinitionRequest_specs, func(g fix2.Group) NoHopsEntry {
+		return NoHopsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var partyDetailsDefinitionRequest_NoRequestingPartyIDs_spec = &fix2.GroupSpec{
@@ -249,15 +246,12 @@ func (m *PartyDetailsDefinitionRequest) NoRequestingPartyIDsEntries() []NoReques
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, partyDetailsDefinitionRequest_specs...)
-	entries := make([]NoRequestingPartyIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRequestingPartyIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, partyDetailsDefinitionRequest_specs, func(g fix2.Group) NoRequestingPartyIDsEntry {
+		return NoRequestingPartyIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var partyDetailsDefinitionRequest_NoPartyUpdates_spec = &fix2.GroupSpec{
@@ -336,15 +330,12 @@ func (m *PartyDetailsDefinitionRequest) NoPartyUpdatesEntries() []NoPartyUpdates
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, partyDetailsDefinitionRequest_specs...)
-	entries := make([]NoPartyUpdatesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyUpdatesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, partyDetailsDefinitionRequest_specs, func(g fix2.Group) NoPartyUpdatesEntry {
+		return NoPartyUpdatesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type partyDetailsDefinitionRequest_groups struct {

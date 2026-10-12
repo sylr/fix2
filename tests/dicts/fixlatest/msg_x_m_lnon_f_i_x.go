@@ -190,15 +190,12 @@ func (m *XMLnonFIX) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, xMLnonFIX_specs...)
-	entries := make([]NoHopsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoHopsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, xMLnonFIX_specs, func(g fix2.Group) NoHopsEntry {
+		return NoHopsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var xMLnonFIX_NoAttachments_spec = &fix2.GroupSpec{
@@ -221,15 +218,12 @@ func (m *XMLnonFIX) NoAttachmentsEntries() []NoAttachmentsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, xMLnonFIX_specs...)
-	entries := make([]NoAttachmentsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoAttachmentsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, xMLnonFIX_specs, func(g fix2.Group) NoAttachmentsEntry {
+		return NoAttachmentsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type xMLnonFIX_groups struct {

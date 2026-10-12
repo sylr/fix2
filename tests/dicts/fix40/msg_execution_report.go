@@ -366,15 +366,12 @@ func (m *ExecutionReport) NoMiscFeesEntries() []NoMiscFeesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, executionReport_specs...)
-	entries := make([]NoMiscFeesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoMiscFeesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, executionReport_specs, func(g fix2.Group) NoMiscFeesEntry {
+		return NoMiscFeesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type executionReport_groups struct {

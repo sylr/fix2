@@ -90,15 +90,12 @@ func (m *LimitResponse) NoLimitIndicatorsEntries() []NoLimitIndicatorsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, limitResponse_specs...)
-	entries := make([]NoLimitIndicatorsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoLimitIndicatorsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, limitResponse_specs, func(g fix2.Group) NoLimitIndicatorsEntry {
+		return NoLimitIndicatorsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type limitResponse_groups struct {

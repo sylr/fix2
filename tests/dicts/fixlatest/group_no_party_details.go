@@ -50,15 +50,12 @@ func (e *NoPartyDetailsEntry) NoPartyDetailAltIDEntries() []NoPartyDetailAltIDEn
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoPartyDetailAltIDEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyDetailAltIDEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoPartyDetailAltIDEntry {
+		return NoPartyDetailAltIDEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoPartyDetailsEntry) NoPartyDetailSubIDs() (int, bool, error) {
 	v := e.get(TagNoPartyDetailSubIDs)
@@ -73,15 +70,12 @@ func (e *NoPartyDetailsEntry) NoPartyDetailSubIDsEntries() []NoPartyDetailSubIDs
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoPartyDetailSubIDsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoPartyDetailSubIDsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoPartyDetailSubIDsEntry {
+		return NoPartyDetailSubIDsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 func (e *NoPartyDetailsEntry) NoRelatedPartyDetailID() (int, bool, error) {
 	v := e.get(TagNoRelatedPartyDetailID)
@@ -96,15 +90,12 @@ func (e *NoPartyDetailsEntry) NoRelatedPartyDetailIDEntries() []NoRelatedPartyDe
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoRelatedPartyDetailIDEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoRelatedPartyDetailIDEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoRelatedPartyDetailIDEntry {
+		return NoRelatedPartyDetailIDEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoPartyDetailsEntryBuilder struct {

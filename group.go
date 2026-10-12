@@ -148,6 +148,13 @@ func (g *Group) GroupsOf(spec *GroupSpec, others ...*GroupSpec) []Group {
 }
 
 func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
+	return EntriesOf(fields, spec, others, func(g Group) Group { return g })
+}
+
+// EntriesOf is GroupsOf over fields, a message's or an entry's, with every
+// entry passed through wrap: generated readers build their typed entries
+// with it, without an intermediate []Group.
+func EntriesOf[E any](fields []Field, spec *GroupSpec, others []*GroupSpec, wrap func(Group) E) []E {
 	for i := 0; i < len(fields); {
 		f := fields[i]
 		if f.Tag == spec.Counter {
@@ -155,8 +162,7 @@ func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
 			if err != nil || count <= 0 {
 				return nil
 			}
-			groups, _ := spec.entries(fields, i+1, count)
-			return groups
+			return entries(spec, fields, i+1, count, wrap)
 		}
 		if o := groupSpecFor(others, f.Tag); o != nil {
 			count, _ := ParseInt(f.Value)
@@ -168,25 +174,25 @@ func groupsOf(fields []Field, spec *GroupSpec, others []*GroupSpec) []Group {
 	return nil
 }
 
-// entries reads up to count entries starting at fields[i] and returns them
-// with the index just past the block.
-func (s *GroupSpec) entries(fields []Field, i, count int) ([]Group, int) {
+// entries reads up to count entries of s starting at fields[i] and returns
+// them passed through wrap.
+func entries[E any](s *GroupSpec, fields []Field, i, count int, wrap func(Group) E) []E {
 	if i >= len(fields) || fields[i].Tag != s.Delim {
-		return nil, i
+		return nil
 	}
 	// Every entry holds at least one field: the fields left bound a count
 	// read off the wire.
-	groups := make([]Group, 0, min(count, len(fields)-i))
+	out := make([]E, 0, min(count, len(fields)-i))
 	wide := s.wideScratch()
 	defer releaseScratch(wide)
-	for len(groups) < count && i < len(fields) && fields[i].Tag == s.Delim {
+	for len(out) < count && i < len(fields) && fields[i].Tag == s.Delim {
 		start := i
 		i = s.entry(fields, i, wide)
 		// Cap the capacity so appending to an entry cannot overwrite the
 		// fields that follow it.
-		groups = append(groups, Group{fields: fields[start:i:i]})
+		out = append(out, wrap(Group{fields: fields[start:i:i]}))
 	}
-	return groups, i
+	return out
 }
 
 // entry consumes the entry whose delimiter is at fields[i] and returns the

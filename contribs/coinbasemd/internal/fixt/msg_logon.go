@@ -298,15 +298,12 @@ func (m *Logon) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, logon_specs...)
-	entries := make([]NoHopsEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoHopsEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, logon_specs, func(g fix2.Group) NoHopsEntry {
+		return NoHopsEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 var logon_NoMsgTypes_spec = &fix2.GroupSpec{
@@ -321,15 +318,12 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := m.msg.GroupsOf(spec, logon_specs...)
-	entries := make([]NoMsgTypesEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoMsgTypesEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(m.msg.Fields(), spec, logon_specs, func(g fix2.Group) NoMsgTypesEntry {
+		return NoMsgTypesEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type logon_groups struct {

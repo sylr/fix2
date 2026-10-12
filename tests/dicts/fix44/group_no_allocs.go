@@ -54,15 +54,12 @@ func (e *NoAllocsEntry) NoDlvyInstEntries() []NoDlvyInstEntry {
 	if spec == nil {
 		return nil
 	}
-	groups := e.grp.GroupsOf(spec, e.spec.Nested...)
-	entries := make([]NoDlvyInstEntry, len(groups))
-	for i := range groups {
-		entries[i] = NoDlvyInstEntry{
-			grp:  groups[i],
+	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoDlvyInstEntry {
+		return NoDlvyInstEntry{
+			grp:  g,
 			spec: spec,
 		}
-	}
-	return entries
+	})
 }
 
 type NoAllocsEntryBuilder struct {
