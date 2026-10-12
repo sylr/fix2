@@ -75,7 +75,7 @@ func (e runError) Unwrap() error { return e.err }
 // run runs the command line args and returns the exit code: 2 for a usage
 // error, 1 for a command that failed.
 func run(args []string, stdout, stderr io.Writer) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signalContext()
 	defer stop()
 	root := newCommand(stdout, stderr)
 	root.SetArgs(args)
@@ -89,6 +89,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stderr, "Run 'binancemd --help' for usage.\n")
 	return 2
+}
+
+// signalContext returns a context done on the first SIGINT or SIGTERM, which
+// starts the shutdown. A second one terminates the process, as signals do by
+// default: the shutdown may wait for a blocked output.
+func signalContext() (context.Context, context.CancelFunc) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	context.AfterFunc(ctx, stop)
+	return ctx, stop
 }
 
 // newCommand returns the binancemd command, writing data to stdout and logs

@@ -90,7 +90,7 @@ func feed(c *client, input string) {
 			_ = c.FromApp(context.Background(), nil, &m, in)
 		}
 	}
-	_ = c.out.end()
+	_ = c.out.end(context.Background())
 }
 
 // FuzzClient feeds every command messages as hostile as the exchange could

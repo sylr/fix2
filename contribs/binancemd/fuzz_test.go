@@ -140,7 +140,7 @@ func feed(c *client, s *session.Session, input string) {
 			_ = c.FromApp(context.Background(), s, &m, in)
 		}
 	}
-	_ = c.out.end()
+	_ = c.out.end(context.Background())
 	if c.quiet != nil {
 		c.quiet.Stop()
 	}

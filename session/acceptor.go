@@ -47,6 +47,7 @@ type Acceptor struct {
 
 	mu        sync.Mutex
 	sessions  map[SessionID]*Session
+	stopping  stoppingSessions         // removed, not yet done
 	byWire    map[SessionID][]*Session // keyed by the counterparty's view of the wire identity
 	listeners []transport.Listener
 	ctx       context.Context // set while running
@@ -74,6 +75,7 @@ func NewAcceptor(opts AcceptorOptions) *Acceptor {
 		opts:      opts,
 		log:       opts.Logger,
 		sessions:  make(map[SessionID]*Session),
+		stopping:  make(stoppingSessions),
 		byWire:    make(map[SessionID][]*Session),
 		pending:   make(chan struct{}, opts.MaxPendingConnections),
 		resolving: make(map[SessionID]chan struct{}),
@@ -81,7 +83,12 @@ func NewAcceptor(opts AcceptorOptions) *Acceptor {
 }
 
 // Add creates a session from cfg, served once its counterparty connects.
+// The ID of a session removed is refused until that session's Done is
+// closed: its store may still be in use.
 func (a *Acceptor) Add(cfg Config) (*Session, error) {
+	if err := a.checkStopping(cfg.ID); err != nil {
+		return nil, err
+	}
 	s, err := New(cfg)
 	if err != nil {
 		return nil, err
@@ -102,6 +109,9 @@ func (a *Acceptor) add(s *Session) error {
 	if _, ok := a.sessions[s.id]; ok {
 		return fmt.Errorf("session %s: already added", s.id)
 	}
+	if err := a.stopping.check(s.id); err != nil {
+		return err
+	}
 	wire := s.id.reversed()
 	if others := a.byWire[wire]; len(others) > 0 && a.opts.Route == nil {
 		return fmt.Errorf("session %s: same wire identity as session %s: set AcceptorOptions.Route to tell them apart", s.id, others[0].id)
@@ -115,7 +125,8 @@ func (a *Acceptor) add(s *Session) error {
 	return nil
 }
 
-// Remove logs session id out, if connected, stops it and removes it.
+// Remove logs session id out, if connected, stops it and removes it. Its ID
+// can be added again once the session's Done is closed.
 func (a *Acceptor) Remove(ctx context.Context, id SessionID) error {
 	a.mu.Lock()
 	s := a.sessions[id]
@@ -124,6 +135,7 @@ func (a *Acceptor) Remove(ctx context.Context, id SessionID) error {
 		return fmt.Errorf("session %s: not found", id)
 	}
 	delete(a.sessions, id)
+	a.stopping[id] = s.Done()
 	wire := id.reversed()
 	list := a.byWire[wire]
 	for i, o := range list {
@@ -155,6 +167,9 @@ func (a *Acceptor) resolve(ctx context.Context, wire SessionID, req *LogonReques
 	if cfg == nil {
 		return errors.New("no session for this Logon")
 	}
+	if err := a.checkStopping(cfg.ID); err != nil {
+		return err
+	}
 	s, err := New(*cfg)
 	if err != nil {
 		return err
@@ -172,6 +187,13 @@ func (a *Acceptor) resolve(ctx context.Context, wire SessionID, req *LogonReques
 		return err
 	}
 	return nil
+}
+
+// checkStopping fails if session id was removed and is still stopping.
+func (a *Acceptor) checkStopping(id SessionID) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.stopping.check(id)
 }
 
 // Session returns session id, or nil.
@@ -206,6 +228,9 @@ func (a *Acceptor) Listen(l transport.Listener) {
 
 // Run serves the listeners until ctx is done, then closes them and stops
 // every session (see Session.Stop): the sessions cannot be run again.
+// What it waits for before returning is as for Initiator.Run: not for a
+// stuck callback of a session's delivery goroutine, which its Done tells
+// the end of.
 func (a *Acceptor) Run(ctx context.Context) error {
 	a.mu.Lock()
 	if a.ctx != nil {
@@ -245,7 +270,8 @@ func (a *Acceptor) Run(ctx context.Context) error {
 
 // shutdown stops sessions, in parallel: each refuses new connections, logs
 // out within its LogoutTimeout plus a margin, delivers what it received and
-// closes its store.
+// closes its store, or leaves the last two to finish once a stuck callback
+// returns (see Session.Done).
 func shutdown(sessions []*Session) {
 	var wg sync.WaitGroup
 	for _, s := range sessions {
@@ -371,7 +397,14 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	}
 	tc.SetReadDeadline(time.Time{})
 	framer.SetMaxBodyLength(fix2.MaxBodyLength)
+	// Stop waits for this ToAdmin, which runs before the connection is the
+	// session's.
+	if !s.startDetached() {
+		refuse("session "+s.id.String()+": "+ErrStopped.Error(), slog.String("session", s.id.String()))
+		return
+	}
 	extra, err := s.toAdmin("A")
+	s.detached.Done()
 	if err != nil {
 		refuse("Logon answer cancelled by the handler", slog.String("session", s.id.String()), slog.Any("error", err))
 		return

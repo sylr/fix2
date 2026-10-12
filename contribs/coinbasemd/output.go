@@ -2,13 +2,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"math/big"
 	"slices"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -63,30 +67,118 @@ type (
 	}
 )
 
-// output writes events. Its methods are called from one goroutine at a time.
+// output renders events, and hands them to a goroutine of its own, the only
+// one writing them: a consumer that stalls blocks neither the client's lock
+// nor the session's reader. Its methods are called from one goroutine at a
+// time: FromApp's, then the command's once the session's callbacks are done.
 type output interface {
 	trade(e *tradeEvent)
 	ticker(e *tickerEvent)
 	book(e *bookEvent)
 	depth(e *depthEvent)
 	instrument(e *instrumentEvent)
-	// flush writes what is buffered, but tables.
+	// flush hands what was rendered, but tables, to the writing goroutine,
+	// waiting while its queue is full. It fails once writing did.
 	flush() error
-	// end writes everything: the command ends.
-	end() error
+	// end renders everything and waits, until ctx is done, for it to be
+	// written: the command ends.
+	end(ctx context.Context) error
 }
 
+// outputQueue bounds the flushes waiting to be written: once it is full,
+// FromApp waits, and the session sees a stalled handler (see
+// session.Config.MaxDeliveryStall), rather than events being dropped.
+const outputQueue = 1024
+
+// errOutputBlocked ends a command whose output stayed blocked once the
+// session stopped.
+var errOutputBlocked = errors.New("output blocked: what was received is not all written")
+
 func newOutput(w io.Writer, jsonLines, terminal bool) output {
-	bw := bufio.NewWriter(w)
+	p := &pipe{w: w, chunks: make(chan []byte, outputQueue), failed: make(chan struct{}), done: make(chan struct{})}
 	if jsonLines {
-		return &jsonOutput{w: bw, enc: json.NewEncoder(bw)}
+		return &jsonOutput{pipe: p, enc: json.NewEncoder(&p.buf)}
 	}
-	return &textOutput{w: bw, terminal: terminal, books: map[string]string{}}
+	return &textOutput{pipe: p, w: &p.buf, terminal: terminal, books: map[string]string{}}
+}
+
+// pipe holds the events an output rendered, and hands them to its writing
+// goroutine, started on the first flush.
+type pipe struct {
+	buf    bytes.Buffer // rendered, not yet flushed
+	w      io.Writer
+	start  sync.Once
+	chunks chan []byte
+	failed chan struct{} // closed once writing failed, with err
+	done   chan struct{} // closed once the writing goroutine returned, with err
+	err    error
+}
+
+// run writes the chunks flushed, in order, until end: through a buffer,
+// itself flushed whenever no chunk waits.
+func (p *pipe) run() {
+	defer close(p.done)
+	bw := bufio.NewWriter(p.w)
+	for b := range p.chunks {
+		if p.err != nil {
+			continue // dropped: end waits for the queue to be drained
+		}
+		_, err := bw.Write(b)
+		if err == nil && len(p.chunks) == 0 {
+			err = bw.Flush()
+		}
+		if err != nil {
+			p.err = err
+			close(p.failed)
+		}
+	}
+}
+
+// send hands what was rendered to the writing goroutine, waiting until ctx
+// is done while its queue is full. Once writing failed, it drops it and
+// fails.
+func (p *pipe) send(ctx context.Context) error {
+	p.start.Do(func() { go p.run() })
+	select {
+	case <-p.failed:
+		p.buf.Reset()
+		return p.err
+	default:
+	}
+	if p.buf.Len() == 0 {
+		return nil
+	}
+	b := bytes.Clone(p.buf.Bytes())
+	p.buf.Reset()
+	select {
+	case p.chunks <- b:
+		return nil
+	case <-p.failed:
+		return p.err
+	case <-ctx.Done():
+		return errOutputBlocked
+	}
+}
+
+func (p *pipe) flush() error { return p.send(context.Background()) }
+
+func (p *pipe) end(ctx context.Context) error {
+	err := p.send(ctx)
+	close(p.chunks)
+	if err != nil {
+		return err
+	}
+	select {
+	case <-p.done:
+		return p.err
+	case <-ctx.Done():
+		return errOutputBlocked
+	}
 }
 
 // jsonOutput writes JSON lines.
 type jsonOutput struct {
-	w   *bufio.Writer
+	*pipe
 	enc *json.Encoder
 }
 
@@ -100,13 +192,12 @@ func (o *jsonOutput) ticker(e *tickerEvent)         { o.write(e) }
 func (o *jsonOutput) book(e *bookEvent)             { o.write(e) }
 func (o *jsonOutput) depth(e *depthEvent)           { o.write(e) }
 func (o *jsonOutput) instrument(e *instrumentEvent) { o.write(e) }
-func (o *jsonOutput) flush() error                  { return o.w.Flush() }
-func (o *jsonOutput) end() error                    { return o.w.Flush() }
 
 // textOutput writes lines for people. On a terminal, books are redrawn in
 // place.
 type textOutput struct {
-	w        *bufio.Writer
+	*pipe
+	w        *bytes.Buffer // the pipe's
 	terminal bool
 	books    map[string]string // the last drawing of each book, on a terminal
 	table    *tabwriter.Writer // instruments, aligned once complete
@@ -250,11 +341,9 @@ func dash(s string) string {
 	return s
 }
 
-func (o *textOutput) flush() error { return o.w.Flush() }
-
-func (o *textOutput) end() error {
+func (o *textOutput) end(ctx context.Context) error {
 	if o.table != nil {
 		o.table.Flush()
 	}
-	return o.w.Flush()
+	return o.pipe.end(ctx)
 }

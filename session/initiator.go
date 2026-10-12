@@ -33,8 +33,9 @@ type Initiator struct {
 
 	mu       sync.Mutex
 	sessions map[SessionID]*initSession
-	ctx      context.Context // set while running
-	closing  bool            // Run is shutting down: no session added
+	stopping stoppingSessions // removed, not yet done
+	ctx      context.Context  // set while running
+	closing  bool             // Run is shutting down: no session added
 	wg       sync.WaitGroup
 }
 
@@ -62,14 +63,22 @@ func NewInitiator(opts InitiatorOptions) *Initiator {
 	if opts.DialTimeout <= 0 {
 		opts.DialTimeout = 10 * time.Second
 	}
-	return &Initiator{opts: opts, log: opts.Logger, sessions: make(map[SessionID]*initSession)}
+	return &Initiator{opts: opts, log: opts.Logger, sessions: make(map[SessionID]*initSession), stopping: make(stoppingSessions)}
 }
 
 // Add creates a session from cfg, connected with dialer, now if the
-// initiator runs, else once it does.
+// initiator runs, else once it does. The ID of a session removed is
+// refused until that session's Done is closed: its store may still be in
+// use.
 func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 	if dialer == nil {
 		return nil, fmt.Errorf("session %s: nil dialer", cfg.ID)
+	}
+	i.mu.Lock()
+	err := i.stopping.check(cfg.ID)
+	i.mu.Unlock()
+	if err != nil {
+		return nil, err
 	}
 	s, err := New(cfg)
 	if err != nil {
@@ -85,6 +94,10 @@ func (i *Initiator) Add(cfg Config, dialer transport.Dialer) (*Session, error) {
 	if _, ok := i.sessions[s.id]; ok {
 		s.store.Close()
 		return nil, fmt.Errorf("session %s: already added", s.id)
+	}
+	if err := i.stopping.check(s.id); err != nil {
+		s.store.Close()
+		return nil, err
 	}
 	is := &initSession{s: s, dialer: dialer}
 	i.sessions[s.id] = is
@@ -106,11 +119,15 @@ func (i *Initiator) start(ctx context.Context, is *initSession) {
 	}()
 }
 
-// Remove logs session id out, stops it and removes it.
+// Remove logs session id out, stops it and removes it. Its ID can be added
+// again once the session's Done is closed.
 func (i *Initiator) Remove(ctx context.Context, id SessionID) error {
 	i.mu.Lock()
 	is := i.sessions[id]
 	delete(i.sessions, id)
+	if is != nil {
+		i.stopping[id] = is.s.Done()
+	}
 	i.mu.Unlock()
 	if is == nil {
 		return fmt.Errorf("session %s: not found", id)
@@ -146,6 +163,13 @@ func (i *Initiator) Sessions() []*Session {
 
 // Run connects the sessions and keeps them connected until ctx is done,
 // then stops them (see Session.Stop): the sessions cannot be run again.
+// Each Stop is bounded by the session's LogoutTimeout plus a second. Run
+// returns once the sessions' connections wound down, which waits for the
+// callbacks run by their goroutines (Authenticate, ToAdmin, FromAdmin,
+// OnResend), but not for those of the sessions' delivery goroutines
+// (OnLogon, FromApp, OnLogout, OnRecoveryLoss): stuck, they may still run,
+// and a session's store is closed once they returned. Each session's Done
+// tells when.
 func (i *Initiator) Run(ctx context.Context) error {
 	i.mu.Lock()
 	if i.ctx != nil {

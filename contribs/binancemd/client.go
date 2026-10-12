@@ -58,6 +58,11 @@ var beginString = spotmd.Version.BeginString
 // take a while, and dials include them.
 var initiatorOptions = session.InitiatorOptions{DialTimeout: 30 * time.Second}
 
+// outputTimeout bounds the wait, once the session stopped, for what was
+// received to be written: an output still blocked then fails the command
+// with errOutputBlocked.
+var outputTimeout = 5 * time.Second
+
 // errDone ends a command that completed.
 var errDone = errors.New("done")
 
@@ -127,13 +132,23 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 	opts := initiatorOptions
 	opts.Logger = log
 	ini := session.NewInitiator(opts)
-	if _, err := ini.Add(cfg, dialer); err != nil {
+	s, err := ini.Add(cfg, dialer)
+	if err != nil {
 		return err
 	}
 	log.LogAttrs(ctx, slog.LevelInfo, "connecting", slog.String("endpoint", o.endpoint), slog.String("sender_comp_id", sender))
 	runErr := ini.Run(ctx)
-	// What was received is written, even when the command fails.
-	endErr := out.end()
+	// What was received is written, even when the command fails, once
+	// FromApp is done with the output: it may outlast Run, waiting for a
+	// blocked output.
+	octx, cancel := context.WithTimeout(context.Background(), outputTimeout)
+	defer cancel()
+	endErr := errOutputBlocked
+	select {
+	case <-s.Done():
+		endErr = out.end(octx)
+	case <-octx.Done():
+	}
 	if runErr != nil {
 		return errors.Join(runErr, endErr)
 	}
@@ -408,11 +423,13 @@ func (c *client) refusedLocked(ctx context.Context, err error) {
 	c.log.LogAttrs(ctx, slog.LevelError, "logon refused, retrying", slog.Int("refusals", c.refusals), slog.Any("error", err))
 }
 
-// FromApp writes what it receives.
+// FromApp writes what it receives: it renders the events with the lock
+// held, and hands them to the output without, so that a blocked output
+// stalls FromApp alone, never FromAdmin.
 func (c *client) FromApp(ctx context.Context, s *session.Session, m *fix2.Message, in session.Inbound) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	err := spotmd.Dispatch(m, &dispatcher{c: c, ctx: ctx, s: s, received: in.Received.UTC()})
+	c.mu.Unlock()
 	if errors.Is(err, fix2.ErrUnsupportedMessageType) {
 		// Never rejected: Binance would not care.
 		c.log.LogAttrs(ctx, slog.LevelDebug, "message ignored", slog.String("msg_type", string(m.MsgType())))

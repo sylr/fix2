@@ -92,6 +92,12 @@ type Session struct {
 	bodyPool sync.Pool
 	// cbCtx is the context handler callbacks get.
 	cbCtx context.Context
+	// done is closed once the session is stopped and its callbacks
+	// returned, see Done.
+	done chan struct{}
+	// detached counts the callbacks running for connections not yet
+	// attached, see startDetached.
+	detached sync.WaitGroup
 
 	mu        sync.Mutex
 	st        store.State // generation, NextSender, and NextTarget: the next expected
@@ -166,6 +172,7 @@ func New(cfg Config) (*Session, error) {
 		handler: cfg.Handler,
 		store:   cfg.Store,
 		heartBt: cfg.HeartBtInt,
+		done:    make(chan struct{}),
 	}
 	s.log = cfg.Logger.With(slog.String("session", cfg.ID.String()))
 	s.cbCtx = context.WithValue(context.Background(), callbackKey{}, s)
