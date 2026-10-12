@@ -37,7 +37,7 @@ BASELINE    ?= fix2
 CXX_PATH       := $(shell command -v $(CXX))
 CMAKE_BUILD_ID := $(shell printf '%s\n%s\n' '$(CXX_PATH)' '$(QUICKFIX_CPP)' | cksum | cut -d' ' -f1)
 
-.PHONY: generate build bench stats vet clean
+.PHONY: generate build bench stats micro vet clean
 
 # generate generates the Go engines' code from $(DICT), into gen/: fix2's
 # with fixgen, QuickFIX/Go's with its generate-fix, both Go tools of the
@@ -89,6 +89,14 @@ STATS_ORDER := $(BASELINE) $(filter-out $(BASELINE),$(AGENTS))
 stats:
 	$(GO) run golang.org/x/perf/cmd/benchstat@latest -row '.name,/window' \
 		-col '/acceptor@($(STATS_ORDER)),/initiator@($(STATS_ORDER))' $(OUTPUT)
+
+# micro runs the microbenchmarks of the fix2 agent's reads (micro/): the
+# scenarios' messages through the generated readers, without a session.
+# Compare two runs of it with benchstat.
+MICRO_COUNT ?= 10
+
+micro: generate
+	$(GO) test -run '^$$' -bench . -count $(MICRO_COUNT) ./micro/
 
 vet: generate
 	$(GO) vet ./...

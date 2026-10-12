@@ -149,6 +149,17 @@ runs every scenario, window and pair once, the pairs in an order of their
 own (`-seed`), so that drift over the session (thermal throttling, other
 load) spreads over all of them rather than favouring the pairs run first.
 
+## Microbenchmarks
+
+A change to fix2's generated readers costs or saves a few hundred
+nanoseconds a message, which round trips of tens of microseconds over TCP
+hide. `micro/` measures them alone: the scenarios' messages, parsed once,
+read through `gen/fix2/fix44` as the fix2 agent's handlers read them
+(`BenchmarkRead`), their group entries without their fields
+(`BenchmarkEntries`), snapshots of 2 to 200 entries (`BenchmarkReadSnapshot`).
+`make micro` runs them 10 times (`MICRO_COUNT`), for benchstat to compare
+two versions of fix2, each with the code its fixgen generates.
+
 ## Fairness
 
 Each engine runs with its defaults but for what the scenarios must set the
