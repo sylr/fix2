@@ -104,17 +104,51 @@ func setOutputTimeout(t *testing.T, d time.Duration) {
 	t.Cleanup(func() { outputTimeout = saved })
 }
 
-// waitQueueFull waits for the output's queue to fill: FromApp then blocks.
-func waitQueueFull(t *testing.T, out output) {
+// sendWhileBlocked sends the snapshots of best bids 1000 to 1000+n-1 to an
+// output w blocks: the first alone, until its Write blocks, so that the
+// writing goroutine holds it alone and the others queue. Sent together,
+// the goroutine could buffer several before its first Write.
+func sendWhileBlocked(t *testing.T, f *fakeCoinbase, id string, w *blockedWriter, n int) {
 	t.Helper()
-	p := out.(*jsonOutput).pipe
-	deadline := time.Now().Add(5 * time.Second)
-	for len(p.chunks) < cap(p.chunks) {
-		if time.Now().After(deadline) {
-			t.Fatalf("output queue holds %d, want %d", len(p.chunks), cap(p.chunks))
+	f.snapshot(id, 1000)
+	select {
+	case <-w.first:
+	case <-time.After(5 * time.Second):
+		t.Fatal("nothing written")
+	}
+	for i := 1; i < n; i++ {
+		f.snapshot(id, 1000+i)
+	}
+}
+
+// waitGrowing waits for n() to reach want. It may grow slowly, under load:
+// it fails once it stopped growing for 10s, or after 2 minutes.
+func waitGrowing(t *testing.T, what string, n func() int, want int) {
+	t.Helper()
+	start, last, since := time.Now(), n(), time.Now()
+	for got := last; got < want; got = n() {
+		now := time.Now()
+		if got > last {
+			last, since = got, now
+		}
+		if now.Sub(since) > 10*time.Second || now.Sub(start) > 2*time.Minute {
+			t.Fatalf("%s %d, want %d", what, got, want)
 		}
 		time.Sleep(time.Millisecond)
 	}
+}
+
+// waitQueued waits for the output's queue to hold n.
+func waitQueued(t *testing.T, out output, n int) {
+	t.Helper()
+	p := out.(*jsonOutput).pipe
+	waitGrowing(t, "output queue holds", func() int { return len(p.chunks) }, n)
+}
+
+// waitQueueFull waits for the output's queue to fill: FromApp then blocks.
+func waitQueueFull(t *testing.T, out output) {
+	t.Helper()
+	waitQueued(t, out, outputQueue)
 }
 
 // checkTickers checks that out holds the tickers of best bids 1000 to
@@ -139,10 +173,7 @@ func checkTickers(t *testing.T, out string, n int) {
 // waitTickers waits for w to hold n lines, then checks them.
 func waitTickers(t *testing.T, w *blockedWriter, n int) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for strings.Count(w.String(), "\n") < n && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitGrowing(t, "lines written", func() int { return strings.Count(w.String(), "\n") }, n)
 	checkTickers(t, w.String(), n)
 }
 
@@ -168,14 +199,7 @@ func TestShutdownWhileOutputBlocked(t *testing.T) {
 			setOutputTimeout(t, 500*time.Millisecond)
 			w := newBlockedWriter(t)
 			f, id, out, cancel, done := startWriting(t, mem.Listen("coinbase"), w)
-			for i := range tc.events {
-				f.snapshot(id, 1000+i)
-			}
-			select {
-			case <-w.first:
-			case <-time.After(5 * time.Second):
-				t.Fatal("nothing written")
-			}
+			sendWhileBlocked(t, f, id, w, tc.events)
 			if tc.events > outputQueue {
 				waitQueueFull(t, out)
 			}
@@ -208,9 +232,7 @@ func TestShutdownWhileOutputBlocked(t *testing.T) {
 func TestAdminWhileOutputBlocked(t *testing.T) {
 	w := newBlockedWriter(t)
 	f, id, out, cancel, done := startWriting(t, mem.Listen("coinbase"), w)
-	for i := range outputQueue + 10 {
-		f.snapshot(id, 1000+i)
-	}
+	sendWhileBlocked(t, f, id, w, outputQueue+10)
 	waitQueueFull(t, out)
 	for _, testReqID := range []string{"T1", "T2"} {
 		f.send("1", "112", testReqID)
@@ -365,14 +387,7 @@ func TestOutputFailureStops(t *testing.T) {
 			for i := range tc.queued {
 				f.snapshot(id, 1001+tc.written+i)
 			}
-			p := out.(*jsonOutput).pipe
-			deadline := time.Now().Add(5 * time.Second)
-			for len(p.chunks) < tc.queued {
-				if time.Now().After(deadline) {
-					t.Fatalf("output queue holds %d, want %d", len(p.chunks), tc.queued)
-				}
-				time.Sleep(time.Millisecond)
-			}
+			waitQueued(t, out, tc.queued)
 			w.fail()
 			select {
 			case m, ok := <-f.msgs:
