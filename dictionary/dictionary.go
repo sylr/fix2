@@ -50,8 +50,11 @@ type MessageDef struct {
 	Name    string
 	MsgType string
 	MsgCat  string
-	Fields  []FieldRef // flattened (components/groups resolved)
-	Groups  []GroupDef // top-level groups in this message
+	// Fields are flattened, components and groups resolved: they list the
+	// fields of the groups' entries too. Those listed no more often than
+	// the groups hold them are allowed only in entries.
+	Fields []FieldRef
+	Groups []GroupDef // top-level groups in this message
 	// Conditions are the required fields of the message's optional
 	// components, required only when the component is present.
 	Conditions []Condition

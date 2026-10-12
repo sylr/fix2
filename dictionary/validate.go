@@ -23,6 +23,7 @@ var (
 	ErrRepeatedTag      = fmt.Errorf("%w: tag appears more than once", ErrValidation)
 	ErrOutOfOrder       = fmt.Errorf("%w: tag out of order", ErrValidation)
 	ErrGroupCount       = fmt.Errorf("%w: incorrect NumInGroup count", ErrValidation)
+	ErrTagOutsideGroup  = fmt.Errorf("%w: tag allowed only in group entries", ErrValidation)
 )
 
 // ValidationError wraps a sentinel error with the offending tag, the
@@ -53,12 +54,21 @@ func (e *ValidationError) Unwrap() error {
 //     optional component only when the component is present, i.e. when a
 //     tag found nowhere else in the message is (components whose presence
 //     cannot be told apart this way are not enforced)
-//  5. Every tag is allowed (header + trailer + message fields + structural)
+//  5. Every tag is allowed (header + trailer + message fields + structural),
+//     a tag the message holds only in group entries only there (reason 2)
 //  6. Enum values are valid for fields that define enums
 //
-// Required tags (2-4) must be present outside group entries: a tag a group
-// entry holds does not stand for the message's own. Validate is ValidateWith
-// with CheckUnknownTags and CheckUserDefinedTags, which 5 is.
+// Groups are read as GroupsOf reads them: a group holds at most as many
+// entries as its counter says, and the fields after them are the message's
+// own, one sharing a tag with the group's delimiter included. Required tags
+// (2-4) must be present outside group entries: a tag a group entry holds
+// does not stand for the message's own. Validate is ValidateWith with
+// CheckUnknownTags and CheckUserDefinedTags, which 5 is.
+//
+// Entries are not validated against their group's definition: an entry may
+// lack its required fields and hold them in any order, whatever the checks.
+// A tag an entry holds twice ends it, as GroupsOf reads it: the second is
+// rejected only where the message does not allow it.
 func (d *Dict) Validate(msg *fix2.Message) error {
 	return d.validate(msg, checksValidate)
 }
@@ -115,6 +125,7 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	// after the required-tag checks.
 	var fieldErr error
 	groups := false
+	misplaced := 0 // the first tag allowed only in group entries and checked, wherever it is
 	for _, f := range msg.Fields() {
 		e := d.lookup(mdef, f.Tag)
 		if e == nil {
@@ -130,6 +141,9 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 			present[e.slot/64] |= 1 << (e.slot % 64)
 		}
 		groups = groups || e.counter
+		if misplaced == 0 && e.grouped && checks&unknownCheck(f.Tag) != 0 {
+			misplaced = f.Tag
+		}
 		if fieldErr == nil && !e.structural && checks&checksValue != 0 {
 			fieldErr = d.checkValue(f, checks)
 		}
@@ -139,16 +153,25 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	}
 
 	// Required tags must be present at the top level: a group entry's field
-	// does not stand for a message's own. Without any group, every field is.
+	// does not stand for a message's own, and a tag allowed only in entries
+	// must not be there. Without any group, every field is.
 	if groups {
+		misplaced = 0
 		for f := range msg.TopLevelFieldsFunc(func(tag int) *fix2.GroupSpec {
 			if e := d.lookup(mdef, tag); e != nil {
 				return e.spec
 			}
 			return nil
 		}) {
-			if e := d.lookup(mdef, f.Tag); e != nil && e.slot >= 0 {
+			e := d.lookup(mdef, f.Tag)
+			if e == nil {
+				continue
+			}
+			if e.slot >= 0 {
 				top[e.slot/64] |= 1 << (e.slot % 64)
+			}
+			if misplaced == 0 && e.grouped && checks&unknownCheck(f.Tag) != 0 {
+				misplaced = f.Tag
 			}
 		}
 	} else {
@@ -209,7 +232,15 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 	}
 
 	if fieldErr == nil && checks&CheckGroupCounts != 0 {
-		return d.checkStructure(msg, mdef, CheckGroupCounts)
+		fieldErr = d.checkStructure(msg, mdef, CheckGroupCounts)
+	}
+	if fieldErr == nil && misplaced != 0 {
+		return &ValidationError{
+			Err:    ErrTagOutsideGroup,
+			Tag:    misplaced,
+			Reason: ReasonTagNotDefinedForMessageType,
+			Msg:    fmt.Sprintf("tag %d%s not allowed outside group entries in message %s", misplaced, d.fieldName(misplaced), mdef.Name),
+		}
 	}
 	return fieldErr
 }

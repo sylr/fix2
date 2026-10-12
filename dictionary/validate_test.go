@@ -737,7 +737,8 @@ func TestValidate_DataLengthEdgeCases(t *testing.T) {
 func TestValidate_MalformedCounts(t *testing.T) {
 	// Entries after a count of zero, a negative or non-numeric count, or
 	// beyond the count are not group entries, as GroupsOf reads them: their
-	// fields are top level. Nothing panics.
+	// fields are top level, where F is the message's own but D, a field of
+	// the group only, is not allowed. Nothing panics.
 	const xml = `<fix type="FIX" major="4" minor="4">
   <header><field name="MsgType" required="Y"/></header>
   <trailer/>
@@ -761,15 +762,22 @@ func TestValidate_MalformedCounts(t *testing.T) {
 	}
 	for _, count := range []string{"0", "-1", "x", "99999999999999999999"} {
 		msg := parseMsg(t, buildFIXMsg("35=M\x01101="+count+"\x01102=d\x01100=f\x01"))
-		if err := d.Validate(&msg); err != nil {
-			t.Errorf("count %s: %v", count, err)
+		if err := d.Validate(&msg); !isGroupFieldOutside(err, 102) {
+			t.Errorf("count %s: %v, want D not allowed outside entries", count, err)
 		}
 	}
 	// Undercounted: the second entry's F is top level.
 	msg := parseMsg(t, buildFIXMsg("35=M\x01101=1\x01102=a\x01100=in\x01102=b\x01100=f\x01"))
-	if err := d.Validate(&msg); err != nil {
-		t.Errorf("undercounted: %v", err)
+	if err := d.Validate(&msg); !isGroupFieldOutside(err, 102) {
+		t.Errorf("undercounted: %v, want D not allowed outside entries", err)
 	}
+}
+
+// isGroupFieldOutside reports whether err rejects tag as not defined for the
+// message type, as it is outside group entries.
+func isGroupFieldOutside(err error, tag int) bool {
+	var ve *dictionary.ValidationError
+	return errors.Is(err, dictionary.ErrTagOutsideGroup) && errors.As(err, &ve) && ve.Tag == tag && ve.Reason == dictionary.ReasonTagNotDefinedForMessageType
 }
 
 func TestValidate_GroupWithLengthOnly(t *testing.T) {

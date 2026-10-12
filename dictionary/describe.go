@@ -31,6 +31,7 @@ func (d *Dict) Sections(m *fix2.Message) []Section {
 	out := make([]Section, len(fields))
 	mdef := d.Messages[string(m.MsgType())]
 	cur := SectionHeader
+	var walk *groupWalk
 	for i := 0; i < len(fields); i++ {
 		var e *tagEntry
 		if mdef != nil {
@@ -51,7 +52,10 @@ func (d *Dict) Sections(m *fix2.Message) []Section {
 		}
 		out[i] = sec
 		if e != nil && e.spec != nil {
-			next, _ := d.walkGroup(fields, i, e.spec, mdef, false)
+			if walk == nil {
+				walk = &groupWalk{d: d, mdef: mdef, fields: fields, seen: map[entryTag]int{}}
+			}
+			next, _ := walk.group(i, e.spec, nil)
 			for j := i + 1; j < next; j++ {
 				out[j] = sec
 			}

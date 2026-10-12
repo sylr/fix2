@@ -30,3 +30,9 @@ func (d *Dict) EnumChecks() int { return len(d.enumChecks) }
 
 // Allows reports whether m's compiled body table holds tag.
 func (m *MessageDef) Allows(tag int) bool { return m.body.get(tag) != nil }
+
+// TopLevel reports whether m allows tag outside group entries.
+func (d *Dict) TopLevel(m *MessageDef, tag int) bool {
+	e := d.lookup(m, tag)
+	return e != nil && !e.grouped
+}

@@ -40,6 +40,7 @@ type tagEntry struct {
 	spec       *fix2.GroupSpec // that group's spec, whose entries top-level presence skips
 	structural bool            // BeginString, BodyLength or CheckSum, never enum-checked
 	declared   bool            // declared by the scope, not only a DATA/LENGTH partner
+	grouped    bool            // allowed only in group entries, not outside them
 	section    section         // where FIX requires the field: header, body or trailer
 	used       bool
 }
@@ -188,8 +189,9 @@ func (d *Dict) compile() {
 	envUnknown := func(tag int) bool { return d.anyTags.get(tag) == nil }
 	envCounters := specsByCounter(slices.Concat(d.groupSpecs(d.HeaderGroups, envUnknown), d.groupSpecs(d.TrailerGroups, envUnknown)))
 	envEntries := map[int]tagEntry{}
-	addAllowed(d.profile, envEntries, d.Header, sectionHeader, env.of, nil, envCounters, nil)
-	addAllowed(d.profile, envEntries, d.Trailer, sectionTrailer, env.of, nil, envCounters, nil)
+	envGrouped := groupOnly(slices.Concat(d.Header, d.Trailer), slices.Concat(d.HeaderGroups, d.TrailerGroups))
+	addAllowed(d.profile, envEntries, d.Header, envGrouped, sectionHeader, env.of, nil, envCounters, nil)
+	addAllowed(d.profile, envEntries, d.Trailer, envGrouped, sectionTrailer, env.of, nil, envCounters, nil)
 	for tag, s := range map[int]section{8: sectionHeader, 9: sectionHeader, 10: sectionTrailer} {
 		e, ok := envEntries[tag]
 		if !ok {
@@ -236,12 +238,18 @@ func (d *Dict) compile() {
 
 		entries := map[int]tagEntry{}
 		unknown := func(tag int) bool { return d.lookup(m, tag) == nil }
-		addAllowed(d.profile, entries, m.Fields, sectionBody, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups, unknown)), envCounters)
+		addAllowed(d.profile, entries, m.Fields, groupOnly(m.Fields, m.Groups), sectionBody, body.of, env.of, specsByCounter(d.groupSpecs(m.Groups, unknown)), envCounters)
 		for tag, e := range entries {
-			if env, ok := envEntries[tag]; ok && !env.structural {
-				e.section = sectionAny
-				entries[tag] = e
+			env, ok := envEntries[tag]
+			if !ok {
+				continue
 			}
+			if !env.structural {
+				e.section = sectionAny
+			}
+			// The header or trailer may hold it outside their groups.
+			e.grouped = e.grouped && env.grouped
+			entries[tag] = e
 		}
 		m.body = newTagTable(entries)
 		for tag := range entries {
@@ -285,13 +293,18 @@ func compileConds(conds []Condition, s *slots) []compiledCond {
 // and generated builders write both, even when the dictionary declares only
 // one. A tag's slot comes from own, else from shared, else it has none; it
 // is a group counter if sharedCounters, the envelope's, or counters has its
-// spec, in that order.
-func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef, sec section, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
-	add := func(tag int) {
-		if _, ok := entries[tag]; ok {
+// spec, in that order. A tag grouped reports, and a partner only such tags
+// pair with, is allowed only in group entries.
+func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef, grouped map[int]bool, sec section, own, shared map[int]int32, counters, sharedCounters map[int]*fix2.GroupSpec) {
+	add := func(tag int, inGroups bool) {
+		if e, ok := entries[tag]; ok {
+			if e.grouped && !inGroups {
+				e.grouped = false
+				entries[tag] = e
+			}
 			return
 		}
-		e := tagEntry{slot: -1, structural: structural(tag), section: sec}
+		e := tagEntry{slot: -1, structural: structural(tag), grouped: inGroups, section: sec}
 		if e.spec = sharedCounters[tag]; e.spec == nil {
 			e.spec = counters[tag]
 		}
@@ -304,7 +317,7 @@ func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef
 		entries[tag] = e
 	}
 	for _, ref := range refs {
-		add(ref.Tag)
+		add(ref.Tag, grouped[ref.Tag])
 		e := entries[ref.Tag]
 		e.declared = true
 		entries[ref.Tag] = e
@@ -313,15 +326,45 @@ func addAllowed(profile *fix2.Profile, entries map[int]tagEntry, refs []FieldRef
 	for _, ref := range refs {
 		for _, p := range []int{profile.DataTag(ref.Tag), profile.DataLengthTag(ref.Tag)} {
 			if p != 0 {
-				add(p)
+				add(p, grouped[ref.Tag])
 			}
 		}
 	}
 	// Every tracked tag is allowed: required and activation tags come from
 	// the scope's own fields, but make sure of it.
 	for tag := range own {
-		add(tag)
+		add(tag, grouped[tag])
 	}
+}
+
+// groupOnly returns the tags of refs that only groups hold. refs list their
+// scope's groups' fields too, nested groups' included: a tag refs list more
+// often than the groups hold it is also the scope's own.
+func groupOnly(refs []FieldRef, groups []GroupDef) map[int]bool {
+	n := make(map[int]int, len(refs))
+	for _, ref := range refs {
+		n[ref.Tag]++
+	}
+	var walk func(groups []GroupDef, nested bool)
+	walk = func(groups []GroupDef, nested bool) {
+		for _, gd := range groups {
+			if nested {
+				n[gd.CounterTag]--
+			}
+			for _, ref := range gd.Fields {
+				n[ref.Tag]--
+			}
+			walk(gd.Groups, true)
+		}
+	}
+	walk(groups, false)
+	only := map[int]bool{}
+	for tag, k := range n {
+		if k <= 0 {
+			only[tag] = true
+		}
+	}
+	return only
 }
 
 // structural reports whether tag is BeginString, BodyLength or CheckSum, which

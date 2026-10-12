@@ -523,9 +523,12 @@ func (r *resolver) group(b *resolvedBody, ctx int, counter string, required bool
 		return err
 	}
 	b.all = append(b.all, b.addField(ctx, fd.Tag, required))
-	// Group children are never required at this level since group
-	// instance validation is out of scope. They do show that their
-	// optional component is present.
+	// Group children are listed too, as many times as the groups hold
+	// them, which tells them apart from the body's own fields (see
+	// dictionary.MessageDef). They are never required at this level, since
+	// entries are not validated against their group (see
+	// dictionary.Dict.Validate). They do show that their optional
+	// component is present.
 	for _, ref := range inner.all {
 		b.markPresent(ctx, ref.Tag)
 		b.all = append(b.all, dictionary.FieldRef{Tag: ref.Tag})

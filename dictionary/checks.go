@@ -3,6 +3,7 @@ package dictionary
 import (
 	"fmt"
 	"slices"
+	"strconv"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -26,12 +27,17 @@ const (
 	// fields after the standard trailer (reason 14).
 	CheckOrder
 	// CheckGroupCounts rejects repeating groups whose NumInGroup does not
-	// match their entries (reason 16).
+	// match their entries (reason 16): fewer follow it than it says, or
+	// another follows them, its delimiter a tag the enclosing entry or the
+	// message could not hold there.
 	CheckGroupCounts
 	// CheckUnknownTags rejects tags below 5000 the message does not define,
 	// its header and trailer included: a tag the dictionary does not define
 	// (reason 0), or not for the message's type (reason 2). Without it, they
-	// are accepted, as QuickFIX/J's AllowUnknownMsgFields=Y does.
+	// are accepted, as QuickFIX/J's AllowUnknownMsgFields=Y does: so is a
+	// tag the message holds only in group entries, outside them. The stray
+	// fields of a group with more entries than its NumInGroup says are then
+	// accepted too: CheckGroupCounts alone reports the count.
 	CheckUnknownTags
 	// CheckUserDefinedTags rejects user-defined tags, 5000 and up, the
 	// message does not define, as CheckUnknownTags those below. Without it,
@@ -54,8 +60,10 @@ const userDefinedTagMin = 5000
 // than CheckUnknownTags and CheckUserDefinedTags. A repeated tag or a field
 // out of order is reported first, as QuickFIX engines find them while
 // parsing; then missing required tags; then field errors in message order;
-// then group counts. Unlike Validate, the extra checks may allocate. To
-// reject unknown tags as Validate does, select their checks too:
+// then group counts; then a tag held only in group entries outside them, if
+// its tag's check, CheckUnknownTags or CheckUserDefinedTags, is selected.
+// Unlike Validate, the extra checks may allocate. To reject unknown tags as
+// Validate does, select their checks too:
 //
 //	d.ValidateWith(msg, dictionary.CheckFormats|dictionary.CheckUnknownTags|dictionary.CheckUserDefinedTags)
 //
@@ -243,6 +251,7 @@ func digits(v []byte) bool {
 // are skipped by walking each group from its counter, which counts them.
 func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks) error {
 	fields := msg.Fields()
+	var walk *groupWalk
 	var seen map[int]bool
 	if checks&CheckRepeatedTags != 0 {
 		seen = make(map[int]bool, len(fields))
@@ -280,7 +289,10 @@ func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks
 			phase = e.section
 		}
 		if e.spec != nil {
-			next, err := d.walkGroup(fields, i, e.spec, mdef, checks&CheckGroupCounts != 0)
+			if walk == nil {
+				walk = &groupWalk{d: d, mdef: mdef, fields: fields, check: checks&CheckGroupCounts != 0, seen: map[entryTag]int{}}
+			}
+			next, err := walk.group(i, e.spec, nil)
 			if err != nil {
 				return err
 			}
@@ -301,22 +313,82 @@ func (d *Dict) repeated(tag int, mdef *MessageDef) *ValidationError {
 	}
 }
 
-// walkGroup walks the entries of the group whose counter is fields[at], of
-// spec, and returns the index of the first field after them. If check is
-// set, it returns an error when the counter does not match the number of
-// entries, or a nested group's counter its own.
-func (d *Dict) walkGroup(fields []fix2.Field, at int, spec *fix2.GroupSpec, mdef *MessageDef, check bool) (int, error) {
-	entries, i := 0, at+1
-	for i < len(fields) {
-		tag := fields[i].Tag
-		if tag == spec.Delim {
-			entries++
-		} else if entries == 0 || !slices.Contains(spec.Tags, tag) && spec.Child(tag) == nil && (spec.Unknown == nil || !spec.Unknown(tag)) {
-			break
+// groupWalk walks the groups of a message's fields as GroupsOf reads them:
+// a group holds at most as many entries as its counter says, and an entry
+// ends at the next one, at a tag its group does not hold, or at one it
+// already holds.
+type groupWalk struct {
+	d      *Dict
+	mdef   *MessageDef
+	fields []fix2.Field
+	check  bool // report counters not matching their entries
+	// seen maps a tag of a group's entries to the index of the delimiter of
+	// the last entry holding it.
+	seen map[entryTag]int
+}
+
+// entryTag is a tag of the entries of a group.
+type entryTag struct {
+	spec *fix2.GroupSpec
+	tag  int
+}
+
+// group walks the entries of the group whose counter is fields[at], of spec,
+// in an entry of parent or, if parent is nil, outside groups, and returns
+// the index of the first field after them. If w.check is set, it returns an
+// error when the counter does not match the number of entries, or a nested
+// group's counter its own: when there are fewer, or when another entry
+// follows them, whose delimiter parent's entry or the message could not hold
+// there instead.
+func (w *groupWalk) group(at int, spec, parent *fix2.GroupSpec) (int, error) {
+	count, cerr := fix2.ParseInt(w.fields[at].Value)
+	i, n := at+1, 0
+	for ; n < count && i < len(w.fields) && w.fields[i].Tag == spec.Delim; n++ {
+		var err error
+		if i, err = w.entry(i, spec); err != nil {
+			return 0, err
+		}
+	}
+	if !w.check {
+		return i, nil
+	}
+	more := n == count && i < len(w.fields) && w.fields[i].Tag == spec.Delim && !w.holds(parent, spec.Delim)
+	if cerr == nil && n == count && !more {
+		return i, nil
+	}
+	follow := strconv.Itoa(n)
+	if more {
+		follow = "more"
+	}
+	return 0, &ValidationError{
+		Err:    ErrGroupCount,
+		Tag:    spec.Counter,
+		Reason: ReasonIncorrectNumInGroupCount,
+		Msg:    fmt.Sprintf("NumInGroup %d%s is %q but %s entries follow in message %s", spec.Counter, w.d.fieldName(spec.Counter), w.fields[at].Value, follow, w.mdef.Name),
+	}
+}
+
+// entry walks the entry of spec whose delimiter is at fields[i] and returns
+// the index just past it.
+func (w *groupWalk) entry(i int, spec *fix2.GroupSpec) (int, error) {
+	start := i
+	for i < len(w.fields) {
+		tag := w.fields[i].Tag
+		child := spec.Child(tag)
+		held := child != nil || slices.Contains(spec.Tags, tag)
+		if i > start && (tag == spec.Delim || !held && (spec.Unknown == nil || !spec.Unknown(tag))) {
+			break // the next entry, or not part of this group
+		}
+		if held {
+			k := entryTag{spec, tag}
+			if s, ok := w.seen[k]; ok && s == start {
+				break // a tag cannot repeat within an entry
+			}
+			w.seen[k] = start
 		}
 		// The delimiter itself may be a nested group's counter.
-		if child := spec.Child(tag); child != nil {
-			next, err := d.walkGroup(fields, i, child, mdef, check)
+		if child != nil {
+			next, err := w.group(i, child, spec)
 			if err != nil {
 				return 0, err
 			}
@@ -325,15 +397,15 @@ func (d *Dict) walkGroup(fields []fix2.Field, at int, spec *fix2.GroupSpec, mdef
 		}
 		i++
 	}
-	if check {
-		if n, err := fix2.ParseInt(fields[at].Value); err != nil || n != entries {
-			return 0, &ValidationError{
-				Err:    ErrGroupCount,
-				Tag:    spec.Counter,
-				Reason: ReasonIncorrectNumInGroupCount,
-				Msg:    fmt.Sprintf("NumInGroup %d%s is %q but %d entries follow in message %s", spec.Counter, d.fieldName(spec.Counter), fields[at].Value, entries, mdef.Name),
-			}
-		}
-	}
 	return i, nil
+}
+
+// holds reports whether an entry of parent or, if parent is nil, the message
+// outside groups may hold tag.
+func (w *groupWalk) holds(parent *fix2.GroupSpec, tag int) bool {
+	if parent == nil {
+		e := w.d.lookup(w.mdef, tag)
+		return e != nil && !e.grouped
+	}
+	return slices.Contains(parent.Tags, tag) || parent.Child(tag) != nil || parent.Unknown != nil && parent.Unknown(tag)
 }
