@@ -1,7 +1,9 @@
 // Command quickfixgo is the benchmark agent of QuickFIX/Go
 // (github.com/quickfixgo/quickfix): the acceptor or the initiator of the
-// scenario (see package scenario), with QuickFIX/Go's defaults but for what
-// the scenario sets.
+// scenarios (see package scenario), with QuickFIX/Go's defaults but for
+// what the scenarios set. It builds and reads every message with the code
+// QuickFIX/Go's generate-fix generates from the dictionary
+// (gen/quickfixgo), and routes those it receives with a MessageRouter.
 package main
 
 import (
@@ -14,6 +16,13 @@ import (
 	"time"
 
 	"github.com/quickfixgo/quickfix"
+	"github.com/shopspring/decimal"
+	"github.com/sylr/fix2/tests/benchmarks/gen/quickfixgo/enum"
+	"github.com/sylr/fix2/tests/benchmarks/gen/quickfixgo/field"
+	"github.com/sylr/fix2/tests/benchmarks/gen/quickfixgo/fix44/executionreport"
+	"github.com/sylr/fix2/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequest"
+	"github.com/sylr/fix2/tests/benchmarks/gen/quickfixgo/fix44/marketdatasnapshotfullrefresh"
+	"github.com/sylr/fix2/tests/benchmarks/gen/quickfixgo/fix44/newordersingle"
 	"github.com/sylr/fix2/tests/benchmarks/internal/scenario"
 )
 
@@ -34,8 +43,8 @@ func main() {
 }
 
 // settings returns the session's settings: those of the scenario, the
-// dictionary of p if any; the store (memory) and the log (none) are given
-// to NewAcceptor and NewInitiator.
+// dictionary of p; the store (memory) and the log (none) are given to
+// NewAcceptor and NewInitiator.
 func settings(p scenario.Params, sender, target string, extra ...string) (*quickfix.Settings, error) {
 	lines := []string{
 		"[DEFAULT]",
@@ -44,40 +53,66 @@ func settings(p scenario.Params, sender, target string, extra ...string) (*quick
 		"ResetOnLogon=Y",
 	}
 	lines = append(lines, extra...)
-	lines = append(lines, "[SESSION]", "SenderCompID="+sender, "TargetCompID="+target)
-	if p.Dict != "" {
-		lines = append(lines, "DataDictionary="+p.Dict)
-	} else {
-		// Without a dictionary QuickFIX/Go still checks for empty values
-		// and fields out of their section; fix2 checks nothing.
-		lines = append(lines, "ValidateFieldsHaveValues=N", "ValidateFieldsOutOfOrder=N")
-	}
+	lines = append(lines, "[SESSION]", "SenderCompID="+sender, "TargetCompID="+target, "DataDictionary="+p.Dict)
 	return quickfix.ParseSettings(strings.NewReader(strings.Join(lines, "\n") + "\n"))
 }
 
-// watcher reports the Rejects and unexpected messages a session receives
-// and sends.
-type watcher struct {
+// dec is a decimal and the scale it is written with: its own, so that it is
+// written as it was read.
+type dec struct {
+	v     decimal.Decimal
+	scale int32
+}
+
+func decOf(v decimal.Decimal) dec { return dec{v, max(0, -v.Exponent())} }
+
+func decFloat(f float64) dec { return decOf(decimal.NewFromFloat(f)) }
+
+// The scenario's values as decimals, converted once.
+var (
+	orderQty = decFloat(scenario.OrderQty)
+	price    = decFloat(scenario.Price)
+	zero     = decOf(decimal.Zero)
+	book     [2][scenario.MarketDepth]struct{ px, size dec }
+)
+
+func init() {
+	for k := range scenario.Book {
+		for lvl, l := range scenario.Book[k] {
+			book[k][lvl].px, book[k][lvl].size = decFloat(l.Px), decFloat(l.Size)
+		}
+	}
+}
+
+// app is the session's Application: it reports the Rejects, sequence
+// recovery and unexpected messages a session sends and receives, and routes
+// the application messages it receives to its routes.
+type app struct {
+	*quickfix.MessageRouter
 	stopping atomic.Bool // the agent logs out: a logout is expected
 	logons   chan struct{}
 }
 
-func (w *watcher) OnCreate(quickfix.SessionID) {}
+func newApp() *app {
+	return &app{MessageRouter: quickfix.NewMessageRouter(), logons: make(chan struct{}, 1)}
+}
 
-func (w *watcher) OnLogon(quickfix.SessionID) {
+func (a *app) OnCreate(quickfix.SessionID) {}
+
+func (a *app) OnLogon(quickfix.SessionID) {
 	select {
-	case w.logons <- struct{}{}:
+	case a.logons <- struct{}{}:
 	default:
 	}
 }
 
-func (w *watcher) OnLogout(id quickfix.SessionID) {
-	if !w.stopping.Load() {
+func (a *app) OnLogout(id quickfix.SessionID) {
+	if !a.stopping.Load() {
 		scenario.Anomaly("%s logged out", id)
 	}
 }
 
-func (w *watcher) ToAdmin(m *quickfix.Message, id quickfix.SessionID) {
+func (a *app) ToAdmin(m *quickfix.Message, id quickfix.SessionID) {
 	switch {
 	case m.IsMsgTypeOf("3"):
 		scenario.Anomaly("%s sent a Reject: %s", id, m)
@@ -87,12 +122,12 @@ func (w *watcher) ToAdmin(m *quickfix.Message, id quickfix.SessionID) {
 	}
 }
 
-// ToApp runs for every message sent: it checks nothing, the fix2 agent
+// ToApp runs for every message sent: it checks nothing, the other agents
 // having nothing to match it. The counterparty reports a
 // BusinessMessageReject it receives.
-func (w *watcher) ToApp(*quickfix.Message, quickfix.SessionID) error { return nil }
+func (a *app) ToApp(*quickfix.Message, quickfix.SessionID) error { return nil }
 
-func (w *watcher) FromAdmin(m *quickfix.Message, id quickfix.SessionID) quickfix.MessageRejectError {
+func (a *app) FromAdmin(m *quickfix.Message, id quickfix.SessionID) quickfix.MessageRejectError {
 	switch {
 	case m.IsMsgTypeOf("3"):
 		scenario.Anomaly("%s received a Reject: %s", id, m)
@@ -102,53 +137,103 @@ func (w *watcher) FromAdmin(m *quickfix.Message, id quickfix.SessionID) quickfix
 	return nil
 }
 
-func (w *watcher) unexpected(m *quickfix.Message, id quickfix.SessionID) quickfix.MessageRejectError {
-	scenario.Anomaly("%s received %s", id, m)
-	return quickfix.UnsupportedMessageType()
-}
-
-// exchange acknowledges each NewOrderSingle with an ExecutionReport.
-type exchange struct {
-	watcher
-	n int // FromApp runs on the session's goroutine
-}
-
-func (x *exchange) OnLogout(quickfix.SessionID) {}
-
-func (x *exchange) FromApp(m *quickfix.Message, id quickfix.SessionID) quickfix.MessageRejectError {
-	if !m.IsMsgTypeOf("D") {
-		return x.unexpected(m, id)
+func (a *app) FromApp(m *quickfix.Message, id quickfix.SessionID) quickfix.MessageRejectError {
+	err := a.Route(m, id)
+	if err != nil {
+		scenario.Anomaly("%s received %s: %v", id, m, err)
 	}
+	return err
+}
+
+// checked reports err, a getter's, as an anomaly.
+func checked[T any](v T, err quickfix.MessageRejectError) T {
+	if err != nil {
+		scenario.Anomaly("%v", err)
+	}
+	return v
+}
+
+// exchange answers each NewOrderSingle with an ExecutionReport, each
+// MarketDataRequest with a MarketDataSnapshotFullRefresh. Its routes run on
+// the session's goroutine.
+type exchange struct {
+	*app
+	n int
+}
+
+func (x *exchange) onNewOrderSingle(m newordersingle.NewOrderSingle, id quickfix.SessionID) quickfix.MessageRejectError {
+	clOrdID := checked(m.GetClOrdID())
+	symbol := checked(m.GetSymbol())
+	side := checked(m.GetSide())
+	qty := decOf(checked(m.GetOrderQty()))
+	px := decOf(checked(m.GetPrice()))
+	parties := checked(m.GetNoPartyIDs())
 	x.n++
 	orderID := strconv.Itoa(x.n)
-	get := func(tag quickfix.Tag) string {
-		v, _ := m.Body.GetString(tag)
-		return v
+	er := executionreport.New(
+		field.NewOrderID(orderID), field.NewExecID(orderID),
+		field.NewExecType(enum.ExecType_NEW), field.NewOrdStatus(enum.OrdStatus_NEW),
+		field.NewSide(side), field.NewLeavesQty(qty.v, qty.scale),
+		field.NewCumQty(zero.v, zero.scale), field.NewAvgPx(zero.v, zero.scale))
+	er.SetClOrdID(clOrdID)
+	er.SetOrderQty(qty.v, qty.scale)
+	er.SetPrice(px.v, px.scale)
+	er.SetSymbol(symbol)
+	er.SetTransactTime(time.Now())
+	g := executionreport.NewNoPartyIDsRepeatingGroup()
+	for i := range parties.Len() {
+		p := parties.Get(i)
+		e := g.Add()
+		e.SetPartyID(checked(p.GetPartyID()))
+		e.SetPartyIDSource(checked(p.GetPartyIDSource()))
+		e.SetPartyRole(checked(p.GetPartyRole()))
 	}
-	qty := get(38)
-	er := quickfix.NewMessage()
-	er.Header.SetString(35, "8")
-	er.Body.SetString(6, scenario.Zero).
-		SetString(11, get(11)).
-		SetString(14, scenario.Zero).
-		SetString(17, orderID).
-		SetString(37, orderID).
-		SetString(38, qty).
-		SetString(39, scenario.OrdStatusNew).
-		SetString(44, get(44)).
-		SetString(54, get(54)).
-		SetString(55, get(55)).
-		SetField(60, quickfix.FIXUTCTimestamp{Time: time.Now(), Precision: quickfix.Millis}).
-		SetString(150, scenario.ExecTypeNew).
-		SetString(151, qty)
+	er.SetNoPartyIDs(g)
 	if err := quickfix.SendToTarget(er, id); err != nil {
 		scenario.Anomaly("%s: sending ExecutionReport %s: %v", id, orderID, err)
 	}
 	return nil
 }
 
+func (x *exchange) onMarketDataRequest(m marketdatarequest.MarketDataRequest, id quickfix.SessionID) quickfix.MessageRejectError {
+	reqID := checked(m.GetMDReqID())
+	sub := checked(m.GetSubscriptionRequestType())
+	depth := checked(m.GetMarketDepth())
+	types := checked(m.GetNoMDEntryTypes())
+	syms := checked(m.GetNoRelatedSym())
+	if string(sub) != scenario.SubscriptionSnapshot || depth != scenario.MarketDepth || types.Len() != len(scenario.EntryTypes) || syms.Len() != 1 {
+		scenario.Anomaly("MarketDataRequest %s: %s of %d levels of %d types of %d symbols", reqID, sub, depth, types.Len(), syms.Len())
+		return nil
+	}
+	w := marketdatasnapshotfullrefresh.New()
+	w.SetMDReqID(reqID)
+	w.SetSymbol(checked(syms.Get(0).GetSymbol()))
+	g := marketdatasnapshotfullrefresh.NewNoMDEntriesRepeatingGroup()
+	for k := range types.Len() {
+		typ := checked(types.Get(k).GetMDEntryType())
+		if string(typ) != scenario.EntryTypes[k] {
+			scenario.Anomaly("MarketDataRequest %s: MDEntryType %s, want %s", reqID, typ, scenario.EntryTypes[k])
+		}
+		for lvl := range depth {
+			l := book[k][lvl]
+			e := g.Add()
+			e.SetMDEntryType(typ)
+			e.SetMDEntryPx(l.px.v, l.px.scale)
+			e.SetMDEntrySize(l.size.v, l.size.scale)
+		}
+	}
+	w.SetNoMDEntries(g)
+	if err := quickfix.SendToTarget(w, id); err != nil {
+		scenario.Anomaly("%s: sending MarketDataSnapshotFullRefresh %s: %v", id, reqID, err)
+	}
+	return nil
+}
+
 func acceptor(p scenario.Params) error {
-	x := &exchange{}
+	x := &exchange{app: newApp()}
+	x.stopping.Store(true) // the acceptor expects the initiator's logout
+	x.AddRoute(newordersingle.Route(x.onNewOrderSingle))
+	x.AddRoute(marketdatarequest.Route(x.onMarketDataRequest))
 	st, err := settings(p, scenario.AcceptorCompID, scenario.InitiatorCompID,
 		"SocketAcceptHost="+scenario.Host, "SocketAcceptPort="+strconv.Itoa(p.Port))
 	if err != nil {
@@ -166,23 +251,49 @@ func acceptor(p scenario.Params) error {
 	return err
 }
 
-// client passes the ExecutionReports it receives to the tracker.
+// client reads the answers it receives and passes their identifiers to the
+// tracker.
 type client struct {
-	watcher
-	tr *scenario.Tracker
+	*app
+	check scenario.Checker
+	tr    *scenario.Tracker
 }
 
-func (c *client) FromApp(m *quickfix.Message, id quickfix.SessionID) quickfix.MessageRejectError {
-	if !m.IsMsgTypeOf("8") {
-		return c.unexpected(m, id)
+func (c *client) onExecutionReport(m executionreport.ExecutionReport, _ quickfix.SessionID) quickfix.MessageRejectError {
+	clOrdID := checked(m.GetClOrdID())
+	parties := checked(m.GetNoPartyIDs())
+	c.check.Parties(parties.Len())
+	for i := range parties.Len() {
+		p := parties.Get(i)
+		c.check.Party(i, checked(p.GetPartyID()), string(checked(p.GetPartyIDSource())), string(checked(p.GetPartyRole())))
 	}
-	clOrdID, _ := m.Body.GetBytes(11)
 	c.tr.Ack(clOrdID)
 	return nil
 }
 
+func (c *client) onMarketDataSnapshotFullRefresh(m marketdatasnapshotfullrefresh.MarketDataSnapshotFullRefresh, _ quickfix.SessionID) quickfix.MessageRejectError {
+	reqID := checked(m.GetMDReqID())
+	entries := checked(m.GetNoMDEntries())
+	c.check.Entries(entries.Len())
+	for i := range min(entries.Len(), 2*scenario.MarketDepth) {
+		e := entries.Get(i)
+		typ := checked(e.GetMDEntryType())
+		px := checked(e.GetMDEntryPx())
+		size := checked(e.GetMDEntrySize())
+		// Compared as decimals, the values QuickFIX/Go reads.
+		k, lvl := i/scenario.MarketDepth, i%scenario.MarketDepth
+		if l := book[k][lvl]; string(typ) != scenario.EntryTypes[k] || !px.Equal(l.px.v) || !size.Equal(l.size.v) {
+			scenario.Anomaly("NoMDEntries entry %d: %s %v@%v, want %s %v@%v", i, typ, size, px, scenario.EntryTypes[k], l.size.v, l.px.v)
+		}
+	}
+	c.tr.Ack(reqID)
+	return nil
+}
+
 func initiator(p scenario.Params) error {
-	c := &client{tr: scenario.NewTracker(p), watcher: watcher{logons: make(chan struct{}, 1)}}
+	c := &client{app: newApp(), tr: scenario.NewTracker(p)}
+	c.AddRoute(executionreport.Route(c.onExecutionReport))
+	c.AddRoute(marketdatasnapshotfullrefresh.Route(c.onMarketDataSnapshotFullRefresh))
 	st, err := settings(p, scenario.InitiatorCompID, scenario.AcceptorCompID,
 		"SocketConnectHost="+scenario.Host, "SocketConnectPort="+strconv.Itoa(p.Port))
 	if err != nil {
@@ -205,22 +316,45 @@ func initiator(p scenario.Params) error {
 		return errors.New("timed out waiting for the logon")
 	}
 
-	ctl := scenario.NewControl()
-	id := quickfix.SessionID{BeginString: scenario.BeginString, SenderCompID: scenario.InitiatorCompID, TargetCompID: scenario.AcceptorCompID}
-	send := func(clOrdID []byte) error {
-		nos := quickfix.NewMessage()
-		nos.Header.SetString(35, "D")
-		nos.Body.SetString(11, string(clOrdID)).
-			SetString(21, scenario.HandlInst).
-			SetString(38, scenario.OrderQty).
-			SetString(40, scenario.OrdType).
-			SetString(44, scenario.Price).
-			SetString(54, scenario.Side).
-			SetString(55, scenario.Symbol).
-			SetString(59, scenario.TimeInForce).
-			SetField(60, quickfix.FIXUTCTimestamp{Time: time.Now(), Precision: quickfix.Millis})
-		return quickfix.SendToTarget(nos, id)
+	sid := quickfix.SessionID{BeginString: scenario.BeginString, SenderCompID: scenario.InitiatorCompID, TargetCompID: scenario.AcceptorCompID}
+	var send func(id string) error
+	switch p.Scenario {
+	case scenario.Orders:
+		send = func(id string) error {
+			nos := newordersingle.New(field.NewClOrdID(id), field.NewSide(enum.Side_BUY),
+				field.NewTransactTime(time.Now()), field.NewOrdType(enum.OrdType_LIMIT))
+			nos.SetHandlInst(enum.HandlInst_AUTOEXECPRIV)
+			nos.SetOrderQty(orderQty.v, orderQty.scale)
+			nos.SetPrice(price.v, price.scale)
+			nos.SetSymbol(scenario.Symbol)
+			nos.SetTimeInForce(enum.TimeInForce_DAY)
+			g := newordersingle.NewNoPartyIDsRepeatingGroup()
+			for _, party := range scenario.Parties {
+				e := g.Add()
+				e.SetPartyID(party.ID)
+				e.SetPartyIDSource(enum.PartyIDSource(party.Source))
+				e.SetPartyRole(enum.PartyRole(party.Role))
+			}
+			nos.SetNoPartyIDs(g)
+			return quickfix.SendToTarget(nos, sid)
+		}
+	case scenario.MarketData:
+		send = func(id string) error {
+			req := marketdatarequest.New(field.NewMDReqID(id),
+				field.NewSubscriptionRequestType(enum.SubscriptionRequestType_SNAPSHOT),
+				field.NewMarketDepth(scenario.MarketDepth))
+			types := marketdatarequest.NewNoMDEntryTypesRepeatingGroup()
+			for _, typ := range scenario.EntryTypes {
+				types.Add().SetMDEntryType(enum.MDEntryType(typ))
+			}
+			req.SetNoMDEntryTypes(types)
+			syms := marketdatarequest.NewNoRelatedSymRepeatingGroup()
+			syms.Add().SetSymbol(scenario.Symbol)
+			req.SetNoRelatedSym(syms)
+			return quickfix.SendToTarget(req, sid)
+		}
 	}
+	ctl := scenario.NewControl()
 	if err := c.tr.Run(ctl, send); err != nil {
 		return err
 	}

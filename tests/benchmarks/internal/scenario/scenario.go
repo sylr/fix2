@@ -29,38 +29,143 @@ const (
 	HeartBtInt      = 30 // seconds
 )
 
-// The NewOrderSingle (35=D) the initiator sends, ClOrdID (11) and
-// TransactTime (60) apart. The acceptor answers each with an
-// ExecutionReport (35=8) acknowledging it: OrderID (37) and ExecID (17)
-// numbered by the acceptor, ExecType (150) and OrdStatus (39) New, LeavesQty
-// (151) the OrderQty, CumQty (14) and AvgPx (6) zero, ClOrdID, Symbol,
-// Side, OrderQty and Price echoed, and a TransactTime of its own.
+// The scenarios: the initiator sends requests, at most a window of them
+// unanswered, which the acceptor answers. Agents build and read every
+// message through the code their engine generates from the dictionary.
+const (
+	// Orders: NewOrderSingle (35=D) messages, each acknowledged with an
+	// ExecutionReport (35=8).
+	Orders = "orders"
+	// MarketData: MarketDataRequest (35=V) messages, each answered with a
+	// MarketDataSnapshotFullRefresh (35=W) of the book.
+	MarketData = "marketdata"
+)
+
+// The NewOrderSingle the initiator sends, ClOrdID (11) and TransactTime
+// (60) apart, with the Parties group (NoPartyIDs, 453) of Parties. The
+// acceptor reads its fields and its Parties, and answers it with an
+// ExecutionReport acknowledging it: OrderID (37) and ExecID (17) numbered by
+// the acceptor, ExecType (150) and OrdStatus (39) New, LeavesQty (151) the
+// OrderQty, CumQty (14) and AvgPx (6) zero, ClOrdID, Symbol, Side, OrderQty,
+// Price and the Parties echoed, and a TransactTime of its own. The
+// initiator reads the ClOrdID and the Parties, which must be those it sent.
 const (
 	Symbol      = "EURUSD"
 	Side        = "1" // Buy
-	OrderQty    = "1000000"
+	OrderQty    = 1000000
 	OrdType     = "2" // Limit
-	Price       = "1.08255"
+	Price       = 1.08255
 	TimeInForce = "0" // Day
 	HandlInst   = "1" // Automated execution, no intervention
 
 	ExecTypeNew  = "0"
 	OrdStatusNew = "0"
-	Zero         = "0"
 )
+
+// Checker checks the answers the initiator reads against what the scenario
+// expects, reporting any difference as an anomaly.
+type Checker struct{}
+
+// Party checks the i-th Parties entry of an ExecutionReport.
+func (Checker) Party(i int, id, source, role string) {
+	if i >= len(Parties) || Parties[i] != (Party{ID: id, Source: source, Role: role}) {
+		Anomaly("Parties entry %d: %s %s %s, want %+v", i, id, source, role, Parties[min(i, len(Parties)-1)])
+	}
+}
+
+// Parties checks the number of Parties entries of an ExecutionReport.
+func (Checker) Parties(n int) {
+	if n != len(Parties) {
+		Anomaly("%d Parties entries, want %d", n, len(Parties))
+	}
+}
+
+// Entry checks the i-th NoMDEntries entry of a MarketDataSnapshotFullRefresh.
+func (Checker) Entry(i int, typ string, px, size float64) {
+	if i >= 2*MarketDepth {
+		return
+	}
+	want := EntryTypes[i/MarketDepth]
+	if l := Book[i/MarketDepth][i%MarketDepth]; typ != want || px != l.Px || size != l.Size {
+		Anomaly("NoMDEntries entry %d: %s %v@%v, want %s %v@%v", i, typ, size, px, want, l.Size, l.Px)
+	}
+}
+
+// Entries checks the number of NoMDEntries entries of a
+// MarketDataSnapshotFullRefresh.
+func (Checker) Entries(n int) {
+	if n != 2*MarketDepth {
+		Anomaly("%d NoMDEntries entries, want %d", n, 2*MarketDepth)
+	}
+}
+
+// Party is an entry of the Parties group.
+type Party struct {
+	ID     string // PartyID (448)
+	Source string // PartyIDSource (447)
+	Role   string // PartyRole (452), an INT the Go engines' code types as a string
+}
+
+// Parties are the order's: its executing firm, its client and its trader,
+// identified by proprietary codes.
+var Parties = []Party{
+	{ID: "BROKER-1", Source: "D", Role: "1"},  // Executing Firm
+	{ID: "CLIENT-1", Source: "D", Role: "3"},  // Client ID
+	{ID: "TRADER-1", Source: "D", Role: "11"}, // Initiating Trader
+}
+
+// The MarketDataRequest the initiator sends, MDReqID (262) apart: a
+// snapshot (SubscriptionRequestType 263) of MarketDepth (264) levels of the
+// bids and offers (NoMDEntryTypes 267, MDEntryType 269) of Symbol
+// (NoRelatedSym 146, Symbol 55). The acceptor reads its fields and groups,
+// and answers it with a MarketDataSnapshotFullRefresh: the MDReqID and the
+// Symbol echoed, and NoMDEntries (268) entries of MDEntryType (269),
+// MDEntryPx (270) and MDEntrySize (271), MarketDepth levels of each
+// requested type, in the order requested: Book. The initiator reads the
+// MDReqID and every entry, which must be the book's.
+const (
+	SubscriptionSnapshot = "0"
+	MarketDepth          = 10
+	EntryBid             = "0"
+	EntryOffer           = "1"
+)
+
+// EntryTypes are the requested entry types.
+var EntryTypes = []string{EntryBid, EntryOffer}
+
+// Level is a level of the book.
+type Level struct {
+	Px   float64 // MDEntryPx (270)
+	Size float64 // MDEntrySize (271)
+}
+
+// Book is the book the acceptor answers with, by entry type, in the order
+// of EntryTypes, best first. No price ends with a zero, so that every engine
+// writes it the same.
+var Book = [2][MarketDepth]Level{
+	{
+		{1.08249, 1000000}, {1.08248, 2000000}, {1.08247, 3000000}, {1.08246, 4000000}, {1.08245, 5000000},
+		{1.08244, 6000000}, {1.08243, 7000000}, {1.08242, 8000000}, {1.08241, 9000000}, {1.08239, 10000000},
+	},
+	{
+		{1.08251, 1000000}, {1.08252, 2000000}, {1.08253, 3000000}, {1.08254, 4000000}, {1.08255, 5000000},
+		{1.08256, 6000000}, {1.08257, 7000000}, {1.08258, 8000000}, {1.08259, 9000000}, {1.08261, 10000000},
+	},
+}
 
 // Params are an agent's arguments:
 //
 //	acceptor  -port P [-dict FIX44.xml]
-//	initiator -port P [-dict FIX44.xml] -messages N -warmup K -window W
+//	initiator -port P [-dict FIX44.xml] -scenario S -messages N -warmup K -window W
 //	version
 //
-// Without -dict, the agent validates nothing beyond what its engine does
-// without a dictionary.
+// The acceptor answers the requests of every scenario. Every agent validates
+// with the dictionary, which the QuickFIX engines need to parse groups.
 type Params struct {
 	Role     string
 	Port     int
 	Dict     string
+	Scenario string
 	Messages int
 	Warmup   int
 	Window   int
@@ -76,9 +181,10 @@ func ParseArgs(args []string) (Params, error) {
 	fs := flag.NewFlagSet(p.Role, flag.ContinueOnError)
 	fs.IntVar(&p.Port, "port", 0, "port the acceptor listens on")
 	fs.StringVar(&p.Dict, "dict", "", "QuickFIX FIX 4.4 dictionary to validate with")
-	fs.IntVar(&p.Messages, "messages", 0, "orders to measure")
-	fs.IntVar(&p.Warmup, "warmup", 0, "orders sent before measuring")
-	fs.IntVar(&p.Window, "window", 1, "orders awaiting their acknowledgement at most")
+	fs.StringVar(&p.Scenario, "scenario", Orders, "the requests the initiator sends: orders or marketdata")
+	fs.IntVar(&p.Messages, "messages", 0, "requests to measure")
+	fs.IntVar(&p.Warmup, "warmup", 0, "requests sent before measuring")
+	fs.IntVar(&p.Window, "window", 1, "requests awaiting their answer at most")
 	if err := fs.Parse(args[1:]); err != nil {
 		return p, err
 	}
@@ -92,8 +198,14 @@ func ParseArgs(args []string) (Params, error) {
 	if p.Port <= 0 {
 		return p, errors.New("-port is required")
 	}
+	if p.Dict == "" {
+		return p, errors.New("-dict is required")
+	}
 	if p.Role == "initiator" && (p.Messages <= 0 || p.Warmup < 0 || p.Window <= 0) {
 		return p, errors.New("-messages and -window must be > 0, -warmup >= 0")
+	}
+	if p.Scenario != Orders && p.Scenario != MarketData {
+		return p, fmt.Errorf("unknown scenario %q", p.Scenario)
 	}
 	return p, nil
 }
@@ -189,14 +301,12 @@ func CPUTime() time.Duration {
 
 // Result is what the initiator measured.
 type Result struct {
-	// Elapsed is from the first measured order sent to the last
-	// acknowledged.
+	// Elapsed is from the first measured request sent to the last answered.
 	ElapsedNs int64 `json:"elapsed_ns"`
 	// CPUNs is the CPU time the initiator used meanwhile.
 	CPUNs int64 `json:"cpu_ns"`
-	// RTTNs are the round trips of the measured orders, in the order sent:
-	// from before the order is handed to the engine to the moment its
-	// ExecutionReport is delivered to the application.
+	// RTTNs are the round trips of the measured requests, in the order sent:
+	// from before the request is built to the moment its answer is read.
 	RTTNs []int64 `json:"rtt_ns"`
 }
 
@@ -229,19 +339,20 @@ func Exit(err error) {
 	os.Exit(0)
 }
 
-// Tracker runs and measures the initiator's side: it sends orders keeping at
-// most Window of them unacknowledged, and times each round trip. The
-// engine's handler calls Ack with the ClOrdID of each ExecutionReport.
+// Tracker runs and measures the initiator's side: it sends requests keeping
+// at most Window of them unanswered, and times each round trip. Request i is
+// identified by the decimal i, its ClOrdID or MDReqID; the engine's handler
+// calls Ack with the identifier of each answer.
 type Tracker struct {
 	p     Params
 	start time.Time
-	sent  []atomic.Int64 // when order i was sent, since start, +1; 0 once acknowledged
-	rtt   []int64        // round trips of the measured orders
-	slots chan struct{}  // one per order awaiting its acknowledgement
+	sent  []atomic.Int64 // when request i was sent, since start, +1; 0 once answered
+	rtt   []int64        // round trips of the measured requests
+	slots chan struct{}  // one per request awaiting its answer
 
-	acked  atomic.Int64 // orders acknowledged
+	acked  atomic.Int64 // requests answered
 	target atomic.Int64 // acked count ending the current phase
-	end    atomic.Int64 // when the phase's last order was acknowledged
+	end    atomic.Int64 // when the latest answer came
 	done   chan struct{}
 
 	errOnce sync.Once
@@ -273,17 +384,17 @@ func (t *Tracker) fail(err error) {
 	})
 }
 
-// Ack tells order clOrdID is acknowledged.
-func (t *Tracker) Ack(clOrdID []byte) {
+// Ack tells request id is answered.
+func (t *Tracker) Ack(id string) {
 	now := t.now()
-	i, err := strconv.Atoi(string(clOrdID))
+	i, err := strconv.Atoi(id)
 	if err != nil || i < 0 || i >= len(t.sent) {
-		t.fail(fmt.Errorf("ExecutionReport for unknown ClOrdID %q", clOrdID))
+		t.fail(fmt.Errorf("answer to unknown request %q", id))
 		return
 	}
 	sent := t.sent[i].Swap(0)
 	if sent == 0 {
-		t.fail(fmt.Errorf("ExecutionReport for ClOrdID %d not awaiting one", i))
+		t.fail(fmt.Errorf("answer to request %d not awaiting one", i))
 		return
 	}
 	if j := i - t.p.Warmup; j >= 0 {
@@ -299,10 +410,10 @@ func (t *Tracker) Ack(clOrdID []byte) {
 	}
 }
 
-// Run sends the warm-up orders, tells the driver WARM, waits for its GO,
-// sends and measures the orders, and tells the driver its RESULT. send sends
-// the order of ClOrdID clOrdID.
-func (t *Tracker) Run(ctl *Control, send func(clOrdID []byte) error) error {
+// Run sends the warm-up requests, tells the driver WARM, waits for its GO,
+// sends and measures the requests, and tells the driver its RESULT. send
+// sends the request identified by id.
+func (t *Tracker) Run(ctl *Control, send func(id string) error) error {
 	if err := t.phase(0, t.p.Warmup, send); err != nil {
 		return fmt.Errorf("warm-up: %w", err)
 	}
@@ -324,13 +435,12 @@ func (t *Tracker) Run(ctl *Control, send func(clOrdID []byte) error) error {
 	return nil
 }
 
-// phase sends orders from to to, and waits for their acknowledgements.
-func (t *Tracker) phase(from, to int, send func([]byte) error) error {
+// phase sends requests from to to, and waits for their answers.
+func (t *Tracker) phase(from, to int, send func(string) error) error {
 	if from == to {
 		return nil
 	}
 	t.target.Store(int64(to))
-	var id []byte
 	for i := from; i < to; i++ {
 		select {
 		case t.slots <- struct{}{}:
@@ -339,10 +449,10 @@ func (t *Tracker) phase(from, to int, send func([]byte) error) error {
 		case <-anomalous:
 			return errAnomalous
 		}
-		id = strconv.AppendInt(id[:0], int64(i), 10)
+		id := strconv.Itoa(i)
 		t.sent[i].Store(t.now())
 		if err := send(id); err != nil {
-			return fmt.Errorf("sending order %d: %w", i, err)
+			return fmt.Errorf("sending request %d: %w", i, err)
 		}
 	}
 	select {

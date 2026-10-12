@@ -31,7 +31,8 @@ type result struct {
 // runOnce runs the scenario once: it starts the acceptor, then the
 // initiator, which logs on and warms up; it measures the acceptor's CPU
 // time around the initiator's measured orders, then stops both.
-func runOnce(ctx context.Context, cfg *config, p pair, window int) (result, error) {
+func runOnce(ctx context.Context, cfg *config, k key) (result, error) {
+	p := k.pair
 	var r result
 	ctx, cancel := context.WithTimeout(ctx, cfg.timeout)
 	defer cancel()
@@ -39,10 +40,7 @@ func runOnce(ctx context.Context, cfg *config, p pair, window int) (result, erro
 	if err != nil {
 		return r, err
 	}
-	common := []string{"-port", strconv.Itoa(port)}
-	if cfg.dict != "" {
-		common = append(common, "-dict", cfg.dict)
-	}
+	common := []string{"-port", strconv.Itoa(port), "-dict", cfg.dict}
 
 	acc, err := start(ctx, p.acceptor, "acceptor", common...)
 	if err != nil {
@@ -53,7 +51,8 @@ func runOnce(ctx context.Context, cfg *config, p pair, window int) (result, erro
 		return r, err
 	}
 	ini, err := start(ctx, p.initiator, "initiator", append(common,
-		"-messages", strconv.Itoa(cfg.messages), "-warmup", strconv.Itoa(cfg.warmup), "-window", strconv.Itoa(window))...)
+		"-scenario", k.scenario, "-messages", strconv.Itoa(cfg.messages), "-warmup", strconv.Itoa(cfg.warmup),
+		"-window", strconv.Itoa(k.window))...)
 	if err != nil {
 		return r, err
 	}

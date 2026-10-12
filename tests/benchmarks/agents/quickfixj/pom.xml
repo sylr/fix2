@@ -44,6 +44,67 @@
       </resource>
     </resources>
     <plugins>
+      <!-- The message and field classes, generated from the benchmarks'
+           dictionary as QuickFIX/J generates its own published ones
+           (quickfixj-messages-all): doubles for prices and quantities,
+           fields in ascending order, no timestamp precision. -->
+      <plugin>
+        <groupId>org.quickfixj</groupId>
+        <artifactId>quickfixj-codegenerator</artifactId>
+        <version>${quickfixj.version}</version>
+        <dependencies>
+          <!-- The plugin's FileUtils, which Maven 3.9 no longer provides. -->
+          <dependency>
+            <groupId>org.codehaus.plexus</groupId>
+            <artifactId>plexus-utils</artifactId>
+            <version>4.0.2</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>fix44</id>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <dictFile>${project.basedir}/../../spec/FIX44.xml</dictFile>
+              <outputDirectory>${project.build.directory}/generated-sources/quickfixj</outputDirectory>
+              <packaging>quickfix.fix44</packaging>
+              <fieldPackage>quickfix.field</fieldPackage>
+              <decimal>false</decimal>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- As quickfixj-messages-all does: the session fields quickfixj-base
+           ships are removed from what is generated, and the CHAR constants
+           of two characters the dictionary defines (MiscFeeType 10 to 12,
+           MassCancelRejectReason 99), which would not compile. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>fix-generated-fields</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <delete>
+                  <fileset dir="${project.build.directory}/generated-sources/quickfixj/quickfix/field"
+                           includes="ApplExtID.java,ApplVerID.java,BeginSeqNo.java,BeginString.java,BodyLength.java,BusinessRejectReason.java,CheckSum.java,CstmApplVerID.java,DefaultApplVerID.java,DeliverToCompID.java,DeliverToLocationID.java,DeliverToSubID.java,EncryptMethod.java,EndSeqNo.java,GapFillFlag.java,HeartBtInt.java,LastMsgSeqNumProcessed.java,MessageEncoding.java,MsgSeqNum.java,MsgType.java,NewSeqNo.java,NextExpectedMsgSeqNum.java,NoHops.java,OnBehalfOfCompID.java,OnBehalfOfLocationID.java,OnBehalfOfSendingTime.java,OnBehalfOfSubID.java,OrigSendingTime.java,PossDupFlag.java,PossResend.java,RefMsgType.java,RefSeqNum.java,RefTagID.java,ResetSeqNumFlag.java,SecureData.java,SecureDataLen.java,SenderCompID.java,SenderLocationID.java,SenderSubID.java,SendingTime.java,SessionRejectReason.java,SessionStatus.java,Signature.java,SignatureLength.java,TargetCompID.java,TargetLocationID.java,TargetSubID.java,TestReqID.java,Text.java,XmlData.java,XmlDataLen.java"/>
+                </delete>
+                <replaceregexp byline="true" match="^\s*public static final char \w+ = '[^']{2,}';\s*$" replace="">
+                  <fileset dir="${project.build.directory}/generated-sources/quickfixj/quickfix/field" includes="*.java"/>
+                </replaceregexp>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>

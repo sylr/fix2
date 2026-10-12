@@ -1,3 +1,5 @@
 /bin/
+/gen/
 /results*.txt
 /agents/*/target/
+/agents/*/build/

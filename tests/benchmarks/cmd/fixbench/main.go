@@ -18,7 +18,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,16 +39,17 @@ type pair struct{ acceptor, initiator *impl }
 func (p pair) String() string { return p.acceptor.name + "/" + p.initiator.name }
 
 type config struct {
-	impls    []*impl
-	baseline string
-	dict     string // "" validates nothing
-	messages int
-	warmup   int
-	windows  []int
-	runs     int
-	timeout  time.Duration
-	seed     uint64
-	output   string
+	impls     []*impl
+	baseline  string
+	dict      string
+	scenarios []string
+	messages  int
+	warmup    int
+	windows   []int
+	runs      int
+	timeout   time.Duration
+	seed      uint64
+	output    string
 }
 
 func main() {
@@ -61,9 +61,8 @@ func main() {
 
 func run() error {
 	var cfg config
-	var windows string
-	validate := true
-	flag.Func("impl", "an implementation's agent, `name=path`; repeatable (default fix2, quickfixgo and quickfixj, in bin/)", func(v string) error {
+	var scenarios, windows string
+	flag.Func("impl", "an implementation's agent, `name=path`; repeatable (default fix2, quickfixgo, quickfixj and quickfixcpp, in bin/)", func(v string) error {
 		name, path, ok := strings.Cut(v, "=")
 		if !ok || name == "" || path == "" {
 			return errors.New("want name=path")
@@ -72,11 +71,11 @@ func run() error {
 		return nil
 	})
 	flag.StringVar(&cfg.baseline, "baseline", "fix2", "the implementation the others are compared to")
-	flag.StringVar(&cfg.dict, "dict", "", "QuickFIX FIX 4.4 dictionary both ends validate with (default QuickFIX/Go's spec/FIX44.xml)")
-	flag.BoolVar(&validate, "validate", true, "validate messages against -dict")
-	flag.IntVar(&cfg.messages, "messages", 50000, "orders measured per run")
-	flag.IntVar(&cfg.warmup, "warmup", 50000, "orders sent before measuring, each run")
-	flag.StringVar(&windows, "windows", "1,10,100,1000", "orders awaiting acknowledgement at most, comma separated")
+	flag.StringVar(&cfg.dict, "dict", "spec/FIX44.xml", "QuickFIX FIX 4.4 dictionary both ends validate with, the one the agents' code is generated from")
+	flag.StringVar(&scenarios, "scenarios", "orders,marketdata", "scenarios to run, comma separated: orders, marketdata")
+	flag.IntVar(&cfg.messages, "messages", 50000, "requests measured per run")
+	flag.IntVar(&cfg.warmup, "warmup", 50000, "requests sent before measuring, each run")
+	flag.StringVar(&windows, "windows", "1,10,100,1000", "requests awaiting their answer at most, comma separated")
 	flag.IntVar(&cfg.runs, "runs", 5, "runs of each window and pair")
 	flag.DurationVar(&cfg.timeout, "timeout", 5*time.Minute, "bound of each run")
 	flag.Uint64Var(&cfg.seed, "seed", 1, "seed of the order of the pairs in each round")
@@ -87,7 +86,16 @@ func run() error {
 	}
 
 	if len(cfg.impls) == 0 {
-		cfg.impls = []*impl{{name: "fix2", path: "bin/fix2"}, {name: "quickfixgo", path: "bin/quickfixgo"}, {name: "quickfixj", path: "bin/quickfixj"}}
+		cfg.impls = []*impl{{name: "fix2", path: "bin/fix2"}, {name: "quickfixgo", path: "bin/quickfixgo"}, {name: "quickfixj", path: "bin/quickfixj"}, {name: "quickfixcpp", path: "bin/quickfixcpp"}}
+	}
+	for s := range strings.SplitSeq(scenarios, ",") {
+		s = strings.TrimSpace(s)
+		if _, ok := scenarioNames[s]; !ok {
+			return fmt.Errorf("-scenarios: unknown scenario %q", s)
+		}
+		if !slices.Contains(cfg.scenarios, s) {
+			cfg.scenarios = append(cfg.scenarios, s)
+		}
 	}
 	for w := range strings.SplitSeq(windows, ",") {
 		n, err := strconv.Atoi(strings.TrimSpace(w))
@@ -106,19 +114,10 @@ func run() error {
 	if cfg.messages <= 0 || cfg.warmup < 0 || cfg.runs <= 0 {
 		return errors.New("-messages and -runs must be > 0, -warmup >= 0")
 	}
-	if validate {
-		if cfg.dict == "" {
-			d, err := quickfixDict()
-			if err != nil {
-				return fmt.Errorf("-dict: %w", err)
-			}
-			cfg.dict = d
-		}
-		if _, err := os.Stat(cfg.dict); err != nil {
-			return fmt.Errorf("-dict: %w", err)
-		}
-	} else {
-		cfg.dict = ""
+	// Every agent validates with the dictionary; the QuickFIX engines also
+	// need it to parse repeating groups.
+	if _, err := os.Stat(cfg.dict); err != nil {
+		return fmt.Errorf("-dict: %w", err)
 	}
 	for _, im := range cfg.impls {
 		v, err := exec.Command(im.path, "version").Output()
@@ -147,28 +146,30 @@ func run() error {
 
 	ctx := context.Background()
 	results := map[key][]result{}
-	total, done := cfg.runs*len(cfg.windows)*len(pairs), 0
+	total, done := cfg.runs*len(cfg.scenarios)*len(cfg.windows)*len(pairs), 0
 	for round := range cfg.runs {
-		for _, w := range cfg.windows {
-			order := append([]pair(nil), pairs...)
-			rng := rand.New(rand.NewPCG(cfg.seed, uint64(round)<<32|uint64(w)))
-			rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
-			for _, p := range order {
-				done++
-				r, err := runOnce(ctx, &cfg, p, w)
-				if err != nil {
-					// A failed run invalidates the matrix: stop, telling
-					// what was measured so far.
-					writeSummary(os.Stdout, &cfg, pairs, results)
-					return fmt.Errorf("window %d, %s, round %d: %w", w, p, round+1, err)
-				}
-				k := key{window: w, pair: p}
-				results[k] = append(results[k], r)
-				s := r.stats(cfg.messages)
-				fmt.Fprintf(os.Stderr, "[%d/%d] window=%d %s: %.0f msgs/s, p50 %s, p99 %s\n",
-					done, total, w, p, s.throughput, fmtNs(s.p50), fmtNs(s.p99))
-				if out != nil {
-					writeRun(out, k, cfg.messages, s)
+		for si, sc := range cfg.scenarios {
+			for _, w := range cfg.windows {
+				order := append([]pair(nil), pairs...)
+				rng := rand.New(rand.NewPCG(cfg.seed, uint64(round)<<40|uint64(si)<<32|uint64(w)))
+				rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
+				for _, p := range order {
+					done++
+					k := key{scenario: sc, window: w, pair: p}
+					r, err := runOnce(ctx, &cfg, k)
+					if err != nil {
+						// A failed run invalidates the matrix: stop, telling
+						// what was measured so far.
+						writeSummary(os.Stdout, &cfg, pairs, results)
+						return fmt.Errorf("%s, window %d, %s, round %d: %w", sc, w, p, round+1, err)
+					}
+					results[k] = append(results[k], r)
+					s := r.stats(cfg.messages)
+					fmt.Fprintf(os.Stderr, "[%d/%d] %s window=%d %s: %.0f msgs/s, p50 %s, p99 %s\n",
+						done, total, sc, w, p, s.throughput, fmtNs(s.p50), fmtNs(s.p99))
+					if out != nil {
+						writeRun(out, k, cfg.messages, s)
+					}
 				}
 			}
 		}
@@ -204,15 +205,9 @@ func matrix(impls []*impl, baseline string) ([]pair, error) {
 	return pairs, nil
 }
 
-// quickfixDict returns the FIX44.xml QuickFIX/Go ships.
-func quickfixDict() (string, error) {
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/quickfixgo/quickfix").Output()
-	if err != nil {
-		return "", fmt.Errorf("locating QuickFIX/Go's dictionaries (run from tests/benchmarks): %w", err)
-	}
-	dir := strings.TrimSpace(string(out))
-	if dir == "" {
-		return "", errors.New("QuickFIX/Go is not downloaded: run go mod download")
-	}
-	return filepath.Join(dir, "spec", "FIX44.xml"), nil
+// scenarioNames are the scenarios, by the name agents know them by, with
+// the name of their benchmarks.
+var scenarioNames = map[string]string{
+	"orders":     "Orders",
+	"marketdata": "MarketData",
 }

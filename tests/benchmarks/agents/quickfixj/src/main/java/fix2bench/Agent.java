@@ -1,8 +1,12 @@
 // Agent is the benchmark agent of QuickFIX/J (org.quickfixj): the acceptor
-// or the initiator of the scenario, with QuickFIX/J's defaults but for what
-// the scenario sets. It implements what the Go agents share in
+// or the initiator of the scenarios, with QuickFIX/J's defaults but for what
+// the scenarios set. It implements what the Go agents share in
 // internal/scenario, the README describes it: the same arguments, line
-// protocol, messages and measurement.
+// protocol, messages and measurement. It builds and reads every message with
+// the classes quickfixj-codegenerator generates from the dictionary as the
+// agent builds, and dispatches those it receives with their generated
+// quickfix.fix44.MessageCracker; DefaultMessageFactory parses them into
+// their generated classes.
 package fix2bench;
 
 import java.io.BufferedReader;
@@ -16,8 +20,6 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -31,6 +33,7 @@ import java.util.concurrent.atomic.AtomicLongArray;
 import quickfix.Application;
 import quickfix.DefaultMessageFactory;
 import quickfix.FieldNotFound;
+import quickfix.IncorrectTagValue;
 import quickfix.LogFactory;
 import quickfix.MemoryStoreFactory;
 import quickfix.Message;
@@ -40,7 +43,40 @@ import quickfix.SessionSettings;
 import quickfix.SocketAcceptor;
 import quickfix.SocketInitiator;
 import quickfix.UnsupportedMessageType;
-import quickfix.UtcTimestampPrecision;
+import quickfix.field.AvgPx;
+import quickfix.field.ClOrdID;
+import quickfix.field.CumQty;
+import quickfix.field.ExecID;
+import quickfix.field.ExecType;
+import quickfix.field.HandlInst;
+import quickfix.field.LeavesQty;
+import quickfix.field.MDEntryPx;
+import quickfix.field.MDEntrySize;
+import quickfix.field.MDEntryType;
+import quickfix.field.MDReqID;
+import quickfix.field.MarketDepth;
+import quickfix.field.NoMDEntries;
+import quickfix.field.NoMDEntryTypes;
+import quickfix.field.NoPartyIDs;
+import quickfix.field.NoRelatedSym;
+import quickfix.field.OrdStatus;
+import quickfix.field.OrdType;
+import quickfix.field.OrderID;
+import quickfix.field.OrderQty;
+import quickfix.field.PartyID;
+import quickfix.field.PartyIDSource;
+import quickfix.field.PartyRole;
+import quickfix.field.Price;
+import quickfix.field.Side;
+import quickfix.field.SubscriptionRequestType;
+import quickfix.field.Symbol;
+import quickfix.field.TimeInForce;
+import quickfix.field.TransactTime;
+import quickfix.fix44.ExecutionReport;
+import quickfix.fix44.MarketDataRequest;
+import quickfix.fix44.MarketDataSnapshotFullRefresh;
+import quickfix.fix44.MessageCracker;
+import quickfix.fix44.NewOrderSingle;
 
 public final class Agent {
     // The session: FIX 4.4, the initiator INITIATOR logs on to the acceptor
@@ -51,18 +87,35 @@ public final class Agent {
     static final String HOST = "127.0.0.1";
     static final int HEART_BT_INT = 30;
 
-    // The NewOrderSingle the initiator sends and the ExecutionReport the
-    // acceptor answers it with: see internal/scenario.
+    // The scenarios and their messages: see internal/scenario.
+    static final String ORDERS = "orders";
+    static final String MARKET_DATA = "marketdata";
+
     static final String SYMBOL = "EURUSD";
-    static final String SIDE = "1";
-    static final String ORDER_QTY = "1000000";
-    static final String ORD_TYPE = "2";
-    static final String PRICE = "1.08255";
-    static final String TIME_IN_FORCE = "0";
-    static final String HANDL_INST = "1";
-    static final String EXEC_TYPE_NEW = "0";
-    static final String ORD_STATUS_NEW = "0";
-    static final String ZERO = "0";
+    static final char SIDE = '1';
+    static final double ORDER_QTY = 1000000;
+    static final char ORD_TYPE = '2';
+    static final double PRICE = 1.08255;
+    static final char TIME_IN_FORCE = '0';
+    static final char HANDL_INST = '1';
+    static final char EXEC_TYPE_NEW = '0';
+    static final char ORD_STATUS_NEW = '0';
+
+    /** An entry of the Parties group: PartyIDSource is a CHAR, PartyRole an INT, in QuickFIX/J's generated code. */
+    record Party(String id, char source, int role) {}
+
+    static final Party[] PARTIES = {new Party("BROKER-1", 'D', 1), new Party("CLIENT-1", 'D', 3), new Party("TRADER-1", 'D', 11)};
+
+    static final char SUBSCRIPTION_SNAPSHOT = '0';
+    static final int MARKET_DEPTH = 10;
+    static final char[] ENTRY_TYPES = {'0', '1'}; // bids, offers
+
+    /** The book the acceptor answers with, by entry type, best first: prices, then sizes. */
+    static final double[][] BOOK_PX = {
+        {1.08249, 1.08248, 1.08247, 1.08246, 1.08245, 1.08244, 1.08243, 1.08242, 1.08241, 1.08239},
+        {1.08251, 1.08252, 1.08253, 1.08254, 1.08255, 1.08256, 1.08257, 1.08258, 1.08259, 1.08261},
+    };
+    static final double[] BOOK_SIZE = {1000000, 2000000, 3000000, 4000000, 5000000, 6000000, 7000000, 8000000, 9000000, 10000000};
 
     private Agent() {}
 
@@ -90,6 +143,7 @@ public final class Agent {
         String role;
         int port;
         String dict = "";
+        String scenario = ORDERS;
         int messages;
         int warmup;
         int window = 1;
@@ -115,6 +169,7 @@ public final class Agent {
                 switch (name.replaceFirst("^--?", "")) {
                     case "port" -> p.port = Integer.parseInt(value);
                     case "dict" -> p.dict = value;
+                    case "scenario" -> p.scenario = value;
                     case "messages" -> p.messages = Integer.parseInt(value);
                     case "warmup" -> p.warmup = Integer.parseInt(value);
                     case "window" -> p.window = Integer.parseInt(value);
@@ -127,8 +182,15 @@ public final class Agent {
             if (p.port <= 0) {
                 throw new IllegalArgumentException("-port is required");
             }
+            // QuickFIX/J parses repeating groups only with a dictionary.
+            if (p.dict.isEmpty()) {
+                throw new IllegalArgumentException("-dict is required");
+            }
             if (p.role.equals("initiator") && (p.messages <= 0 || p.warmup < 0 || p.window <= 0)) {
                 throw new IllegalArgumentException("-messages and -window must be > 0, -warmup >= 0");
+            }
+            if (!p.scenario.equals(ORDERS) && !p.scenario.equals(MARKET_DATA)) {
+                throw new IllegalArgumentException("unknown scenario " + p.scenario);
             }
             return p;
         }
@@ -144,8 +206,8 @@ public final class Agent {
 
     /**
      * settings returns the session's settings: those of the scenario, the
-     * dictionary of p if any; the store (memory) and the log (none) are
-     * given to the connector.
+     * dictionary of p; the store (memory) and the log (none) are given to
+     * the connector.
      */
     static SessionSettings settings(Params p, String sender, String target, String... extra) throws Exception {
         List<String> lines = new ArrayList<>(List.of(
@@ -158,11 +220,7 @@ public final class Agent {
                 "NonStopSession=Y"));
         lines.addAll(List.of(extra));
         lines.addAll(List.of("[SESSION]", "SenderCompID=" + sender, "TargetCompID=" + target));
-        if (p.dict.isEmpty()) {
-            lines.add("UseDataDictionary=N");
-        } else {
-            lines.add("DataDictionary=" + p.dict);
-        }
+        lines.add("DataDictionary=" + p.dict);
         byte[] b = (String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8);
         return new SessionSettings(new ByteArrayInputStream(b));
     }
@@ -281,18 +339,18 @@ public final class Agent {
 
     /**
      * Tracker runs and measures the initiator's side, as internal/scenario's
-     * does: it sends orders keeping at most window of them unacknowledged,
-     * and times each round trip. The handler calls ack with the ClOrdID of
-     * each ExecutionReport.
+     * does: it sends requests keeping at most window of them unanswered,
+     * and times each round trip. The handler calls ack with the identifier
+     * of each answer.
      */
     static final class Tracker {
         private final Params p;
         private final long start = System.nanoTime();
-        private final AtomicLongArray sent; // when order i was sent, since start, +1; 0 once acknowledged
-        private final long[] rtt; // round trips of the measured orders
-        private final Semaphore slots; // one per order awaiting its acknowledgement
+        private final AtomicLongArray sent; // when request i was sent, since start, +1; 0 once answered
+        private final long[] rtt; // round trips of the measured requests
+        private final Semaphore slots; // one per request awaiting its answer
         private final AtomicLong acked = new AtomicLong();
-        private final AtomicLong end = new AtomicLong(); // the latest acknowledgement
+        private final AtomicLong end = new AtomicLong(); // the latest answer
         private volatile long target; // acked count ending the current phase
         private volatile CountDownLatch done;
         private volatile Exception err;
@@ -316,7 +374,7 @@ public final class Agent {
             }
         }
 
-        /** ack tells order clOrdID is acknowledged. */
+        /** ack tells request clOrdID (or MDReqID) is answered. */
         void ack(String clOrdID) {
             long now = now();
             int i;
@@ -326,12 +384,12 @@ public final class Agent {
                 i = -1;
             }
             if (i < 0 || i >= sent.length()) {
-                fail("ExecutionReport for unknown ClOrdID " + clOrdID);
+                fail("answer to unknown request " + clOrdID);
                 return;
             }
             long s = sent.getAndSet(i, 0);
             if (s == 0) {
-                fail("ExecutionReport for ClOrdID " + i + " not awaiting one");
+                fail("answer to request " + i + " not awaiting one");
                 return;
             }
             int j = i - p.warmup;
@@ -355,8 +413,8 @@ public final class Agent {
         }
 
         /**
-         * run sends the warm-up orders, tells the driver WARM, waits for its
-         * GO, sends and measures the orders, and tells the driver its RESULT.
+         * run sends the warm-up requests, tells the driver WARM, waits for its
+         * GO, sends and measures the requests, and tells the driver its RESULT.
          */
         void run(Control ctl, Sender send) throws Exception {
             phase(0, p.warmup, send);
@@ -381,7 +439,7 @@ public final class Agent {
             say(b.append("]}").toString());
         }
 
-        /** phase sends orders from to to, and waits for their acknowledgements. */
+        /** phase sends requests from to to, and waits for their answers. */
         private void phase(int from, int to, Sender send) throws Exception {
             if (from == to) {
                 return;
@@ -392,9 +450,10 @@ public final class Agent {
                 while (!slots.tryAcquire(10, TimeUnit.MILLISECONDS)) {
                     check();
                 }
+                String id = Integer.toString(i);
                 sent.set(i, now());
-                if (!send.send(Integer.toString(i))) {
-                    throw new IllegalStateException("sending order " + i + ": not logged on");
+                if (!send.send(id)) {
+                    throw new IllegalStateException("sending request " + i + ": not logged on");
                 }
             }
             while (!done.await(10, TimeUnit.MILLISECONDS)) {
@@ -463,48 +522,107 @@ public final class Agent {
         @Override
         public void toApp(Message m, SessionID id) {}
 
-        UnsupportedMessageType unexpected(Message m, SessionID id) {
-            anomaly(id + " received " + m);
-            return new UnsupportedMessageType();
+        /** dispatch cracks m to cracker's onMessage, reporting a message of a type it does not handle. */
+        static void dispatch(MessageCracker cracker, Message m, SessionID id)
+                throws FieldNotFound, UnsupportedMessageType, IncorrectTagValue {
+            try {
+                cracker.crack(m, id);
+            } catch (UnsupportedMessageType e) {
+                anomaly(id + " received " + m);
+                throw e;
+            }
         }
     }
 
-    /** Exchange acknowledges each NewOrderSingle with an ExecutionReport. */
+    static void send(Message m, SessionID id, String what) {
+        try {
+            if (!Session.sendToTarget(m, id)) {
+                anomaly(id + ": " + what + " not sent");
+            }
+        } catch (Exception e) {
+            anomaly(id + ": sending " + what + ": " + e);
+        }
+    }
+
+    /**
+     * Exchange answers each NewOrderSingle with an ExecutionReport, each MarketDataRequest with a
+     * MarketDataSnapshotFullRefresh. Its handlers run on the connector's one thread: the group entries it
+     * reuses are its own.
+     */
     static final class Exchange extends Watcher {
-        private long n; // fromApp runs on the connector's one thread
+        private long n;
+        private final NewOrderSingle.NoPartyIDs partyIn = new NewOrderSingle.NoPartyIDs();
+        private final ExecutionReport.NoPartyIDs partyOut = new ExecutionReport.NoPartyIDs();
+        private final MarketDataRequest.NoMDEntryTypes type = new MarketDataRequest.NoMDEntryTypes();
+        private final MarketDataRequest.NoRelatedSym sym = new MarketDataRequest.NoRelatedSym();
+        private final MarketDataSnapshotFullRefresh.NoMDEntries entry = new MarketDataSnapshotFullRefresh.NoMDEntries();
+
+        private final MessageCracker cracker = new MessageCracker() {
+            @Override
+            public void onMessage(NewOrderSingle m, SessionID id) throws FieldNotFound {
+                ClOrdID clOrdID = m.getClOrdID();
+                Symbol symbol = m.getSymbol();
+                Side side = m.getSide();
+                OrderQty qty = m.getOrderQty();
+                Price px = m.getPrice();
+                OrderID orderID = new OrderID(Long.toString(++n));
+                ExecutionReport er = new ExecutionReport(orderID, new ExecID(orderID.getValue()),
+                        new ExecType(EXEC_TYPE_NEW), new OrdStatus(ORD_STATUS_NEW), side,
+                        new LeavesQty(qty.getValue()), new CumQty(0), new AvgPx(0));
+                er.set(clOrdID);
+                er.set(qty);
+                er.set(px);
+                er.set(symbol);
+                er.set(new TransactTime());
+                for (int i = 1, count = m.getGroupCount(NoPartyIDs.FIELD); i <= count; i++) {
+                    m.getGroup(i, partyIn);
+                    partyOut.set(partyIn.getPartyID());
+                    partyOut.set(partyIn.getPartyIDSource());
+                    partyOut.set(partyIn.getPartyRole());
+                    er.addGroup(partyOut);
+                }
+                send(er, id, "ExecutionReport " + orderID.getValue());
+            }
+
+            @Override
+            public void onMessage(MarketDataRequest m, SessionID id) throws FieldNotFound {
+                MDReqID reqID = m.getMDReqID();
+                SubscriptionRequestType sub = m.getSubscriptionRequestType();
+                MarketDepth depth = m.getMarketDepth();
+                int nTypes = m.getGroupCount(NoMDEntryTypes.FIELD);
+                int nSyms = m.getGroupCount(NoRelatedSym.FIELD);
+                if (sub.getValue() != SUBSCRIPTION_SNAPSHOT || depth.getValue() != MARKET_DEPTH
+                        || nTypes != ENTRY_TYPES.length || nSyms != 1) {
+                    anomaly("MarketDataRequest " + reqID.getValue() + ": unexpected request");
+                    return;
+                }
+                m.getGroup(1, sym);
+                MarketDataSnapshotFullRefresh w = new MarketDataSnapshotFullRefresh();
+                w.set(reqID);
+                w.set(sym.getSymbol());
+                for (int k = 0; k < nTypes; k++) {
+                    m.getGroup(k + 1, type);
+                    MDEntryType typ = type.getMDEntryType();
+                    if (typ.getValue() != ENTRY_TYPES[k]) {
+                        anomaly("MarketDataRequest " + reqID.getValue() + ": MDEntryType " + typ.getValue());
+                    }
+                    for (int lvl = 0; lvl < depth.getValue(); lvl++) {
+                        entry.set(typ);
+                        entry.set(new MDEntryPx(BOOK_PX[k][lvl]));
+                        entry.set(new MDEntrySize(BOOK_SIZE[lvl]));
+                        w.addGroup(entry);
+                    }
+                }
+                send(w, id, "MarketDataSnapshotFullRefresh " + reqID.getValue());
+            }
+        };
 
         @Override
         public void onLogout(SessionID id) {}
 
         @Override
-        public void fromApp(Message m, SessionID id) throws FieldNotFound, UnsupportedMessageType {
-            if (!msgType(m).equals("D")) {
-                throw unexpected(m, id);
-            }
-            String orderID = Long.toString(++n);
-            String qty = m.getString(38);
-            Message er = new Message();
-            er.getHeader().setString(35, "8");
-            er.setString(6, ZERO);
-            er.setString(11, m.getString(11));
-            er.setString(14, ZERO);
-            er.setString(17, orderID);
-            er.setString(37, orderID);
-            er.setString(38, qty);
-            er.setString(39, ORD_STATUS_NEW);
-            er.setString(44, m.getString(44));
-            er.setString(54, m.getString(54));
-            er.setString(55, m.getString(55));
-            er.setUtcTimeStamp(60, LocalDateTime.now(ZoneOffset.UTC), UtcTimestampPrecision.MILLIS);
-            er.setString(150, EXEC_TYPE_NEW);
-            er.setString(151, qty);
-            try {
-                if (!Session.sendToTarget(er, id)) {
-                    anomaly(id + ": ExecutionReport " + orderID + " not sent");
-                }
-            } catch (Exception e) {
-                anomaly(id + ": sending ExecutionReport " + orderID + ": " + e);
-            }
+        public void fromApp(Message m, SessionID id) throws FieldNotFound, UnsupportedMessageType, IncorrectTagValue {
+            dispatch(cracker, m, id);
         }
     }
 
@@ -521,20 +639,65 @@ public final class Agent {
         }
     }
 
-    /** Client passes the ExecutionReports it receives to the tracker. */
+    /** Client reads the answers it receives and passes their identifiers to the tracker. */
     static final class Client extends Watcher {
         final Tracker tr;
+        private final ExecutionReport.NoPartyIDs party = new ExecutionReport.NoPartyIDs();
+        private final MarketDataSnapshotFullRefresh.NoMDEntries entry = new MarketDataSnapshotFullRefresh.NoMDEntries();
+
+        private final MessageCracker cracker = new MessageCracker() {
+            @Override
+            public void onMessage(ExecutionReport m, SessionID id) throws FieldNotFound {
+                String clOrdID = m.getClOrdID().getValue();
+                int n = m.getGroupCount(NoPartyIDs.FIELD);
+                if (n != PARTIES.length) {
+                    anomaly(n + " Parties entries, want " + PARTIES.length);
+                }
+                for (int i = 1; i <= n; i++) {
+                    m.getGroup(i, party);
+                    String pid = party.getPartyID().getValue();
+                    char src = party.getPartyIDSource().getValue();
+                    int role = party.getPartyRole().getValue();
+                    if (i <= PARTIES.length) {
+                        Party want = PARTIES[i - 1];
+                        if (!pid.equals(want.id()) || src != want.source() || role != want.role()) {
+                            anomaly("Parties entry " + (i - 1) + ": " + pid + " " + src + " " + role + ", want " + want);
+                        }
+                    }
+                }
+                tr.ack(clOrdID);
+            }
+
+            @Override
+            public void onMessage(MarketDataSnapshotFullRefresh m, SessionID id) throws FieldNotFound {
+                String reqID = m.getMDReqID().getValue();
+                int n = m.getGroupCount(NoMDEntries.FIELD);
+                if (n != 2 * MARKET_DEPTH) {
+                    anomaly(n + " NoMDEntries entries, want " + 2 * MARKET_DEPTH);
+                }
+                for (int i = 1; i <= n; i++) {
+                    m.getGroup(i, entry);
+                    char typ = entry.getMDEntryType().getValue();
+                    double px = entry.getMDEntryPx().getValue();
+                    double size = entry.getMDEntrySize().getValue();
+                    if (i <= 2 * MARKET_DEPTH) {
+                        int k = (i - 1) / MARKET_DEPTH, lvl = (i - 1) % MARKET_DEPTH;
+                        if (typ != ENTRY_TYPES[k] || px != BOOK_PX[k][lvl] || size != BOOK_SIZE[lvl]) {
+                            anomaly("NoMDEntries entry " + (i - 1) + ": " + typ + " " + size + "@" + px);
+                        }
+                    }
+                }
+                tr.ack(reqID);
+            }
+        };
 
         Client(Tracker tr) {
             this.tr = tr;
         }
 
         @Override
-        public void fromApp(Message m, SessionID id) throws FieldNotFound, UnsupportedMessageType {
-            if (!msgType(m).equals("8")) {
-                throw unexpected(m, id);
-            }
-            tr.ack(m.getString(11));
+        public void fromApp(Message m, SessionID id) throws FieldNotFound, UnsupportedMessageType, IncorrectTagValue {
+            dispatch(cracker, m, id);
         }
     }
 
@@ -550,20 +713,40 @@ public final class Agent {
             }
             Control ctl = new Control();
             SessionID id = new SessionID(BEGIN_STRING, INITIATOR, ACCEPTOR);
-            c.tr.run(ctl, clOrdID -> {
-                Message nos = new Message();
-                nos.getHeader().setString(35, "D");
-                nos.setString(11, clOrdID);
-                nos.setString(21, HANDL_INST);
-                nos.setString(38, ORDER_QTY);
-                nos.setString(40, ORD_TYPE);
-                nos.setString(44, PRICE);
-                nos.setString(54, SIDE);
-                nos.setString(55, SYMBOL);
-                nos.setString(59, TIME_IN_FORCE);
-                nos.setUtcTimeStamp(60, LocalDateTime.now(ZoneOffset.UTC), UtcTimestampPrecision.MILLIS);
-                return Session.sendToTarget(nos, id);
-            });
+            if (p.scenario.equals(ORDERS)) {
+                NewOrderSingle.NoPartyIDs party = new NewOrderSingle.NoPartyIDs();
+                c.tr.run(ctl, clOrdID -> {
+                    // TransactTime's generated constructor writes milliseconds.
+                    NewOrderSingle nos = new NewOrderSingle(new ClOrdID(clOrdID), new Side(SIDE), new TransactTime(),
+                            new OrdType(ORD_TYPE));
+                    nos.set(new HandlInst(HANDL_INST));
+                    nos.set(new OrderQty(ORDER_QTY));
+                    nos.set(new Price(PRICE));
+                    nos.set(new Symbol(SYMBOL));
+                    nos.set(new TimeInForce(TIME_IN_FORCE));
+                    for (Party pt : PARTIES) {
+                        party.set(new PartyID(pt.id()));
+                        party.set(new PartyIDSource(pt.source()));
+                        party.set(new PartyRole(pt.role()));
+                        nos.addGroup(party);
+                    }
+                    return Session.sendToTarget(nos, id);
+                });
+            } else {
+                MarketDataRequest.NoMDEntryTypes type = new MarketDataRequest.NoMDEntryTypes();
+                MarketDataRequest.NoRelatedSym sym = new MarketDataRequest.NoRelatedSym();
+                c.tr.run(ctl, reqID -> {
+                    MarketDataRequest req = new MarketDataRequest(new MDReqID(reqID),
+                            new SubscriptionRequestType(SUBSCRIPTION_SNAPSHOT), new MarketDepth(MARKET_DEPTH));
+                    for (char t : ENTRY_TYPES) {
+                        type.set(new MDEntryType(t));
+                        req.addGroup(type);
+                    }
+                    sym.set(new Symbol(SYMBOL));
+                    req.addGroup(sym);
+                    return Session.sendToTarget(req, id);
+                });
+            }
             // The driver closes stdin once it has the result: then log out.
             while (ctl.next() != null) {
             }
