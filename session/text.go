@@ -2,10 +2,12 @@ package session
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
 )
 
@@ -42,6 +44,34 @@ func cleanText(s string) string {
 		cut--
 	}
 	return s[:cut] + "..."
+}
+
+// withhold returns text, a Text or log about m's field tag (noTag for
+// none), or fallback if text may show the value of one of m's SensitiveTags
+// fields: the session never repeats a credential. It does if tag is one, and
+// if text holds the beginning of one's value, as is or quoted (quoteValue,
+// %q), cut on a rune boundary to at most 64 bytes, as quoteValue keeps them.
+// A value shorter than 4 bytes is not looked for: it would match texts about
+// any other field.
+func withhold(m *fix2.Message, tag int, text, fallback string) string {
+	if slices.Contains(SensitiveTags, tag) {
+		return fallback
+	}
+	for _, f := range m.Fields() {
+		if len(f.Value) < 4 || !slices.Contains(SensitiveTags, f.Tag) {
+			continue
+		}
+		n := min(len(f.Value), 64)
+		for n > 0 && n < len(f.Value) && !utf8.RuneStart(f.Value[n]) {
+			n--
+		}
+		v := string(f.Value[:n])
+		q := strconv.Quote(v)
+		if strings.Contains(text, v) || strings.Contains(text, q[1:len(q)-1]) {
+			return fallback
+		}
+	}
+	return text
 }
 
 // quoteValue quotes a field value for a Text, escaping control characters

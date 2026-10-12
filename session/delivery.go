@@ -284,7 +284,7 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 		// A BusinessMessageReject the handler refuses, as a generated
 		// Dispatch without its handler does, is not rejected: a counterparty
 		// refusing ours alike would reject it in turn, and the two would loop.
-		s.logUnanswered(m, err.Error())
+		s.logUnanswered(m, noTag, err.Error())
 		return
 	}
 	var rej *RejectError

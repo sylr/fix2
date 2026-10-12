@@ -45,7 +45,9 @@ type LogonRequest struct {
 type Handler interface {
 	// Authenticate checks the counterparty's Logon before the session acts
 	// on it. An error logs it out, with a generic Text: the error itself is
-	// only logged, so as not to tell an unauthenticated peer why. A Logon
+	// only logged, so as not to tell an unauthenticated peer why, and, for a
+	// first Logon, is the Err of the LogoutError OnLogout gets; it must not
+	// hold credentials. A Logon
 	// with ResetSeqNumFlag the session refuses anyway (see Compatibility) is
 	// not authenticated. It runs on the connection's reader goroutine.
 	Authenticate(ctx context.Context, req *LogonRequest) error
@@ -72,7 +74,8 @@ type Handler interface {
 	// fix2.ErrUnsupportedMessageType (as generated Dispatch functions
 	// return) with one whose reason is "unsupported message type", and any
 	// other with one whose reason is "other". Either way the message counts
-	// as processed.
+	// as processed. The error may be logged, its text sent: it must not hold
+	// credentials.
 	FromApp(ctx context.Context, s *Session, m *fix2.Message, in Inbound) error
 
 	// OnResend tells whether a stored application message may be resent at

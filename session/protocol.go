@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -150,11 +151,66 @@ func (s *Session) invalidTagLocked(c *conn, m *fix2.Message, tag int) {
 }
 
 // garbled handles a frame that does not parse: FIX ignores it, without
-// changing sequence numbers.
+// changing sequence numbers. Its bytes are not logged, credentials among
+// them perhaps: only its length, why and, read from its header, its MsgType
+// and MsgSeqNum.
 func (c *conn) garbled(frame []byte, err error) {
 	c.s.stats.Garbled.Add(1)
-	c.s.log.LogAttrs(context.Background(), slog.LevelWarn, "garbled message ignored",
-		slog.String("error", err.Error()), slog.String("frame", string(frame[:min(len(frame), 256)])))
+	attrs := []slog.Attr{slog.Int("bytes", len(frame)), slog.String("error", err.Error())}
+	var pe *fix2.ParseError
+	if errors.As(err, &pe) {
+		attrs = append(attrs, slog.Int("offset", pe.Offset))
+	}
+	msgType, seq := headerIDs(frame)
+	if msgType != nil {
+		attrs = append(attrs, slog.String("msg_type", string(msgType)))
+	}
+	if seq > 0 {
+		attrs = append(attrs, slog.Int("seq", seq))
+	}
+	c.s.log.LogAttrs(context.Background(), slog.LevelWarn, "garbled message ignored", attrs...)
+}
+
+// identTags are the standard header fields headerIDs reads past: none is a
+// DATA field, whose value could hold anything.
+var identTags = [...]int{8, 9, 35, 34, 49, 56, 50, 57, 115, 116, 128, 129, 142, 143, 144, 145, 43, 97, 52, 122, 369, 1128, 1129}
+
+// headerIDs returns the MsgType and MsgSeqNum of frame, read from the
+// fields of its standard header up to the first that is not one of
+// identTags or does not scan: nil and 0 if not found there. A MsgType is
+// returned only if it is a few letters and digits, a MsgSeqNum only if it is
+// a number.
+func headerIDs(frame []byte) (msgType []byte, seq int) {
+	for i := 0; i < len(frame) && (msgType == nil || seq == 0); {
+		eq := bytes.IndexByte(frame[i:], '=')
+		if eq <= 0 {
+			break
+		}
+		tag, err := strconv.Atoi(string(frame[i : i+eq]))
+		if err != nil || !slices.Contains(identTags[:], tag) {
+			break
+		}
+		start := i + eq + 1
+		end := bytes.IndexByte(frame[start:], 1)
+		if end < 0 {
+			break
+		}
+		v := frame[start : start+end]
+		switch tag {
+		case tagMsgType:
+			if len(v) > 0 && len(v) <= 4 && !slices.ContainsFunc(v, func(b byte) bool {
+				return (b < '0' || b > '9') && (b < 'A' || b > 'Z') && (b < 'a' || b > 'z')
+			}) {
+				msgType = v
+			}
+		case tagMsgSeqNum:
+			if n, err := strconv.Atoi(string(v)); err == nil && n > 0 {
+				seq = n
+			}
+		}
+		i = start + end + 1
+	}
+	return msgType, seq
 }
 
 // authenticate asks the handler whether to accept Logon m.
@@ -737,7 +793,7 @@ func (s *Session) validateLocked(m *fix2.Message, applVerID string) *dictionary.
 // reject it in turn, and the two would loop.
 func (s *Session) rejectValidationLocked(m *fix2.Message, verr *dictionary.ValidationError) {
 	if isReject(m.MsgType()) && (verr.Reason == -1 || verr.Reason == dictionary.ReasonInvalidMsgType) {
-		s.logUnanswered(m, verr.Msg)
+		s.logUnanswered(m, verr.Tag, verr.Msg)
 		return
 	}
 	if verr.Reason == -1 {
@@ -753,8 +809,10 @@ func (s *Session) rejectValidationLocked(m *fix2.Message, verr *dictionary.Valid
 }
 
 // logUnanswered logs why m, a Reject or BusinessMessageReject, would have been
-// rejected, had answering it not risked a loop with the counterparty.
-func (s *Session) logUnanswered(m *fix2.Message, text string) {
+// rejected, about its field tag (noTag for none), had answering it not
+// risked a loop with the counterparty.
+func (s *Session) logUnanswered(m *fix2.Message, tag int, text string) {
+	text = withhold(m, tag, text, "value withheld")
 	s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a reject",
 		slog.String("msg_type", string(m.MsgType())), slog.String("seq", string(m.Get(tagMsgSeqNum))),
 		slog.String("text", text))
@@ -765,6 +823,7 @@ func (s *Session) rejectLocked(m *fix2.Message, reason dictionary.RejectReason, 
 	if s.c == nil {
 		return
 	}
+	text = withhold(m, tag, text, rejectText(reason, "value withheld"))
 	s.stats.RejectsSent.Add(1)
 	s.log.LogAttrs(context.Background(), slog.LevelWarn, "rejecting a message",
 		slog.String("msg_type", string(m.MsgType())), slog.String("seq", string(m.Get(tagMsgSeqNum))),
@@ -807,6 +866,7 @@ func (s *Session) businessRejectLocked(m *fix2.Message, reason int, refID, text 
 		s.rejectLocked(m, dictionary.ReasonOther, noTag, text)
 		return
 	}
+	text = withhold(m, noTag, text, "value withheld")
 	s.stats.RejectsSent.Add(1)
 	b := adminBody(nil)
 	if ref := m.Get(tagMsgSeqNum); ref != nil {
