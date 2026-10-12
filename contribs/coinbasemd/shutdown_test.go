@@ -402,6 +402,8 @@ func TestOutputFailureStops(t *testing.T) {
 			case err := <-done:
 				if !errors.Is(err, io.ErrClosedPipe) {
 					t.Errorf("command failed with %v, want io.ErrClosedPipe", err)
+				} else if n := strings.Count(err.Error(), io.ErrClosedPipe.Error()); n != 1 {
+					t.Errorf("command failed with %q: the write error told %d times, want once", err, n)
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("the command did not stop")

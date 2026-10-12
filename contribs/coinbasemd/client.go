@@ -191,6 +191,10 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		return errors.Join(runErr, endErr)
 	}
 	if err := context.Cause(ctx); !errors.Is(err, errDone) && !errors.Is(err, context.Canceled) {
+		if endErr != nil && errors.Is(err, endErr) {
+			// The output's failure stopped the command: told once.
+			endErr = nil
+		}
 		return errors.Join(err, endErr)
 	}
 	return endErr
