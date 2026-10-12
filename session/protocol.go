@@ -33,7 +33,8 @@ func (c *conn) handleFrame(frame []byte) {
 	s.waitDeliveryRoom(c)
 	now := time.Now()
 	m := &c.msg
-	if err := fix2.ParseInto(m, frame, s.dicts.parse); err != nil {
+	applVerID, err := s.parseInbound(m, frame)
+	if err != nil {
 		if tag, ok := badTagNumber(frame, m, err); ok {
 			s.mu.Lock()
 			if s.c == c && !c.closed && s.phase == phaseEstablished {
@@ -47,12 +48,6 @@ func (c *conn) handleFrame(frame []byte) {
 		c.garbled(frame, err)
 		return
 	}
-	if p := s.appProfile(m); p != nil && p != s.dicts.parse {
-		if err := fix2.ParseInto(m, frame, p); err != nil {
-			c.garbled(frame, err)
-			return
-		}
-	}
 	s.stats.MessagesReceived.Add(1)
 	s.stats.BytesReceived.Add(uint64(len(frame)))
 	if obs := s.cfg.Observer; obs != nil {
@@ -60,7 +55,9 @@ func (c *conn) handleFrame(frame []byte) {
 		obs.OnInbound(s, Frame{Raw: frame, Seq: uint64(max(seq, 0)), Generation: s.generation(), Epoch: c.epoch, Resend: bytes.Equal(m.Get(tagPossDupFlag), yes)})
 	}
 
-	// A Logon is authenticated before the session acts on it.
+	// A Logon is authenticated before the session acts on it, unless the
+	// session refuses it anyway: one resetting the sequence numbers is
+	// checked first.
 	if bytes.Equal(m.MsgType(), msgLogon) {
 		s.mu.Lock()
 		ph, current := s.phase, s.c == c && !c.closed
@@ -68,7 +65,9 @@ func (c *conn) handleFrame(frame []byte) {
 		if !current {
 			return
 		}
-		if ph == phaseAwaitingLogon || ph == phaseLogonSent || bytes.Equal(m.Get(tagResetSeqNumFlag), yes) {
+		reset := ph == phaseEstablished && s.prof.resetSeqNum && bytes.Equal(m.Get(tagResetSeqNumFlag), yes) &&
+			string(m.BeginString()) == s.id.BeginString && s.resetLogonProblem(m, now) == nil
+		if ph == phaseAwaitingLogon || ph == phaseLogonSent || reset {
 			if err := s.authenticate(c, m); err != nil {
 				s.mu.Lock()
 				defer s.mu.Unlock()
@@ -89,7 +88,7 @@ func (c *conn) handleFrame(frame []byte) {
 		return
 	}
 	c.lastRead = now
-	in, fromAdmin := s.onMessageLocked(c, m, frame, now)
+	in, fromAdmin := s.onMessageLocked(c, m, frame, applVerID, now)
 	if !c.closed {
 		s.armLocked(c)
 	}
@@ -182,28 +181,77 @@ func (s *Session) generation() uint64 {
 	return s.st.Generation
 }
 
-// appProfile returns the parsing profile of a FIXT application message whose
-// version is not the default, or nil.
-func (s *Session) appProfile(m *fix2.Message) *fix2.Profile {
+// profileFor returns the profile raw, a whole message, parses with: for FIXT,
+// that of the application version the ApplVerID (1128) of its standard header
+// names or, without one, the counterparty's DefaultApplVerID if inbound, ours
+// if not. It is chosen before parsing, the body's DATA fields depending on it.
+func (s *Session) profileFor(raw []byte, inbound bool) *fix2.Profile {
 	if s.dicts.parseApps == nil {
-		return nil
+		return s.dicts.parse
 	}
-	v := m.Get(tagApplVerID)
-	if v == nil {
-		s.mu.Lock()
-		peer := s.peerApplVerID
-		s.mu.Unlock()
-		if peer == "" {
-			return nil
-		}
-		return s.dicts.parseApps[peer]
+	if v, ok := s.dicts.applVerID(raw); ok {
+		return s.dicts.appProfile(string(v))
 	}
-	return s.dicts.parseApps[string(v)]
+	if !inbound {
+		return s.dicts.parse
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dicts.appProfile(s.peerApplVerID)
 }
 
-// onMessageLocked handles received message m, frame its bytes, on c. It
-// returns what to tell the handler's FromAdmin, if anything.
-func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, now time.Time) (Inbound, bool) {
+// parseInbound is parseApp without the lock held: received frame is parsed
+// into m with the profile of its application version, which it returns for
+// validation and delivery to use in turn.
+func (s *Session) parseInbound(m *fix2.Message, frame []byte) (string, error) {
+	if !s.prof.fixt {
+		return "", fix2.ParseInto(m, frame, s.dicts.parse)
+	}
+	s.mu.Lock()
+	peer := s.peerApplVerID
+	s.mu.Unlock()
+	return s.parseApp(m, frame, peer)
+}
+
+// parseApp parses received frame into m with the profile of its application
+// version, and returns that version: for FIXT, the ApplVerID (1128) of its
+// standard header or, without one, peer, the counterparty's
+// DefaultApplVerID. It tries peer's profile first, which reads the standard
+// header as any other does (see newDicts): a message of that version, the
+// usual one, is parsed once, its ApplVerID read from its parsed header rather
+// than looked for in frame.
+func (s *Session) parseApp(m *fix2.Message, frame []byte, peer string) (string, error) {
+	if !s.prof.fixt {
+		return "", fix2.ParseInto(m, frame, s.dicts.parse)
+	}
+	first := s.dicts.appProfile(peer)
+	err := fix2.ParseInto(m, frame, first)
+	var v []byte
+	var ok bool
+	switch {
+	case s.dicts.parseApps == nil:
+		// A single profile, without a dictionary to tell the header.
+		v = m.Get(tagApplVerID)
+		ok = len(v) > 0
+	case err == nil:
+		v, ok = s.dicts.headerApplVerID(m)
+	default:
+		v, ok = s.dicts.applVerID(frame)
+	}
+	if !ok {
+		return peer, err
+	}
+	version := s.dicts.version(v)
+	if p := s.dicts.appProfile(version); p != first {
+		err = fix2.ParseInto(m, frame, p)
+	}
+	return version, err
+}
+
+// onMessageLocked handles received message m, frame its bytes, of FIXT
+// application version applVerID, on c. It returns what to tell the handler's
+// FromAdmin, if anything.
+func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, applVerID string, now time.Time) (Inbound, bool) {
 	msgType := m.MsgType()
 	if string(m.BeginString()) != s.id.BeginString {
 		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
@@ -236,6 +284,9 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, now ti
 		PossDup:    bytes.Equal(m.Get(tagPossDupFlag), yes),
 		PossResend: bytes.Equal(m.Get(tagPossResend), yes),
 		Received:   now,
+	}
+	if !isAdmin(msgType) {
+		in.ApplVerID = applVerID
 	}
 	s.replyTo = in.Seq
 	defer func() { s.replyTo = 0 }()
@@ -548,13 +599,9 @@ func (s *Session) pruneStashLocked() {
 // replayStashedLocked handles a message kept ahead of a gap, now in sequence.
 func (s *Session) replayStashedLocked(c *conn, frame []byte) {
 	m := &s.stashMsg
-	if err := fix2.ParseInto(m, frame, s.dicts.parse); err != nil {
+	applVerID, err := s.parseApp(m, frame, s.peerApplVerID)
+	if err != nil {
 		return
-	}
-	if p := s.appProfileLocked(m); p != nil && p != s.dicts.parse {
-		if fix2.ParseInto(m, frame, p) != nil {
-			return
-		}
 	}
 	seq, _ := fix2.ParseInt(m.Get(tagMsgSeqNum))
 	in := Inbound{
@@ -563,6 +610,9 @@ func (s *Session) replayStashedLocked(c *conn, frame []byte) {
 		PossDup:    bytes.Equal(m.Get(tagPossDupFlag), yes),
 		PossResend: bytes.Equal(m.Get(tagPossResend), yes),
 		Received:   time.Now(),
+	}
+	if !isAdmin(m.MsgType()) {
+		in.ApplVerID = applVerID
 	}
 	switch string(m.MsgType()) {
 	case "A":
@@ -578,20 +628,6 @@ func (s *Session) replayStashedLocked(c *conn, frame []byte) {
 	default:
 		s.onRegularLocked(c, m, frame, in, in.Received)
 	}
-}
-
-// appProfileLocked is appProfile with the lock held.
-func (s *Session) appProfileLocked(m *fix2.Message) *fix2.Profile {
-	if s.dicts.parseApps == nil {
-		return nil
-	}
-	if v := m.Get(tagApplVerID); v != nil {
-		return s.dicts.parseApps[string(v)]
-	}
-	if s.peerApplVerID != "" {
-		return s.dicts.parseApps[s.peerApplVerID]
-	}
-	return nil
 }
 
 // onRegularLocked handles a message other than Logon, Logout, ResendRequest
@@ -610,7 +646,7 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 	s.lastProcessedLocked(m, in)
 	msgType := m.MsgType()
 	admin := isAdmin(msgType)
-	if verr := s.validateLocked(m, &in); verr != nil {
+	if verr := s.validateLocked(m, in.ApplVerID); verr != nil {
 		s.rejectValidationLocked(m, verr)
 		s.markLocked(in.Seq)
 		s.advanceLocked(c, in.Seq+1)
@@ -662,19 +698,15 @@ func (s *Session) markLocked(seq uint64) {
 	s.deliv.push(item{kind: itemMark, gen: s.st.Generation, seq: seq})
 }
 
-// validateLocked validates m against the session's dictionaries.
-func (s *Session) validateLocked(m *fix2.Message, in *Inbound) *dictionary.ValidationError {
+// validateLocked validates m against the session's dictionaries: for a FIXT
+// application message, that of applVerID, the version it was parsed as.
+func (s *Session) validateLocked(m *fix2.Message, applVerID string) *dictionary.ValidationError {
 	d := s.dicts.session
 	if s.prof.fixt && !isAdmin(m.MsgType()) {
-		v := string(m.Get(tagApplVerID))
-		if v == "" {
-			v = s.peerApplVerID
-		}
-		in.ApplVerID = v
 		if s.dicts.apps != nil {
-			if d = s.dicts.apps[v]; d == nil {
+			if d = s.dicts.apps[applVerID]; d == nil {
 				return &dictionary.ValidationError{Err: dictionary.ErrValidation, Tag: tagApplVerID, Reason: dictionary.ReasonInvalidApplVerID,
-					Msg: fmt.Sprintf("no dictionary for ApplVerID %q", v)}
+					Msg: fmt.Sprintf("no dictionary for ApplVerID %q", applVerID)}
 			}
 		}
 	}

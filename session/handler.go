@@ -45,8 +45,9 @@ type LogonRequest struct {
 type Handler interface {
 	// Authenticate checks the counterparty's Logon before the session acts
 	// on it. An error logs it out, with a generic Text: the error itself is
-	// only logged, so as not to tell an unauthenticated peer why. It runs on
-	// the connection's reader goroutine.
+	// only logged, so as not to tell an unauthenticated peer why. A Logon
+	// with ResetSeqNumFlag the session refuses anyway (see Compatibility) is
+	// not authenticated. It runs on the connection's reader goroutine.
 	Authenticate(ctx context.Context, req *LogonRequest) error
 
 	// OnLogon tells the session is logged on, before any application

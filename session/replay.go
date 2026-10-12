@@ -135,6 +135,8 @@ func (c *conn) runReplay(job *replayJob) {
 		if writeErr != nil {
 			return writeErr
 		}
+		// Our own message: of our default version, unless its header says.
+		p := s.profileFor(raw, false)
 		skip := false
 		switch {
 		case hole == store.HoleMissing:
@@ -154,7 +156,7 @@ func (c *conn) runReplay(job *replayJob) {
 		case isAdmin(msgTypeOf(raw)):
 			skip = true
 		default:
-			if fix2.ParseInto(&c.rmsg, raw, s.dicts.parse) != nil || !s.handler.OnResend(s.callbackCtx(), s, seq, &c.rmsg) {
+			if fix2.ParseInto(&c.rmsg, raw, p) != nil || !s.handler.OnResend(s.callbackCtx(), s, seq, &c.rmsg) {
 				skip = true
 			}
 		}
@@ -165,7 +167,7 @@ func (c *conn) runReplay(job *replayJob) {
 			return nil
 		}
 		gapFill(seq)
-		out, err := fix2.RewriteForResend(buf, raw, s.dicts.parse, sending)
+		out, err := fix2.RewriteForResend(buf, raw, p, sending)
 		if err != nil {
 			s.log.LogAttrs(context.Background(), slog.LevelError, "stored message cannot be resent: gap-filled",
 				slog.Uint64("seq", seq), slog.Any("error", err))

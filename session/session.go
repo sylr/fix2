@@ -16,10 +16,14 @@
 package session
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -422,6 +426,12 @@ type dicts struct {
 	// the FIXT application versions.
 	parse     *fix2.Profile
 	parseApps map[string]*fix2.Profile
+	// versions are the keys of parseApps.
+	versions []string
+	// header tells, by tag, the fields of the FIXT standard header, which
+	// headerProf reads: a message's ApplVerID is looked for there.
+	header     []bool
+	headerProf *fix2.Profile
 }
 
 func newDicts(cfg Config, p *profile) (dicts, error) {
@@ -445,5 +455,98 @@ func newDicts(cfg Config, p *profile) (dicts, error) {
 	if def := d.parseApps[cfg.Dictionaries.DefaultApplVerID]; def != nil {
 		d.parse = def
 	}
+	tags := []int{8, 9, tagMsgType}
+	for _, f := range d.session.Header {
+		tags = append(tags, f.Tag)
+	}
+	d.header = make([]bool, slices.Max(tags)+1)
+	for _, tag := range tags {
+		d.header[tag] = true
+	}
+	d.headerProf = d.session.Profile()
+	// A message's header is read before its version is known: every version
+	// must read it alike.
+	d.versions = slices.Sorted(maps.Keys(d.parseApps))
+	for _, v := range d.versions {
+		p := d.parseApps[v]
+		for tag, in := range d.header {
+			if in && (p.DataTag(tag) != d.headerProf.DataTag(tag) || p.DataLengthTag(tag) != d.headerProf.DataLengthTag(tag)) {
+				return d, fmt.Errorf("Dictionaries.Apps[%q] changes whether standard header field %d is a LENGTH or DATA field, which Dictionaries.Session decides", v, tag)
+			}
+		}
+	}
 	return d, nil
+}
+
+// applVerID returns the ApplVerID (1128) in frame's standard header: among
+// the fields before the first the header does not define, DATA fields read
+// by their length. ok is false if it is not there, or the header does not
+// scan: parsing the frame then tells what is wrong.
+func (d *dicts) applVerID(frame []byte) (v []byte, ok bool) {
+	data, n := 0, 0 // the DATA field the previous one announced, and its length
+	for i := 0; i < len(frame); {
+		// The tag, a header one: bounded by the header's highest.
+		tag, j := 0, i
+		for ; j < len(frame) && frame[j] != '='; j++ {
+			if c := frame[j] - '0'; c <= 9 && tag < len(d.header) {
+				tag = tag*10 + int(c)
+				continue
+			}
+			return nil, false
+		}
+		if j == len(frame) || tag >= len(d.header) || !d.header[tag] {
+			return nil, false
+		}
+		start := j + 1
+		end := start + n
+		if data == 0 {
+			if end = bytes.IndexByte(frame[start:], 1); end < 0 {
+				return nil, false
+			}
+			end += start
+		} else if tag != data || n >= len(frame)-start || frame[end] != 1 {
+			// The length comes from the peer: compared by subtraction.
+			return nil, false
+		}
+		if tag == tagApplVerID {
+			return frame[start:end], end > start
+		}
+		if data, n = d.headerProf.DataTag(tag), 0; data != 0 {
+			var err error
+			if n, err = fix2.ParseInt(frame[start:end]); err != nil || n < 0 {
+				return nil, false
+			}
+		}
+		i = end + 1
+	}
+	return nil, false
+}
+
+// headerApplVerID is applVerID for m, parsed.
+func (d *dicts) headerApplVerID(m *fix2.Message) (v []byte, ok bool) {
+	for _, f := range m.Fields() {
+		if f.Tag >= len(d.header) || !d.header[f.Tag] {
+			break
+		}
+		if f.Tag == tagApplVerID {
+			return f.Value, len(f.Value) > 0
+		}
+	}
+	return nil, false
+}
+
+// version returns v as a string, without allocating if it has a dictionary.
+func (d *dicts) version(v []byte) string {
+	for _, name := range d.versions {
+		if name == string(v) {
+			return name
+		}
+	}
+	return string(v)
+}
+
+// appProfile returns the profile of application version v, the default one
+// if v has no dictionary.
+func (d *dicts) appProfile(v string) *fix2.Profile {
+	return cmp.Or(d.parseApps[v], d.parse)
 }

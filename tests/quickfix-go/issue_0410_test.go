@@ -79,7 +79,9 @@ func TestIssue410_RefusedResetLogonKeepsStore(t *testing.T) {
 func TestIssue410_RefusedResetLogonWhileLoggedOnKeepsStore(t *testing.T) {
 	s, h, _, p := i410LoggedOn(t)
 	h.refuse.Store(true)
-	p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+	// At MsgSeqNum 1, as FIX requires of a reset: any other is refused before
+	// the handler is asked.
+	p.send("A", 1, "98", "0", "108", "30", "141", "Y")
 	p.expect("5", "34", "3")
 	if got, want := s.NextTargetSeqNum(), uint64(4); got != want {
 		t.Errorf("NextTargetSeqNum = %d, want %d", got, want)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
 )
 
 // logonTags are the tags of a Logon the session writes, on top of the
@@ -117,67 +118,54 @@ func (s *Session) logonBody(reset bool, next uint64) adminBody {
 
 // onLogonLocked handles a Logon: the counterparty's, or its answer to ours.
 func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.Time) {
-	if s.phase == phaseEstablished || s.phase == phaseLogoutSent {
-		if bytes.Equal(m.Get(tagResetSeqNumFlag), yes) && s.prof.resetSeqNum {
-			s.activeResetLocked(c, m, in)
+	switch s.phase {
+	case phaseLogoutSent:
+		// Logging out, FIX lets us send nothing but what a ResendRequest
+		// asks for: neither a Logon answering it nor a sequence reset.
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logon ignored while logging out",
+			slog.Bool("reset", bytes.Equal(m.Get(tagResetSeqNumFlag), yes)))
+		return
+	case phaseEstablished:
+		if !bytes.Equal(m.Get(tagResetSeqNumFlag), yes) || !s.prof.resetSeqNum {
+			s.logoutLocked(c, "Logon received while already logged on")
 			return
 		}
-		s.logoutLocked(c, "Logon received while already logged on")
+		if p := s.resetLogonProblem(m, now); p != nil {
+			// Rejected, and counted if it is the one expected, as a message
+			// with a wrong header is: nothing is reset.
+			s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logon with ResetSeqNumFlag refused", slog.String("reason", p.text))
+			s.rejectLocked(m, p.reason, p.tag, p.text)
+			if in.Seq == s.st.NextTarget {
+				s.markLocked(in.Seq)
+				s.st.NextTarget = in.Seq + 1
+			}
+			s.logoutLocked(c, "Logon with ResetSeqNumFlag refused")
+			return
+		}
+		if v := m.Get(tagDefaultApplVerID); s.prof.fixt && string(v) != s.peerApplVerID && (s.dicts.apps == nil || s.dicts.apps[string(v)] != nil) {
+			// What was negotiated at logon holds until the next.
+			s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty's DefaultApplVerID changed on a sequence reset: the one of the logon is kept",
+				slog.String("default_appl_ver_id", string(v)), slog.String("kept", s.peerApplVerID))
+		}
+		s.activeResetLocked(c, m, in)
 		return
 	}
 
 	// Errors before the session is logged on disconnect without a word, as
 	// FIX requires: a Logout would take a sequence number, and tell an
 	// unknown peer what is wrong.
-	refuse := func(format string, args ...any) {
-		text := fmt.Sprintf(format, args...)
-		s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logon refused", slog.String("reason", text))
-		s.disconnectLocked(c, &LogoutError{Text: "Logon refused: " + text})
-	}
-	if _, text := s.compIDProblem(m); text != "" {
-		refuse("%s", text)
+	hb, peerApplVerID, p := s.checkLogon(m, now)
+	if p != nil {
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "Logon refused", slog.String("reason", p.text))
+		s.disconnectLocked(c, &LogoutError{Text: "Logon refused: " + p.text})
 		return
 	}
-	if _, _, text := s.sendingTimeProblem(m, now); text != "" {
-		refuse("%s", text)
-		return
-	}
-	if v := m.Get(tagEncryptMethod); v != nil && string(v) != "0" {
-		refuse("EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))
-		return
-	}
-	hb, err := fix2.ParseInt(m.Get(tagHeartBtInt))
-	switch {
-	case m.Get(tagHeartBtInt) == nil:
-		refuse("HeartBtInt (108) missing")
-		return
-	case err != nil || hb < 0:
-		refuse("HeartBtInt (108) %s is not a number of seconds", quoteValue(m.Get(tagHeartBtInt)))
-		return
-	case !s.initiator && hb != 0 && (time.Duration(hb)*time.Second < s.cfg.MinHeartBtInt || time.Duration(hb)*time.Second > s.cfg.MaxHeartBtInt):
-		refuse("HeartBtInt (108) %ds outside the accepted %s to %s", hb, s.cfg.MinHeartBtInt, s.cfg.MaxHeartBtInt)
-		return
-	}
-	peerApplVerID := ""
-	if s.prof.fixt {
-		v := m.Get(tagDefaultApplVerID)
-		if v == nil {
-			refuse("DefaultApplVerID (1137) missing, required on a FIXT.1.1 Logon")
-			return
-		}
-		peerApplVerID = string(v)
-		if s.dicts.apps != nil && s.dicts.apps[peerApplVerID] == nil {
-			have := strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", ")
-			if s.cfg.Compatibility == CompatStrict2020 {
-				refuse("DefaultApplVerID (1137) %s not supported, have %s", quoteValue(v), have)
-				return
-			}
-			// As QuickFIX: accepted, its messages validated with our own
-			// default version.
-			s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty's DefaultApplVerID has no dictionary: our default is used for its messages",
-				slog.String("default_appl_ver_id", peerApplVerID), slog.String("have", have))
-			peerApplVerID = s.cfg.Dictionaries.DefaultApplVerID
-		}
+	if s.prof.fixt && s.dicts.apps != nil && s.dicts.apps[peerApplVerID] == nil {
+		// As QuickFIX: accepted, its messages validated with our own
+		// default version.
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty's DefaultApplVerID has no dictionary: our default is used for its messages",
+			slog.String("default_appl_ver_id", peerApplVerID), slog.String("have", strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", ")))
+		peerApplVerID = s.cfg.Dictionaries.DefaultApplVerID
 	}
 
 	reset := s.prof.resetSeqNum && bytes.Equal(m.Get(tagResetSeqNumFlag), yes)
@@ -266,6 +254,69 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		s.markAheadLocked(in.Seq)
 		s.tooHighLocked(c, in, nil)
 	}
+}
+
+// logonProblem is what makes a Logon invalid: the reason and tag of the
+// Reject an established session sends for it, and a text.
+type logonProblem struct {
+	reason dictionary.RejectReason
+	tag    int
+	text   string
+}
+
+// checkLogon checks the fields of Logon m the session relies on: CompIDs,
+// SendingTime, EncryptMethod, HeartBtInt and, for FIXT, DefaultApplVerID. It
+// returns the HeartBtInt and the DefaultApplVerID, which may have no
+// dictionary unless CompatStrict2020 is set, or the problem.
+func (s *Session) checkLogon(m *fix2.Message, now time.Time) (int, string, *logonProblem) {
+	problem := func(reason dictionary.RejectReason, tag int, format string, args ...any) (int, string, *logonProblem) {
+		return 0, "", &logonProblem{reason, tag, rejectText(reason, fmt.Sprintf(format, args...))}
+	}
+	if reason, tag, text := s.compIDOrTimeProblem(m, now); text != "" {
+		return 0, "", &logonProblem{reason, tag, text}
+	}
+	if v := m.Get(tagEncryptMethod); v != nil && string(v) != "0" {
+		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))
+	}
+	v := m.Get(tagHeartBtInt)
+	hb, err := fix2.ParseInt(v)
+	switch {
+	case v == nil:
+		return problem(dictionary.ReasonRequiredTagMissing, tagHeartBtInt, "%s", fieldDesc(nil, tagHeartBtInt))
+	case err != nil:
+		return problem(dictionary.ReasonIncorrectDataFormat, tagHeartBtInt, "HeartBtInt (108) %s is not a number of seconds", quoteValue(v))
+	case hb < 0:
+		return problem(dictionary.ReasonValueIsIncorrect, tagHeartBtInt, "HeartBtInt (108) %s is not a number of seconds", quoteValue(v))
+	case !s.initiator && hb != 0 && (time.Duration(hb)*time.Second < s.cfg.MinHeartBtInt || time.Duration(hb)*time.Second > s.cfg.MaxHeartBtInt):
+		return problem(dictionary.ReasonValueIsIncorrect, tagHeartBtInt, "HeartBtInt (108) %ds outside the accepted %s to %s", hb, s.cfg.MinHeartBtInt, s.cfg.MaxHeartBtInt)
+	}
+	if !s.prof.fixt {
+		return hb, "", nil
+	}
+	v = m.Get(tagDefaultApplVerID)
+	switch {
+	case v == nil:
+		return problem(dictionary.ReasonRequiredTagMissing, tagDefaultApplVerID, "%s", fieldDesc(nil, tagDefaultApplVerID))
+	case s.dicts.apps != nil && s.dicts.apps[string(v)] == nil && s.cfg.Compatibility == CompatStrict2020:
+		return problem(dictionary.ReasonValueIsIncorrect, tagDefaultApplVerID, "DefaultApplVerID (1137) %s not supported, have %s",
+			quoteValue(v), strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", "))
+	}
+	return hb, string(v), nil
+}
+
+// resetLogonProblem checks Logon m with ResetSeqNumFlag, received on an
+// established session, as a first Logon is checked, and its MsgSeqNum: FIX
+// requires 1, both sides restarting there.
+func (s *Session) resetLogonProblem(m *fix2.Message, now time.Time) *logonProblem {
+	if _, _, p := s.checkLogon(m, now); p != nil {
+		return p
+	}
+	v := m.Get(tagMsgSeqNum)
+	if seq, err := fix2.ParseInt(v); err != nil || seq != 1 {
+		return &logonProblem{dictionary.ReasonValueIsIncorrect, tagMsgSeqNum,
+			rejectText(dictionary.ReasonValueIsIncorrect, "MsgSeqNum (34) "+quoteValue(v)+" of a Logon with ResetSeqNumFlag, expected 1")}
+	}
+	return nil
 }
 
 // activeResetLocked handles a Logon with ResetSeqNumFlag on a logged on

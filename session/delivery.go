@@ -263,11 +263,10 @@ func (d *delivery) process(it item) {
 func (d *delivery) deliver(ctx context.Context, it item) {
 	s := d.s
 	m := &d.msg
-	p := s.dicts.parse
-	if v := it.in.ApplVerID; v != "" && s.dicts.parseApps != nil && s.dicts.parseApps[v] != nil {
-		p = s.dicts.parseApps[v]
-	}
-	if err := fix2.ParseInto(m, it.frame, p); err != nil {
+	// The profile it was received with (see parseApp): it parses.
+	if err := fix2.ParseInto(m, it.frame, s.dicts.appProfile(it.in.ApplVerID)); err != nil {
+		s.log.LogAttrs(context.Background(), slog.LevelError, "received message does not parse again: not delivered",
+			slog.Uint64("seq", it.seq), slog.String("appl_ver_id", it.in.ApplVerID), slog.Any("error", err))
 		return
 	}
 	err := s.handler.FromApp(ctx, s, m, it.in)

@@ -45,6 +45,13 @@ const (
 
 // Compatibility selects how the session behaves where the FIX specification
 // changed or counterparties differ.
+//
+// In every mode, a Logon with ResetSeqNumFlag (141=Y) received while logged
+// on is checked as a first Logon is (CompIDs, SendingTime, EncryptMethod,
+// HeartBtInt, DefaultApplVerID), and its MsgSeqNum must be 1: an invalid one
+// is rejected and logs out, resetting nothing. One received while logging out
+// is ignored: FIX lets the session send nothing then but what a
+// ResendRequest asks for.
 type Compatibility int
 
 const (
