@@ -419,15 +419,6 @@ func pair(t *testing.T, iniChange, accChange func(*session.Config)) (ini, acc *s
 	return ini, acc, ir, ar
 }
 
-// knownIssue skips a test reproducing an issue fix2 shares with QuickFIX/Go,
-// unless FIX2_QUICKFIX_ISSUES is set: why says how fix2 behaves.
-func knownIssue(t *testing.T, why string) {
-	t.Helper()
-	if os.Getenv("FIX2_QUICKFIX_ISSUES") == "" {
-		t.Skip("fix2 shares this issue (FIX2_QUICKFIX_ISSUES=1 runs it): " + why)
-	}
-}
-
 // dict loads a dictionary of cmd/fixgen/testdata: FIX40, FIX44, FIX50SP2 or
 // FIXT11.
 func dict(t testing.TB, name string) *dictionary.Dict {

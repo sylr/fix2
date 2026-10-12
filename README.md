@@ -107,8 +107,7 @@ end-to-end suite, `tests/e2e`, logs an initiator on to an acceptor in FIX
 both sessions validate against: the initiator sends NewOrderSingle
 messages, the acceptor acknowledges and fills each with ExecutionReport
 messages (`go test ./tests/e2e/`). `tests/quickfix-go` replays the
-behavioural issues reported to QuickFIX/Go, one file per issue; those
-fix2 shares are skipped unless `FIX2_QUICKFIX_ISSUES=1`. `make
+behavioural issues reported to QuickFIX/Go, one file per issue. `make
 fuzz` runs every fuzz target, the contribs' too, for `FUZZTIME` each (30s by
 default); a failing input lands in its package's `testdata/fuzz`. CI runs
 the tests on Linux, amd64 and arm64, and on macOS, arm64, with and without

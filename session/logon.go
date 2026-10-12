@@ -169,10 +169,21 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	}
 
 	reset := s.prof.resetSeqNum && bytes.Equal(m.Get(tagResetSeqNumFlag), yes)
+	// announce tells an acceptor resetting for ResetOnLogon, unasked, under
+	// CompatStrict2020, that the reset moves its sequence numbers: its answer
+	// says so with ResetSeqNumFlag, and the counterparty, resetting in turn,
+	// restarts at 1, its Logon left in the sequence reset. One at the start
+	// of its sequence has nothing to announce: its answer is that of any
+	// first Logon. QuickFIX never announces, and its acceptance tests expect
+	// it not to.
+	announce := false
 	var resetErr error
 	switch {
-	case !s.initiator && (reset || s.cfg.ResetOnLogon):
+	case !s.initiator && reset:
 		resetErr = s.resetStoreLocked("Logon with ResetSeqNumFlag")
+	case !s.initiator && s.cfg.ResetOnLogon:
+		announce = s.cfg.Compatibility == CompatStrict2020 && s.prof.resetSeqNum && (s.st.NextSender > 1 || s.st.NextTarget > 1)
+		resetErr = s.resetStoreLocked("ResetOnLogon")
 	case s.initiator && reset && !s.sentReset:
 		resetErr = s.resetStoreLocked("Logon answer with ResetSeqNumFlag")
 	case s.initiator && s.sentReset && !reset:
@@ -191,7 +202,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	// initiator's own Logon included.
 	nextBefore := s.st.NextSender
 	peerNext := uint64(0)
-	if s.cfg.NextExpectedMsgSeqNum && s.prof.nextExpected && !reset {
+	if s.cfg.NextExpectedMsgSeqNum && s.prof.nextExpected && !reset && !announce {
 		if v, err := fix2.ParseInt(m.Get(tagNextExpectedMsgSeqNum)); err == nil && v > 0 {
 			peerNext = uint64(v)
 		} else if m.Get(tagNextExpectedMsgSeqNum) != nil {
@@ -208,8 +219,11 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		s.closeAfterFlushLocked(c, &LogoutError{Text: "Logon MsgSeqNum too low"})
 		return
 	}
-	// 789, what the counterparty expects next, prevails over its 369.
-	s.lastProcessedLocked(m, in)
+	// 789, what the counterparty expects next, prevails over its 369. Both
+	// refer to the sequence left behind when a reset is announced.
+	if !announce {
+		s.lastProcessedLocked(m, in)
+	}
 	if peerNext > 0 {
 		s.ackedLocked(peerNext-1, tagNextExpectedMsgSeqNum, in.Seq)
 	}
@@ -222,10 +236,10 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	s.peerApplVerID = peerApplVerID
 	if !s.initiator {
 		next := in.Seq + 1
-		if in.Seq > s.st.NextTarget {
+		if announce || in.Seq > s.st.NextTarget {
 			next = s.st.NextTarget
 		}
-		b := s.logonBody(reset, next)
+		b := s.logonBody(reset || announce, next)
 		b = append(b, c.logonExtra...)
 		s.sendAdminLocked(&header{msgType: "A"}, b)
 		if c.closed || s.c != c {
@@ -247,6 +261,9 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		s.startReplayLocked(c, peerNext, s.st.NextSender-1, true)
 	}
 	switch {
+	case announce:
+		// The counterparty's Logon belongs to the sequence reset: its next
+		// message is 1.
 	case in.Seq == s.st.NextTarget:
 		s.markLocked(in.Seq)
 		s.advanceLocked(c, in.Seq+1)

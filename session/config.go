@@ -56,14 +56,18 @@ type Compatibility int
 
 const (
 	// CompatQuickFIX behaves as QuickFIX engines and their acceptance
-	// tests expect, the most common counterparty behaviour.
+	// tests expect, the most common counterparty behaviour. An acceptor
+	// with ResetOnLogon answers a Logon without ResetSeqNumFlag without one,
+	// even when the reset moved its sequence numbers: a counterparty that
+	// did not reset logs out with "MsgSeqNum too low".
 	CompatQuickFIX Compatibility = iota
 	// CompatStrict2020 follows the 2020 FIX Session Layer specification
 	// where it differs, and refuses what QuickFIX lets through: a
 	// ResendRequest for messages already processed, without PossDup, logs
 	// out; a Logout received ahead of a gap is answered once the gap is
 	// recovered; a Logon whose DefaultApplVerID has no dictionary is
-	// refused.
+	// refused; an acceptor with ResetOnLogon announces a reset that moved
+	// its sequence numbers (see Config.ResetOnLogon).
 	CompatStrict2020
 )
 
@@ -170,6 +174,18 @@ type Config struct {
 	MaxLatency time.Duration
 	// ResetOnLogon resets sequence numbers at every logon: an initiator
 	// sends ResetSeqNumFlag (141=Y), an acceptor resets on any Logon.
+	//
+	// By default (CompatQuickFIX) an acceptor answers ResetSeqNumFlag only
+	// when the Logon carries it, as QuickFIX's acceptance tests expect: one
+	// whose sequence numbers had moved answers at MsgSeqNum 1 unannounced,
+	// and a counterparty that did not reset logs out with "MsgSeqNum too
+	// low". Under CompatStrict2020 it answers a Logon without
+	// ResetSeqNumFlag with one, at MsgSeqNum 1, when the reset moved its
+	// sequence numbers, either being past 1: the counterparty, which may
+	// expect them to go on, resets in turn, its Logon left behind, and its
+	// next message is 1. At the start of its sequence an acceptor has
+	// nothing to announce: it answers as to any first Logon, and the Logon
+	// counts. FIX 4.0, without ResetSeqNumFlag, never announces.
 	ResetOnLogon bool
 	// ResetOnLogout and ResetOnDisconnect reset sequence numbers after a
 	// logout, or any disconnection.
