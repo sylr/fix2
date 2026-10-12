@@ -17,7 +17,7 @@ import (
 // ackForTest records an acknowledgement as from a message the counterparty
 // sent after the previous one.
 func (s *Session) ackForTest(seq uint64, source int) {
-	s.ackedLocked(seq, source, s.ret.ackFrom+1)
+	s.ackedLocked(new(fix2.Message), seq, source, s.ret.ackFrom+1)
 }
 
 // retentionSession returns a session with retention r, as if it had sent
@@ -337,9 +337,9 @@ func TestRetention_AckOrder(t *testing.T) {
 	s := retentionSession(t, Retention{Interval: time.Minute}, 101)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ackedLocked(80, tagLastMsgSeqNumProcessed, 10)
-	s.ackedLocked(30, tagBeginSeqNo, 12)
-	s.ackedLocked(90, tagLastMsgSeqNumProcessed, 11)
+	s.ackedLocked(new(fix2.Message), 80, tagLastMsgSeqNumProcessed, 10)
+	s.ackedLocked(new(fix2.Message), 30, tagBeginSeqNo, 12)
+	s.ackedLocked(new(fix2.Message), 90, tagLastMsgSeqNumProcessed, 11)
 	if got := s.evictBeforeLocked(time.Now()); got != 31 {
 		t.Errorf("evictBefore = %d, want 31", got)
 	}

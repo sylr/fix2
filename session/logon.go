@@ -232,7 +232,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		s.lastProcessedLocked(m, in)
 	}
 	if peerNext > 0 {
-		s.ackedLocked(peerNext-1, tagNextExpectedMsgSeqNum, in.Seq)
+		s.ackedLocked(m, peerNext-1, tagNextExpectedMsgSeqNum, in.Seq)
 	}
 
 	if s.initiator {
@@ -259,7 +259,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	c.loggedOn = true
 	c.logonDeadline = time.Time{}
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "logged on",
-		slog.Uint64("epoch", c.epoch), slog.Duration("heartbeat", s.heartBt), slog.Uint64("next_sender", s.st.NextSender), slog.Uint64("next_target", s.st.NextTarget))
+		slog.Uint64("epoch", c.epoch), slog.String("heartbeat", withhold(m, tagHeartBtInt, s.heartBt.String(), "withheld")), slog.Uint64("next_sender", s.st.NextSender), slog.Uint64("next_target", s.st.NextTarget))
 	s.deliv.push(item{kind: itemLogon})
 
 	if peerNext > 0 && peerNext < nextBefore {
@@ -276,7 +276,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		s.advanceLocked(c, in.Seq+1)
 	default:
 		s.markAheadLocked(in.Seq)
-		s.tooHighLocked(c, in, nil)
+		s.tooHighLocked(c, m, in, nil)
 	}
 }
 
@@ -291,10 +291,10 @@ type logonProblem struct {
 // checkLogon checks the fields of Logon m the session relies on: CompIDs,
 // SendingTime, EncryptMethod, HeartBtInt and, for FIXT, DefaultApplVerID.
 // FIX requires EncryptMethod of every Logon: an acceptor requires it of the
-// counterparty's, an initiator accepts a Logon answer without it, as some
-// venues send (Binance's dictionary has it optional), but not a reset Logon
-// on an established session (see resetLogonProblem). It returns the
-// HeartBtInt and the
+// counterparty's, as an initiator does of the Logon answer under
+// CompatStrict2020 only, as some venues leave it out (Binance's dictionary
+// has it optional); a reset Logon on an established session always needs it
+// (see resetLogonProblem). It returns the HeartBtInt and the
 // DefaultApplVerID, which may have no dictionary unless CompatStrict2020 is
 // set, or the problem, its text withheld if it may show a credential: it is
 // logged.
@@ -306,7 +306,7 @@ func (s *Session) checkLogon(m *fix2.Message, now time.Time) (int, string, *logo
 		return 0, "", newLogonProblem(m, reason, tag, text)
 	}
 	switch v := m.Get(tagEncryptMethod); {
-	case v == nil && !s.initiator:
+	case v == nil && (!s.initiator || s.cfg.Compatibility == CompatStrict2020):
 		return problem(dictionary.ReasonRequiredTagMissing, tagEncryptMethod, "%s", fieldDesc(nil, tagEncryptMethod))
 	case v != nil && string(v) != "0":
 		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))

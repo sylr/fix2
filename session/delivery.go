@@ -32,6 +32,9 @@ type item struct {
 	frame []byte // itemApp: the message, a pooled copy
 	in    Inbound
 	err   error
+	// withheld tells, for itemLoss, that its end, worked out from a
+	// MsgSeqNum received, may show a credential: it is not logged.
+	withheld bool
 }
 
 // delivery delivers received messages and events to the handler, in order,
@@ -295,8 +298,12 @@ func (d *delivery) process(it item) {
 		s.handler.OnLogout(ctx, s, it.err)
 		return
 	case itemLoss:
+		to := slog.Uint64("to", it.end)
+		if it.withheld {
+			to = slog.String("to", "withheld")
+		}
 		s.log.LogAttrs(context.Background(), slog.LevelError, "messages may never be delivered",
-			slog.Uint64("from", it.seq), slog.Uint64("to", it.end), slog.Any("cause", it.err))
+			slog.Uint64("from", it.seq), to, slog.Any("cause", it.err))
 		s.handler.OnRecoveryLoss(ctx, s, it.seq, it.end, it.err)
 		return
 	case itemApp:

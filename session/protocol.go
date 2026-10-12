@@ -27,6 +27,10 @@ type recovery struct {
 	// chunkEnd is the end of the range last asked for, 0 for "up to the
 	// last".
 	chunkEnd uint64
+	// withheld tells a MsgSeqNum received too high may show a credential:
+	// the ends of the ranges reported lost, worked out from them, are not
+	// logged.
+	withheld bool
 }
 
 // handleFrame handles a frame the reader read.
@@ -511,7 +515,7 @@ func (s *Session) origTimeOK(c *conn, m *fix2.Message, inSequence bool) bool {
 
 // tooHighLocked handles a message received ahead of a gap: it is kept, if
 // there is room, and the missing messages are asked for.
-func (s *Session) tooHighLocked(c *conn, in Inbound, frame []byte) {
+func (s *Session) tooHighLocked(c *conn, m *fix2.Message, in Inbound, frame []byte) {
 	if s.stash == nil {
 		s.stash = make(map[uint64][]byte)
 	}
@@ -520,16 +524,19 @@ func (s *Session) tooHighLocked(c *conn, in Inbound, frame []byte) {
 			s.stash[in.Seq] = bytes.Clone(frame)
 		} else {
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "too many messages received ahead of a gap: dropped, to be asked for again",
-				slog.Uint64("seq", in.Seq))
+				numAttr(m, "seq", tagMsgSeqNum, int64(in.Seq)))
 		}
 	}
 	if in.Seq > s.recov.target {
 		s.recov.target = in.Seq
 	}
+	if withhold(m, tagMsgSeqNum, strconv.FormatUint(in.Seq, 10), "") == "" {
+		s.recov.withheld = true
+	}
 	if !s.recov.active {
 		s.recov.active = true
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "MsgSeqNum too high, asking for the missing messages",
-			slog.Uint64("expected", s.st.NextTarget), slog.Uint64("received", in.Seq))
+			slog.Uint64("expected", s.st.NextTarget), numAttr(m, "received", tagMsgSeqNum, int64(in.Seq)))
 		s.sendResendRequestLocked()
 	}
 }
@@ -645,7 +652,7 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 	}
 	switch s.checkSeqLocked(c, m, in) {
 	case seqTooHigh:
-		s.tooHighLocked(c, in, frame)
+		s.tooHighLocked(c, m, in, frame)
 		return in, false
 	case seqIgnore, seqDone:
 		return in, false
@@ -900,7 +907,7 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 		// Recover the messages before it first: it is answered when its
 		// turn comes, if the counterparty waits that long. QuickFIX
 		// answers at once, and its acceptance tests expect it.
-		s.tooHighLocked(c, in, frame)
+		s.tooHighLocked(c, m, in, frame)
 		return
 	}
 	s.lastProcessedLocked(m, in)
@@ -925,7 +932,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 	if gapFill {
 		switch s.checkSeqLocked(c, m, in) {
 		case seqTooHigh:
-			s.tooHighLocked(c, in, frame)
+			s.tooHighLocked(c, m, in, frame)
 			return
 		case seqIgnore, seqDone:
 			return
@@ -948,7 +955,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 	switch {
 	case uint64(newSeq) > expected:
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset",
-			slog.Bool("gap_fill", gapFill), slog.Uint64("from", expected), slog.Int("to", newSeq))
+			slog.Bool("gap_fill", gapFill), slog.Uint64("from", expected), numAttr(m, "to", tagNewSeqNo, int64(newSeq)))
 		if !gapFill {
 			s.resetPastLocked(c, uint64(newSeq))
 			return
@@ -958,7 +965,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 		s.advanceLocked(c, uint64(newSeq))
 		s.gapFilling = false
 	case uint64(newSeq) == expected && !gapFill:
-		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset to the expected MsgSeqNum, nothing to do", slog.Int("new_seq_no", newSeq))
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset to the expected MsgSeqNum, nothing to do", numAttr(m, "new_seq_no", tagNewSeqNo, int64(newSeq)))
 	default:
 		reason := fmt.Sprintf("NewSeqNo %d is not greater than the expected MsgSeqNum %d", newSeq, expected)
 		tag := tagNewSeqNo
@@ -986,7 +993,7 @@ var errResetPast = errors.New("counterparty reset its sequence numbers past them
 // per gap: those above it, the SequenceReset among them, the counterparty may
 // never have sent.
 func (s *Session) resetPastLocked(c *conn, next uint64) {
-	recovering, last := s.recov.active, s.recov.target
+	recovering, last, withheld := s.recov.active, s.recov.target, s.recov.withheld
 	// The chunks of a chunked ResendRequest below next are given up: none is
 	// asked for while the messages held are processed.
 	chunkEnd := s.recov.chunkEnd
@@ -1008,7 +1015,7 @@ func (s *Session) resetPastLocked(c *conn, next uint64) {
 		}
 		if from := s.st.NextTarget; from < held {
 			if recovering && from <= last {
-				s.deliv.push(item{kind: itemLoss, gen: s.st.Generation, seq: from, end: min(held-1, last), err: errResetPast})
+				s.deliv.push(item{kind: itemLoss, gen: s.st.Generation, seq: from, end: min(held-1, last), err: errResetPast, withheld: withheld})
 			}
 			// Queued after the loss, rather than marked: the messages lost
 			// count as processed once OnRecoveryLoss has told of them.
@@ -1048,7 +1055,7 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 		// The counterparty has our messages up to the one before begin,
 		// and none after: what it asks for is not to be evicted.
 		s.lastProcessedLocked(m, in)
-		s.ackedLocked(uint64(begin)-1, tagBeginSeqNo, in.Seq)
+		s.ackedLocked(m, uint64(begin)-1, tagBeginSeqNo, in.Seq)
 		last := s.st.NextSender - 1
 		e := uint64(end)
 		if s.prof.isInfinity(e) || e > last {
@@ -1058,11 +1065,11 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 			// Handled below: too low without PossDup logs out.
 		} else if uint64(begin) <= e {
 			s.log.LogAttrs(context.Background(), slog.LevelInfo, "resending at the counterparty's request",
-				slog.Int("begin", begin), slog.Uint64("end", e))
+				numAttr(m, "begin", tagBeginSeqNo, int64(begin)), numAttr(m, "end", tagEndSeqNo, int64(e)))
 			s.startReplayLocked(c, uint64(begin), e, false)
 		} else {
 			s.log.LogAttrs(context.Background(), slog.LevelInfo, "ResendRequest for nothing sent yet",
-				slog.Int("begin", begin), slog.Int("end", end), slog.Uint64("last_sent", last))
+				numAttr(m, "begin", tagBeginSeqNo, int64(begin)), numAttr(m, "end", tagEndSeqNo, int64(end)), slog.Uint64("last_sent", last))
 		}
 	}
 	switch s.checkSeqLocked(c, m, in) {
@@ -1070,7 +1077,7 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 		// Our ResendRequest is held behind the replay: FIX wants the replay
 		// first (simultaneous resend requests).
 		s.markAheadLocked(in.Seq)
-		s.tooHighLocked(c, in, nil)
+		s.tooHighLocked(c, m, in, nil)
 	case seqOK:
 		s.markLocked(in.Seq)
 		s.advanceLocked(c, in.Seq+1)

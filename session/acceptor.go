@@ -373,7 +373,22 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		}
 	}
 	defer release()
+	// m is the first message, once parsed: what is said of the connection
+	// then, its reason, identities and errors, may quote its fields, a
+	// credential among them perhaps, and is withheld if it does.
+	var m fix2.Message
+	parsed := false
 	refuse := func(why string, args ...slog.Attr) {
+		if parsed {
+			why = withhold(&m, noTag, why, "Logon refused, reason withheld")
+			for i, arg := range args {
+				if k := arg.Value.Kind(); k == slog.KindString || k == slog.KindAny {
+					if v := arg.Value.String(); withhold(&m, noTag, v, "") == "" {
+						args[i].Value = slog.StringValue("withheld")
+					}
+				}
+			}
+		}
 		a.log.LogAttrs(ctx, slog.LevelWarn, "connection refused: "+why, append([]slog.Attr{slog.String("remote", remote)}, args...)...)
 		tc.Close()
 	}
@@ -403,11 +418,11 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		refuse("no valid first message", slog.Any("error", err))
 		return
 	}
-	var m fix2.Message
 	if err := fix2.ParseInto(&m, frame, fix2.DefaultProfile()); err != nil {
 		refuse("first message does not parse", slog.Any("error", err))
 		return
 	}
+	parsed = true
 	if string(m.MsgType()) != "A" {
 		refuse("first message is not a Logon", slog.String("msg_type", withhold(&m, tagMsgType, string(m.MsgType()), "withheld")))
 		return

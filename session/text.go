@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -74,6 +75,12 @@ func withhold(m *fix2.Message, tag int, text, fallback string) string {
 		}
 	}
 	return text
+}
+
+// numAttr logs v, a number of m's field tag, or worked out from one, as key:
+// withheld if it may show a credential, as a misplaced one would.
+func numAttr(m *fix2.Message, key string, tag int, v int64) slog.Attr {
+	return slog.String(key, withhold(m, tag, strconv.FormatInt(v, 10), "withheld"))
 }
 
 // quoteValue quotes a field value for a Text, escaping control characters

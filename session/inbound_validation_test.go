@@ -286,6 +286,20 @@ func TestLogonWithoutEncryptMethod(t *testing.T) {
 		p.write(from(session.FIX44, 2), "1", "112", "PING")
 		p.expect("0", "112", "PING")
 	})
+	// The 2020 Session Layer requires it of the answer too.
+	t.Run("initiator, CompatStrict2020", func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		_, rec := startInitiator(t, l, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.write(from(session.FIX44, 1), "A", "108", "30")
+		p.expectSilentEnd()
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if rec.logons != 0 {
+			t.Error("logged on")
+		}
+	})
 }
 
 // A valid Logon with ResetSeqNumFlag on an established session resets both

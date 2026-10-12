@@ -57,7 +57,12 @@ type Handler interface {
 	OnLogon(ctx context.Context, s *Session)
 	// OnLogout tells the session is logged out or disconnected, after the
 	// last application message delivered. reason says why, often a
-	// *LogoutError.
+	// *LogoutError. Except while recording the received messages processed
+	// fails (see Config.Store): the messages received before the
+	// disconnection, held until recording works again, the generation they
+	// belong to is reset or the session stops, are delivered after
+	// OnLogout. FromApp may then follow OnLogout, OnRecoveryLoss too: the
+	// handler must stay ready for them once logged out.
 	OnLogout(ctx context.Context, s *Session, reason error)
 
 	// ToAdmin may add fields to a Logon (35=A) or Logout (35=5) before it

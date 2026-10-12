@@ -75,7 +75,7 @@ func (s *Session) onRetentionTimer() {
 // messages from it on, not that it has all those before. Above our last
 // message, it is ignored: the counterparty cannot have processed messages we
 // never sent.
-func (s *Session) ackedLocked(seq uint64, source int, from uint64) {
+func (s *Session) ackedLocked(m *fix2.Message, seq uint64, source int, from uint64) {
 	if s.cfg.Retention.Interval <= 0 || from < s.ret.ackFrom {
 		return
 	}
@@ -83,7 +83,7 @@ func (s *Session) ackedLocked(seq uint64, source int, from uint64) {
 		if !s.ret.warned {
 			s.ret.warned = true
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty acknowledges messages we never sent: ignored",
-				slog.String("tag", fieldDesc(nil, source)), slog.Uint64("acked", seq), slog.Uint64("last_sent", s.st.NextSender-1))
+				slog.String("tag", fieldDesc(nil, source)), numAttr(m, "acked", source, int64(seq)), slog.Uint64("last_sent", s.st.NextSender-1))
 		}
 		return
 	}
@@ -143,7 +143,7 @@ func (s *Session) lastProcessedLocked(m *fix2.Message, in Inbound) {
 		return
 	}
 	if n, err := fix2.ParseInt(v); err == nil && n >= 0 {
-		s.ackedLocked(uint64(n), tagLastMsgSeqNumProcessed, in.Seq)
+		s.ackedLocked(m, uint64(n), tagLastMsgSeqNumProcessed, in.Seq)
 	}
 }
 

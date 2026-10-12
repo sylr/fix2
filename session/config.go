@@ -53,10 +53,10 @@ const (
 // In every mode, a Logon with ResetSeqNumFlag (141=Y) received while logged
 // on is checked as an acceptor checks a first Logon (CompIDs, SendingTime,
 // EncryptMethod, HeartBtInt, DefaultApplVerID), and its MsgSeqNum must be 1:
-// an invalid one
-// is rejected and logs out, resetting nothing. One received while logging out
-// is ignored: FIX lets the session send nothing then but what a
-// ResendRequest asks for.
+// an invalid one is rejected and logs out, resetting nothing. One received
+// while logging out is ignored: FIX lets the session send nothing then but
+// what a ResendRequest asks for. An acceptor refuses a first Logon without
+// EncryptMethod (98) in every mode.
 type Compatibility int
 
 const (
@@ -64,7 +64,9 @@ const (
 	// tests expect, the most common counterparty behaviour. An acceptor
 	// with ResetOnLogon answers a Logon without ResetSeqNumFlag without one,
 	// even when the reset moved its sequence numbers: a counterparty that
-	// did not reset logs out with "MsgSeqNum too low".
+	// did not reset logs out with "MsgSeqNum too low". An initiator accepts
+	// a Logon answer without EncryptMethod (98), as venues whose
+	// dictionaries make it optional send.
 	CompatQuickFIX Compatibility = iota
 	// CompatStrict2020 follows the 2020 FIX Session Layer specification
 	// where it differs, and refuses what QuickFIX lets through: a
@@ -72,7 +74,9 @@ const (
 	// out; a Logout received ahead of a gap is answered once the gap is
 	// recovered; a Logon whose DefaultApplVerID has no dictionary is
 	// refused; an acceptor with ResetOnLogon announces a reset that moved
-	// its sequence numbers (see Config.ResetOnLogon).
+	// its sequence numbers (see Config.ResetOnLogon); an initiator refuses a
+	// Logon answer without EncryptMethod (98), which the 2020 Session Layer
+	// requires of every Logon.
 	CompatStrict2020
 )
 
@@ -207,7 +211,10 @@ type Config struct {
 	// ResendChunkSize asks for missing messages this many at a time, all at
 	// once if 0.
 	ResendChunkSize int
-	// Compatibility selects behaviours where specifications differ.
+	// Compatibility selects behaviours where specifications differ or
+	// counterparties do: CompatQuickFIX by default, which, among others,
+	// accepts a Logon answer without EncryptMethod (98); CompatStrict2020
+	// refuses it.
 	Compatibility Compatibility
 	// SkipChecks disables validations the dictionaries would run: all run
 	// by default (see dictionary.Checks). Skipping
