@@ -58,7 +58,9 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 // logged; Done tells when. Once the callback returned, its ctx is an
 // ordinary one, except while a callback of the same kind runs, as FromApp
 // for a later message: Stop called with it then returns at once as well.
-// Initiators and acceptors stop the sessions they remove.
+// A worker that needs Stop to complete before it returns uses a ctx of its
+// own, not derived from a callback's, or waits for Done. Initiators and
+// acceptors stop the sessions they remove.
 func (s *Session) Stop(ctx context.Context) error {
 	return s.stop(ctx, "session stopped")
 }
@@ -67,8 +69,9 @@ func (s *Session) Stop(ctx context.Context) error {
 // callbacks returned: its delivery goroutine exited, its last connection
 // wound down, and its store is closed. No handler callback of the session
 // runs after. It is closed by the time Stop returns, unless Stop's ctx
-// ended first or Stop was called from a callback; the errors of the store's
-// Sync and Close made then are only logged.
+// ended first or Stop was called from a callback, or with the ctx of a
+// callback that returned while one of the same kind runs (see Stop); the
+// errors of the store's Sync and Close made then are only logged.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) stop(ctx context.Context, text string) error {

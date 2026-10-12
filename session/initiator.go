@@ -146,8 +146,13 @@ func (i *Initiator) start(ctx context.Context, is *initSession) {
 }
 
 // Remove logs session id out, stops it and removes it. Its ID can be added
-// again once the session's Done is closed. Called from one of the
-// session's callbacks, it returns at once, as Stop does.
+// again once the session's Done is closed. ctx bounds its waits, as for
+// Stop: if it ends first, as when a handler callback is stuck, Remove
+// returns ctx's error and Done tells when the session stopped. Called from
+// one of the session's callbacks, it returns at once, as Stop does, and as
+// it does with the ctx of a callback that returned while one of the same
+// kind runs: a worker needing the session stopped uses a ctx of its own,
+// or waits for Done.
 func (i *Initiator) Remove(ctx context.Context, id SessionID) error {
 	i.mu.Lock()
 	is := i.sessions[id]
@@ -162,9 +167,16 @@ func (i *Initiator) Remove(ctx context.Context, id SessionID) error {
 	err := is.s.Stop(ctx)
 	if is.cancel != nil {
 		is.cancel()
-		// The connection loop may be running the callback calling.
+		// The connection loop may be running the callback calling, or one
+		// stuck: Done tells when it ends.
 		if !is.s.ownCallback(ctx) {
-			<-is.done
+			select {
+			case <-is.done:
+			case <-ctx.Done():
+				if !errors.Is(err, ctx.Err()) {
+					err = errors.Join(err, ctx.Err())
+				}
+			}
 		}
 	}
 	return err

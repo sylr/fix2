@@ -174,7 +174,11 @@ func (a *Acceptor) add(s *Session) error {
 }
 
 // Remove logs session id out, if connected, stops it and removes it. Its ID
-// can be added again once the session's Done is closed.
+// can be added again once the session's Done is closed. It waits as Stop
+// does, bounded by ctx: called from one of the session's callbacks, or with
+// the ctx of a callback that returned while one of the same kind runs, it
+// returns at once, and a worker needing the session stopped uses a ctx of
+// its own, or waits for Done.
 func (a *Acceptor) Remove(ctx context.Context, id SessionID) error {
 	a.mu.Lock()
 	s := a.sessions[id]
