@@ -167,6 +167,13 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 	if err != nil {
 		return err
 	}
+	// A failed write stops the command, though no event follows to be
+	// handed to the output.
+	go func() {
+		if err := out.failure(ctx); err != nil {
+			finish(fmt.Errorf("writing: %w", err))
+		}
+	}()
 	log.LogAttrs(ctx, slog.LevelInfo, "connecting", slog.String("endpoint", o.endpoint))
 	runErr := ini.Run(ctx)
 	// What was received is written, even when the command fails, once

@@ -69,8 +69,9 @@ type (
 
 // output renders events, and hands them to a goroutine of its own, the only
 // one writing them: a consumer that stalls blocks neither the client's lock
-// nor the session's reader. Its methods are called from one goroutine at a
-// time: FromApp's, then the command's once the session's callbacks are done.
+// nor the session's reader. Its methods, but failure, are called from one
+// goroutine at a time: FromApp's, then the command's once the session's
+// callbacks are done.
 type output interface {
 	trade(e *tradeEvent)
 	ticker(e *tickerEvent)
@@ -83,6 +84,9 @@ type output interface {
 	// end renders everything and waits, until ctx is done, for it to be
 	// written: the command ends.
 	end(ctx context.Context) error
+	// failure waits, until ctx is done, for writing to fail, and returns
+	// why: nil once ctx is done first.
+	failure(ctx context.Context) error
 }
 
 // outputQueue bounds the flushes waiting to be written: once it is full,
@@ -161,6 +165,15 @@ func (p *pipe) send(ctx context.Context) error {
 }
 
 func (p *pipe) flush() error { return p.send(context.Background()) }
+
+func (p *pipe) failure(ctx context.Context) error {
+	select {
+	case <-p.failed:
+		return p.err
+	case <-ctx.Done():
+		return nil
+	}
+}
 
 func (p *pipe) end(ctx context.Context) error {
 	err := p.send(ctx)

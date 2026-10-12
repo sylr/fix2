@@ -281,6 +281,127 @@ func TestShutdownStalledPipe(t *testing.T) {
 	checkTickers(t, got.String(), n)
 }
 
+// failingWriter accepts its first ok Writes; the next ones wait until fail,
+// then fail with io.ErrClosedPipe.
+type failingWriter struct {
+	ok      int
+	waiting chan struct{} // closed once a Write waits
+	once    sync.Once
+	release chan struct{}
+
+	mu     sync.Mutex
+	writes int
+	buf    bytes.Buffer
+}
+
+func newFailingWriter(t *testing.T, ok int) *failingWriter {
+	w := &failingWriter{ok: ok, waiting: make(chan struct{}), release: make(chan struct{})}
+	t.Cleanup(w.fail)
+	return w
+}
+
+func (w *failingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	w.writes++
+	if w.writes <= w.ok {
+		defer w.mu.Unlock()
+		return w.buf.Write(p)
+	}
+	w.mu.Unlock()
+	w.once.Do(func() { close(w.waiting) })
+	<-w.release
+	return 0, io.ErrClosedPipe
+}
+
+// fail fails the Writes waiting, and those to come.
+func (w *failingWriter) fail() {
+	select {
+	case <-w.release:
+	default:
+		close(w.release)
+	}
+}
+
+func (w *failingWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
+}
+
+// A failed write stops the command promptly, though no event follows to be
+// handed to the output: the command fails with the write's error, and the
+// events written before it are the first ones, in order, each once.
+func TestOutputFailureStops(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		written int // events written before the failure
+		queued  int // events waiting for the output when it fails
+	}{
+		{"idle, first event", 0, 0},
+		{"busy, mid-stream", 2, 50},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newFailingWriter(t, tc.written)
+			f, id, out, _, done := startWriting(t, mem.Listen("coinbase"), w)
+			// One Write each: the output's queue is empty.
+			for i := range tc.written {
+				f.snapshot(id, 1000+i)
+				deadline := time.Now().Add(5 * time.Second)
+				for strings.Count(w.String(), "\n") <= i {
+					if time.Now().After(deadline) {
+						t.Fatalf("event %d not written", i)
+					}
+					time.Sleep(time.Millisecond)
+				}
+			}
+			f.snapshot(id, 1000+tc.written)
+			select {
+			case <-w.waiting:
+			case <-time.After(5 * time.Second):
+				t.Fatal("nothing written")
+			}
+			// Handed to the output, which waits on the Write: FromApp is done
+			// with them once its queue holds them all.
+			for i := range tc.queued {
+				f.snapshot(id, 1001+tc.written+i)
+			}
+			p := out.(*jsonOutput).pipe
+			deadline := time.Now().Add(5 * time.Second)
+			for len(p.chunks) < tc.queued {
+				if time.Now().After(deadline) {
+					t.Fatalf("output queue holds %d, want %d", len(p.chunks), tc.queued)
+				}
+				time.Sleep(time.Millisecond)
+			}
+			w.fail()
+			select {
+			case m, ok := <-f.msgs:
+				if !ok || string(m.MsgType()) != "5" {
+					t.Fatalf("got %v, want a Logout", m)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("the output failed, but the command did not stop")
+			}
+			f.send("5")
+			select {
+			case err := <-done:
+				if !errors.Is(err, io.ErrClosedPipe) {
+					t.Errorf("command failed with %v, want io.ErrClosedPipe", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("the command did not stop")
+			}
+			if tc.written == 0 {
+				if s := w.String(); s != "" {
+					t.Errorf("written %q, want nothing", s)
+				}
+				return
+			}
+			checkTickers(t, w.String(), tc.written)
+		})
+	}
+}
+
 // A second signal terminates the process while it shuts down, as signals
 // do by default.
 func TestSecondSignalTerminates(t *testing.T) {
