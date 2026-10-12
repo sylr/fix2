@@ -997,11 +997,12 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 	case uint64(newSeq) > expected:
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset",
 			slog.Bool("gap_fill", gapFill), slog.Uint64("from", expected), slog.Int("to", newSeq))
-		if !gapFill && s.recov.active {
-			s.deliv.push(item{kind: itemLoss, gen: s.st.Generation, seq: expected, end: uint64(newSeq) - 1, err: errors.New("counterparty reset its sequence numbers past them")})
+		if !gapFill {
+			s.resetPastLocked(c, uint64(newSeq))
+			return
 		}
 		s.deliv.push(item{kind: itemMark, gen: s.st.Generation, seq: uint64(newSeq) - 1})
-		s.gapFilling = gapFill
+		s.gapFilling = true
 		s.advanceLocked(c, uint64(newSeq))
 		s.gapFilling = false
 	case uint64(newSeq) == expected && !gapFill:
@@ -1019,6 +1020,52 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 			s.advanceLocked(c, in.Seq+1)
 		}
 	}
+}
+
+// errResetPast is the cause OnRecoveryLoss gets for messages a Reset-mode
+// SequenceReset gave up.
+var errResetPast = errors.New("counterparty reset its sequence numbers past them")
+
+// resetPastLocked handles a Reset-mode SequenceReset to next, above the
+// MsgSeqNum expected. The messages held ahead of a gap below next were
+// received, and the counterparty will not send them again: they are processed
+// in sequence, each as if the gap before it were filled. A recovery under way
+// reports lost the messages missing below the highest one received, one range
+// per gap: those above it, the SequenceReset among them, the counterparty may
+// never have sent.
+func (s *Session) resetPastLocked(c *conn, next uint64) {
+	recovering, last := s.recov.active, s.recov.target
+	// The chunks of a chunked ResendRequest below next are given up: none is
+	// asked for while the messages held are processed.
+	chunkEnd := s.recov.chunkEnd
+	s.recov.chunkEnd = 0
+	for s.st.NextTarget < next {
+		if s.c != c || c.closed {
+			// What is left is asked for again once logged on.
+			return
+		}
+		held := next
+		for seq := range s.stash {
+			if seq >= s.st.NextTarget && seq < held {
+				held = seq
+			}
+		}
+		if from := s.st.NextTarget; from < held {
+			if recovering && from <= last {
+				s.deliv.push(item{kind: itemLoss, gen: s.st.Generation, seq: from, end: min(held-1, last), err: errResetPast})
+			}
+			s.markLocked(held - 1)
+		}
+		if held == next {
+			break
+		}
+		// Processes it, and those held after it in sequence.
+		s.advanceLocked(c, held)
+	}
+	if s.recov.active {
+		s.recov.chunkEnd = chunkEnd
+	}
+	s.advanceLocked(c, next)
 }
 
 // onResendRequestLocked handles a ResendRequest: it is served whatever its

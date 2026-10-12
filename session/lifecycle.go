@@ -220,7 +220,8 @@ func (s *Session) SetNextSenderSeqNum(next uint64) error {
 
 // SetNextTargetSeqNum sets the MsgSeqNum expected of the next message
 // received, as agreed with the counterparty out of band. Messages received
-// meanwhile, not yet processed, are still delivered.
+// meanwhile, not yet processed, are still delivered; those held ahead of a
+// gap are dropped, their numbers belonging to the sequence replaced.
 func (s *Session) SetNextTargetSeqNum(next uint64) error {
 	if next == 0 {
 		return fmt.Errorf("session %s: NextTargetSeqNum must be at least 1", s.id)

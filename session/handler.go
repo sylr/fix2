@@ -86,10 +86,13 @@ type Handler interface {
 	// OnRecoveryLoss tells that messages begin to end may never be
 	// delivered: the counterparty reset its sequence numbers past them, or
 	// we could not resend messages of ours, ErrBeyondRetention telling those
-	// evicted from the store, administrative ones among them. A GapFill
-	// received is not reported: the session cannot tell administrative
-	// messages, which counterparties gap-fill, from application ones they no
-	// longer keep.
+	// evicted from the store, administrative ones among them. A
+	// SequenceReset-Reset during a gap recovery reports each range never
+	// received below the highest MsgSeqNum received, in a call of its own,
+	// in sequence with the messages around it: those received ahead of the
+	// gap are delivered, not lost. A GapFill received is not reported: the
+	// session cannot tell administrative messages, which counterparties
+	// gap-fill, from application ones they no longer keep.
 	OnRecoveryLoss(ctx context.Context, s *Session, begin, end uint64, cause error)
 }
 

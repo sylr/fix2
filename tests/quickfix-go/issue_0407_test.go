@@ -18,7 +18,6 @@ import (
 // was lost. Messages received ahead of the gap must be delivered once a
 // SequenceReset-Reset gives up on it.
 func TestIssue407_HeldMessagesDeliveredAfterResetPastThem(t *testing.T) {
-	knownIssue(t, "a SequenceReset-Reset past the messages held ahead of the gap drops them, reporting them to OnRecoveryLoss with the gap")
 	s, rec, p := i407Gap(t)
 	// As in the issue's log: the Reset follows the held messages and moves
 	// past itself.
