@@ -234,12 +234,18 @@ type Config struct {
 	DeliveryQueue int
 	// MaxDeliveryStall disconnects when FromApp has not returned for this
 	// long while the delivery queue is full, max(30s, 2*HeartBtInt) if 0.
+	// It measures how long the reader has waited for room, not FromApp's
+	// progress: once a gap is filled or a SequenceReset passes it, the
+	// messages held ahead of it, up to MaxStash, are queued at once, past
+	// DeliveryQueue, and a handler slow to work through them can trip it.
 	MaxDeliveryStall time.Duration
 	// ResetDrainTimeout bounds how long a sequence reset waits for the
 	// messages of the previous sequence to be delivered, 5s if 0.
 	ResetDrainTimeout time.Duration
 	// MaxStash bounds the messages received ahead of a gap kept while the
-	// gap is recovered, 10000 if 0.
+	// gap is recovered, 10000 if 0. They are queued for delivery at once,
+	// beyond DeliveryQueue, when the gap is filled or a SequenceReset
+	// passes it (see MaxDeliveryStall).
 	MaxStash int
 	// AckProbe selects when to probe for acknowledgements.
 	AckProbe AckProbe

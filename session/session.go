@@ -132,6 +132,9 @@ type Session struct {
 	gapFilling bool
 	// draining is set while advanceLocked handles messages kept ahead.
 	draining bool
+	// heldScanned counts the messages kept ahead of a gap a
+	// SequenceReset-Reset looked at, for tests.
+	heldScanned uint64
 	// The schedule's window: whether the session is within one, which,
 	// a channel closed when one opens, and how to stop following it.
 	inWindow    bool

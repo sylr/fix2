@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -1039,22 +1040,28 @@ func (s *Session) resetPastLocked(c *conn, next uint64) {
 	// asked for while the messages held are processed.
 	chunkEnd := s.recov.chunkEnd
 	s.recov.chunkEnd = 0
+	// Looked at once: processing them only removes some.
+	stashed := slices.Sorted(maps.Keys(s.stash))
+	s.heldScanned += uint64(len(stashed))
 	for s.st.NextTarget < next {
 		if s.c != c || c.closed {
 			// What is left is asked for again once logged on.
 			return
 		}
+		for len(stashed) > 0 && (stashed[0] < s.st.NextTarget || s.stash[stashed[0]] == nil) {
+			stashed = stashed[1:]
+		}
 		held := next
-		for seq := range s.stash {
-			if seq >= s.st.NextTarget && seq < held {
-				held = seq
-			}
+		if len(stashed) > 0 && stashed[0] < next {
+			held = stashed[0]
 		}
 		if from := s.st.NextTarget; from < held {
 			if recovering && from <= last {
 				s.deliv.push(item{kind: itemLoss, gen: s.st.Generation, seq: from, end: min(held-1, last), err: errResetPast})
 			}
-			s.markLocked(held - 1)
+			// Queued after the loss, rather than marked: the messages lost
+			// count as processed once OnRecoveryLoss has told of them.
+			s.deliv.push(item{kind: itemMark, gen: s.st.Generation, seq: held - 1})
 		}
 		if held == next {
 			break

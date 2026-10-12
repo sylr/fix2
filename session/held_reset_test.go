@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport/mem"
 )
 
@@ -191,4 +193,85 @@ func TestResetPastHeld_SmallDeliveryQueue(t *testing.T) {
 	}
 	p.resetTo(24, 25)
 	rec.waitEvents(t, want...)
+}
+
+// targetLog is a Store recording the NextTarget values it is set to.
+type targetLog struct {
+	*memstore.Store
+	mu   sync.Mutex
+	sets []uint64
+}
+
+func (st *targetLog) SetNextTarget(ctx context.Context, gen, next uint64) error {
+	st.mu.Lock()
+	st.sets = append(st.sets, next)
+	st.mu.Unlock()
+	return st.Store.SetNextTarget(ctx, gen, next)
+}
+
+// highest returns the highest NextTarget set so far.
+func (st *targetLog) highest() uint64 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return slices.Max(append([]uint64{0}, st.sets...))
+}
+
+// lossGate is a Handler whose OnRecoveryLoss waits for release.
+type lossGate struct {
+	*recorder
+	entered, release chan struct{}
+}
+
+func (h *lossGate) OnRecoveryLoss(context.Context, *session.Session, uint64, uint64, error) {
+	close(h.entered)
+	<-h.release
+}
+
+// The messages a Reset gives up are not recorded as processed before
+// OnRecoveryLoss has told of them: a crash in between would lose the
+// notification for good.
+func TestResetPastHeld_LossBeforeCommit(t *testing.T) {
+	st := &targetLog{Store: memstore.New()}
+	h := &lossGate{recorder: newRecorder(), entered: make(chan struct{}), release: make(chan struct{})}
+	l := mem.Listen("acceptor")
+	s, _ := startInitiator(t, l, func(c *session.Config) { c.Handler = h; c.Store = st })
+	released := false
+	t.Cleanup(func() {
+		if !released {
+			close(h.release)
+		}
+	})
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 101, "98", "0", "108", "30")
+	h.wait(t, func() bool { return h.logons == 1 })
+	p.expect("2", "7", "1", "16", "0")
+	p.resetTo(102, 102)
+	select {
+	case <-h.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnRecoveryLoss not called")
+	}
+	waitFor(t, func() bool { return s.NextTargetSeqNum() == 102 })
+	if n := st.highest(); n > 1 {
+		t.Errorf("NextTarget %d recorded before OnRecoveryLoss(1, 100) returned", n)
+	}
+	released = true
+	close(h.release)
+	waitFor(t, func() bool { return st.highest() == 102 })
+}
+
+// A Reset past many messages held between gaps looks at each once.
+func TestResetPastHeld_ScanBounded(t *testing.T) {
+	const n = 1000
+	s, rec, p := heldGap(t, 2, nil)
+	// Held at 4, 6, ..., after the Logon's marker at 2: a gap before each.
+	for i := range n {
+		p.order(4+2*i, fmt.Sprint("O", i))
+	}
+	p.resetTo(2*n+3, 2*n+4)
+	rec.wait(t, func() bool { return len(rec.apps) == n })
+	if got, bound := session.HeldScanned(s), uint64(2*(n+1)); got > bound {
+		t.Errorf("%d held messages looked at for %d held, want at most %d", got, n+1, bound)
+	}
 }
