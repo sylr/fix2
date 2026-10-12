@@ -10,7 +10,7 @@ generates from one dictionary, `spec/FIX44.xml`.
 
     nix develop                     # Go, the JDK, Maven, Gradle, CMake, QuickFIX C++
     make bench                      # the whole matrix, every run in results.txt
-    make bench RUNS=10 WINDOWS=1,100 SCENARIOS=marketdata
+    make bench RUNS=20 WINDOWS=1,100 SCENARIOS=marketdata
     make bench AGENTS="fix2 quickfixj"          # AGENTS holds BASELINE, fix2
     go run golang.org/x/perf/cmd/benchstat@latest -col /initiator results.txt
 
@@ -114,10 +114,13 @@ and no further at 100000.
   JVM's follows its heap, sized by its defaults from the machine's memory,
   not by what QuickFIX/J needs.
 
-The summary gives, for each scenario and window, the median of the runs of
-each pair, and the slowest and fastest runs' throughputs; `-o` writes every
-run in the Go benchmark format (`BenchmarkOrders`, `BenchmarkMarketData`)
-for benchstat to compare with confidence intervals.
+The summary describes the runs: for each scenario and window, the median
+of the runs of each pair, and the slowest and fastest runs' throughputs,
+its ratios to the baseline those of medians, with no statistical test.
+`-o` writes every run in the Go benchmark format (`BenchmarkOrders`,
+`BenchmarkMarketData`) for benchstat to compare them: it gives a
+confidence interval of a median from 6 runs, and tells whether two pairs
+differ significantly. `-runs` is 10 by default.
 
 ## Matrix
 

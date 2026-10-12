@@ -76,7 +76,7 @@ func run() error {
 	flag.IntVar(&cfg.messages, "messages", 50000, "requests measured per run")
 	flag.IntVar(&cfg.warmup, "warmup", 50000, "requests sent before measuring, each run")
 	flag.StringVar(&windows, "windows", "1,10,100,1000", "requests awaiting their answer at most, comma separated")
-	flag.IntVar(&cfg.runs, "runs", 5, "runs of each window and pair")
+	flag.IntVar(&cfg.runs, "runs", 10, "runs of each scenario, window and pair; benchstat needs 6 for a confidence interval")
 	flag.DurationVar(&cfg.timeout, "timeout", 5*time.Minute, "bound of each run")
 	flag.Uint64Var(&cfg.seed, "seed", 1, "seed of the order of the pairs in each round")
 	flag.StringVar(&cfg.output, "o", "", "write every run to `file`, in the Go benchmark format")
