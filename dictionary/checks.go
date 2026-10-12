@@ -251,7 +251,7 @@ func digits(v []byte) bool {
 // are skipped by walking each group from its counter, which counts them.
 func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks) error {
 	fields := msg.Fields()
-	var walk *groupWalk
+	walk := groupWalk{d: d, mdef: mdef, fields: fields, check: checks&CheckGroupCounts != 0}
 	var seen map[int]bool
 	if checks&CheckRepeatedTags != 0 {
 		seen = make(map[int]bool, len(fields))
@@ -289,9 +289,6 @@ func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks
 			phase = e.section
 		}
 		if e.spec != nil {
-			if walk == nil {
-				walk = &groupWalk{d: d, mdef: mdef, fields: fields, check: checks&CheckGroupCounts != 0, seen: map[entryTag]int{}}
-			}
 			next, err := walk.group(i, e.spec, nil)
 			if err != nil {
 				return err
@@ -322,30 +319,48 @@ type groupWalk struct {
 	mdef   *MessageDef
 	fields []fix2.Field
 	check  bool // report counters not matching their entries
-	// seen maps a tag of a group's entries to the index of the delimiter of
-	// the last entry holding it.
-	seen map[entryTag]int
 }
 
-// entryTag is a tag of the entries of a group.
-type entryTag struct {
-	spec *fix2.GroupSpec
-	tag  int
+// entryState is the entry of a group being walked: the tags it holds so
+// far, and the entry holding its group, nil outside groups.
+type entryState struct {
+	spec   *fix2.GroupSpec
+	seen   []uint64 // bits by position in spec.Tags, then spec.Nested
+	parent *entryState
+}
+
+// position returns the position of tag in spec.Tags, then spec.Nested, a
+// nested counter first as GroupsOf has it, or -1, and the spec of the nested
+// group it counts, if any.
+func position(spec *fix2.GroupSpec, tag int) (int, *fix2.GroupSpec) {
+	for c, n := range spec.Nested {
+		if n.Counter == tag {
+			return len(spec.Tags) + c, n
+		}
+	}
+	return slices.Index(spec.Tags, tag), nil
 }
 
 // group walks the entries of the group whose counter is fields[at], of spec,
-// in an entry of parent or, if parent is nil, outside groups, and returns
-// the index of the first field after them. If w.check is set, it returns an
+// in the entry parent or, if it is nil, outside groups, and returns the
+// index of the first field after them. If w.check is set, it returns an
 // error when the counter does not match the number of entries, or a nested
 // group's counter its own: when there are fewer, or when another entry
-// follows them, whose delimiter parent's entry or the message could not hold
-// there instead.
-func (w *groupWalk) group(at int, spec, parent *fix2.GroupSpec) (int, error) {
+// follows them, whose delimiter no enclosing entry nor the message could
+// hold there instead.
+func (w *groupWalk) group(at int, spec *fix2.GroupSpec, parent *entryState) (int, error) {
 	count, cerr := fix2.ParseInt(w.fields[at].Value)
+	// The tags of an entry, on the stack for groups of up to 256 tags and
+	// nested groups.
+	var small [4]uint64
+	e := entryState{spec: spec, seen: small[:], parent: parent}
+	if n := (len(spec.Tags) + len(spec.Nested) + 63) / 64; n > len(small) {
+		e.seen = make([]uint64, n)
+	}
 	i, n := at+1, 0
 	for ; n < count && i < len(w.fields) && w.fields[i].Tag == spec.Delim; n++ {
 		var err error
-		if i, err = w.entry(i, spec); err != nil {
+		if i, err = w.entry(i, &e); err != nil {
 			return 0, err
 		}
 	}
@@ -368,27 +383,26 @@ func (w *groupWalk) group(at int, spec, parent *fix2.GroupSpec) (int, error) {
 	}
 }
 
-// entry walks the entry of spec whose delimiter is at fields[i] and returns
-// the index just past it.
-func (w *groupWalk) entry(i int, spec *fix2.GroupSpec) (int, error) {
-	start := i
-	for i < len(w.fields) {
+// entry walks the entry of e.spec whose delimiter is at fields[i] and
+// returns the index just past it.
+func (w *groupWalk) entry(i int, e *entryState) (int, error) {
+	clear(e.seen)
+	spec := e.spec
+	for start := i; i < len(w.fields); {
 		tag := w.fields[i].Tag
-		child := spec.Child(tag)
-		held := child != nil || slices.Contains(spec.Tags, tag)
-		if i > start && (tag == spec.Delim || !held && (spec.Unknown == nil || !spec.Unknown(tag))) {
+		k, child := position(spec, tag)
+		if i > start && (tag == spec.Delim || k < 0 && (spec.Unknown == nil || !spec.Unknown(tag))) {
 			break // the next entry, or not part of this group
 		}
-		if held {
-			k := entryTag{spec, tag}
-			if s, ok := w.seen[k]; ok && s == start {
+		if k >= 0 {
+			if e.seen[k/64]&(1<<(k%64)) != 0 {
 				break // a tag cannot repeat within an entry
 			}
-			w.seen[k] = start
+			e.seen[k/64] |= 1 << (k % 64)
 		}
 		// The delimiter itself may be a nested group's counter.
 		if child != nil {
-			next, err := w.group(i, child, spec)
+			next, err := w.group(i, child, e)
 			if err != nil {
 				return 0, err
 			}
@@ -400,12 +414,24 @@ func (w *groupWalk) entry(i int, spec *fix2.GroupSpec) (int, error) {
 	return i, nil
 }
 
-// holds reports whether an entry of parent or, if parent is nil, the message
-// outside groups may hold tag.
-func (w *groupWalk) holds(parent *fix2.GroupSpec, tag int) bool {
-	if parent == nil {
-		e := w.d.lookup(w.mdef, tag)
-		return e != nil && !e.grouped
+// holds reports whether tag, ending a group's entries in the entry e, may
+// belong to e, an entry enclosing it or, past them all, the message outside
+// groups, as GroupsOf reads it: an entry keeps a tag its group holds and it
+// does not hold yet, or one Unknown reports; its group's delimiter starts
+// its next entry. Any other tag ends it.
+func (w *groupWalk) holds(e *entryState, tag int) bool {
+	for ; e != nil; e = e.parent {
+		if tag == e.spec.Delim {
+			return true
+		}
+		if k, _ := position(e.spec, tag); k >= 0 {
+			if e.seen[k/64]&(1<<(k%64)) == 0 {
+				return true
+			}
+		} else if e.spec.Unknown != nil && e.spec.Unknown(tag) {
+			return true
+		}
 	}
-	return slices.Contains(parent.Tags, tag) || parent.Child(tag) != nil || parent.Unknown != nil && parent.Unknown(tag)
+	te := w.d.lookup(w.mdef, tag)
+	return te != nil && !te.grouped
 }

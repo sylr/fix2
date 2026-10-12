@@ -467,6 +467,89 @@ func TestValidate_GroupFieldOutsideEntries(t *testing.T) {
 	}
 }
 
+// A nested group's entries end at its count, and the field after them that
+// shares their delimiter's tag goes to the first enclosing entry, or the
+// message, that may still hold it, as GroupsOf reads it: it is another entry
+// only if none may.
+func TestValidate_NestedGroupBoundaries(t *testing.T) {
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages>
+<message name="Top" msgtype="U1" msgcat="app"><field name="Text" required="N"/><component name="P" required="N"/></message>
+<message name="Grandparent" msgtype="U2" msgcat="app">
+  <group name="NoQ" required="N"><field name="QID" required="N"/><component name="P" required="N"/><field name="Text" required="N"/></group>
+</message>
+<message name="Parent" msgtype="U3" msgcat="app">
+  <group name="NoP" required="N"><field name="PID" required="N"/><field name="Text" required="N"/><group name="NoG" required="N"><field name="Text" required="N"/></group></group>
+</message>
+</messages><components><component name="P">
+  <group name="NoP" required="N"><field name="PID" required="N"/><group name="NoG" required="N"><field name="Text" required="N"/></group></group>
+</component></components><fields>
+<field number="35" name="MsgType" type="STRING"/>
+<field number="58" name="Text" type="STRING"/>
+<field number="5000" name="NoP" type="NUMINGROUP"/>
+<field number="5001" name="PID" type="STRING"/>
+<field number="5002" name="NoG" type="NUMINGROUP"/>
+<field number="5003" name="NoQ" type="NUMINGROUP"/>
+<field number="5004" name="QID" type="STRING"/>
+</fields></fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const counts = dictionary.CheckGroupCounts | dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags
+	parse := func(body string) fix2.Message {
+		return parseMsg(t, buildFIXMsg(strings.ReplaceAll(body, "|", "\x01")))
+	}
+
+	// The message's own Text after the nested group.
+	m := parse("35=U1|5000=1|5001=a|5002=1|58=g|58=top|")
+	p := d.CounterSpec(d.Messages["U1"], 5000)
+	if got := len(m.GroupsOf(p)); got != 1 {
+		t.Errorf("U1: GroupsOf(NoP) = %d entries, want 1", got)
+	}
+	if got := string(m.GetTopLevel(58, p)); got != "top" {
+		t.Errorf("U1: GetTopLevel(58) = %q, want top", got)
+	}
+	// The grandparent entry's Text after the nested group.
+	m2 := parse("35=U2|5003=1|5004=q|5000=1|5001=p|5002=1|58=g|58=qtext|")
+	q := d.CounterSpec(d.Messages["U2"], 5003)
+	qs := m2.GroupsOf(q)
+	if len(qs) != 1 {
+		t.Fatalf("U2: GroupsOf(NoQ) = %d entries, want 1", len(qs))
+	}
+	if got := string(qs[0].GetTopLevel(58, q.Child(5000))); got != "qtext" {
+		t.Errorf("U2: Q entry's GetTopLevel(58) = %q, want qtext", got)
+	}
+	for name, msg := range map[string]*fix2.Message{"U1": &m, "U2": &m2} {
+		for _, c := range []struct {
+			name string
+			err  error
+		}{
+			{"Validate", d.Validate(msg)},
+			{"counts", d.ValidateWith(msg, counts)},
+			{"CheckAll", d.ValidateWith(msg, dictionary.CheckAll)},
+		} {
+			if c.err != nil {
+				t.Errorf("%s: %s: %v", name, c.name, c.err)
+			}
+		}
+	}
+
+	// The parent entry holds Text already: the next Text is another entry
+	// of the nested group, which Validate finds outside it.
+	m3 := parse("35=U3|5000=1|5001=p|58=pt|5002=1|58=g|58=extra|")
+	var ve *dictionary.ValidationError
+	if err := d.ValidateWith(&m3, counts); !errors.As(err, &ve) || ve.Tag != 5002 || ve.Reason != dictionary.ReasonIncorrectNumInGroupCount {
+		t.Errorf("U3: counts: %v, want an incorrect NumInGroup for 5002", err)
+	}
+	if err := d.Validate(&m3); !errors.As(err, &ve) || ve.Tag != 58 || ve.Reason != dictionary.ReasonTagNotDefinedForMessageType {
+		t.Errorf("U3: Validate: %v, want 58 not defined for the message type", err)
+	}
+	// Without it, the next Text is the parent entry's.
+	m4 := parse("35=U3|5000=1|5001=p|5002=1|58=g|58=pt|")
+	if err := d.ValidateWith(&m4, dictionary.CheckAll); err != nil {
+		t.Errorf("U3: Text after the nested group: %v", err)
+	}
+}
+
 // The standard dictionaries allow outside group entries every tag a message
 // requires and the counters of its groups, and every other tag of the
 // message outside them or in its groups' entries.

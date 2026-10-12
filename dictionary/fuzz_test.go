@@ -108,7 +108,7 @@ func FuzzValidate(f *testing.F) {
 		if e := d.ValidateWith(&msg, unknown); fmt.Sprint(e) != fmt.Sprint(verr) {
 			t.Fatalf("Validate = %v, ValidateWith(%d) = %v", verr, unknown, e)
 		}
-		if e := d.ValidateWith(&msg, cs&^unknown); errors.Is(e, dictionary.ErrUnexpectedTag) {
+		if e := d.ValidateWith(&msg, cs&^unknown); errors.Is(e, dictionary.ErrUnexpectedTag) || errors.Is(e, dictionary.ErrTagOutsideGroup) {
 			t.Fatalf("ValidateWith(%d) = %v, though it accepts unknown tags", cs&^unknown, e)
 		}
 

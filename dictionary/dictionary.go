@@ -52,7 +52,11 @@ type MessageDef struct {
 	MsgCat  string
 	// Fields are flattened, components and groups resolved: they list the
 	// fields of the groups' entries too. Those listed no more often than
-	// the groups hold them are allowed only in entries.
+	// the groups hold them are allowed only in entries: a tag the message
+	// holds outside its groups too must be listed once more, or Validate
+	// rejects it there. A hand-built Dict listing a tag once in Fields and
+	// once in a GroupDef allows it only in entries, where it used to allow
+	// it anywhere.
 	Fields []FieldRef
 	Groups []GroupDef // top-level groups in this message
 	// Conditions are the required fields of the message's optional
