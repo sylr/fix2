@@ -3,7 +3,9 @@ package fix2
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -221,25 +223,28 @@ func FuzzFramer(f *testing.F) {
 	f.Add([]byte("8=FIX.4.4\x019=5\x0135=0\x0110=000\x01"))
 	f.Add(append(good[:20:20], good...))
 	f.Fuzz(func(t *testing.T, stream []byte) {
-		frames, skipped, _, err := frameAll(t, bytes.NewReader(stream), FramerOptions{BufferSize: 16, MaxBodyLength: 4096})
-		total := skipped
-		for _, fr := range frames {
-			total += len(fr)
-			if !bytes.HasPrefix(fr, frameStart) || len(fr) < trailerLen || !bytes.HasPrefix(fr[len(fr)-trailerLen:], []byte("10=")) || fr[len(fr)-1] != soh {
-				t.Fatalf("malformed frame %q", fr)
+		// In one read, and a byte at a time.
+		for _, r := range []io.Reader{bytes.NewReader(stream), iotest.OneByteReader(bytes.NewReader(stream))} {
+			frames, skipped, _, err := frameAll(t, r, FramerOptions{BufferSize: 16, MaxBodyLength: 4096})
+			total := skipped
+			for _, fr := range frames {
+				total += len(fr)
+				if !bytes.HasPrefix(fr, frameStart) || len(fr) < trailerLen || !bytes.HasPrefix(fr[len(fr)-trailerLen:], []byte("10=")) || fr[len(fr)-1] != soh {
+					t.Fatalf("malformed frame %q", fr)
+				}
 			}
-		}
-		switch err {
-		case io.EOF:
-			if total != len(stream) {
-				t.Fatalf("frames and skipped bytes cover %d of %d bytes", total, len(stream))
+			switch err {
+			case io.EOF:
+				if total != len(stream) {
+					t.Fatalf("frames and skipped bytes cover %d of %d bytes", total, len(stream))
+				}
+			case io.ErrUnexpectedEOF:
+				if total > len(stream) {
+					t.Fatalf("frames and skipped bytes cover %d of %d bytes", total, len(stream))
+				}
+			default:
+				t.Fatalf("final error = %v", err)
 			}
-		case io.ErrUnexpectedEOF:
-			if total > len(stream) {
-				t.Fatalf("frames and skipped bytes cover %d of %d bytes", total, len(stream))
-			}
-		default:
-			t.Fatalf("final error = %v", err)
 		}
 	})
 }
@@ -260,5 +265,189 @@ func TestFramer_BodyLengthTooLong(t *testing.T) {
 	}
 	if skipped != len(m1)+len(m2) || len(garbled) != 1 || !errors.Is(garbled[0], ErrBodyLenMismatch) {
 		t.Errorf("skipped %d bytes in %v, want %d in one report", skipped, garbled, len(m1)+len(m2))
+	}
+}
+
+// chunkReader returns at most n bytes per Read, as a peer trickling bytes.
+type chunkReader struct {
+	r io.Reader
+	n int
+}
+
+func (c chunkReader) Read(p []byte) (int, error) { return c.r.Read(p[:min(len(p), c.n)]) }
+
+// readSizes are the read sizes the CheckSum tests split streams into: a
+// CheckSum field split at every point, a TCP segment, and the whole stream.
+var readSizes = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 1460, 1 << 20}
+
+// frameOutcomes reads stream with a Framer, n bytes at a time, and describes
+// what each call to Next returned, up to the final error.
+func frameOutcomes(t *testing.T, stream []byte, n int, opts FramerOptions) []string {
+	t.Helper()
+	f := NewFramer(chunkReader{bytes.NewReader(stream), n}, opts)
+	var out []string
+	for range 100000 {
+		frame, err := f.Next()
+		var g *GarbledError
+		switch {
+		case errors.As(err, &g):
+			out = append(out, fmt.Sprintf("skipped %d: %v", g.Skipped, g.Err))
+		case err != nil:
+			return append(out, err.Error())
+		default:
+			out = append(out, fmt.Sprintf("frame %q", frame))
+		}
+	}
+	t.Fatal("Framer did not stop")
+	return nil
+}
+
+// badFrame is a frame whose BodyLength, 5, ends inside its body.
+const badFrame = "8=FIX.4.4\x019=5\x0135=0\x01xx"
+
+// TestFramer_SkipToCheckSum covers frames whose CheckSum is not where their
+// BodyLength says: the Framer skips up to the first CheckSum field after the
+// declared body, whatever the size of the reads.
+func TestFramer_SkipToCheckSum(t *testing.T) {
+	good := buildMsg("FIX.4.4", "35=0\x0149=A\x01")
+	mismatch := func(skipped int) string {
+		return fmt.Sprintf("skipped %d: %v: no CheckSum field after the 5 bytes BodyLength declares", skipped, ErrBodyLenMismatch)
+	}
+	for _, tc := range []struct {
+		name    string
+		garbled string // up to where the Framer resumes
+		after   []byte
+		want    []string // a report of garbled, the frame after and io.EOF if nil
+	}{
+		{name: "CheckSum after the body", garbled: badFrame + "\x0110=000\x01", after: good},
+		{name: "CheckSum after filler", garbled: badFrame + strings.Repeat("a", 100) + "\x0110=000\x01", after: good},
+		{name: "CheckSum after SOH-dense filler", garbled: badFrame + strings.Repeat("\x011", 50) + "\x0110=000\x01", after: good},
+		{name: "16 bytes without SOH are no CheckSum value", garbled: badFrame + "\x0110=" + strings.Repeat("7", 16) + "\x0110=1\x01", after: good},
+		{name: "15 bytes then SOH are", garbled: badFrame + "\x0110=" + strings.Repeat("7", 15) + "\x01", after: good},
+		{name: "frame start before the CheckSum", garbled: badFrame + "8=FIX.4.4\x019=5\x0135=0\x0110=000\x01", after: good},
+		{
+			name:    "CheckSum value cut by the end of the stream",
+			garbled: badFrame + "\x0110=12",
+			// All but a tail that may begin a frame start, then the tail.
+			want: []string{
+				mismatch(len(badFrame+"\x0110=12") - (len(frameStart) - 1)),
+				fmt.Sprintf("skipped %d: %v: bytes before the end of the stream", len(frameStart)-1, ErrInvalidBeginTag),
+				io.EOF.Error(),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stream := append([]byte(tc.garbled), tc.after...)
+			want := tc.want
+			if want == nil {
+				want = []string{mismatch(len(tc.garbled)), fmt.Sprintf("frame %q", tc.after), io.EOF.Error()}
+			}
+			for _, n := range readSizes {
+				if got := frameOutcomes(t, stream, n, FramerOptions{BufferSize: 16}); !slices.Equal(got, want) {
+					t.Errorf("%d-byte reads:\n got %q\nwant %q", n, got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestFramer_SkipToCheckSumLimit covers a malformed frame without a CheckSum
+// field within MaxBodyLength: the Framer resyncs on the next frame start,
+// reporting the bytes up to it.
+func TestFramer_SkipToCheckSumLimit(t *testing.T) {
+	good := buildMsg("FIX.4.4", "35=0\x0149=A\x01")
+	for _, filler := range []string{"a", "\x011", "\x0110=" + strings.Repeat("7", 16)} {
+		garbled := badFrame + strings.Repeat(filler, 100/len(filler)+1)
+		for _, n := range readSizes {
+			r := chunkReader{strings.NewReader(garbled + string(good)), n}
+			frames, skipped, reports, err := frameAll(t, r, FramerOptions{BufferSize: 16, MaxBodyLength: 64})
+			if err != io.EOF || len(frames) != 1 || !bytes.Equal(frames[0], good) {
+				t.Fatalf("filler %q, %d-byte reads: frames %q, err %v; want the good frame, io.EOF", filler, n, frames, err)
+			}
+			if skipped != len(garbled) || !errors.Is(reports[0], ErrBodyLenMismatch) {
+				t.Errorf("filler %q, %d-byte reads: skipped %d bytes in %v, want %d from a BodyLength mismatch", filler, n, skipped, reports, len(garbled))
+			}
+		}
+	}
+}
+
+// garbledStream returns badFrame followed by n bytes of filler and, if
+// checkSum, a CheckSum field.
+func garbledStream(n int, filler string, checkSum bool) []byte {
+	stream := []byte(badFrame + strings.Repeat(filler, n/len(filler)))
+	if checkSum {
+		stream = append(stream, "\x0110=000\x01"...)
+	}
+	return stream
+}
+
+// embeddedStream returns n bytes of malformed frames back to back, without
+// CheckSum fields: each is skipped up to the next.
+func embeddedStream(n int, _ string, _ bool) []byte {
+	return bytes.Repeat([]byte(badFrame), n/len(badFrame))
+}
+
+// searched returns how many bytes a Framer searched for CheckSum fields
+// while reading stream, n bytes at a time, to the end.
+func searched(stream []byte, n int, opts FramerOptions) int {
+	f := NewFramer(chunkReader{bytes.NewReader(stream), n}, opts)
+	for {
+		_, err := f.Next()
+		var g *GarbledError
+		if err != nil && !errors.As(err, &g) {
+			return f.searched
+		}
+	}
+}
+
+// TestFramer_SkipToCheckSumIsLinear checks that skipping malformed frames
+// searches each byte a bounded number of times, however the stream is split
+// into reads: four times the input, about four times the work.
+func TestFramer_SkipToCheckSumIsLinear(t *testing.T) {
+	const n = 16 << 10
+	for _, tc := range []struct {
+		name     string
+		stream   func(n int, filler string, checkSum bool) []byte
+		filler   string
+		checkSum bool
+		read     int
+	}{
+		{"filler, byte by byte", garbledStream, "a", true, 1},
+		{"SOH-dense filler, byte by byte", garbledStream, "\x011", true, 1},
+		{"filler, by segment", garbledStream, "a", true, 1460},
+		{"no CheckSum, byte by byte", garbledStream, "a", false, 1},
+		{"SOH-dense, no CheckSum, byte by byte", garbledStream, "\x011", false, 1},
+		{"malformed frames back to back, by segment", embeddedStream, "", false, 1460},
+		{"malformed frames back to back, one read", embeddedStream, "", false, 1 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			small := searched(tc.stream(n, tc.filler, tc.checkSum), tc.read, FramerOptions{})
+			large := searched(tc.stream(4*n, tc.filler, tc.checkSum), tc.read, FramerOptions{})
+			if large > 5*small || large > 8*4*n {
+				t.Errorf("searched %d bytes for %d bytes of input, %d for %d: want linear growth", small, n, large, 4*n)
+			}
+		})
+	}
+}
+
+// BenchmarkFramer_Garbled skips a malformed frame with 64 KiB before its
+// CheckSum field, read a byte or a TCP segment at a time.
+func BenchmarkFramer_Garbled(b *testing.B) {
+	for _, filler := range []struct{ name, s string }{{"filler", "a"}, {"SOH-dense", "\x011"}} {
+		stream := append(garbledStream(64<<10, filler.s, true), buildMsg("FIX.4.4", "35=0\x01")...)
+		for _, n := range []int{1, 1460} {
+			b.Run(fmt.Sprintf("%s/%dB", filler.name, n), func(b *testing.B) {
+				b.SetBytes(int64(len(stream)))
+				for b.Loop() {
+					f := NewFramer(chunkReader{bytes.NewReader(stream), n}, FramerOptions{})
+					if _, err := f.Next(); err == nil {
+						b.Fatal("malformed frame read")
+					}
+					if _, err := f.Next(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
 	}
 }

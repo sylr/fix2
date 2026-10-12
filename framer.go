@@ -70,6 +70,12 @@ type Framer struct {
 	maxBody int
 	skipped int // garbage skipped and not reported yet
 	empty   int // consecutive reads returning no data and no error
+
+	// [checked, checkedEnd) are buffered bytes where skipToCheckSum found no
+	// CheckSum field start: it does not search them again for the malformed
+	// frames found inside.
+	checked, checkedEnd int
+	searched            int // bytes skipToCheckSum searched, for tests
 }
 
 // NewFramer returns a Framer reading from r.
@@ -242,6 +248,7 @@ func (f *Framer) fill(n int) error {
 			return f.err
 		}
 		if f.start+n > len(f.buf) {
+			f.checked, f.checkedEnd = max(0, f.checked-f.start), max(0, f.checkedEnd-f.start)
 			if n > len(f.buf) {
 				nb := make([]byte, max(n, 2*len(f.buf)))
 				f.end = copy(nb, f.buf[f.start:f.end])
@@ -282,14 +289,33 @@ var checkSumField = []byte("\x0110=")
 // long swallows the next frame, as QuickFIX engines read them. Without a
 // CheckSum within MaxBodyLength more bytes, it resyncs on the next frame
 // start instead.
+//
+// However the stream is split into reads, each byte is searched about once:
+// the search resumes where the previous read ended it, and skips the bytes
+// searched for a previous malformed frame, which this one starts inside.
 func (f *Framer) skipToCheckSum(from int) {
 	const maxValue = 16 // bytes searched for the SOH ending a CheckSum value
 	limit := from + f.maxBody + trailerLen
+	// No CheckSum field starts in [first, from), offsets from f.start, which
+	// fill keeps valid.
+	first := from
 	eof := false
 	for {
-		if i := bytes.Index(f.buf[f.start+from:f.end], checkSumField); i >= 0 {
-			value := from + i + len(checkSumField) // offset of the value
+		buffered := f.end - f.start
+		lo, hi := f.checked-f.start, f.checkedEnd-f.start
+		stop := buffered
+		switch {
+		case from >= lo && from < hi:
+			from = hi // searched for a previous frame
+		case from < lo && lo < hi:
+			stop = lo + len(checkSumField) - 1 // up to the bytes searched before
+		}
+		f.searched += stop - from
+		if i := bytes.Index(f.buf[f.start+from:f.start+stop], checkSumField); i >= 0 {
+			from += i
+			value := from + len(checkSumField) // offset of the value
 			rest := f.buf[f.start+value : f.end]
+			f.searched += min(len(rest), maxValue)
 			if j := bytes.IndexByte(rest[:min(len(rest), maxValue)], soh); j >= 0 {
 				f.skip(value + j + 1)
 				return
@@ -298,12 +324,22 @@ func (f *Framer) skipToCheckSum(from int) {
 				from = value // a look-alike: search further
 				continue
 			}
+			// The value is incomplete: search it again once read.
+		} else if stop < buffered {
+			from = hi // none before the bytes searched before either
+			continue
+		} else {
+			from = max(from, stop-(len(checkSumField)-1)) // the tail may begin one
 		}
-		if eof || f.end-f.start >= limit {
+		if first <= hi && from >= lo {
+			first, from = min(first, lo), max(from, hi)
+		}
+		f.checked, f.checkedEnd = f.start+first, f.start+from
+		if eof || buffered >= limit {
 			f.resync()
 			return
 		}
-		if f.fill(f.end-f.start+1) != nil {
+		if f.fill(buffered+1) != nil {
 			eof = true
 		}
 	}
