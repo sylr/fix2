@@ -1,0 +1,53 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/sylr/fix2/contribs/store/sqlite3"
+)
+
+func main() {
+	if err := run(); err != nil {
+		panic(err)
+	}
+}
+
+func run() error {
+	dir, err := os.MkdirTemp("", "fix2-schema-repro-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	db, err := sql.Open("sqlite3", filepath.Join(dir, "metadata.db"))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	for _, q := range []string{"CREATE TABLE application_data(value TEXT)", "PRAGMA user_version=7"} {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
+	s := sqlite3.New(db, "FIX-SESSION")
+	_, err = s.Open(context.Background())
+	fmt.Println("Open alongside unrelated schema version 7:", err)
+	if err := s.Close(); err != nil {
+		return err
+	}
+	if _, err := db.Exec("PRAGMA user_version=0"); err != nil {
+		return err
+	}
+	s = sqlite3.New(db, "FIX-SESSION")
+	defer s.Close()
+	_, err = s.Open(context.Background())
+	var version int
+	if readErr := db.QueryRow("PRAGMA user_version").Scan(&version); readErr != nil {
+		return readErr
+	}
+	fmt.Printf("Open alongside schema version 0: err=%v, app user_version now=%d\n", err, version)
+	return nil
+}

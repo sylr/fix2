@@ -1,0 +1,112 @@
+package session
+
+import (
+	"context"
+	"errors"
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/session/store/memstore"
+	"github.com/sylr/fix2/session/transport/mem"
+	"testing"
+	"time"
+)
+
+type reauditVeto struct{ BaseHandler }
+
+func (reauditVeto) OnResend(context.Context, *Session, uint64, *fix2.Message) bool { return false }
+func TestReauditFailedGapFillReceipt(t *testing.T) {
+	s := fenceSession(t, func(c *Config) { c.Handler = reauditVeto{} })
+	a, b := mem.Pipe()
+	defer b.Close()
+	c, err := s.attach(&brokenAfter{Conn: a, n: 1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go c.run()
+	s.mu.Lock()
+	s.phase = phaseEstablished
+	s.mu.Unlock()
+	r, err := s.Send(context.Background(), fix2.NewBuilder(FIX44, "D").SetString(11, "ORDER"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := r.Wait(ctx, Written); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.startReplayLocked(c, r.seq, r.seq, false)
+	s.mu.Unlock()
+	<-c.done()
+	c.writers.Wait()
+	if err := r.Err(); errors.Is(err, ErrSkipped) {
+		t.Fatalf("GapFill Write returned 0,error but receipt claims irrecoverably skipped: %v", err)
+	}
+}
+
+type reauditTruncateStore struct{ *memstore.Store }
+
+func (reauditTruncateStore) Truncate(context.Context, uint64, uint64) error {
+	return store.ErrGenerationGone
+}
+func TestReauditTruncateDivergenceMustHalt(t *testing.T) {
+	fs := reauditTruncateStore{memstore.New()}
+	s := fenceSession(t, func(c *Config) { c.Store = fs; c.Retention = Retention{Interval: time.Hour} })
+	a, b := mem.Pipe()
+	defer b.Close()
+	c, err := s.attach(&brokenAfter{Conn: a, n: 100}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go c.run()
+	s.mu.Lock()
+	s.phase = phaseEstablished
+	if err := fs.Append(context.Background(), s.st.Generation, 1, []byte("a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.Append(context.Background(), s.st.Generation, 2, []byte("b")); err != nil {
+		t.Fatal(err)
+	}
+	s.st.NextSender = 3
+	s.ret.ackKnown = true
+	s.ret.acked = 2
+	s.evictLocked(time.Now())
+	halted := s.halted
+	s.mu.Unlock()
+	if halted == nil {
+		t.Fatalf("background Truncate structural error left session running: State=%s Err=%v", s.State(), s.Err())
+	}
+}
+
+type reauditRangeStore struct{ *memstore.Store }
+
+func (reauditRangeStore) Range(context.Context, uint64, uint64, uint64, func(uint64, []byte, store.Hole) error) error {
+	return store.ErrGenerationGone
+}
+func TestReauditRangeDivergenceMustHalt(t *testing.T) {
+	fs := reauditRangeStore{memstore.New()}
+	s := fenceSession(t, func(c *Config) { c.Store = fs })
+	a, b := mem.Pipe()
+	defer b.Close()
+	c, err := s.attach(&brokenAfter{Conn: a, n: 100}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go c.run()
+	s.mu.Lock()
+	s.phase = phaseEstablished
+	if err := fs.Append(context.Background(), s.st.Generation, 1, s.appendFrame(nil, &header{msgType: "D", seq: 1, sendingTime: time.Now()}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	s.st.NextSender = 2
+	s.startReplayLocked(c, 1, 1, false)
+	s.mu.Unlock()
+	deadline := time.Now().Add(time.Second)
+	for s.State() != StateLoggingOut && s.Err() == nil && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if s.Err() == nil {
+		t.Fatalf("Range structural error only logs out, permits reconnect: State=%s Err=%v", s.State(), s.Err())
+	}
+}

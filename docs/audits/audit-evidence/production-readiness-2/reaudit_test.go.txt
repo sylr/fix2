@@ -1,0 +1,23 @@
+package session_test
+
+import (
+	"errors"
+	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/session/store/memstore"
+	"testing"
+)
+
+// Structural target errors mean store generation/ownership changed, not a transient failed write.
+func TestReauditManualTargetDivergenceMustHalt(t *testing.T) {
+	fs := &targetStore{Store: memstore.New(), err: store.ErrGenerationGone}
+	s, _, _ := loggedOn(t, func(c *session.Config) { c.Store = fs })
+	waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+	fs.fail.Store(true)
+	if err := s.SetNextTargetSeqNum(100); !errors.Is(err, store.ErrGenerationGone) {
+		t.Fatal(err)
+	}
+	if s.Err() == nil {
+		t.Fatalf("structural store error did not halt: State=%s Err=%v", s.State(), s.Err())
+	}
+}
