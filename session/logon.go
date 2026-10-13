@@ -379,7 +379,7 @@ func (s *Session) activeResetLocked(c *conn, m *fix2.Message, in Inbound) {
 	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
 	c.signalRoomLocked()
 	s.recov = recovery{}
-	clear(s.stash)
+	s.clearStashLocked()
 }
 
 // fenceReset completes a reset activeResetLocked started, from the reader
@@ -464,7 +464,7 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	s.resetOwed = ""
 	s.committed = 0
 	s.recov = recovery{}
-	clear(s.stash)
+	s.clearStashLocked()
 	s.receipts.newGeneration(gen, st.Generation)
 	s.ret.newGeneration()
 	if s.deliv != nil {

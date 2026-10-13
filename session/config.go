@@ -236,7 +236,9 @@ type Config struct {
 	WriteTimeout time.Duration
 	// MaxPendingMessages and MaxPendingBytes bound the messages waiting to
 	// be written, 10000 and 16 MiB if 0. Send waits for room or fails with
-	// ErrSlowConsumer.
+	// ErrSlowConsumer: a message is queued only if the bytes waiting and
+	// its body fit, give or take its header, or if nothing is waiting.
+	// Session-level messages may exceed them.
 	MaxPendingMessages, MaxPendingBytes int
 	// FailWhenFull makes Send fail with ErrSlowConsumer rather than wait
 	// for room.
@@ -245,11 +247,14 @@ type Config struct {
 	// unwritten longer than this, 0 for no limit.
 	MaxPendingAge time.Duration
 	// MaxHeldMessages bounds the messages Send holds back while the session
-	// resends messages, 10000 if 0.
+	// resends messages, 10000 if 0, and MaxPendingBytes their bytes, as it
+	// does those waiting: Send fails with ErrReplayInProgress beyond.
 	MaxHeldMessages int
-	// DeliveryQueue bounds the received messages waiting for FromApp, 1024
-	// if 0.
-	DeliveryQueue int
+	// DeliveryQueue and DeliveryQueueBytes bound the received messages
+	// waiting for FromApp, 1024 and 64 MiB if 0: the reader waits for room
+	// before reading the next one, which may take the queue past
+	// DeliveryQueueBytes by its size.
+	DeliveryQueue, DeliveryQueueBytes int
 	// MaxDeliveryStall disconnects when FromApp has not returned for this
 	// long while the delivery queue is full, max(30s, 2*HeartBtInt) if 0.
 	// It measures how long the reader has waited for room, not FromApp's
@@ -260,11 +265,13 @@ type Config struct {
 	// ResetDrainTimeout bounds how long a sequence reset waits for the
 	// messages of the previous sequence to be delivered, 5s if 0.
 	ResetDrainTimeout time.Duration
-	// MaxStash bounds the messages received ahead of a gap kept while the
-	// gap is recovered, 10000 if 0. They are queued for delivery at once,
-	// beyond DeliveryQueue, when the gap is filled or a SequenceReset
-	// passes it (see MaxDeliveryStall).
-	MaxStash int
+	// MaxStash and MaxStashBytes bound the messages received ahead of a
+	// gap kept while the gap is recovered, 10000 and 64 MiB if 0; one
+	// message is kept whatever its size. Those beyond are dropped, to be
+	// asked for again. They are queued for delivery at once, beyond
+	// DeliveryQueue, when the gap is filled or a SequenceReset passes it
+	// (see MaxDeliveryStall).
+	MaxStash, MaxStashBytes int
 	// AckProbe selects when to probe for acknowledgements.
 	AckProbe AckProbe
 	// AckProbeMinInterval is the least time between two probes.
@@ -301,7 +308,9 @@ func (c Config) withDefaults() Config {
 	defInt(&c.MaxPendingBytes, 16<<20)
 	defInt(&c.MaxHeldMessages, 10000)
 	defInt(&c.DeliveryQueue, 1024)
+	defInt(&c.DeliveryQueueBytes, 64<<20)
 	defInt(&c.MaxStash, 10000)
+	defInt(&c.MaxStashBytes, 64<<20)
 	defInt(&c.MaxTrackedReceipts, 1<<20)
 	if c.Logger == nil {
 		c.Logger = slog.New(slog.DiscardHandler)
@@ -396,7 +405,7 @@ func (c *Config) Validate() error {
 	}{
 		{"ResendChunkSize", c.ResendChunkSize}, {"MaxPendingMessages", c.MaxPendingMessages},
 		{"MaxPendingBytes", c.MaxPendingBytes}, {"MaxHeldMessages", c.MaxHeldMessages},
-		{"DeliveryQueue", c.DeliveryQueue}, {"MaxStash", c.MaxStash}, {"MaxTrackedReceipts", c.MaxTrackedReceipts},
+		{"DeliveryQueue", c.DeliveryQueue}, {"DeliveryQueueBytes", c.DeliveryQueueBytes}, {"MaxStash", c.MaxStash}, {"MaxStashBytes", c.MaxStashBytes}, {"MaxTrackedReceipts", c.MaxTrackedReceipts},
 	} {
 		if n.v < 0 {
 			add(n.field, "must be >= 0, got %d", n.v)

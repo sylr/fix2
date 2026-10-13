@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -428,4 +429,15 @@ func TestResetPastHeld_ScanBounded(t *testing.T) {
 	if got, bound := session.HeldScanned(s), uint64(2*(n+1)); got > bound {
 		t.Errorf("%d held messages looked at for %d held, want at most %d", got, n+1, bound)
 	}
+}
+
+// A message dropped for want of bytes among those held is reported lost;
+// one after it that fits is kept.
+func TestResetPastHeld_DroppedForBytes(t *testing.T) {
+	_, rec, p := heldGap(t, 3, func(c *session.Config) { c.MaxStashBytes = 400 })
+	p.order(4, "A")
+	p.send("D", 5, "11", "B", "55", "X", "58", strings.Repeat("x", 500)) // no room for its bytes
+	p.order(6, "C")
+	p.resetTo(7, 8)
+	rec.waitEvents(t, "loss 1-2", "app A", "loss 5-5", "app C")
 }

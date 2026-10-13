@@ -118,6 +118,7 @@ type Session struct {
 	sentReset bool
 	recov     recovery
 	stash     map[uint64][]byte // received ahead of a gap, by MsgSeqNum
+	stashSize int               // the bytes of stash's messages
 	receipts  receipts
 	deliv     *delivery
 	// committed is the MsgSeqNum of the last received message processed:
@@ -305,12 +306,13 @@ func (s *Session) send(ctx context.Context, msgType string, body []byte) (Receip
 		}
 		c := s.c
 		if c.replaying() {
-			if len(c.heldFrames) >= s.cfg.MaxHeldMessages {
+			if len(c.heldFrames) >= s.cfg.MaxHeldMessages || len(c.held) > 0 && len(c.held)+len(body) > s.cfg.MaxPendingBytes {
 				return Receipt{}, ErrReplayInProgress
 			}
 			break
 		}
-		if c.hasRoom() {
+		// Its body: its header is a few dozen bytes more.
+		if c.hasRoom(len(body)) {
 			break
 		}
 		if s.cfg.FailWhenFull {

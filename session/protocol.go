@@ -516,16 +516,11 @@ func (s *Session) origTimeOK(c *conn, m *fix2.Message, inSequence bool) bool {
 // tooHighLocked handles a message received ahead of a gap: it is kept, if
 // there is room, and the missing messages are asked for.
 func (s *Session) tooHighLocked(c *conn, m *fix2.Message, in Inbound, frame []byte) {
-	if s.stash == nil {
-		s.stash = make(map[uint64][]byte)
-	}
-	if _, ok := s.stash[in.Seq]; !ok {
-		if len(s.stash) < s.cfg.MaxStash {
-			s.stash[in.Seq] = bytes.Clone(frame)
-		} else {
-			s.log.LogAttrs(context.Background(), slog.LevelWarn, "too many messages received ahead of a gap: dropped, to be asked for again",
-				numAttr(m, "seq", tagMsgSeqNum, int64(in.Seq)))
-		}
+	// A nil frame stands for a message handled already, whose marker
+	// markAheadLocked could not keep.
+	if _, ok := s.stash[in.Seq]; !ok && (frame == nil || !s.stashLocked(in.Seq, frame, true)) {
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "too many messages received ahead of a gap: dropped, to be asked for again",
+			numAttr(m, "seq", tagMsgSeqNum, int64(in.Seq)))
 	}
 	if in.Seq > s.recov.target {
 		s.recov.target = in.Seq
@@ -588,7 +583,7 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 		if !ok || s.c != c || c.closed {
 			break
 		}
-		delete(s.stash, s.st.NextTarget)
+		s.unstashLocked(s.st.NextTarget)
 		s.replayStashedLocked(c, frame)
 		if s.st.NextTarget > pruned+1 {
 			// A jump (a GapFill): drop what it skipped over.
@@ -605,9 +600,44 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 func (s *Session) pruneStashLocked() {
 	for seq := range s.stash {
 		if seq < s.st.NextTarget {
-			delete(s.stash, seq)
+			s.unstashLocked(seq)
 		}
 	}
+}
+
+// stashLocked keeps frame, message seq received ahead of a gap, a copy if
+// clone is set, if MaxStash and MaxStashBytes leave room for it, and
+// reports whether it did.
+func (s *Session) stashLocked(seq uint64, frame []byte, clone bool) bool {
+	if len(s.stash) >= s.cfg.MaxStash || len(s.stash) > 0 && s.stashSize+len(frame) > s.cfg.MaxStashBytes {
+		return false
+	}
+	if clone {
+		frame = bytes.Clone(frame)
+	}
+	s.keepLocked(seq, frame)
+	return true
+}
+
+// keepLocked keeps frame for message seq in the stash.
+func (s *Session) keepLocked(seq uint64, frame []byte) {
+	if s.stash == nil {
+		s.stash = make(map[uint64][]byte)
+	}
+	s.stash[seq] = frame
+	s.stashSize += len(frame)
+}
+
+// unstashLocked drops message seq kept ahead of a gap.
+func (s *Session) unstashLocked(seq uint64) {
+	s.stashSize -= len(s.stash[seq])
+	delete(s.stash, seq)
+}
+
+// clearStashLocked drops every message kept ahead of a gap.
+func (s *Session) clearStashLocked() {
+	clear(s.stash)
+	s.stashSize = 0
 }
 
 // replayStashedLocked handles a message kept ahead of a gap, now in sequence.
@@ -685,7 +715,7 @@ func (s *Session) onRegularLocked(c *conn, m *fix2.Message, frame []byte, in Inb
 		s.sendAdminLocked(&header{msgType: "0"}, adminBody(nil).bytes(tagTestReqID, id))
 	case "3", "j":
 		if ref, err := fix2.ParseInt(m.Get(tagRefSeqNum)); err == nil && ref > 0 {
-			s.receipts.rejected(s.st.Generation, uint64(ref), rejectInfo(m))
+			s.receipts.rejected(s.st.Generation, uint64(ref), s.st.NextSender, rejectInfo(m))
 		}
 	}
 	if admin {
@@ -1086,12 +1116,10 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 
 // markAheadLocked keeps a marker for message seq, received ahead of a gap
 // and already handled: when its turn comes it only moves the sequence on.
+// A marker is a few dozen bytes: MaxStash alone bounds them.
 func (s *Session) markAheadLocked(seq uint64) {
-	if s.stash == nil {
-		s.stash = make(map[uint64][]byte)
-	}
 	if _, ok := s.stash[seq]; !ok && len(s.stash) < s.cfg.MaxStash {
-		s.stash[seq] = handledMarker(s.id.BeginString, seq)
+		s.keepLocked(seq, handledMarker(s.id.BeginString, seq))
 	}
 }
 

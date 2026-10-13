@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -49,6 +50,7 @@ type delivery struct {
 	mu    sync.Mutex
 	items []item
 	head  int
+	size  int           // the bytes of the queued items' frames
 	room  chan struct{} // closed when the queue has room again
 	wake  chan struct{}
 	stop  bool
@@ -83,6 +85,7 @@ func newDelivery(s *Session) *delivery {
 func (d *delivery) push(it item) {
 	d.mu.Lock()
 	d.items = append(d.items, it)
+	d.size += len(it.frame)
 	d.mu.Unlock()
 	select {
 	case d.wake <- struct{}{}:
@@ -90,11 +93,17 @@ func (d *delivery) push(it item) {
 	}
 }
 
-// pending returns the number of items queued.
-func (d *delivery) pending() int {
+// full reports whether the queue holds DeliveryQueue items, or
+// DeliveryQueueBytes of frames.
+func (d *delivery) full() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return len(d.items) - d.head
+	return d.fullLocked()
+}
+
+func (d *delivery) fullLocked() bool {
+	n := len(d.items) - d.head
+	return n >= d.s.cfg.DeliveryQueue || n > 0 && d.size >= d.s.cfg.DeliveryQueueBytes
 }
 
 // copyFrame returns a pooled copy of frame.
@@ -116,7 +125,7 @@ func (d *delivery) releaseFrame(frame []byte) {
 func (d *delivery) roomSignal() <-chan struct{} {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if len(d.items)-d.head < d.s.cfg.DeliveryQueue {
+	if !d.fullLocked() {
 		c := make(chan struct{})
 		close(c)
 		return c
@@ -158,7 +167,7 @@ func (d *delivery) close() {
 // meanwhile, for at most MaxDeliveryStall (see onTimer).
 func (s *Session) waitDeliveryRoom(c *conn) {
 	d := s.deliv
-	if d.pending() < s.cfg.DeliveryQueue {
+	if !d.full() {
 		return
 	}
 	s.mu.Lock()
@@ -207,6 +216,7 @@ func (d *delivery) run() {
 			next = d.head
 		}
 		it := d.items[next]
+		d.size -= len(it.frame)
 		if next != d.head {
 			// A notification going past held messages.
 			copy(d.items[next:], d.items[next+1:])
@@ -226,7 +236,7 @@ func (d *delivery) run() {
 			d.items, d.head = d.items[:n], 0
 		}
 		d.busy, d.busyMsg = true, it.kind == itemApp || it.kind == itemMark
-		if d.room != nil && len(d.items)-d.head < d.s.cfg.DeliveryQueue {
+		if d.room != nil && !d.fullLocked() {
 			close(d.room)
 			d.room = nil
 		}
@@ -439,7 +449,16 @@ func (d *delivery) persistLocked(force bool) error {
 
 // rejectInfo describes a Reject or BusinessMessageReject received.
 func rejectInfo(m *fix2.Message) RejectInfo {
-	r := RejectInfo{MsgType: string(m.MsgType()), Text: string(m.Get(tagText))}
+	text := m.Get(tagText)
+	if len(text) > maxRejectText {
+		// Cut on a character boundary, if UTF-8.
+		n := maxRejectText
+		for n > maxRejectText-utf8.UTFMax && !utf8.RuneStart(text[n]) {
+			n--
+		}
+		text = text[:n]
+	}
+	r := RejectInfo{MsgType: string(m.MsgType()), Text: string(text)}
 	if v, err := fix2.ParseInt(m.Get(tagSessionRejectReason)); err == nil {
 		r.Reason = v
 	}

@@ -94,10 +94,21 @@ func (c *conn) done() <-chan struct{} { return c.closedCh }
 // replaying reports whether new messages are held back for a replay.
 func (c *conn) replaying() bool { return c.replay != nil }
 
-// hasRoom reports whether pending has room for another message.
-func (c *conn) hasRoom() bool {
+// reusable returns buf emptied for reuse, or nil if it grew past twice
+// max, as one oversized message makes it: it is not kept.
+func reusable(buf []byte, max int) []byte {
+	if cap(buf) > 2*max {
+		return nil
+	}
+	return buf[:0]
+}
+
+// hasRoom reports whether pending has room for another message of size
+// bytes: within MaxPendingMessages, and within MaxPendingBytes unless
+// nothing is pending.
+func (c *conn) hasRoom(size int) bool {
 	cfg := &c.s.cfg
-	return len(c.frames) < cfg.MaxPendingMessages && len(c.pending) < cfg.MaxPendingBytes
+	return len(c.frames) < cfg.MaxPendingMessages && (len(c.pending) == 0 || len(c.pending)+size <= cfg.MaxPendingBytes)
 }
 
 // roomSignal returns a channel closed once pending has room again.
@@ -304,7 +315,7 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 	s.phase = phaseDisconnected
 	s.receipts.connectionLost()
 	s.recov = recovery{}
-	clear(s.stash)
+	s.clearStashLocked()
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "disconnected",
 		slog.Uint64("epoch", c.epoch), slog.String("phase", was.String()), slog.Any("reason", reason))
 	if was == phaseEstablished || was == phaseLogoutSent {
@@ -383,7 +394,7 @@ func (c *conn) writeLoop() {
 		}
 
 		s.mu.Lock()
-		c.spare, c.spareFrames = buf[:0], frames[:0]
+		c.spare, c.spareFrames = reusable(buf, s.cfg.MaxPendingBytes), frames[:0]
 		if err != nil && !c.closed {
 			// What it did not write stays unwritten: disconnectLocked notes
 			// it.
@@ -520,7 +531,7 @@ func (c *conn) wrote(buf []byte, frames []pendingFrame, n int, gen, epoch uint64
 
 // signalRoomLocked wakes the Sends waiting for room, if there is some.
 func (c *conn) signalRoomLocked() {
-	if c.room != nil && c.hasRoom() {
+	if c.room != nil && c.hasRoom(0) {
 		close(c.room)
 		c.room = nil
 	}

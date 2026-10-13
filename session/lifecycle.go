@@ -414,7 +414,7 @@ func (s *Session) SetNextTargetSeqNum(next uint64) error {
 	s.committed = next - 1
 	s.ret.ackFrom = 0 // the counterparty's MsgSeqNum may go back
 	s.recov = recovery{}
-	clear(s.stash)
+	s.clearStashLocked()
 	s.log.LogAttrs(context.Background(), slog.LevelWarn, "NextTargetSeqNum set by hand", slog.Uint64("next", next))
 	return nil
 }

@@ -40,6 +40,14 @@ func (r Receipt) Seq() uint64 { return r.seq }
 // Generation returns the sequence number generation the message belongs to.
 func (r Receipt) Generation() uint64 { return r.gen }
 
+// maxRejections bounds the rejections kept, by the messages sent they are
+// for, and maxRejectText the bytes of their Text: a counterparty sending
+// them could hold memory otherwise.
+const (
+	maxRejections = 16384
+	maxRejectText = 1024
+)
+
 // RejectInfo describes a Reject or BusinessMessageReject the counterparty
 // sent for a message.
 type RejectInfo struct {
@@ -93,8 +101,10 @@ func (r Receipt) Err() error {
 }
 
 // Rejection returns the Reject or BusinessMessageReject the counterparty
-// sent for the message, if any so far. A rejection does not change what
-// Wait reports: a message can be read, then rejected.
+// sent for the message, if any so far, and if it is one of the last 16384
+// sent (fewer if Config.MaxTrackedReceipts is): Text holds the first 1 KiB
+// of its Text (58). A rejection does not change what Wait reports: a
+// message can be read, then rejected.
 func (r Receipt) Rejection() (RejectInfo, bool) {
 	if r.s == nil {
 		return RejectInfo{}, false
@@ -303,15 +313,18 @@ func (t *receipts) connectionLost() {
 	t.notify()
 }
 
-// rejected records a rejection of message seq.
-func (t *receipts) rejected(gen, seq uint64, ri RejectInfo) {
-	if gen != t.gen {
+// rejected records a rejection of message seq, if it is one of the last
+// maxRejections sent before next: the counterparty names the message, any
+// number, and writes Text, up to 1 MiB, of which maxRejectText is kept.
+func (t *receipts) rejected(gen, seq, next uint64, ri RejectInfo) {
+	window := uint64(min(t.max, maxRejections))
+	if gen != t.gen || seq >= next || seq+window < next {
 		return
 	}
 	t.rejections[seq] = ri
-	if len(t.rejections) > t.max {
+	if len(t.rejections) > int(window) {
 		for s := range t.rejections {
-			if s+uint64(t.max) < seq {
+			if s+window < next {
 				delete(t.rejections, s)
 			}
 		}

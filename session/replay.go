@@ -279,6 +279,9 @@ func (c *conn) releaseHeldLocked(upTo uint64) {
 	}
 	rest := copy(c.held, c.held[cut:])
 	c.held = c.held[:rest]
+	if rest == 0 {
+		c.held = reusable(c.held, c.s.cfg.MaxPendingBytes)
+	}
 	kept := copy(c.heldFrames, c.heldFrames[n:])
 	c.heldFrames = c.heldFrames[:kept]
 	for i := range c.heldFrames {

@@ -153,6 +153,11 @@ QuickFIX/J and QuickFIX C++, on orders and their acknowledgements over TCP, each
 process of its own, either engine on either end, their toolchains pinned
 by a Nix flake: `cd tests/benchmarks && nix develop -c make bench`.
 
+## Operating
+
+[docs/operations.md](docs/operations.md) says what a deployment has to size
+and configure: the memory each session's buffers may take, and the store's.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
