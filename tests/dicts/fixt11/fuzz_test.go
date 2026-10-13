@@ -25,6 +25,10 @@ func FuzzGetters(f *testing.F) {
 	} {
 		f.Add(body)
 	}
+	// Every message type with every field, for each getter to find its own.
+	for _, body := range dicttest.FullAll(Dictionary()) {
+		f.Add(body)
+	}
 	f.Fuzz(func(t *testing.T, body []byte) {
 		var msg fix2.Message
 		if err := fix2.ParseInto(&msg, dicttest.Frame(Version.BeginString, body), Dictionary().Profile()); err != nil {
