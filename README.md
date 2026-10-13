@@ -40,7 +40,8 @@ typed code generation and a session engine.
     ResendRequest) beyond the last few and a minimum age, and any written
     beyond a bound;
   - schedules (`session/schedule`) with boundaries fired on time;
-  - stores (`session/store`, an in-memory one for now), transports
+  - stores (`session/store`: in memory, and SQLite in
+    `contribs/store/sqlite3`), transports
     (`session/transport`: TCP, TLS, in-memory), logging through `log/slog`
     (zerolog and zap through their slog handlers) and a redacting message
     observer;
@@ -49,12 +50,14 @@ typed code generation and a session engine.
 
 ## Contribs
 
-Command-line tools built on fix2, each a module of its own under
-`contribs/`. They build against the fix2 of the repository (a `replace`
-directive), and their tests run from their directories: `go test ./...` at
-the root leaves them out. Each has a Makefile: `make` builds
-`dist/<name>`, `make all` cross builds with checksums, `make test`, `make
-lint` and `make generate-verify` (the generated code is up to date). Their
+Command-line tools and stores built on fix2, each a module of its own under
+`contribs/`, so that their dependencies stay out of fix2's. They build
+against the fix2 of the repository (a `replace` directive), and their tests
+run from their directories: `go test ./...` at the root leaves them out.
+
+The tools each have a Makefile: `make` builds `dist/<name>`, `make all`
+cross builds with checksums, `make test`, `make lint` and `make
+generate-verify` (the generated code is up to date). Their
 messages come from packages fixgen generates from the venues' dictionaries
 (`go generate ./...` runs fixgen as a Go tool), they sign their Logon with
 the session's `LogonSigner` hook, resubscribe after every reconnection, and
@@ -97,6 +100,23 @@ sandbox work with `--sandbox`:
 On macOS it verifies Coinbase's certificate with Go's verifier and
 `/etc/ssl/cert.pem` (`--ca-file` to choose): macOS's own rejects Coinbase's
 FIX certificates, which carry no Certificate Transparency timestamps.
+
+### store/sqlite3
+
+A `session/store` keeping sessions in a SQLite database file, through
+[mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) (cgo): a session
+resumes its sequence numbers, and can resend its messages, after the
+process restarts. One file holds any number of sessions, each under a key
+of its own; its tables are prefixed with `fix2_` and may share a database
+with others:
+
+    st, err := sqlite3.OpenFile("fix2.db", id.String())
+    s, err := initiator.Add(session.Config{ID: id, Store: st, ...}, dialer)
+
+The database runs in WAL mode: every call commits on its own, without
+waiting for the disk, and `Sync`, which the session calls before it writes,
+flushes the write-ahead log once for all the messages stored since. `New`
+takes a `*sql.DB` the application opened itself.
 
 ## Testing
 
