@@ -150,9 +150,11 @@ type Session struct {
 type Stats struct {
 	MessagesSent, MessagesReceived atomic.Uint64
 	BytesSent, BytesReceived       atomic.Uint64
-	Resent, GapFilled              atomic.Uint64
 	RejectsSent, Garbled           atomic.Uint64
 	Connections                    atomic.Uint64
+	// Resent counts the messages a replay wrote again; GapFilled, the
+	// sequence numbers its GapFills written stand for.
+	Resent, GapFilled atomic.Uint64
 	// Evicted counts the sequence numbers Config.Retention evicted from the
 	// store, since the process started; BeyondRetention, the messages
 	// gap-filled because they were evicted, each time the counterparty
@@ -406,6 +408,9 @@ func (s *Session) haltLocked(err error) {
 	if s.halted == nil {
 		s.halted = fmt.Errorf("session %s halted, check the store before restarting: %w", s.id, err)
 		s.log.LogAttrs(context.Background(), slog.LevelError, "session halted", slog.Any("error", err))
+		// The receipts waited for will never be acknowledged, connected or
+		// not.
+		s.receipts.notify()
 	}
 	if s.c != nil {
 		s.disconnectLocked(s.c, &LogoutError{Text: "store failure", Err: err})

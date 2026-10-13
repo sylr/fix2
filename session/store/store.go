@@ -67,7 +67,8 @@ var (
 	// committed. From Append, SetNextSender, Sync or Reset, the session
 	// halts: it never reuses a sequence number that may be taken, nor
 	// carries on with a generation that may be gone. From SetNextTarget, a
-	// counter set again next time, it only disconnects.
+	// counter set again next time, it only disconnects, or fails
+	// session.Session.SetNextTargetSeqNum; from Truncate, it is ignored.
 	ErrUnknownOutcome = errors.New("store: write outcome unknown")
 	// ErrBackwards reports a counter moved backwards within a generation.
 	ErrBackwards = errors.New("store: sequence number moved backwards")
@@ -86,9 +87,10 @@ var (
 // ErrClosed leave the persisted state in doubt: they halt the session (see
 // session.Session.Err), which stays down until the store is reconciled.
 // Except ErrUnknownOutcome alone from SetNextTarget, which its next call
-// settles, or from a Sync the session cancelled, and errors about a
-// generation the session itself left meanwhile, as a Sync of the messages
-// of a generation it just reset may return. An error that is or wraps
+// settles, from Truncate (see Truncater), or from a Sync the session
+// cancelled, and errors about a generation the session itself left
+// meanwhile, as a Sync of the messages of a generation it just reset may
+// return. An error that is or wraps
 // ErrSeqMismatch, ErrGenerationGone, ErrBackwards or ErrClosed always halts
 // it, whatever it is joined with. Other errors drop the connection, or fail
 // the call that asked for the write.
@@ -164,5 +166,8 @@ type Syncer interface {
 // seeing the messages it drops.
 type Truncater interface {
 	// Truncate drops the messages of generation gen below seq before.
+	// ErrUnknownOutcome alone does not halt the session: it at worst
+	// dropped messages the session still counts as kept, which Range
+	// reports as holes.
 	Truncate(ctx context.Context, gen, before uint64) error
 }

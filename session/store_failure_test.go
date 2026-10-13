@@ -556,6 +556,42 @@ func TestStoreTargetFailure(t *testing.T) {
 	}
 }
 
+// SetNextTargetSeqNum told the store moved on halts the session, whatever
+// that is joined with; an outcome unknown alone, which the next
+// SetNextTarget settles, or another failure, only fails the call.
+func TestStoreSetNextTargetSeqNumFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		halt bool
+	}{
+		{"generation gone", store.ErrGenerationGone, true},
+		{"joined with an unknown outcome", errors.Join(store.ErrUnknownOutcome, fmt.Errorf("store: %w", store.ErrSeqMismatch)), true},
+		{"unknown outcome", store.ErrUnknownOutcome, false},
+		{"error", errors.New("disk full"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := &targetStore{Store: memstore.New(), err: tc.err}
+			s, _, _ := loggedOn(t, func(c *session.Config) { c.Store = fs })
+			waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+			before := s.NextTargetSeqNum()
+			fs.fail.Store(true)
+			if err := s.SetNextTargetSeqNum(100); !errors.Is(err, tc.err) {
+				t.Fatalf("SetNextTargetSeqNum: %v, want %v", err, tc.err)
+			}
+			if n := s.NextTargetSeqNum(); n != before {
+				t.Errorf("NextTargetSeqNum() = %d, want %d unchanged", n, before)
+			}
+			if halted := s.Err() != nil; halted != tc.halt {
+				t.Errorf("halted = %t (Err() = %v), want %t", halted, s.Err(), tc.halt)
+			}
+			if !tc.halt && s.State() != session.StateLoggedOn {
+				t.Errorf("State() = %s, want %s", s.State(), session.StateLoggedOn)
+			}
+		})
+	}
+}
+
 // A failure to record received messages that tells the store moved on
 // halts the session, even joined with ErrUnknownOutcome.
 func TestStoreTargetDivergenceHalts(t *testing.T) {

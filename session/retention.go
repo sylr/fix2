@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -170,6 +171,12 @@ func (s *Session) evictLocked(now time.Time) {
 		return
 	}
 	if err := t.Truncate(context.Background(), s.st.Generation, before); err != nil {
+		if diverged(err) {
+			s.haltLocked(fmt.Errorf("evicting messages before %d: %w", before, err))
+			return
+		}
+		// An outcome unknown alone leaves at worst messages evicted that the
+		// session still counts as kept: a replay finds their holes.
 		if !s.ret.failing {
 			s.ret.failing = true
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "evicting messages from the store failed",

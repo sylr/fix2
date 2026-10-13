@@ -22,7 +22,8 @@ type pendingFrame struct {
 	seq     uint64
 	queued  time.Time
 	probe   string // TestReqID, if the frame is an acknowledgement probe
-	gapFill bool   // a SequenceReset-GapFill standing for messages seq..: not their write
+	gapFill bool   // a SequenceReset-GapFill standing for messages seq..newSeq-1: not their write
+	newSeq  uint64 // a GapFill's NewSeqNo
 	admin   bool   // a session-level message, which a replay gap-fills rather than resends
 }
 
@@ -470,7 +471,8 @@ func (c *conn) watchSync(seen uint64, times int) {
 }
 
 // wrote accounts for frames of buf, of which the first n bytes were written:
-// the frames written completely, and only those, are Written.
+// the frames written completely, and only those, are Written, or, a
+// replay's GapFills, skip the messages they stand for.
 func (c *conn) wrote(buf []byte, frames []pendingFrame, n int, gen, epoch uint64, resend bool) {
 	s := c.s
 	start, done := 0, 0
@@ -497,7 +499,13 @@ func (c *conn) wrote(buf []byte, frames []pendingFrame, n int, gen, epoch uint64
 		case f.probe != "":
 			s.receipts.probeWritten(f.probe, epoch)
 		case f.gapFill:
+			// Written whole: the counterparty moves past them for good.
 			s.receipts.tick(epoch)
+			s.receipts.gapFilled(gen, f.seq, f.newSeq)
+			s.stats.GapFilled.Add(f.newSeq - f.seq)
+		case resend:
+			s.receipts.written(gen, f.seq, epoch)
+			s.stats.Resent.Add(1)
 		default:
 			s.receipts.written(gen, f.seq, epoch)
 		}

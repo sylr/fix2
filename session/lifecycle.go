@@ -394,7 +394,8 @@ func (s *Session) SetNextSenderSeqNum(next uint64) error {
 // SetNextTargetSeqNum sets the MsgSeqNum expected of the next message
 // received, as agreed with the counterparty out of band. Messages received
 // meanwhile, not yet processed, are still delivered; those held ahead of a
-// gap are dropped, their numbers belonging to the sequence replaced.
+// gap are dropped, their numbers belonging to the sequence replaced. A store
+// failure telling the store moved on without the session halts it (see Err).
 func (s *Session) SetNextTargetSeqNum(next uint64) error {
 	if next == 0 {
 		return fmt.Errorf("session %s: NextTargetSeqNum must be at least 1", s.id)
@@ -402,6 +403,11 @@ func (s *Session) SetNextTargetSeqNum(next uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.store.SetNextTarget(context.Background(), s.st.Generation, next); err != nil {
+		if diverged(err) {
+			// The store moved on without the session. An outcome unknown
+			// alone fails the call only: the next SetNextTarget settles it.
+			s.haltLocked(fmt.Errorf("setting NextTargetSeqNum to %d: %w", next, err))
+		}
 		return fmt.Errorf("session %s: %w", s.id, err)
 	}
 	s.st.NextTarget = next

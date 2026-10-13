@@ -92,7 +92,6 @@ func (c *conn) runReplay(job *replayJob) {
 		now      = time.Now()
 		sending  = fix2.AppendUTCTimestamp(nil, now, s.prec)
 		writeErr error
-		gaps     [][2]uint64
 		evicted  [][2]uint64  // runs of messages beyond retention, inclusive
 		covered  []coveredRun // those of them a GapFill in buf covers
 		lost     [][2]uint64  // those of them a GapFill written covers
@@ -121,9 +120,7 @@ func (c *conn) runReplay(job *replayJob) {
 		}
 		buf = s.appendFrame(buf, &header{msgType: "4", seq: gapStart, possDup: true, orig: sending, sendingTime: now},
 			adminBody(nil).int(tagNewSeqNo, next).str(tagGapFillFlag, "Y"))
-		frames = append(frames, pendingFrame{end: len(buf), seq: gapStart, gapFill: true})
-		s.stats.GapFilled.Add(next - gapStart)
-		gaps = append(gaps, [2]uint64{gapStart, next})
+		frames = append(frames, pendingFrame{end: len(buf), seq: gapStart, gapFill: true, newSeq: next})
 		for len(evicted) > 0 && evicted[0][0] < next {
 			covered = append(covered, coveredRun{run: evicted[0], end: len(buf)})
 			evicted = evicted[1:]
@@ -176,7 +173,6 @@ func (c *conn) runReplay(job *replayJob) {
 		}
 		buf = out
 		frames = append(frames, pendingFrame{end: len(buf), seq: seq})
-		s.stats.Resent.Add(1)
 		if len(buf) >= replayChunk {
 			flush()
 		}
@@ -204,6 +200,14 @@ func (c *conn) runReplay(job *replayJob) {
 			slog.Uint64("from", e[0]), slog.Uint64("to", e[1]))
 		s.deliv.push(item{kind: itemLoss, gen: gen, seq: e[0], end: e[1], err: ErrBeyondRetention})
 	}
+	if diverged(err) && gen == s.st.Generation && !s.stopped {
+		// The store moved on without the session, not because a reset
+		// since dropped the generation read. A stopped session closed its
+		// store itself: it logs out as for any other failure to read.
+		s.haltLocked(fmt.Errorf("reading our messages %d to %d to resend: %w", job.begin, job.end, err))
+		c.replay, c.replayQueue = nil, nil
+		return
+	}
 	if (missing != 0 || readErr != nil) && writeErr == nil && !c.closed {
 		var text string
 		var cause error
@@ -221,9 +225,6 @@ func (c *conn) runReplay(job *replayJob) {
 		c.replay, c.replayQueue = nil, nil
 		s.logoutLocked(c, text)
 		return
-	}
-	for _, g := range gaps {
-		s.receipts.gapFilled(gen, g[0], g[1])
 	}
 	if writeErr != nil {
 		if !c.closed {
