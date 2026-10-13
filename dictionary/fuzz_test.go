@@ -85,10 +85,10 @@ func FuzzValidate(f *testing.F) {
 		{0, "35=D|" + hdr + "11=O1|58=a\rb\tc\\d|"},
 		{2, "35=D|" + hdr + "11=O|54=1|60=20231001-12:00:00|40=2|55=X|30=X|78=1|79=A|"},
 	} {
-		f.Add(s.sel, uint8(dictionary.CheckAll), []byte(s.body))
-		f.Add(s.sel, uint8(0), []byte(s.body))
+		f.Add(s.sel, uint16(dictionary.CheckAll), []byte(s.body))
+		f.Add(s.sel, uint16(0), []byte(s.body))
 	}
-	f.Fuzz(func(t *testing.T, sel, checks uint8, body []byte) {
+	f.Fuzz(func(t *testing.T, sel uint8, checks uint16, body []byte) {
 		fd := fuzzDicts()[int(sel)%len(fuzzDicts())]
 		d := fd.dict
 		data := frame(fd.begin, soh(string(body)))

@@ -580,6 +580,23 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+// With --validate, a trade as Binance's testnet writes it, its entry's
+// fields out of the dictionary's order, is shown, not rejected.
+func TestValidateTrades(t *testing.T) {
+	l := mem.Listen("binance")
+	out, _, _ := startClient(t, l, func(o *options) { o.validate = true }, "trades", "BTCUSDT")
+	f := acceptBinance(t, l, pub(t))
+	f.logon()
+	id := string(f.expect("V").Get(262))
+	f.send("X", "262", id, "268", "1",
+		"279", "0", "269", "2", "270", "83344.68000000", "271", "0.00023000", "55", "BTCUSDT",
+		"1003", "389737", "60", "20261013-10:52:33.878142", "2446", "2")
+	lines := waitLines(t, out, 1)
+	if !strings.Contains(lines[0], `"trade_id":389737`) {
+		t.Errorf("output:\n%s", out.String())
+	}
+}
+
 // A Logon that succeeds is no refusal, even when Binance logs out at once,
 // before OnLogon runs.
 func TestLogoutRightAfterLogonIsNoRefusal(t *testing.T) {

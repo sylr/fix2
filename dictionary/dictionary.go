@@ -43,6 +43,10 @@ type GroupDef struct {
 	// fields and, where nested groups sit, their counter tags. FIX requires
 	// entry fields in this order; Layout[0] is DelimTag.
 	Layout []int
+	// Conditions are the required fields of an entry's optional
+	// components, required in an entry only when the component is present
+	// in it.
+	Conditions []Condition
 }
 
 // MessageDef describes a single FIX message type.
@@ -114,6 +118,8 @@ type Dict struct {
 	enums        tagTable // tag -> index in enumChecks
 	enumChecks   []enumCheck
 	formats      tagTable // tag -> format of its values, see ValidateWith
+	// groupRules holds what an entry of each group requires, by spec.
+	groupRules map[*fix2.GroupSpec]*groupRules
 
 	fieldsByName map[string]*FieldDef
 	profile      *fix2.Profile // DATA fields, see Profile

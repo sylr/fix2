@@ -20,6 +20,7 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/contribs/binancemd/internal/spotmd"
+	"github.com/sylr/fix2/dictionary"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/transport"
 	"github.com/sylr/fix2/session/transport/tcp"
@@ -118,8 +119,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		// Binance requires ResetSeqNumFlag on every Logon, and resends
 		// nothing: every connection starts at 1.
 		ResetOnLogon: true,
-		Logger:       log,
-		Handler:      c,
+		// Binance writes entry fields out of its dictionary's order: a
+		// trade's MDEntryType before MDEntryPx, TradeID before
+		// TransactTime.
+		SkipChecks: dictionary.CheckGroupOrder,
+		Logger:     log,
+		Handler:    c,
 	}
 	if o.trace {
 		// Every message, field by field; Username (553) holds the API key.

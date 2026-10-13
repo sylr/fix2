@@ -173,6 +173,9 @@ func groupsLiteral(groups []dictionary.GroupDef, tag func(int) jen.Code) jen.Cod
 		if len(g.Layout) > 0 {
 			def[jen.Id("Layout")] = tagsLiteral(g.Layout, tag)
 		}
+		if len(g.Conditions) > 0 {
+			def[jen.Id("Conditions")] = conditionsLiteral(g.Conditions, tag)
+		}
 		items = append(items, jen.Line().Values(def))
 	}
 	return jen.Index().Qual(dictPkg, "GroupDef").Values(append(items, jen.Line())...)

@@ -220,7 +220,10 @@ type Config struct {
 	// by default (see dictionary.Checks). Skipping
 	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
 	// accepts tags the dictionaries do not define, as QuickFIX/J's
-	// AllowUnknownMsgFields=Y and ValidateUserDefinedFields=N do.
+	// AllowUnknownMsgFields=Y and ValidateUserDefinedFields=N do. Skipping
+	// dictionary.CheckGroupOrder accepts group entries whose fields are not
+	// in their dictionary's order, as some counterparties send them, as
+	// QuickFIX/J's ValidateUnorderedGroupFields=N does.
 	SkipChecks dictionary.Checks
 	// Leniency relaxes checks.
 	Leniency Leniency

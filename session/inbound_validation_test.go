@@ -817,3 +817,32 @@ func TestUnknownApplVerID(t *testing.T) {
 		t.Errorf("delivered %q", rec.data)
 	}
 }
+
+// A group entry out of its group's order is rejected, reason 15, unless
+// the session skips dictionary.CheckGroupOrder: then it is delivered.
+func TestGroupEntryOutOfOrder(t *testing.T) {
+	// NoAllocs lists AllocAccount (79), AllocQty (80), then IndividualAllocID (467).
+	order := []string{"11", "O1", "54", "1", "60", "20240101-00:00:00.000", "40", "2", "44", "10", "55", "EUR/USD",
+		"78", "1", "79", "A", "467", "I1", "80", "10"}
+	t.Run("checked", func(t *testing.T) {
+		s, rec, p := loggedOn(t, func(c *session.Config) { c.Dictionaries = session.Dictionaries{Session: fix44.Dictionary()} })
+		p.send("D", 0, order...)
+		p.expect("3", "45", "2", "373", "15", "371", "80")
+		if got := s.NextTargetSeqNum(); got != 3 {
+			t.Errorf("NextTargetSeqNum = %d, want 3", got)
+		}
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if len(rec.apps) != 0 {
+			t.Errorf("delivered %q", rec.apps)
+		}
+	})
+	t.Run("skipped", func(t *testing.T) {
+		_, rec, p := loggedOn(t, func(c *session.Config) {
+			c.Dictionaries = session.Dictionaries{Session: fix44.Dictionary()}
+			c.SkipChecks = dictionary.CheckGroupOrder
+		})
+		p.send("D", 0, order...)
+		rec.wait(t, func() bool { return len(rec.apps) == 1 })
+	})
+}

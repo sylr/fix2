@@ -356,17 +356,18 @@ func TestValidate_GroupBoundaries(t *testing.T) {
 		name, body string
 		entries    int    // as GroupsOf reads them
 		top        string // GetTopLevel(101), "" for none
+		skip       dictionary.Checks
 	}{
-		{"delimiter after the group", "35=M|100=1|101=A|102=R|101=TOP|", 1, "TOP"},
-		{"delimiter after a nested group", "35=M|100=1|101=A|102=R|110=1|111=x|112=y|101=TOP|", 1, "TOP"},
-		{"delimiter after a zero count", "35=M|100=0|101=TOP|", 0, "TOP"},
-		{"delimiter before the group", "35=M|101=TOP|100=1|101=A|102=R|", 1, "TOP"},
-		{"required delimiter after the group", "35=R|100=1|101=A|102=R|101=TOP|", 1, "TOP"},
-		{"zero count", "35=M|100=0|", 0, ""},
-		{"nested zero count", "35=M|100=1|101=A|102=R|110=0|", 1, ""},
-		// An entry's required fields are not enforced: TOP starts the
-		// second entry.
-		{"count 2, one entry then the delimiter", "35=M|100=2|101=A|102=R|101=TOP|", 2, ""},
+		{"delimiter after the group", "35=M|100=1|101=A|102=R|101=TOP|", 1, "TOP", 0},
+		{"delimiter after a nested group", "35=M|100=1|101=A|102=R|110=1|111=x|112=y|101=TOP|", 1, "TOP", 0},
+		{"delimiter after a zero count", "35=M|100=0|101=TOP|", 0, "TOP", 0},
+		{"delimiter before the group", "35=M|101=TOP|100=1|101=A|102=R|", 1, "TOP", 0},
+		{"required delimiter after the group", "35=R|100=1|101=A|102=R|101=TOP|", 1, "TOP", 0},
+		{"zero count", "35=M|100=0|", 0, "", 0},
+		{"nested zero count", "35=M|100=1|101=A|102=R|110=0|", 1, "", 0},
+		// TOP starts the second entry, which lacks R: CheckAll rejects it
+		// (see TestValidate_GroupEntries).
+		{"count 2, one entry then the delimiter", "35=M|100=2|101=A|102=R|101=TOP|", 2, "", dictionary.CheckGroupRequired},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := parseMsg(t, buildFIXMsg(strings.ReplaceAll(tc.body, "|", "\x01")))
@@ -380,8 +381,8 @@ func TestValidate_GroupBoundaries(t *testing.T) {
 			if err := d.Validate(&m); err != nil {
 				t.Errorf("Validate: %v", err)
 			}
-			if err := d.ValidateWith(&m, dictionary.CheckAll); err != nil {
-				t.Errorf("ValidateWith(CheckAll): %v", err)
+			if err := d.ValidateWith(&m, dictionary.CheckAll&^tc.skip); err != nil {
+				t.Errorf("ValidateWith(CheckAll&^%d): %v", tc.skip, err)
 			}
 		})
 	}
@@ -435,7 +436,8 @@ func TestValidate_GroupFieldOutsideEntries(t *testing.T) {
 		{"nested count 2, one entry", "35=M|100=1|101=A|102=R|110=2|111=x|", verdict{}, verdict{110, 16}, verdict{110, 16}},
 		{"unknown tags", "35=P|4999=x|9001=y|", verdict{4999, 0}, verdict{4999, 0}, verdict{}},
 		{"unknown tags in an entry", "35=P|100=1|101=A|4999=x|102=R|9001=y|", verdict{4999, 0}, verdict{4999, 0}, verdict{}},
-		{"valid", "35=P|100=2|101=A|102=R|110=1|111=x|101=B|", verdict{}, verdict{}, verdict{}},
+		{"second entry without its required R", "35=P|100=2|101=A|102=R|110=1|111=x|101=B|", verdict{}, verdict{102, 1}, verdict{102, 1}},
+		{"valid", "35=P|100=2|101=A|102=R|110=1|111=x|101=B|102=S|", verdict{}, verdict{}, verdict{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := parseMsg(t, buildFIXMsg(strings.ReplaceAll(tc.body, "|", "\x01")))
@@ -543,10 +545,13 @@ func TestValidate_NestedGroupBoundaries(t *testing.T) {
 	if err := d.Validate(&m3); !errors.As(err, &ve) || ve.Tag != 58 || ve.Reason != dictionary.ReasonTagNotDefinedForMessageType {
 		t.Errorf("U3: Validate: %v, want 58 not defined for the message type", err)
 	}
-	// Without it, the next Text is the parent entry's.
+	// Without it, the next Text is the parent entry's, out of its order.
 	m4 := parse("35=U3|5000=1|5001=p|5002=1|58=g|58=pt|")
-	if err := d.ValidateWith(&m4, dictionary.CheckAll); err != nil {
+	if err := d.ValidateWith(&m4, dictionary.CheckAll&^dictionary.CheckGroupOrder); err != nil {
 		t.Errorf("U3: Text after the nested group: %v", err)
+	}
+	if err := d.ValidateWith(&m4, dictionary.CheckAll); !errors.As(err, &ve) || ve.Tag != 58 || ve.Reason != dictionary.ReasonRepeatingGroupOutOfOrder {
+		t.Errorf("U3: Text after the nested group: %v, want 58 out of order", err)
 	}
 }
 

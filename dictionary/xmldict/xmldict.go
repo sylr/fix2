@@ -525,22 +525,26 @@ func (r *resolver) group(b *resolvedBody, ctx int, counter string, required bool
 	b.all = append(b.all, b.addField(ctx, fd.Tag, required))
 	// Group children are listed too, as many times as the groups hold
 	// them, which tells them apart from the body's own fields (see
-	// dictionary.MessageDef). They are never required at this level, since
-	// entries are not validated against their group (see
-	// dictionary.Dict.Validate). They do show that their optional
-	// component is present.
+	// dictionary.MessageDef). They are never required at this level: their
+	// group requires them of its entries (see dictionary.CheckGroupRequired).
+	// They do show that their optional component is present.
 	for _, ref := range inner.all {
 		b.markPresent(ctx, ref.Tag)
 		b.all = append(b.all, dictionary.FieldRef{Tag: ref.Tag})
 	}
+	// An entry's optional components: their tags counted in the entry,
+	// nested entries included, as a message's are in its body.
+	inEntry := map[int]int{}
+	countTags(inEntry, inner.all)
 	b.groups = append(b.groups, dictionary.GroupDef{
 		CounterTag: fd.Tag,
 		Name:       counter,
-		Required:   required,
+		Required:   required && ctx < 0, // inside an optional component, its condition requires it
 		DelimTag:   inner.first,
 		Fields:     inner.direct,
 		Groups:     inner.groups,
 		Layout:     inner.layout,
+		Conditions: inner.conditions(nil, inEntry),
 	})
 	b.layout = append(b.layout, fd.Tag)
 	b.setFirst(fd.Tag)

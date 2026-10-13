@@ -24,6 +24,7 @@ var (
 	ErrOutOfOrder       = fmt.Errorf("%w: tag out of order", ErrValidation)
 	ErrGroupCount       = fmt.Errorf("%w: incorrect NumInGroup count", ErrValidation)
 	ErrTagOutsideGroup  = fmt.Errorf("%w: tag allowed only in group entries", ErrValidation)
+	ErrGroupOrder       = fmt.Errorf("%w: repeating group fields out of order", ErrValidation)
 )
 
 // ValidationError wraps a sentinel error with the offending tag, the
@@ -65,10 +66,11 @@ func (e *ValidationError) Unwrap() error {
 // does not stand for the message's own. Validate is ValidateWith with
 // CheckUnknownTags and CheckUserDefinedTags, which 5 is.
 //
-// Entries are not validated against their group's definition: an entry may
-// lack its required fields and hold them in any order, whatever the checks.
-// A tag an entry holds twice ends it, as GroupsOf reads it: the second is
-// rejected only where the message does not allow it.
+// Entries are validated against their group's definition only with
+// CheckGroupRequired and CheckGroupOrder (see ValidateWith): Validate lets
+// an entry lack its required fields and hold them in any order. A tag an
+// entry holds twice ends it, as GroupsOf reads it: the second is rejected
+// only where the message does not allow it.
 func (d *Dict) Validate(msg *fix2.Message) error {
 	return d.validate(msg, checksValidate)
 }
@@ -106,7 +108,7 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 
 	// Repeated tags and fields out of order first: QuickFIX engines find
 	// them while parsing, before validating against the dictionary.
-	if structure := checks & (CheckRepeatedTags | CheckOrder); structure != 0 {
+	if structure := checks & (CheckRepeatedTags | CheckOrder | CheckGroupOrder); structure != 0 {
 		if err := d.checkStructure(msg, mdef, structure|checks&checksValidate); err != nil {
 			return err
 		}
@@ -231,8 +233,8 @@ func (d *Dict) validate(msg *fix2.Message, checks Checks) error {
 		}
 	}
 
-	if fieldErr == nil && checks&CheckGroupCounts != 0 {
-		fieldErr = d.checkStructure(msg, mdef, CheckGroupCounts)
+	if groups := checks & (CheckGroupCounts | CheckGroupRequired); fieldErr == nil && groups != 0 {
+		fieldErr = d.checkStructure(msg, mdef, groups)
 	}
 	if fieldErr == nil && misplaced != 0 {
 		return &ValidationError{
@@ -366,7 +368,178 @@ func (d *Dict) groupSpecs(groups []GroupDef, unknown func(int) bool) []*fix2.Gro
 			}
 		}
 		s.Nested = d.groupSpecs(gd.Groups, unknown)
+		d.groupRules[s] = d.rulesOf(gd, s)
 		specs = append(specs, s)
 	}
 	return specs
+}
+
+// groupRules is what an entry of a group requires (see CheckGroupRequired
+// and CheckGroupOrder), its tags by position (see position).
+type groupRules struct {
+	name     string
+	rank     []int32 // a tag's place in the group's Layout, -1 if none
+	required []int
+	conds    []entryCond
+}
+
+// entryCond is a Condition of a group's entries, its tags by position.
+type entryCond struct {
+	component            string
+	activation, required []int
+}
+
+// rulesOf returns the rules of the entries of gd, of spec s.
+func (d *Dict) rulesOf(gd GroupDef, s *fix2.GroupSpec) *groupRules {
+	n := len(s.Tags) + len(s.Nested)
+	r := &groupRules{name: gd.Name, rank: make([]int32, n)}
+	// Positions by tag, a nested counter's winning as in position.
+	pos := make(map[int]int, n)
+	for k := range n {
+		pos[tagAt(s, k)] = k
+	}
+	at := func(tag int) int {
+		if k, ok := pos[tag]; ok {
+			return k
+		}
+		return -1
+	}
+	layout := make(map[int]int32, len(gd.Layout))
+	for i, tag := range gd.Layout {
+		if _, ok := layout[tag]; !ok {
+			layout[tag] = int32(i)
+		}
+	}
+	for k := range r.rank {
+		tag := tagAt(s, k)
+		// A LENGTH field and its DATA field, one right after the other,
+		// sit where the group declares the first of them.
+		rank := int32(-1)
+		for _, t := range [...]int{tag, d.profile.DataTag(tag), d.profile.DataLengthTag(tag)} {
+			if i, ok := layout[t]; ok && t != 0 && (rank < 0 || i < rank) {
+				rank = i
+			}
+		}
+		r.rank[k] = rank
+	}
+	required := make([]bool, n)
+	for _, ref := range gd.Fields {
+		if ref.Required {
+			if k := at(ref.Tag); k >= 0 {
+				required[k] = true
+			}
+		}
+	}
+	for _, g := range gd.Groups {
+		if g.Required {
+			if k := at(g.CounterTag); k >= 0 {
+				required[k] = true
+			}
+		}
+	}
+	for k, req := range required {
+		if req {
+			r.required = append(r.required, k)
+		}
+	}
+	// Activation tags held by nested entries only cannot be told from the
+	// entry's own: the nested group's counter, the entry's, stands for them.
+	declared := once(func() map[int]bool { return groupTags(gd) })
+	for _, c := range gd.Conditions {
+		ec := entryCond{component: c.Component}
+		for _, tag := range d.activation(c.Activation, declared) {
+			if k := at(tag); k >= 0 {
+				ec.activation = append(ec.activation, k)
+			}
+		}
+		for _, tag := range c.Required {
+			if k := at(tag); k >= 0 {
+				ec.required = append(ec.required, k)
+			}
+		}
+		if len(ec.activation) > 0 && len(ec.required) > 0 {
+			r.conds = append(r.conds, ec)
+		}
+	}
+	return r
+}
+
+// activation returns the tags of a condition's activation that show its
+// component is present: not a LENGTH or DATA field whose partner the scope
+// declares outside the component, which may bring it along. declared
+// returns the tags the scope declares; it is called only if needed.
+func (d *Dict) activation(tags []int, declared func() map[int]bool) []int {
+	var in, outside map[int]bool
+	var out []int // nil while every tag is kept
+	for i, tag := range tags {
+		keep := true
+		if dt, lt := d.profile.DataTag(tag), d.profile.DataLengthTag(tag); dt != 0 || lt != 0 {
+			if in == nil {
+				in = make(map[int]bool, len(tags))
+				for _, t := range tags {
+					in[t] = true
+				}
+				outside = declared()
+			}
+			keep = (dt == 0 || in[dt] || !outside[dt]) && (lt == 0 || in[lt] || !outside[lt])
+		}
+		switch {
+		case !keep && out == nil:
+			out = append(make([]int, 0, len(tags)), tags[:i]...)
+		case keep && out != nil:
+			out = append(out, tag)
+		}
+	}
+	if out == nil {
+		return tags
+	}
+	return out
+}
+
+// once returns a function returning what f returns, calling f once.
+func once(f func() map[int]bool) func() map[int]bool {
+	var m map[int]bool
+	return func() map[int]bool {
+		if m == nil {
+			m = f()
+		}
+		return m
+	}
+}
+
+// refTags returns the tags of refs.
+func refTags(refs ...[]FieldRef) map[int]bool {
+	tags := map[int]bool{}
+	for _, rs := range refs {
+		for _, ref := range rs {
+			tags[ref.Tag] = true
+		}
+	}
+	return tags
+}
+
+// groupTags returns the tags an entry of gd may hold, its nested entries'
+// included.
+func groupTags(gd GroupDef) map[int]bool {
+	tags := refTags(gd.Fields)
+	var walk func([]GroupDef)
+	walk = func(groups []GroupDef) {
+		for _, g := range groups {
+			tags[g.CounterTag] = true
+			for _, ref := range g.Fields {
+				tags[ref.Tag] = true
+			}
+			walk(g.Groups)
+		}
+	}
+	walk(gd.Groups)
+	return tags
+}
+
+// tagAt returns the tag at position k of spec (see position).
+func tagAt(spec *fix2.GroupSpec, k int) int {
+	if k < len(spec.Tags) {
+		return spec.Tags[k]
+	}
+	return spec.Nested[k-len(spec.Tags)].Counter
 }

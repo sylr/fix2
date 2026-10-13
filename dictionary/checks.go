@@ -43,9 +43,19 @@ const (
 	// message does not define, as CheckUnknownTags those below. Without it,
 	// they are accepted, as QuickFIX/J's ValidateUserDefinedFields=N does.
 	CheckUserDefinedTags
+	// CheckGroupRequired rejects group entries without their group's
+	// required fields or nested groups (reason 1), as QuickFIX does, or
+	// without the required fields of an optional component they hold, as
+	// Validate checks a message's, which QuickFIX does not.
+	CheckGroupRequired
+	// CheckGroupOrder rejects group entries whose fields are not in their
+	// group's order (reason 15), as QuickFIX/J's
+	// ValidateUnorderedGroupFields=Y does. A DATA field and its LENGTH
+	// field count as one; tags the group does not define are not ordered.
+	CheckGroupOrder
 
 	// CheckAll enables every check.
-	CheckAll = CheckEmptyValues | CheckFormats | CheckRepeatedTags | CheckOrder | CheckGroupCounts | CheckUnknownTags | CheckUserDefinedTags
+	CheckAll = CheckEmptyValues | CheckFormats | CheckRepeatedTags | CheckOrder | CheckGroupCounts | CheckUnknownTags | CheckUserDefinedTags | CheckGroupRequired | CheckGroupOrder
 
 	// checksValidate are the checks Validate runs.
 	checksValidate = CheckUnknownTags | CheckUserDefinedTags
@@ -58,9 +68,11 @@ const userDefinedTagMin = 5000
 
 // ValidateWith checks msg as Validate does, with the checks selected rather
 // than CheckUnknownTags and CheckUserDefinedTags. A repeated tag or a field
-// out of order is reported first, as QuickFIX engines find them while
-// parsing; then missing required tags; then field errors in message order;
-// then group counts; then a tag held only in group entries outside them, if
+// out of order, a group entry's included, is reported first, as QuickFIX
+// engines find them while parsing; then missing required tags; then field
+// errors in message order; then group counts and group entries missing
+// required fields, in message order; then a tag held only in group entries
+// outside them, if
 // its tag's check, CheckUnknownTags or CheckUserDefinedTags, is selected.
 // Unlike Validate, the extra checks may allocate. To reject unknown tags as
 // Validate does, select their checks too:
@@ -251,7 +263,8 @@ func digits(v []byte) bool {
 // are skipped by walking each group from its counter, which counts them.
 func (d *Dict) checkStructure(msg *fix2.Message, mdef *MessageDef, checks Checks) error {
 	fields := msg.Fields()
-	walk := groupWalk{d: d, mdef: mdef, fields: fields, check: checks&CheckGroupCounts != 0}
+	walk := groupWalk{d: d, mdef: mdef, fields: fields, check: checks&CheckGroupCounts != 0,
+		required: checks&CheckGroupRequired != 0, order: checks&CheckGroupOrder != 0}
 	var seen map[int]bool
 	if checks&CheckRepeatedTags != 0 {
 		seen = make(map[int]bool, len(fields))
@@ -315,10 +328,12 @@ func (d *Dict) repeated(tag int, mdef *MessageDef) *ValidationError {
 // ends at the next one, at a tag its group does not hold, or at one it
 // already holds.
 type groupWalk struct {
-	d      *Dict
-	mdef   *MessageDef
-	fields []fix2.Field
-	check  bool // report counters not matching their entries
+	d        *Dict
+	mdef     *MessageDef
+	fields   []fix2.Field
+	check    bool // report counters not matching their entries
+	required bool // report entries without their required fields
+	order    bool // report entries with fields out of order
 }
 
 // entryState is the entry of a group being walked: the tags it holds so
@@ -353,22 +368,31 @@ func (w *groupWalk) group(at int, spec *fix2.GroupSpec, parent *entryState) (int
 	// The tags of an entry, on the stack for groups of up to 256 tags and
 	// nested groups.
 	var small [4]uint64
+	// The rules stay out of e: an error built from them must not make
+	// every entryState, linked to its parent, escape.
+	rules := w.d.groupRules[spec]
 	e := entryState{spec: spec, seen: small[:], parent: parent}
 	if n := (len(spec.Tags) + len(spec.Nested) + 63) / 64; n > len(small) {
 		e.seen = make([]uint64, n)
 	}
 	i, n := at+1, 0
+	// The first entry missing a required field, reported after the
+	// counter, which comes before it.
+	var missing error
 	for ; n < count && i < len(w.fields) && w.fields[i].Tag == spec.Delim; n++ {
 		var err error
-		if i, err = w.entry(i, &e); err != nil {
+		if i, err = w.entry(i, &e, rules, n+1); err != nil {
 			return 0, err
 		}
+		if w.required && rules != nil && missing == nil {
+			missing = w.complete(&e, rules, n+1)
+		}
 	}
-	if !w.check {
-		return i, nil
-	}
-	more := n == count && i < len(w.fields) && w.fields[i].Tag == spec.Delim && !w.holds(parent, spec.Delim)
-	if cerr == nil && n == count && !more {
+	more := w.check && n == count && i < len(w.fields) && w.fields[i].Tag == spec.Delim && !w.holds(parent, spec.Delim)
+	if !w.check || cerr == nil && n == count && !more {
+		if missing != nil {
+			return 0, missing
+		}
 		return i, nil
 	}
 	follow := strconv.Itoa(n)
@@ -383,11 +407,12 @@ func (w *groupWalk) group(at int, spec *fix2.GroupSpec, parent *entryState) (int
 	}
 }
 
-// entry walks the entry of e.spec whose delimiter is at fields[i] and
-// returns the index just past it.
-func (w *groupWalk) entry(i int, e *entryState) (int, error) {
+// entry walks the entry of e.spec, of rules, whose delimiter is at
+// fields[i], the group's nth, and returns the index just past it.
+func (w *groupWalk) entry(i int, e *entryState, rules *groupRules, nth int) (int, error) {
 	clear(e.seen)
 	spec := e.spec
+	last := int32(-1) // the rank of the last field ordered
 	for start := i; i < len(w.fields); {
 		tag := w.fields[i].Tag
 		k, child := position(spec, tag)
@@ -399,6 +424,15 @@ func (w *groupWalk) entry(i int, e *entryState) (int, error) {
 				break // a tag cannot repeat within an entry
 			}
 			e.seen[k/64] |= 1 << (k % 64)
+			if w.order && rules != nil {
+				if r := rules.rank[k]; r >= 0 {
+					if r < last {
+						return 0, w.entryError(spec.Counter, rules, nth, ErrGroupOrder, ReasonRepeatingGroupOutOfOrder, tag,
+							fmt.Sprintf("tag %d%s out of order", tag, w.d.fieldName(tag)))
+					}
+					last = r
+				}
+			}
 		}
 		// The delimiter itself may be a nested group's counter.
 		if child != nil {
@@ -412,6 +446,57 @@ func (w *groupWalk) entry(i int, e *entryState) (int, error) {
 		i++
 	}
 	return i, nil
+}
+
+// complete returns an error if e, the nth entry of its group, of rules,
+// misses a required field or nested group, or one of an optional component
+// it holds.
+func (w *groupWalk) complete(e *entryState, rules *groupRules, nth int) error {
+	for _, k := range rules.required {
+		if !bitSet(e.seen, k) {
+			tag := tagAt(e.spec, k)
+			return w.entryError(e.spec.Counter, rules, nth, ErrRequiredTag, ReasonRequiredTagMissing, tag,
+				fmt.Sprintf("required tag %d%s missing", tag, w.d.fieldName(tag)))
+		}
+	}
+	for _, c := range rules.conds {
+		if !anySet(e.seen, c.activation) {
+			continue
+		}
+		for _, k := range c.required {
+			if !bitSet(e.seen, k) {
+				tag := tagAt(e.spec, k)
+				return w.entryError(e.spec.Counter, rules, nth, ErrRequiredTag, ReasonRequiredTagMissing, tag,
+					fmt.Sprintf("required tag %d%s missing for component %s", tag, w.d.fieldName(tag), c.component))
+			}
+		}
+	}
+	return nil
+}
+
+// bitSet reports whether bit k of bits is set.
+func bitSet(bits []uint64, k int) bool { return bits[k/64]&(1<<(k%64)) != 0 }
+
+// anySet reports whether any of the bits ks of bits is set.
+func anySet(bits []uint64, ks []int) bool {
+	for _, k := range ks {
+		if bitSet(bits, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// entryError returns the error err, for reason, about tag in the nth entry
+// of the group of counter, of rules, what says what.
+func (w *groupWalk) entryError(counter int, rules *groupRules, nth int, err error, reason RejectReason, tag int, what string) *ValidationError {
+	return &ValidationError{
+		Err:    err,
+		Tag:    tag,
+		Reason: reason,
+		Msg: fmt.Sprintf("%s in entry %d of group %d (%s) in message %s",
+			what, nth, counter, rules.name, w.mdef.Name),
+	}
 }
 
 // holds reports whether tag, ending a group's entries in the entry e, may

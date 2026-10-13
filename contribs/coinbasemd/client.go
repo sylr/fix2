@@ -152,6 +152,9 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		// SendingTime has exactly milliseconds: the Logon's signature
 		// covers it as written.
 		Timestamps: session.MillisecondTimestamps,
+		// Venues do not all keep their dictionary's order within group
+		// entries (Binance does not): an entry out of it is not rejected.
+		SkipChecks: dictionary.CheckGroupOrder,
 		Logger:     log,
 		Handler:    c,
 	}

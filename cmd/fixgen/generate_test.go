@@ -1585,6 +1585,7 @@ const dictionaryTestXML = `<fix type="FIXT" major="1" minor="1">
         <field name="PartyID" required="N"/>
         <group name="NoSubs" required="N"><field name="SubID" required="N"/></group>
         <field name="Text" required="N"/>
+        <component name="PtyOpt" required="N"/>
       </group>
       <component name="Opt" required="N"/>
     </message>
@@ -1594,6 +1595,7 @@ const dictionaryTestXML = `<fix type="FIXT" major="1" minor="1">
     <component name="HdrOpt"><field name="OnBehalfOfCompID" required="Y"/><field name="OnBehalfOfSubID" required="N"/></component>
     <component name="Sig"><field name="SignatureLength" required="Y"/><field name="Signature" required="N"/></component>
     <component name="Opt"><field name="OptA" required="Y"/><field name="OptB" required="N"/></component>
+    <component name="PtyOpt"><field name="PtyOptA" required="Y"/><field name="PtyOptB" required="N"/></component>
   </components>
   <fields>
     <field number="10" name="CheckSum" type="STRING"/>
@@ -1614,6 +1616,8 @@ const dictionaryTestXML = `<fix type="FIXT" major="1" minor="1">
     <field number="5001" name="SubID" type="MULTIPLESTRINGVALUE"><value enum="AB" description="ab"/><value enum="C" description="c"/></field>
     <field number="5002" name="OptA" type="STRING"/>
     <field number="5003" name="OptB" type="STRING"/>
+    <field number="5004" name="PtyOptA" type="STRING"/>
+    <field number="5005" name="PtyOptB" type="STRING"/>
   </fields>
 </fix>`
 
@@ -1651,6 +1655,9 @@ func TestDictionary(t *testing.T) {
 	}
 	if len(want.HeaderConditions) == 0 || len(want.TrailerConditions) == 0 || len(want.HeaderGroups) == 0 {
 		t.Error("the test dictionary should have header conditions, trailer conditions and header groups")
+	}
+	if len(want.Messages["D"].Groups[0].Conditions) == 0 {
+		t.Error("the test dictionary should have a group with conditions")
 	}
 	if len(got.Messages) != len(want.Messages) {
 		t.Fatalf("%d messages, want %d", len(got.Messages), len(want.Messages))

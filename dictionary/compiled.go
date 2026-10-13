@@ -147,6 +147,7 @@ func (s *slots) track(tag int) int32 {
 // any built before.
 func (d *Dict) compile() {
 	d.enumChecks = nil
+	d.groupRules = map[*fix2.GroupSpec]*groupRules{}
 	for _, m := range d.Messages {
 		m.requiredTags, m.conds = nil, nil
 	}
@@ -180,8 +181,9 @@ func (d *Dict) compile() {
 	env := slots{of: map[int]int32{}}
 	d.headerReq = requiredOf(d.Header, &env)
 	d.trailerReq = requiredOf(d.Trailer, &env)
-	d.headerConds = compileConds(d.HeaderConditions, &env)
-	d.trailerConds = compileConds(d.TrailerConditions, &env)
+	envDeclared := once(func() map[int]bool { return refTags(d.Header, d.Trailer) })
+	d.headerConds = d.compileConds(d.HeaderConditions, &env, envDeclared)
+	d.trailerConds = d.compileConds(d.TrailerConditions, &env, envDeclared)
 	d.envSlots = env.n
 
 	// The envelope's groups are every message's: their entries keep only
@@ -224,9 +226,10 @@ func (d *Dict) compile() {
 				m.requiredTags = append(m.requiredTags, tracked{tag: ref.Tag, slot: shared(ref.Tag)})
 			}
 		}
+		declared := once(func() map[int]bool { return refTags(m.Fields, d.Header, d.Trailer) })
 		for _, c := range m.Conditions {
 			cc := compiledCond{component: c.Component}
-			for _, tag := range c.Activation {
+			for _, tag := range d.activation(c.Activation, declared) {
 				cc.activation = append(cc.activation, tracked{tag: tag, slot: shared(tag)})
 			}
 			for _, tag := range c.Required {
@@ -272,12 +275,13 @@ func requiredOf(refs []FieldRef, s *slots) []tracked {
 	return out
 }
 
-// compileConds resolves the tags of conds to slots.
-func compileConds(conds []Condition, s *slots) []compiledCond {
+// compileConds resolves the tags of conds, in the scope declaring declared
+// (see activation), to slots.
+func (d *Dict) compileConds(conds []Condition, s *slots, declared func() map[int]bool) []compiledCond {
 	var out []compiledCond
 	for _, c := range conds {
 		cc := compiledCond{component: c.Component}
-		for _, tag := range c.Activation {
+		for _, tag := range d.activation(c.Activation, declared) {
 			cc.activation = append(cc.activation, tracked{tag: tag, slot: s.track(tag)})
 		}
 		for _, tag := range c.Required {

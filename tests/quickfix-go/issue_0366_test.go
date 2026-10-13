@@ -1,6 +1,7 @@
 package quickfixgo
 
 import (
+	"errors"
 	"testing"
 
 	fix2 "github.com/sylr/fix2"
@@ -14,7 +15,8 @@ import (
 // that did not match: a field coming before one the definition lists first
 // ended the entry, and the entries left were not counted, Incorrect
 // NumInGroup. Entries are delimited by their first field, whatever the order
-// of the others.
+// of the others: counted, they are rejected for that order only when
+// dictionary.CheckGroupOrder is on, as it is in CheckAll.
 func TestIssue366_EntriesInAnotherOrderCounted(t *testing.T) {
 	d := dict(t, "FIX44")
 	// NoAllocs lists AllocAccount (79), AllocQty (80), AllocPrice (366),
@@ -27,7 +29,11 @@ func TestIssue366_EntriesInAnotherOrderCounted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ValidateWith(&m, dictionary.CheckAll); err != nil {
+	if err := d.ValidateWith(&m, dictionary.CheckAll&^dictionary.CheckGroupOrder); err != nil {
 		t.Fatalf("NoAllocs entries in another order rejected: %v", err)
+	}
+	var ve *dictionary.ValidationError
+	if err := d.ValidateWith(&m, dictionary.CheckAll); !errors.As(err, &ve) || ve.Reason != dictionary.ReasonRepeatingGroupOutOfOrder {
+		t.Fatalf("CheckAll: %v, want repeating group fields out of order", err)
 	}
 }
