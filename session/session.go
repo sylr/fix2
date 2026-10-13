@@ -87,6 +87,9 @@ type Session struct {
 	dicts dicts
 
 	initiator bool // set by Initiator.Add or Acceptor.Add
+	// authWarned is set once the session warned it accepted a Logon
+	// without authentication.
+	authWarned atomic.Bool
 
 	// bodyPool holds the buffers Send encodes bodies into.
 	bodyPool sync.Pool

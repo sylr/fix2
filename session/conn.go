@@ -77,6 +77,9 @@ type conn struct {
 
 	logonExtra []byte // fields the handler added to the Logon we answer with
 	loggedOn   bool   // the connection got to log on
+	// byDefault tells BaseHandler's Authenticate accepted the Logon, and
+	// transportAuth that the transport authenticated the counterparty.
+	byDefault, transportAuth bool
 
 	wake       chan struct{} // wakes the writer
 	writers    sync.WaitGroup

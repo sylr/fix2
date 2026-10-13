@@ -35,6 +35,10 @@ type LogonRequest struct {
 	TLS *tls.ConnectionState
 	// Principal is who the transport authenticated, if it does.
 	Principal any
+
+	// byDefault is set by BaseHandler.Authenticate, which accepts any
+	// Logon.
+	byDefault bool
 }
 
 // Handler receives a session's events and application messages. Callbacks
@@ -124,14 +128,23 @@ type LogonSigner interface {
 }
 
 // BaseHandler implements Handler with defaults: every Logon is accepted,
-// every message resent, and events are ignored.
+// every message resent, and events are ignored. An acceptor's session logs
+// a warning the first time it logs on with a Logon BaseHandler's
+// Authenticate accepted: a deployment exposed to counterparties it does not
+// trust implements Authenticate, returning nil itself once a counterparty
+// is authenticated, or authenticates in its transport.
 type BaseHandler struct{}
 
 var _ Handler = BaseHandler{}
 
-func (BaseHandler) Authenticate(context.Context, *LogonRequest) error { return nil }
-func (BaseHandler) OnLogon(context.Context, *Session)                 {}
-func (BaseHandler) OnLogout(context.Context, *Session, error)         {}
+func (BaseHandler) Authenticate(_ context.Context, req *LogonRequest) error {
+	if req != nil {
+		req.byDefault = true
+	}
+	return nil
+}
+func (BaseHandler) OnLogon(context.Context, *Session)         {}
+func (BaseHandler) OnLogout(context.Context, *Session, error) {}
 func (BaseHandler) ToAdmin(context.Context, *Session, string, *fix2.Builder) error {
 	return nil
 }

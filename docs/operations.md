@@ -35,3 +35,20 @@ retention against how far back counterparties may ask for resends.
 
 Before Logon, an acceptor reads at most `AcceptorOptions.MaxPreLogonBytes`
 (16 KiB) of a connection's first message.
+
+## Authentication
+
+An acceptor accepts any Logon whose CompIDs name one of its sessions unless
+the handler's `Authenticate` refuses it. `BaseHandler`'s accepts them all:
+a session that logs on with a Logon it accepted logs, the first time,
+
+    Logon accepted by BaseHandler's Authenticate, which accepts any Logon: implement Authenticate to authenticate counterparties
+
+with the counterparty's address, and `transport_authenticated=false` when
+the connection had neither TLS nor a transport principal. Exposed to
+counterparties it does not trust, a deployment authenticates them: in
+`Authenticate`, from the Logon's Username and Password, the connection's
+TLS client certificate (`LogonRequest.TLS`) or the transport's principal
+(`LogonRequest.Principal`), or in front of the acceptor. An `Authenticate`
+that authenticates returns nil itself: one that ends by calling
+`BaseHandler`'s cannot be told from one that does not, and gets the warning.

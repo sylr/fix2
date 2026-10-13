@@ -260,6 +260,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 	c.logonDeadline = time.Time{}
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "logged on",
 		slog.Uint64("epoch", c.epoch), slog.String("heartbeat", withhold(m, tagHeartBtInt, s.heartBt.String(), "withheld")), slog.Uint64("next_sender", s.st.NextSender), slog.Uint64("next_target", s.st.NextTarget))
+	s.warnUnauthenticatedLocked(c)
 	s.deliv.push(item{kind: itemLogon})
 
 	if peerNext > 0 && peerNext < nextBefore {

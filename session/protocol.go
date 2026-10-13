@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"maps"
 	"math"
+	"net"
 	"slices"
 	"strconv"
 	"strings"
@@ -180,7 +181,37 @@ func (s *Session) authenticate(c *conn, m *fix2.Message) error {
 	if pc, ok := c.tc.(transport.PrincipalConn); ok {
 		req.Principal = pc.Principal()
 	}
-	return s.handler.Authenticate(s.callbackCtx(), req)
+	err := s.handler.Authenticate(s.callbackCtx(), req)
+	if err == nil && req.byDefault && !s.initiator {
+		// Warned of once logged on (see warnUnauthenticatedLocked): the
+		// Logon may still be refused.
+		s.mu.Lock()
+		c.byDefault, c.transportAuth = true, req.TLS != nil || req.Principal != nil
+		s.mu.Unlock()
+	}
+	return err
+}
+
+// warnUnauthenticatedLocked warns, once per session, that the Logon c
+// logged on with was accepted by BaseHandler's Authenticate.
+func (s *Session) warnUnauthenticatedLocked(c *conn) {
+	if !c.byDefault || s.authWarned.Swap(true) {
+		return
+	}
+	attrs := []slog.Attr{slog.String("remote_addr", addrString(c.tc.RemoteAddr()))}
+	if !c.transportAuth {
+		attrs = append(attrs, slog.Bool("transport_authenticated", false))
+	}
+	s.log.LogAttrs(context.Background(), slog.LevelWarn,
+		"Logon accepted by BaseHandler's Authenticate, which accepts any Logon: implement Authenticate to authenticate counterparties", attrs...)
+}
+
+// addrString returns addr's String, "" for none.
+func addrString(addr net.Addr) string {
+	if addr == nil {
+		return ""
+	}
+	return addr.String()
 }
 
 // callbackCtx returns the context passed to handler callbacks.
