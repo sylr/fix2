@@ -110,13 +110,32 @@ func wokeAt(c <-chan struct{}) <-chan time.Time {
 // Distinct deadlines beyond MaxConcurrent fall back to Go timers, still
 // shared, still never early, and every slot is given back.
 func TestAt_BeyondTheBoundStillSharesAndWaits(t *testing.T) {
+	const attempts = 5
+	for range attempts {
+		if beyondTheBound(t) {
+			return
+		}
+	}
+	t.Fatalf("no attempt out of %d set its deadlines before the first was reached", attempts)
+}
+
+// beyondTheBound asks for 3*MaxConcurrent distinct deadlines, twice each,
+// and checks them once they are all waited out. It reports false, leaving
+// sharing and the waits in flight unchecked, when setting them took longer
+// than soon: a wait over before its second caller or before the count, as
+// a loaded machine under the race detector can make it, would fail them
+// although At did its job. Whatever the timing, no caller wakes early.
+func beyondTheBound(t *testing.T) bool {
 	base := time.Now().Add(soon)
 	const deadlines = 3 * MaxConcurrent
 	var wg sync.WaitGroup
+	unshared := -1
 	for i := range deadlines {
 		deadline := base.Add(time.Duration(i) * time.Microsecond)
 		first, second := At(deadline), At(deadline)
-		require.Equal(t, first, second, "deadline %d is shared", i)
+		if first != second && unshared < 0 {
+			unshared = i
+		}
 		for _, c := range []<-chan struct{}{first, second} {
 			woke := wokeAt(c)
 			wg.Go(func() {
@@ -127,9 +146,18 @@ func TestAt_BeyondTheBoundStillSharesAndWaits(t *testing.T) {
 	registry.Lock()
 	inFlight := len(registry.waits)
 	registry.Unlock()
-	require.Equal(t, deadlines, inFlight, "every deadline was in flight at once, most of them past the bound")
+	// No wait ends before its deadline, the first of them base: counted
+	// before base, every wait was still in flight, and every second caller
+	// joined its first.
+	inTime := time.Now().Before(base)
 	wg.Wait()
 	requireIdle(t)
+	if !inTime {
+		return false
+	}
+	require.Equal(t, -1, unshared, "deadline %d is shared", unshared)
+	require.Equal(t, deadlines, inFlight, "every deadline was in flight at once, most of them past the bound")
+	return true
 }
 
 // Callers racing a wait's completion either join it before it ends or get
