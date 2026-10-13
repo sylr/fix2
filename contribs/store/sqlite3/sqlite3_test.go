@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -374,7 +375,8 @@ func TestNotAFile(t *testing.T) {
 // A newer schema is refused.
 func TestSchemaVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fix2.db")
-	if _, err := openDB(t, path).Exec("PRAGMA user_version = 99"); err != nil {
+	open(t, path, "S")
+	if _, err := openDB(t, path).Exec("UPDATE fix2_schema SET version = 99"); err != nil {
 		t.Fatal(err)
 	}
 	s, err := sqlite3.OpenFile(path, "S")
@@ -382,7 +384,72 @@ func TestSchemaVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, err := s.Open(context.Background()); err == nil {
-		t.Error("Open of a database with a newer schema succeeded")
+	if _, err := s.Open(context.Background()); err == nil || !strings.Contains(err.Error(), "version 99") {
+		t.Errorf("Open of a database with a newer schema: %v, want version 99 refused", err)
+	}
+}
+
+// userVersion returns the user_version of db.
+func userVersion(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var v int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+// The database's user_version belongs to the application sharing it:
+// whatever it is, the store opens and leaves it as it is.
+func TestSchemaUserVersionLeftAlone(t *testing.T) {
+	for _, v := range []int{0, 1, 7, 99} {
+		t.Run(fmt.Sprint(v), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "fix2.db")
+			db := openDB(t, path)
+			for _, q := range []string{"CREATE TABLE application (value TEXT)", fmt.Sprintf("PRAGMA user_version = %d", v)} {
+				if _, err := db.Exec(q); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for range 2 {
+				s, _ := open(t, path, "S")
+				s.Close()
+				if got := userVersion(t, db); got != v {
+					t.Fatalf("user_version = %d, want %d", got, v)
+				}
+			}
+		})
+	}
+}
+
+// A database of version 1, which had no fix2_schema and set user_version
+// to 1, keeps its sessions and messages, and its user_version.
+func TestSchemaVersion1(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := open(t, path, "S")
+	if err := s.Append(ctx, st.Generation, 1, []byte("m1")); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	db := openDB(t, path)
+	for _, q := range []string{"DROP TABLE fix2_schema", "PRAGMA user_version = 1"} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, st = open(t, path, "S")
+	if st.NextSender != 2 {
+		t.Errorf("NextSender = %d, want 2", st.NextSender)
+	}
+	if got := collect(t, s, st.Generation, 1, 1); len(got) != 1 || got[0].raw != "m1" {
+		t.Errorf("messages = %v, want m1", got)
+	}
+	var version int
+	if err := db.QueryRow("SELECT version FROM fix2_schema").Scan(&version); err != nil || version != 2 {
+		t.Errorf("fix2_schema version = %d (%v), want 2", version, err)
+	}
+	if got := userVersion(t, db); got != 1 {
+		t.Errorf("user_version = %d, want 1", got)
 	}
 }

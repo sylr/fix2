@@ -4,7 +4,8 @@
 //
 // A database holds any number of sessions, each under a key of its own,
 // session.SessionID.String() for one, and one Store at a time per key. Its
-// tables are prefixed with fix2_ and may live alongside others. It must be a
+// tables are prefixed with fix2_ and may live alongside others; the
+// database's user_version is left to them. It must be a
 // file: the store switches it to WAL mode, where Range reads a snapshot
 // while the session keeps writing.
 //
@@ -45,8 +46,10 @@ import (
 	"github.com/sylr/fix2/session/store"
 )
 
-// schemaVersion is the user_version of the databases this package writes.
-const schemaVersion = 1
+// schemaVersion is the version of the tables this package writes, kept in
+// fix2_schema: the database's user_version belongs to the application.
+// Version 1 had no fix2_schema; version 2 adds it.
+const schemaVersion = 2
 
 // checkpointEvery is the number of commits after which the store
 // checkpoints the write-ahead log, in the background.
@@ -69,6 +72,11 @@ var schema = []string{
 		seq        INTEGER NOT NULL,
 		raw        BLOB NOT NULL,
 		PRIMARY KEY (session_id, seq)
+	)`,
+	// The version of these tables, one row.
+	`CREATE TABLE IF NOT EXISTS fix2_schema (
+		id      INTEGER PRIMARY KEY CHECK (id = 1),
+		version INTEGER NOT NULL
 	)`,
 	// The sequence numbers SetNextSender skipped, first_seq to last_seq.
 	`CREATE TABLE IF NOT EXISTS fix2_skipped (
@@ -191,19 +199,20 @@ func (s *Store) load(ctx context.Context) (st store.State, first uint64, err err
 	}
 	var createdAt string
 	err = s.write(ctx, func(ctx context.Context) error {
-		var version int
-		if err := s.conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+		version, err := s.storedSchemaVersion(ctx)
+		if err != nil {
 			return err
 		}
 		if version > schemaVersion {
-			return fmt.Errorf("the database's schema is version %d, this store knows up to %d", version, schemaVersion)
+			return fmt.Errorf("the database's fix2 tables are version %d, this store knows up to %d", version, schemaVersion)
 		}
 		for _, q := range schema {
 			if _, err := s.conn.ExecContext(ctx, q); err != nil {
 				return err
 			}
 		}
-		if _, err := s.conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
+		if _, err := s.conn.ExecContext(ctx, `INSERT INTO fix2_schema (id, version) VALUES (1, ?)
+			ON CONFLICT (id) DO UPDATE SET version = excluded.version`, schemaVersion); err != nil {
 			return err
 		}
 		if _, err := s.conn.ExecContext(ctx, `INSERT INTO fix2_sessions
@@ -223,6 +232,32 @@ func (s *Store) load(ctx context.Context) (st store.State, first uint64, err err
 		return st, 0, fmt.Errorf("sqlite3: loading session %q: created_at: %w", s.key, err)
 	}
 	return st, first, nil
+}
+
+// storedSchemaVersion returns the version of the fix2 tables of the
+// database, 0 if it has none.
+func (s *Store) storedSchemaVersion(ctx context.Context) (int, error) {
+	hasTable := func(name string) (bool, error) {
+		var ok bool
+		err := s.conn.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM sqlite_master
+			WHERE type = 'table' AND name = ?)`, name).Scan(&ok)
+		return ok, err
+	}
+	if ok, err := hasTable("fix2_schema"); err != nil || ok {
+		var version int
+		if err == nil {
+			err = s.conn.QueryRowContext(ctx, "SELECT version FROM fix2_schema WHERE id = 1").Scan(&version)
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			err = errors.New("fix2_schema holds no version")
+		}
+		return version, err
+	}
+	// Version 1 kept its version in user_version, which is left as it is.
+	if ok, err := hasTable("fix2_sessions"); err != nil || !ok {
+		return 0, err
+	}
+	return 1, nil
 }
 
 // write runs fn in a transaction on the writer connection (see tx). If the
