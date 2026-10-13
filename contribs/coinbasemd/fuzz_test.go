@@ -111,6 +111,16 @@ func FuzzClient(f *testing.F) {
 	f.Add(uint8(kindBook), uint8(1), uint8(1), snap+"\n35=X|262=$ID|268=3|279=2|269=0|55=BTC-USD|270=5\n35=X|262=$ID|268=99|279=9|269=Z")
 	f.Add(uint8(kindInstruments), uint8(0), uint8(0), "35=y|320=$ID|560=1|146=1|55=\n35=3|45=1|372=A|58=x\n35=5|58=bye\n35=j|45=1|380=0|58=x")
 	f.Add(uint8(kindDepth), uint8(0), uint8(0), "35=Y|262=$ID|281=0|58=Unknown symbol\n35=Y|262=$ID2\n35=f|55=BTC-USD|1682=halted\n35=A|98=0")
+	// A message the client does not handle, a Logout it did not ask for,
+	// then both subscriptions rejected.
+	f.Add(uint8(kindTrades), uint8(0), uint8(0), "35=ZZZ\n35=5|58=bye\n35=3|45=2|58=no\n35=3|45=3|58=no")
+	// A quote without a snapshot before it.
+	f.Add(uint8(kindTicker), uint8(0), uint8(0), "35=X|262=$ID|268=1|279=0|269=0|55=BTC-USD|270=1|271=1")
+	// A change of an unknown action.
+	f.Add(uint8(kindDepth), uint8(0), uint8(0), "35=X|262=$ID|268=1|279=9|269=0|55=BTC-USD|270=1|271=1")
+	// Books whose spread is negative, and not a number.
+	f.Add(uint8(kindBook), uint8(0), uint8(3), "35=W|262=$ID|893=Y|55=BTC-USD|268=2|269=0|270=101.5|271=1|269=1|270=99|271=1")
+	f.Add(uint8(kindBook), uint8(0), uint8(3), "35=W|262=$ID|893=Y|55=BTC-USD|268=2|269=0|270=abc|271=1|269=1|270=99|271=1")
 	f.Fuzz(func(t *testing.T, k, flags, show uint8, input string) {
 		c := fuzzClient(kind(k%5), flags&1 != 0, flags&2 != 0, int(show%12))
 		feed(c, input)

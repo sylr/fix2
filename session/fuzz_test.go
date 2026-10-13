@@ -499,6 +499,36 @@ func fuzzSeeds(f *testing.F, swap func(string) string) {
 		{fuzzL + m("3", "$N", "45=0|373=1|58=\xc3\xa9\x07\x00end") + m("5", "$N", "58=\xff\xfe\x01"), nil},
 		{"35=A|49=INI|50=S|142=L|56=ACC|57=T|143=M|34=1|52=$T|98=0|108=30\n35=0|49=INI|50=S|142=L|56=ACC|57=T|143=M|34=2|52=$T", nil},
 		{fuzzL + "|95=3|96=abc|553=u|554=p|925=n|464=Y|384=1|372=D|385=R", nil},
+		// A Logon of another BeginString, with a malformed SendingTime,
+		// without MsgSeqNum, with an empty SenderCompID or TargetCompID.
+		{"!8=FIX.4.2|9=57|35=A|49=INI|56=ACC|34=1|52=20231001-12:00:00|98=0|108=30|10=197|", nil},
+		{"35=A|49=INI|56=ACC|34=1|52=x|98=0|108=30", nil},
+		{"35=A|49=INI|56=ACC|52=$T|98=0|108=30", nil},
+		{"35=A|49=|56=ACC|34=1|52=$T|98=0|108=30", nil},
+		{"35=A|49=INI|56=|34=1|52=$T|98=0|108=30", nil},
+		{"35=A|49=ACC|56=|34=1|52=$T|98=0|108=30", nil},
+		// A Reject of the initiator's Logon, of a reason that is not a
+		// number.
+		{"35=3|49=INI|56=ACC|34=1|52=$T|45=1|373=x|58=no", nil},
+		// A bad tag after a MsgSeqNum too high, a malformed OrigSendingTime.
+		{fuzzL + "\n35=0|49=INI|56=ACC|34=9|52=$T|5x=1", nil},
+		{fuzzL + m("D", "$N", "11=A") + m("D", "2", "43=Y|122=bad|11=B") + m("4", "2", "43=Y|123=Y|36=4"), nil},
+		// SequenceResets without NewSeqNo, a GapFill whose NewSeqNo is not a
+		// number, a Reset whose MsgSeqNum is not a number.
+		{fuzzL + m("4", "$N", "") + m("4", "$N", "123=Y|36=x") + m("4", "x", "36=40"), nil},
+		// ResendRequests without BeginSeqNo or EndSeqNo, with EndSeqNo not a
+		// number, from another sender, and too high.
+		{fuzzL + m("2", "$N", "16=0") + m("2", "$N", "7=1") + m("2", "$N", "7=1|16=x") + "\n35=2|49=XXX|56=ACC|34=$N|52=$T|7=1|16=0", nil},
+		{fuzzL + fuzzApp + m("2", "$J", "7=1|16=0"), nil},
+		// Logouts too high, without Text, from another sender, and from
+		// another sender answering ours, which a MsgSeqNum that is not a
+		// number had the session send.
+		{fuzzL + m("5", "$J", "58=bye"), nil},
+		{fuzzL + m("5", "$N", ""), nil},
+		{fuzzL + "\n35=5|49=XXX|56=ACC|34=$N|52=$T", nil},
+		{fuzzL + m("0", "x", "") + "\n35=5|49=XXX|56=ACC|34=$N|52=$T", []byte{5, 5}},
+		// NextTargetSeqNum set to 0, a Send after Stop.
+		{fuzzL + fuzzHB + fuzzHB, []byte{4, 7, 0}},
 	}
 	scriptsT := []struct {
 		script string
@@ -523,6 +553,28 @@ func fuzzSeeds(f *testing.F, swap func(string) string) {
 		for _, s := range scriptsT {
 			f.Add(cfg|fuzzFIXT, swap(s.script), s.ops)
 		}
+	}
+	// Scripts that need a configuration of their own.
+	for _, s := range []struct {
+		cfg    uint32
+		script string
+	}{
+		// A malformed NextExpectedMsgSeqNum, and one beyond ours.
+		{fuzzNextExpected, fuzzL + "|789=x"},
+		{fuzzNextExpected, fuzzL + "|789=99"},
+		// The initiator's ToAdmin cancels its Logon.
+		{fuzzExtra | fuzzRefuse | fuzzActive, fuzzL + fuzzApp},
+		// A Logon without TargetCompID, which no session can be resolved
+		// for, its Password not cut on a rune boundary.
+		{fuzzExtra | fuzzActive | fuzzDicts, "35=A|49=INI|34=1|52=$T|98=0|108=30|553=u|554=abc\xc3\xa9d"},
+		// A Logon without MsgSeqNum, logged.
+		{fuzzVerbose, "35=A|49=INI|56=ACC|52=$T|98=0|108=30"},
+		// A MsgType the dictionaries do not support.
+		{fuzzDicts, fuzzL + m("F", "$N", "58=x")},
+		// A PossDup SequenceReset without OrigSendingTime, allowed.
+		{fuzzStrict, fuzzL + fuzzApp + m("4", "2", "43=Y|123=Y|36=4")},
+	} {
+		f.Add(s.cfg, swap(s.script), []byte(nil))
 	}
 }
 

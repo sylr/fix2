@@ -164,6 +164,18 @@ func FuzzClient(f *testing.F) {
 	f.Add(uint8(kindBook), uint8(0), uint8(10), uint8(10), snap+"\n35=X|262=$ID|268=1|279=0|269=0|270=98|271=1|55=BTCUSDT|25043=103|25044=104\n35=B|148=maintenance")
 	f.Add(uint8(kindBook), uint8(1), uint8(1), uint8(1), "35=W|262=$ID|268=1|269=0|270=-1|271=NaN\n35=X|262=$ID|268=3|279=2|269=0|55=BTCUSDT|270=5|25043=9223372036854775807|25044=-9223372036854775808")
 	f.Add(uint8(kindDepth), uint8(0), uint8(0), uint8(0), "35=Y|262=$ID|25016=-1121|58=Invalid symbol.\n35=Y|262=$ID2|281=1\n35=3|45=2|372=X|373=8|58=x\n35=5|58=bye")
+	// A message the client does not handle, then both subscriptions rejected.
+	f.Add(uint8(kindTrades), uint8(0), uint8(0), uint8(0), "35=ZZZ\n35=3|45=2|58=no\n35=3|45=3|58=no")
+	// Changes of two symbols in one update, of an unknown side and action.
+	f.Add(uint8(kindDepth), uint8(0), uint8(0), uint8(0), "35=X|262=$ID|268=2|279=0|269=0|270=1|271=1|55=BTCUSDT|25043=1|25044=2|279=7|269=9|270=2|271=1|55=ETHUSDT|25043=3|25044=4")
+	// A quote, then an older one.
+	f.Add(uint8(kindTicker), uint8(0), uint8(0), uint8(0), "35=X|262=$ID|268=2|279=0|269=0|270=1|271=1|55=BTCUSDT|25044=5|279=0|269=1|270=2|271=1|55=BTCUSDT|25044=4")
+	// Limits of subscriptions and of an unknown type, in a table.
+	f.Add(uint8(kindLimits), uint8(2), uint8(0), uint8(0), "35=XLR|6136=$ID|25003=2|25004=3|25005=1|25006=10|25004=9|25005=1|25006=10")
+	// Maintenance news to a command that does not stream.
+	f.Add(uint8(kindInstruments), uint8(0), uint8(0), uint8(0), "35=B|148=maintenance")
+	// A book whose spread is not a number.
+	f.Add(uint8(kindBook), uint8(0), uint8(3), uint8(10), "35=W|262=$ID|55=BTCUSDT|25044=100|268=2|269=0|270=abc|271=1|269=1|270=2|271=1")
 	f.Fuzz(func(t *testing.T, k, flags, show, levels uint8, input string) {
 		s := fuzzSession(t)
 		c := fuzzClient(kind(k%6), flags&1 != 0, flags&2 != 0, flags&4 != 0, int(show%12), int(levels))

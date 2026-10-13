@@ -80,6 +80,10 @@ func FuzzValidate(f *testing.F) {
 		{2, "35=A|" + hdr + "98=0|108=30|1137=9|95=3|96=a|b|"},
 		{2, "35=A|1128=9|627=2|628=a|629=20231001-12:00:00|630=1|628=b|"},
 		{2, "35=8|" + hdr + "453=99999999999999999999|"},
+		// Control characters and a backslash, which AppendField escapes,
+		// and a tag the message does not define before one of its groups.
+		{0, "35=D|" + hdr + "11=O1|58=a\rb\tc\\d|"},
+		{2, "35=D|" + hdr + "11=O|54=1|60=20231001-12:00:00|40=2|55=X|30=X|78=1|79=A|"},
 	} {
 		f.Add(s.sel, uint8(dictionary.CheckAll), []byte(s.body))
 		f.Add(s.sel, uint8(0), []byte(s.body))

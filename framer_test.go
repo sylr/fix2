@@ -246,6 +246,12 @@ func FuzzFramer(f *testing.F) {
 	f.Add(append([]byte("junk8=FIX"), good...))
 	f.Add([]byte("8=FIX.4.4\x019=5\x0135=0\x0110=000\x01"))
 	f.Add(append(good[:20:20], good...))
+	// A stream ending right after the BeginString.
+	f.Add([]byte("8=FIX.4.4\x01"))
+	// A BodyLength too short, in a frame whose CheckSum search runs into the
+	// bytes searched for that of a frame whose BodyLength is too long: neither
+	// is found.
+	f.Add([]byte("8=FIX.4.4\x019=60\x0135=0\x01" + "8=FIX.4.4\x019=5\x0135=0\x0149=A\x01" + "58=" + strings.Repeat("x", 40) + "\x01"))
 	f.Fuzz(func(t *testing.T, stream []byte) {
 		// In one read, and a byte at a time.
 		for _, r := range []io.Reader{bytes.NewReader(stream), iotest.OneByteReader(bytes.NewReader(stream))} {

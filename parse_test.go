@@ -557,6 +557,21 @@ func FuzzParse(f *testing.F) {
 	f.Add([]byte("8=FIX.4.4\x019=5\x0135=0\x0110=1\x01ab"))
 	// Seed with DATA fields (embedded SOH, read by length).
 	f.Add(buildMsg("FIX.4.4", "35=A\x0195=6\x0196=A\x0155=X\x01212=3\x01213=\x01\x01\x01"))
+	// Seed with headers, bodies and trailers malformed one field at a time.
+	for _, raw := range []string{
+		"8=FIX.4.4 9=5 35=0 10=000 ",                                // BeginString without SOH
+		"8=FIX.4.4\x019=5 35=0 10=000 ",                             // BodyLength without SOH
+		"8=FIX.4.4\x018=5\x0135=0\x0110=000\x01",                    // BeginString where BodyLength belongs
+		"8=FIX.4.4\x01x=5\x0135=0\x0110=000\x01",                    // a tag that is not a number
+		"8=FIX.4.4\x019=\x0135=0\x0110=000\x01",                     // BodyLength empty
+		"8=FIX.4.4\x019=0000000000000000000x\x0135=0\x0110=000\x01", // BodyLength longer than the fast path reads, not a number
+		"8=FIX.4.4\x01\x0135=0\x0149=A\x0110=000\x01",               // BodyLength missing
+		"8=FIX.4.4\x019=12\x0135=0\x0158=abcd",                      // a body field without SOH
+		"8=FIX.4.4\x019=5\x0135=0\x01100=000\x01",                   // a three-digit tag where CheckSum belongs
+		"8=FIX.4.4\x019=5\x0135=0\x0110=000",                        // CheckSum without SOH
+	} {
+		f.Add([]byte(raw))
+	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// The reader parsers and the Framer read the same bytes, malformed

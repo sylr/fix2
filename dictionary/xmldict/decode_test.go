@@ -225,6 +225,8 @@ func limit(r io.Reader) error {
 // messages without panicking: for each message type, one with all its fields
 // and a bare one.
 func FuzzLoad(f *testing.F) {
+	// An Orchestra repository with two fields, for the seeds to add to.
+	const orch = `<fixr:repository xmlns:fixr="http://fixprotocol.io/2020/orchestra/repository" name="FIX.4.4"><fixr:fields><fixr:field id="1" name="A" type="String"/><fixr:field id="2" name="N" type="NumInGroup"/></fixr:fields>`
 	for _, seed := range []string{
 		`<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages><message name="M" msgtype="M"><component name="C"/><group name="NoG" required="Y"><field name="A"/><group name="NoH"><field name="B"/></group></group></message></messages><components><component name="C"><field name="A"/><component name="D"/></component><component name="D"><field name="B" required="Y"/></component></components><fields><field number="35" name="MsgType" type="STRING"/><field number="1" name="A" type="STRING"/><field number="2" name="B" type="INT"><value enum="1" description="ONE"/></field><field number="3" name="NoG" type="NUMINGROUP"/><field number="4" name="NoH" type="NUMINGROUP"/></fields></fix>`,
 		`<fix><messages><message name="M" msgtype="M"><component name="C"/></message></messages><components><component name="C"><component name="C"/></component></components></fix>`,
@@ -236,6 +238,24 @@ func FuzzLoad(f *testing.F) {
 		`<`, ``, `<fix>`, `<fix><messages><message/></messages></fix>`,
 		testOrchestraXML,
 		`<fixr:repository xmlns:fixr="http://fixprotocol.io/2020/orchestra/repository" name="FIX.4.4"><fixr:fields><fixr:field id="1" name="A" type="String"/><fixr:field id="2" name="N" type="NumInGroup"/></fixr:fields><fixr:groups><fixr:group id="5" name="G"><fixr:numInGroup id="2"/><fixr:fieldRef id="1"/><fixr:groupRef id="5"/></fixr:group></fixr:groups><fixr:messages><fixr:message name="M" msgType="M"><fixr:structure><fixr:groupRef id="5"/></fixr:structure></fixr:message></fixr:messages></fixr:repository>`,
+		// Malformed QuickFIX dictionaries: an unclosed element in a component
+		// and in a field, an element no body holds, a trailer field and a
+		// group counter that are not defined.
+		`<fix><components><component name="C"><x></component></components></fix>`,
+		`<fix><messages><message name="M" msgtype="M"><field name="A"><`,
+		`<fix><messages><message name="M" msgtype="M"><x/></message></messages></fix>`,
+		`<fix><trailer><field name="Missing"/></trailer></fix>`,
+		`<fix><header><group name="NoHops"/></header></fix>`,
+		// Malformed Orchestra repositories: an element each list skips, ids
+		// that are not numbers, references to a field that is not defined.
+		orch + `<fixr:codeSets><fixr:x/></fixr:codeSets></fixr:repository>`,
+		orch + `<fixr:fields><fixr:x/></fixr:fields></fixr:repository>`,
+		orch + `<fixr:groups><fixr:x/></fixr:groups></fixr:repository>`,
+		orch + `<fixr:messages><fixr:x/></fixr:messages></fixr:repository>`,
+		orch + `<fixr:groups><fixr:group id="x" name="G"/></fixr:groups></fixr:repository>`,
+		orch + `<fixr:groups><fixr:group id="5" name="G"><fixr:numInGroup id="x"/></fixr:group></fixr:groups></fixr:repository>`,
+		orch + `<fixr:groups><fixr:group id="5" name="G"><fixr:numInGroup id="2"/><fixr:fieldRef id="99"/></fixr:group></fixr:groups></fixr:repository>`,
+		orch + `<fixr:components><fixr:component id="7" name="C"><fixr:fieldRef id="99"/></fixr:component></fixr:components></fixr:repository>`,
 	} {
 		f.Add([]byte(seed))
 	}

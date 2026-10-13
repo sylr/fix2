@@ -342,6 +342,8 @@ func FuzzBuilder(f *testing.F) {
 	f.Add([]byte{0, 0, 55, 3, 'X', 'Y', 'Z', 1, 0, 44, 2, '1', '0', 4, 0, 38, 8, 0, 0, 0, 0, 0, 0, 0xf0, 0x3f})
 	f.Add([]byte{2, 0, 95, 4, 'a', 1, 'b', 'c', 0, 0, 35, 1, 'D', 0, 0, 8, 7, 'F', 'I', 'X', '.', '4', '.', '2'})
 	f.Add([]byte{6, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1})
+	// SetFloat on MsgType, a tag the Builder manages: 1.5.
+	f.Add([]byte{4, 0, 35, 8, 0x3f, 0xf8, 0, 0, 0, 0, 0, 0})
 	f.Fuzz(func(t *testing.T, ops []byte) {
 		b := NewBuilder("FIX.4.4", "D")
 		begin, msgType := "FIX.4.4", "D"

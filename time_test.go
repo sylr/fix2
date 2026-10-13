@@ -175,7 +175,7 @@ func TestAppendUTCTime(t *testing.T) {
 
 // The fast path agrees with time.Parse, and does not allocate.
 func FuzzParseUTCTimestamp(f *testing.F) {
-	for _, s := range []string{"20231015-10:00:00", "20231015-10:00:00.123", "20240229-23:59:59.123456789", "20230229-10:00:00", "20231015-24:00:00", "00000000-00:00:00"} {
+	for _, s := range []string{"20231015-10:00:00", "20231015-10:00:00.123", "20240229-23:59:59.123456789", "20230229-10:00:00", "20231015-24:00:00", "00000000-00:00:00", "20231015-10:00:00.12x"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
