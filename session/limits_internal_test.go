@@ -7,6 +7,7 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session/transport"
 	"github.com/sylr/fix2/session/transport/mem"
 )
 
@@ -32,21 +33,50 @@ func TestHasRoom(t *testing.T) {
 	}
 }
 
-// limitSession returns an established session with MaxPendingBytes 100 on
-// a connection that writes nothing, its writer not started.
+// blockedConn blocks every Write until the test ends.
+type blockedConn struct {
+	transport.Conn
+	release chan struct{}
+}
+
+func (c *blockedConn) Write(b []byte) (int, error) {
+	<-c.release
+	return len(b), nil
+}
+
+// limitSession returns an established session with MaxPendingBytes 100
+// whose writer is stuck writing a first message, so that what the test
+// queues stays queued.
 func limitSession(t *testing.T) (*Session, *conn) {
 	t.Helper()
 	s := fenceSession(t, func(c *Config) { c.MaxPendingBytes, c.FailWhenFull = 100, true })
 	a, b := mem.Pipe()
-	t.Cleanup(func() { a.Close(); b.Close() })
-	c, err := s.attach(a, nil)
+	bc := &blockedConn{Conn: a, release: make(chan struct{})}
+	t.Cleanup(func() { close(bc.release); a.Close(); b.Close() })
+	c, err := s.attach(bc, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
 	s.phase = phaseEstablished
 	s.mu.Unlock()
-	return s, c
+	if _, err := s.Send(t.Context(), sizedOrder(1)); err != nil {
+		t.Fatal(err)
+	}
+	// The writer took it, and is stuck writing it.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		taken := len(c.pending) == 0
+		s.mu.Unlock()
+		if taken {
+			return s, c
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the writer never took the first message")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // order returns an order whose body is about n bytes.
