@@ -27,7 +27,8 @@
 // flushes meanwhile, and in the write that completes a checkpoint. A disk
 // that hangs holds the session, and Close, until it answers. On macOS, a
 // flush reaches the drive, not its platters: SQLite only asks for that with
-// PRAGMA fullfsync, which slows every Sync tenfold.
+// PRAGMA fullfsync, which slows every Sync tenfold. The store does not set
+// it, by design: on macOS, a Sync is not promised to survive a power loss.
 package sqlite3
 
 import (

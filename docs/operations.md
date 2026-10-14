@@ -154,7 +154,9 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
   machine crash may lose those since the last `Sync`, which the session
   calls before writing what it stored. On macOS, a flush reaches the drive,
   not its platters: SQLite only asks for that with `PRAGMA fullfsync`,
-  which the store does not set.
+  which slows every `Sync` about tenfold. The store does not set it, and
+  will not offer it: on macOS, a `Sync` is not promised to survive a
+  power loss.
 - **Disk.** The database holds every message sent until `Retention`
   evicts it, or the sequence numbers are reset. Retention is not a hard
   bound: messages that may not have been written, those a resend the
