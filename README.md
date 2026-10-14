@@ -155,8 +155,9 @@ by a Nix flake: `cd tests/benchmarks && nix develop -c make bench`.
 
 ## Operating
 
-[docs/operations.md](docs/operations.md) says what a deployment has to size
-and configure: the memory each session's buffers may take, and the store's.
+[docs/operations.md](docs/operations.md) says what a deployment has to size,
+configure and watch: memory, authentication, TLS, what the logs hold, audit
+trails, the SQLite store's disk, and a disk that stops answering.
 
 ## License
 
