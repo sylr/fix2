@@ -33,6 +33,7 @@ package sqlite3
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -93,8 +94,9 @@ var schema = []string{
 var errConflict = fmt.Errorf("%w: the database changed under the store, another writer?", store.ErrSeqMismatch)
 
 // Store is a store.Store in a SQLite database. Writes go through a
-// connection of its own, one at a time; Range reads through another, in a
-// transaction whose snapshot the writes made meanwhile do not change.
+// connection of its own, one at a time; Range reads through others, in a
+// short transaction for each chunk of messages, so that checkpoints are not
+// held back while its callback runs (see Range).
 type Store struct {
 	db    *sql.DB
 	key   string
@@ -113,14 +115,36 @@ type Store struct {
 
 	// mu guards what follows, which only writers, holding wmu, change; and
 	// failed, which a checkpoint sets too.
-	mu     sync.RWMutex
-	state  store.State
-	first  uint64 // the messages below were truncated away
-	dirty  bool   // committed since the last flush
-	failed error  // why the store is in doubt
-	opened bool
-	closed bool
+	mu    sync.RWMutex
+	state store.State
+	first uint64 // the messages below were truncated away
+	// deleted is how far they were deleted: Truncate keeps those a Range
+	// reads (see pins), deleting them later.
+	deleted uint64
+	dirty   bool  // committed since the last flush
+	failed  error // why the store is in doubt
+	opened  bool
+	closed  bool
+	// pins counts the Ranges running by generation and first sequence
+	// number read: Truncate deletes no message of the current generation at
+	// or after the lowest, which a Range must still see. Changed holding tmu
+	// too.
+	pins map[pinned]int
+	// tmu, held by Truncate and by a Range pinning, orders them: a Truncate
+	// is in a Range's snapshot, or sees its pin. A channel, so that a Range
+	// stops waiting for it when its ctx is done.
+	tmu chan struct{}
 }
+
+// pinned is a generation and the first sequence number a Range reads in it.
+type pinned struct{ gen, seq uint64 }
+
+// rangeChunkRows and rangeChunkBytes bound the messages a Range reads in one
+// transaction, before handing them to its callback.
+const (
+	rangeChunkRows  = 512
+	rangeChunkBytes = 1 << 20
+)
 
 var (
 	_ store.Store     = (*Store)(nil)
@@ -132,10 +156,13 @@ var (
 // with the "sqlite3" driver this package registers, without cache=shared.
 // Open creates the tables if need be. db stays the caller's: Close leaves it
 // open. The Store keeps one of db's connections while open, which it
-// discards when it closes, and Range and the checkpoints take others: a db
-// limited to one connection is refused, and one shared by n stores must
-// allow n+1 at least, one more for a Range callback that calls Range.
-func New(db *sql.DB, key string) *Store { return &Store{db: db, key: key} }
+// discards when it closes, and Range and the checkpoints take others, Range
+// only while it reads a chunk, not while its callback runs: a db limited to
+// one connection is refused, and one shared by n stores must allow n+1 at
+// least.
+func New(db *sql.DB, key string) *Store {
+	return &Store{db: db, key: key, tmu: make(chan struct{}, 1)}
+}
 
 // OpenFile opens the database file at path, creating it if need be, and
 // returns the Store of the session key in it. Closing the Store closes the
@@ -145,7 +172,7 @@ func OpenFile(path, key string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite3: opening %s: %w", path, err)
 	}
-	return &Store{db: db, key: key, owned: true}, nil
+	return &Store{db: db, key: key, owned: true, tmu: make(chan struct{}, 1)}, nil
 }
 
 // Open implements store.Store.
@@ -176,7 +203,7 @@ func (s *Store) Open(ctx context.Context) (store.State, error) {
 	}
 	s.closing, s.cancel = context.WithCancel(context.Background())
 	s.mu.Lock()
-	s.state, s.first, s.opened = st, first, true
+	s.state, s.first, s.deleted, s.opened = st, first, first, true
 	s.mu.Unlock()
 	return st, nil
 }
@@ -222,9 +249,17 @@ func (s *Store) load(ctx context.Context) (st store.State, first uint64, err err
 			s.key, time.Now().Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
-		return s.conn.QueryRowContext(ctx, `SELECT session_id, generation, next_sender, next_target, first_seq, created_at, window_id
+		if err := s.conn.QueryRowContext(ctx, `SELECT session_id, generation, next_sender, next_target, first_seq, created_at, window_id
 			FROM fix2_sessions WHERE session_key = ?`, s.key).Scan(
-			&s.sessionID, &st.Generation, &st.NextSender, &st.NextTarget, &first, &createdAt, &st.WindowID)
+			&s.sessionID, &st.Generation, &st.NextSender, &st.NextTarget, &first, &createdAt, &st.WindowID); err != nil {
+			return err
+		}
+		// What a Truncate kept for a Range that never ended.
+		if _, err = s.conn.ExecContext(ctx, "DELETE FROM fix2_messages WHERE session_id = ? AND seq < ?", s.sessionID, first); err != nil {
+			return err
+		}
+		_, err = s.conn.ExecContext(ctx, "DELETE FROM fix2_skipped WHERE session_id = ? AND last_seq < ?", s.sessionID, first)
+		return err
 	})
 	if err != nil {
 		return st, 0, fmt.Errorf("sqlite3: loading session %q: %w", s.key, err)
@@ -344,7 +379,9 @@ func (s *Store) settle() error {
 		return s.fail(fmt.Errorf("%w: sqlite3: settling a failed commit: %w", store.ErrUnknownOutcome, err))
 	}
 	s.mu.Lock()
-	s.state, s.first, s.dirty = st, first, true
+	// What was deleted is not known: no further than first, which a Reset
+	// may have brought back to 1, is safe.
+	s.state, s.first, s.deleted, s.dirty = st, first, min(s.deleted, first), true
 	s.mu.Unlock()
 	return nil
 }
@@ -552,13 +589,171 @@ func (s *Store) SetNextSender(ctx context.Context, gen, next uint64) error {
 	return nil
 }
 
-// Range implements store.Store. It reads in a transaction of its own
-// connection, whose snapshot it reports, and checks the generation against
-// the store's before each message.
+// Range implements store.Store. It reads the messages a chunk at a time
+// (rangeChunkRows or rangeChunkBytes), each in a short transaction on a
+// connection of the pool, given back before fn sees the chunk: a callback
+// that takes long, as a resend to a slow counterparty does, holds back no
+// checkpoint. The snapshot it reports is NextSender and first_seq read when
+// it starts, and the messages Truncate keeps for it (see pin). It checks
+// the generation against the store's before each message.
 func (s *Store) Range(ctx context.Context, gen, begin, end uint64, fn func(seq uint64, raw []byte, hole store.Hole) error) error {
 	if err := s.current(gen); err != nil {
 		return err
 	}
+	begin = max(begin, 1)
+	// Pinned before the snapshot is read: a Truncate is either in it, or
+	// deletes nothing this Range reads.
+	unpin, err := s.pin(ctx, gen, begin)
+	if err != nil {
+		return err
+	}
+	defer unpin()
+	var next, first uint64
+	var skipped [][2]uint64
+	err = s.read(ctx, gen, func(conn *sql.Conn) error {
+		var dbGen uint64
+		err := conn.QueryRowContext(ctx, "SELECT generation, next_sender, first_seq FROM fix2_sessions WHERE session_id = ?", s.sessionID).Scan(&dbGen, &next, &first)
+		if err != nil {
+			return fmt.Errorf("sqlite3: reading session %q: %w", s.key, err)
+		}
+		if dbGen != gen {
+			return fmt.Errorf("%w: generation %d, current is %d", store.ErrGenerationGone, gen, dbGen)
+		}
+		if end = min(end, next-1); begin > end {
+			return nil
+		}
+		skipped, err = s.skipped(ctx, conn, begin, end)
+		return err
+	})
+	if err != nil || begin > end {
+		return cmp.Or(err, s.current(gen))
+	}
+	// The messages stored, a chunk at a time: the transaction reading one
+	// ends before fn sees it. Those below first, a Truncate deferred may
+	// have left, are not read.
+	var rows []storedRow
+	var buf []byte
+	for seq := begin; seq <= end; {
+		hi, ri := end, 0 // ri: the row of rows seq may be
+		if lo := max(seq, first); lo <= end {
+			rows, buf = rows[:0], buf[:0]
+			full := false
+			err := s.read(ctx, gen, func(conn *sql.Conn) error {
+				// A Reset deleting the messages commits before the store's
+				// generation changes: one committed is seen here.
+				var dbGen uint64
+				if err := conn.QueryRowContext(ctx, "SELECT generation FROM fix2_sessions WHERE session_id = ?", s.sessionID).Scan(&dbGen); err != nil {
+					return fmt.Errorf("sqlite3: reading session %q: %w", s.key, err)
+				}
+				if dbGen != gen {
+					return fmt.Errorf("%w: generation %d, current is %d", store.ErrGenerationGone, gen, dbGen)
+				}
+				r, err := conn.QueryContext(ctx, "SELECT seq, raw FROM fix2_messages WHERE session_id = ? AND seq BETWEEN ? AND ? ORDER BY seq", s.sessionID, lo, end)
+				if err != nil {
+					return fmt.Errorf("sqlite3: reading messages %d to %d: %w", lo, end, err)
+				}
+				defer r.Close()
+				var rowSeq uint64
+				var raw sql.RawBytes // valid until the next row
+				for !full && r.Next() {
+					if err := r.Scan(&rowSeq, &raw); err != nil {
+						return fmt.Errorf("sqlite3: reading messages: %w", err)
+					}
+					start := len(buf)
+					buf = append(buf, raw...)
+					rows = append(rows, storedRow{seq: rowSeq, start: start, end: len(buf)})
+					full = len(rows) == rangeChunkRows || len(buf) >= rangeChunkBytes
+				}
+				if err := r.Err(); err != nil {
+					return fmt.Errorf("sqlite3: reading messages: %w", err)
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			if full {
+				// Read on from the message after the chunk's last.
+				hi = rows[len(rows)-1].seq
+			}
+		}
+		for ; seq <= hi; seq++ {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := s.current(gen); err != nil {
+				return err
+			}
+			for len(skipped) > 0 && skipped[0][1] < seq {
+				skipped = skipped[1:]
+			}
+			var err error
+			switch {
+			case seq < first:
+				err = fn(seq, nil, store.HoleRetention)
+			case ri < len(rows) && rows[ri].seq == seq:
+				r := rows[ri]
+				err = fn(seq, buf[r.start:r.end:r.end], store.HoleNone)
+				ri++
+			case len(skipped) > 0 && skipped[0][0] <= seq:
+				err = fn(seq, nil, store.HoleNotStored)
+			default:
+				err = fn(seq, nil, store.HoleMissing)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return s.current(gen)
+}
+
+// storedRow is a message a Range read, at buf[start:end].
+type storedRow struct {
+	seq        uint64
+	start, end int
+}
+
+// pin keeps Truncate from deleting the messages of generation gen from seq
+// on until the returned function is called. It waits for a Truncate
+// running, not for a write: a disk that hangs holds a Range back only if a
+// Truncate hangs.
+func (s *Store) pin(ctx context.Context, gen, seq uint64) (func(), error) {
+	if err := s.lockTruncate(ctx); err != nil {
+		return nil, err
+	}
+	defer s.unlockTruncate()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pins == nil {
+		s.pins = make(map[pinned]int)
+	}
+	p := pinned{gen, seq}
+	s.pins[p]++
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.pins[p]--; s.pins[p] == 0 {
+			delete(s.pins, p)
+		}
+	}, nil
+}
+
+// lockTruncate takes tmu, unless ctx is done first.
+func (s *Store) lockTruncate(ctx context.Context) error {
+	select {
+	case s.tmu <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Store) unlockTruncate() { <-s.tmu }
+
+// read runs fn in a read transaction on a connection of the pool, which it
+// gives back once fn returns.
+func (s *Store) read(ctx context.Context, gen uint64, fn func(conn *sql.Conn) error) error {
 	conn, err := s.db.Conn(ctx)
 	if err != nil {
 		if cerr := s.current(gen); cerr != nil {
@@ -568,74 +763,11 @@ func (s *Store) Range(ctx context.Context, gen, begin, end uint64, fn func(seq u
 	}
 	defer release(conn)
 	// DEFERRED whatever the driver's _txlock: a read takes no lock that
-	// would hold back the writes, those fn makes included.
+	// would hold back the writes.
 	if _, err := conn.ExecContext(ctx, "BEGIN DEFERRED"); err != nil {
 		return fmt.Errorf("sqlite3: beginning a transaction: %w", err)
 	}
-	var dbGen, next, first uint64
-	err = conn.QueryRowContext(ctx, "SELECT generation, next_sender, first_seq FROM fix2_sessions WHERE session_id = ?", s.sessionID).Scan(&dbGen, &next, &first)
-	if err != nil {
-		return fmt.Errorf("sqlite3: reading session %q: %w", s.key, err)
-	}
-	if dbGen != gen {
-		return fmt.Errorf("%w: generation %d, current is %d", store.ErrGenerationGone, gen, dbGen)
-	}
-	begin, end = max(begin, 1), min(end, next-1)
-	if begin > end {
-		return s.current(gen)
-	}
-	skipped, err := s.skipped(ctx, conn, begin, end)
-	if err != nil {
-		return err
-	}
-	rows, err := conn.QueryContext(ctx, "SELECT seq, raw FROM fix2_messages WHERE session_id = ? AND seq BETWEEN ? AND ? ORDER BY seq", s.sessionID, begin, end)
-	if err != nil {
-		return fmt.Errorf("sqlite3: reading messages %d to %d: %w", begin, end, err)
-	}
-	defer rows.Close()
-	var (
-		rowSeq uint64
-		raw    sql.RawBytes // valid until the next row: fn's to borrow
-	)
-	nextRow := func() (bool, error) {
-		if !rows.Next() {
-			return false, rows.Err()
-		}
-		return true, rows.Scan(&rowSeq, &raw)
-	}
-	more, err := nextRow()
-	for seq := begin; err == nil && seq <= end; seq++ {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := s.current(gen); err != nil {
-			return err
-		}
-		for len(skipped) > 0 && skipped[0][1] < seq {
-			skipped = skipped[1:]
-		}
-		switch {
-		case more && rowSeq == seq:
-			if err := fn(seq, raw, store.HoleNone); err != nil {
-				return err
-			}
-			more, err = nextRow()
-			continue
-		case seq < first:
-			err = fn(seq, nil, store.HoleRetention)
-		case len(skipped) > 0 && skipped[0][0] <= seq:
-			err = fn(seq, nil, store.HoleNotStored)
-		default:
-			err = fn(seq, nil, store.HoleMissing)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("sqlite3: reading messages: %w", err)
-	}
-	return s.current(gen)
+	return fn(conn)
 }
 
 // skipped returns the ranges of sequence numbers SetNextSender skipped
@@ -708,7 +840,7 @@ func (s *Store) Reset(ctx context.Context, expectGen uint64, createdAt time.Time
 	}
 	s.mu.Lock()
 	s.state = store.State{Generation: expectGen + 1, NextSender: 1, NextTarget: 1, CreatedAt: createdAt, WindowID: windowID}
-	s.first = 1
+	s.first, s.deleted = 1, 1
 	s.mu.Unlock()
 	return nil
 }
@@ -783,30 +915,48 @@ func (s *Store) sync(gen uint64) error {
 // Truncate implements store.Truncater. The messages are deleted: a Range
 // already started keeps reading them from its snapshot.
 func (s *Store) Truncate(ctx context.Context, gen, before uint64) error {
+	if err := s.lockTruncate(ctx); err != nil {
+		return err
+	}
+	defer s.unlockTruncate()
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
 	if err := s.current(gen); err != nil {
 		return err
 	}
-	before = min(before, s.state.NextSender)
-	if before <= s.first {
+	first := max(s.first, min(before, s.state.NextSender))
+	// A Range running reads on from its pin, past first_seq: what it must
+	// still see is deleted by a Truncate after it, at the same first_seq
+	// if need be.
+	deleteBefore := first
+	s.mu.RLock()
+	for p := range s.pins {
+		// A Range of an earlier generation reads nothing more.
+		if p.gen == gen {
+			deleteBefore = min(deleteBefore, p.seq)
+		}
+	}
+	s.mu.RUnlock()
+	if first == s.first && deleteBefore <= s.deleted {
 		return nil
 	}
 	err := s.write(ctx, func(ctx context.Context) error {
-		if _, err := s.conn.ExecContext(ctx, "DELETE FROM fix2_messages WHERE session_id = ? AND seq < ?", s.sessionID, before); err != nil {
-			return fmt.Errorf("sqlite3: truncating before %d: %w", before, err)
-		}
-		if _, err := s.conn.ExecContext(ctx, "DELETE FROM fix2_skipped WHERE session_id = ? AND last_seq < ?", s.sessionID, before); err != nil {
-			return fmt.Errorf("sqlite3: truncating before %d: %w", before, err)
+		if deleteBefore > s.deleted {
+			if _, err := s.conn.ExecContext(ctx, "DELETE FROM fix2_messages WHERE session_id = ? AND seq < ?", s.sessionID, deleteBefore); err != nil {
+				return fmt.Errorf("sqlite3: truncating before %d: %w", first, err)
+			}
+			if _, err := s.conn.ExecContext(ctx, "DELETE FROM fix2_skipped WHERE session_id = ? AND last_seq < ?", s.sessionID, deleteBefore); err != nil {
+				return fmt.Errorf("sqlite3: truncating before %d: %w", first, err)
+			}
 		}
 		return s.update(ctx, "UPDATE fix2_sessions SET first_seq = ? WHERE session_id = ? AND generation = ? AND next_sender = ? AND first_seq = ?",
-			before, s.sessionID, gen, s.state.NextSender, s.first)
+			first, s.sessionID, gen, s.state.NextSender, s.first)
 	})
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
-	s.first = before
+	s.first, s.deleted = first, max(s.deleted, deleteBefore)
 	s.mu.Unlock()
 	return nil
 }

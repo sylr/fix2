@@ -147,9 +147,9 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
   writing the same key make each other's writes fail with
   `store.ErrSeqMismatch`, which halts the session.
 - **Connections.** A store keeps one of the pool's connections while open;
-  replays (`Range`) and checkpoints take others. A `*sql.DB` shared by n
-  stores must allow n+1 connections at least, n+2 if a `Range` callback
-  calls `Range`.
+  replays (`Range`) and checkpoints take others, a replay only while it
+  reads a chunk. A `*sql.DB` shared by n stores must allow n+1 connections
+  at least.
 - **Durability.** Each write is a commit a process crash does not lose; a
   machine crash may lose those since the last `Sync`, which the session
   calls before writing what it stored. On macOS, a flush reaches the drive,
@@ -168,11 +168,12 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
   commits, and a commit writes whole pages, the message's and its
   indexes', some 12 KiB in the store's tests, not the message alone: every
   message sent is a commit, and so are the records of messages received
-  and each `Sync`. A checkpoint cannot copy past what a reader still
-  needs: while a replay reads (a resend the counterparty asked for, a
-  `Range` callback the application runs), the log grows by every commit
-  meanwhile, and starts over only once the replay is done. Leave room for
-  the commits a long resend may see.
+  and each `Sync`. A replay reads the messages 512 (or 1 MiB) at a time,
+  each chunk in a short transaction, so a long resend holds back no
+  checkpoint: in the store's tests, 6000 messages written during one keep
+  the log near 13 MiB, against 87 MiB when a replay was one transaction.
+  The messages a replay is still to read stay on disk past a `Truncate`
+  meanwhile, until the next `Truncate` or the store's next `Open`.
 - **A failed flush or checkpoint** leaves the store in doubt: every call
   from then on fails with `store.ErrUnknownOutcome`, and the session
   halts (`Session.Err`). It does not reconnect: check the database,

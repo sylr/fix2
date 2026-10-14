@@ -144,8 +144,8 @@ func TestCheckpointConnFlushes(t *testing.T) {
 	}
 }
 
-// A Range callback may close the store while a checkpoint waits for the
-// connection the Range holds.
+// A Range callback may close the store while a checkpoint runs, or has just
+// run: the Range holds no connection then, which the checkpoint takes.
 func TestCloseFromRangeDuringCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "fix2.db"))
@@ -153,7 +153,7 @@ func TestCloseFromRangeDuringCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	db.SetMaxOpenConns(2) // the writer's, and the Range's
+	db.SetMaxOpenConns(2) // the writer's, and the Range's or the checkpoint's
 	s := New(db, "S")
 	st, err := s.Open(ctx)
 	if err != nil {
@@ -164,10 +164,15 @@ func TestCloseFromRangeDuringCheckpoint(t *testing.T) {
 	}
 	closed := make(chan error, 1)
 	err = s.Range(ctx, st.Generation, 1, 1, func(uint64, []byte, store.Hole) error {
-		for seq := uint64(2); !s.checkpointing.Load(); seq++ {
+		// A checkpoint starts every checkpointEvery commits; it may be
+		// over before it is seen running.
+		for seq := uint64(2); seq <= 3*checkpointEvery && !s.checkpointing.Load() && !s.catchUp.Load(); seq++ {
 			if err := s.Append(ctx, st.Generation, seq, []byte("m")); err != nil {
 				return err
 			}
+		}
+		if !s.checkpointing.Load() && !s.catchUp.Load() {
+			t.Fatal("no checkpoint ran")
 		}
 		go func() { closed <- s.Close() }()
 		select {
@@ -201,5 +206,57 @@ func TestSyncFlushesEveryCommit(t *testing.T) {
 	}
 	if s.dirty {
 		t.Error("Sync left SetNextTarget's commit unflushed")
+	}
+}
+
+// A Range waits neither for a write nor for a flush: holding the writer's
+// lock, as a flush that hangs does, holds no Range back.
+func TestRangeWaitsForNoWrite(t *testing.T) {
+	ctx := context.Background()
+	s, st := open(t)
+	if err := s.Append(ctx, st.Generation, 1, []byte("m1")); err != nil {
+		t.Fatal(err)
+	}
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Range(ctx, st.Generation, 1, 1, func(uint64, []byte, store.Hole) error { return nil })
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Range waited for the writer's lock")
+	}
+}
+
+// A Range waiting for a Truncate gives up when its ctx is done.
+func TestRangeCancelledWaitingForTruncate(t *testing.T) {
+	s, st := open(t)
+	s.tmu <- struct{}{} // a Truncate running
+	defer func() { <-s.tmu }()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := s.Range(ctx, st.Generation, 1, 1, func(uint64, []byte, store.Hole) error { return nil })
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Range: %v, want %v", err, context.DeadlineExceeded)
+	}
+}
+
+// After a commit whose outcome is unknown, the store does not take as
+// deleted what it cannot know was: a Reset may have brought first back to 1.
+func TestSettleForgetsDeleted(t *testing.T) {
+	s, _ := open(t)
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	s.deleted = 1001 // as after truncating generation 1 before 1001
+	if err := s.settle(); err != nil {
+		t.Fatal(err)
+	}
+	if s.deleted > s.first {
+		t.Errorf("deleted = %d past first = %d", s.deleted, s.first)
 	}
 }

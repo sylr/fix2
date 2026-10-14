@@ -453,3 +453,294 @@ func TestSchemaVersion1(t *testing.T) {
 		t.Errorf("user_version = %d, want 1", got)
 	}
 }
+
+// A Range reads in short transactions, a chunk at a time: the writes its
+// callback waits through are checkpointed meanwhile, and the write-ahead
+// log stays bounded, as in TestCheckpoint.
+func TestRangeLetsCheckpointsRun(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := open(t, path, "S")
+	raw := make([]byte, 200)
+	const n = 6000
+	for seq := uint64(1); seq <= n; seq++ {
+		if err := s.Append(ctx, st.Generation, seq, raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A resend of everything, during which as many messages are sent.
+	next := uint64(n + 1)
+	err := s.Range(ctx, st.Generation, 1, n, func(uint64, []byte, store.Hole) error {
+		err := s.Append(ctx, st.Generation, next, raw)
+		next++
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path + "-wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Some 12KB per commit, were it never checkpointed: 70MB.
+	t.Logf("write-ahead log of %.1f MB", float64(fi.Size())/(1<<20))
+	if fi.Size() > 40<<20 {
+		t.Errorf("write-ahead log of %d MB after %d messages written during a Range", fi.Size()>>20, n)
+	}
+}
+
+// A Range keeps its snapshot across a Truncate its callback makes, in the
+// chunks it reads after it too; the messages kept for it are deleted by a
+// later Truncate.
+func TestRangeSnapshotAcrossChunks(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := open(t, path, "S")
+	const n = 3*500 + 7 // several chunks
+	for seq := uint64(1); seq <= n; seq++ {
+		if err := s.Append(ctx, st.Generation, seq, []byte(fmt.Sprint("m", seq))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := 0
+	err := s.Range(ctx, st.Generation, 1, n, func(seq uint64, raw []byte, hole store.Hole) error {
+		if seq == 1 {
+			if err := s.Truncate(ctx, st.Generation, n-10); err != nil {
+				return err
+			}
+		}
+		if hole != store.HoleNone || string(raw) != fmt.Sprint("m", seq) {
+			t.Errorf("message %d: %q, %v, want m%d", seq, raw, hole, seq)
+		}
+		got++
+		return nil
+	})
+	if err != nil || got != n {
+		t.Fatalf("Range: %d messages, %v", got, err)
+	}
+	for _, r := range collect(t, s, st.Generation, 1, n-11) {
+		if r.hole != store.HoleRetention {
+			t.Fatalf("after the Range, message %d: %v, want truncated", r.seq, r.hole)
+		}
+	}
+	countBelow := func(seq uint64) int {
+		var c int
+		if err := openDB(t, path).QueryRow("SELECT count(*) FROM fix2_messages WHERE seq < ?", seq).Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	if c := countBelow(n - 10); c == 0 {
+		t.Fatal("the messages the Range read were deleted under it")
+	}
+	if err := s.Truncate(ctx, st.Generation, n-5); err != nil {
+		t.Fatal(err)
+	}
+	if c := countBelow(n - 5); c != 0 {
+		t.Errorf("%d messages left before %d after a Truncate with no Range", c, n-5)
+	}
+}
+
+// Messages, numbers skipped and truncated ones are told apart across the
+// chunks a Range reads.
+func TestRangeChunkBoundaries(t *testing.T) {
+	ctx := context.Background()
+	s, st := open(t, filepath.Join(t.TempDir(), "fix2.db"), "S")
+	// 1-700 stored, 701-1300 skipped, 1301-2100 stored, the first 100
+	// truncated.
+	seq := uint64(1)
+	for ; seq <= 700; seq++ {
+		if err := s.Append(ctx, st.Generation, seq, []byte(fmt.Sprint("m", seq))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetNextSender(ctx, st.Generation, 1301); err != nil {
+		t.Fatal(err)
+	}
+	for seq = 1301; seq <= 2100; seq++ {
+		if err := s.Append(ctx, st.Generation, seq, []byte(fmt.Sprint("m", seq))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Truncate(ctx, st.Generation, 101); err != nil {
+		t.Fatal(err)
+	}
+	got := collect(t, s, st.Generation, 1, 2100)
+	if len(got) != 2100 {
+		t.Fatalf("Range: %d records, want 2100", len(got))
+	}
+	for _, r := range got {
+		want := record{seq: r.seq, raw: fmt.Sprint("m", r.seq)}
+		switch {
+		case r.seq <= 100:
+			want = record{seq: r.seq, hole: store.HoleRetention}
+		case r.seq >= 701 && r.seq <= 1300:
+			want = record{seq: r.seq, hole: store.HoleNotStored}
+		}
+		if r != want {
+			t.Fatalf("record %+v, want %+v", r, want)
+		}
+	}
+}
+
+// A Reset committed while a Range reads stops the Range at its next chunk
+// with ErrGenerationGone, rather than reporting the messages it deleted
+// missing.
+func TestRangeAcrossReset(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	db := openDB(t, path)
+	a := sqlite3.New(db, "S")
+	defer a.Close()
+	st, err := a.Open(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 1200 // several chunks
+	for seq := uint64(1); seq <= n; seq++ {
+		if err := a.Append(ctx, st.Generation, seq, []byte("m")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = a.Range(ctx, st.Generation, 1, n, func(seq uint64, _ []byte, hole store.Hole) error {
+		if hole == store.HoleMissing {
+			return fmt.Errorf("message %d missing", seq)
+		}
+		if seq == 1 {
+			// Committed by another store: a's generation has not changed
+			// yet, as between a Reset's commit and its state.
+			b := sqlite3.New(db, "S")
+			defer b.Close()
+			if _, err := b.Open(ctx); err != nil {
+				return err
+			}
+			return b.Reset(ctx, st.Generation, time.Now(), "")
+		}
+		return nil
+	})
+	if !errors.Is(err, store.ErrGenerationGone) {
+		t.Errorf("Range: %v, want %v", err, store.ErrGenerationGone)
+	}
+}
+
+// The messages a Truncate kept for a Range are deleted by the next one,
+// even at the same first_seq, or when the store opens.
+func TestTruncateDeletesWhatItKept(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := open(t, path, "S")
+	for seq := uint64(1); seq <= 100; seq++ {
+		if err := s.Append(ctx, st.Generation, seq, []byte("m")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	truncatingRange := func() {
+		t.Helper()
+		err := s.Range(ctx, st.Generation, 1, 100, func(seq uint64, _ []byte, _ store.Hole) error {
+			if seq == 1 {
+				return s.Truncate(ctx, st.Generation, 101)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored := func() int {
+		t.Helper()
+		var c int
+		if err := openDB(t, path).QueryRow("SELECT count(*) FROM fix2_messages").Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	truncatingRange()
+	if c := stored(); c != 100 {
+		t.Fatalf("%d messages stored after the Range, want the 100 it read", c)
+	}
+	if err := s.Truncate(ctx, st.Generation, 101); err != nil {
+		t.Fatal(err)
+	}
+	if c := stored(); c != 0 {
+		t.Errorf("%d messages stored after a Truncate at the same first_seq, want 0", c)
+	}
+	// Left behind by a process that stopped: deleted when the store opens.
+	if _, err := openDB(t, path).Exec("INSERT INTO fix2_messages (session_id, seq, raw) SELECT session_id, 5, x'00' FROM fix2_sessions"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	open(t, path, "S")
+	if c := stored(); c != 0 {
+		t.Errorf("%d messages stored below first_seq once opened, want 0", c)
+	}
+}
+
+// A Range of a generation a Reset ended keeps nothing of the next one from
+// a Truncate.
+func TestTruncateIgnoresPinsOfEarlierGenerations(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := open(t, path, "S")
+	for seq := uint64(1); seq <= 10; seq++ {
+		if err := s.Append(ctx, st.Generation, seq, []byte("m")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := s.Range(ctx, st.Generation, 1, 10, func(seq uint64, _ []byte, _ store.Hole) error {
+		if seq != 1 {
+			return nil
+		}
+		if err := s.Reset(ctx, st.Generation, time.Now(), ""); err != nil {
+			return err
+		}
+		gen := st.Generation + 1
+		for seq := uint64(1); seq <= 10; seq++ {
+			if err := s.Append(ctx, gen, seq, []byte("n")); err != nil {
+				return err
+			}
+		}
+		if err := s.Truncate(ctx, gen, 11); err != nil {
+			return err
+		}
+		var c int
+		if err := openDB(t, path).QueryRow("SELECT count(*) FROM fix2_messages").Scan(&c); err != nil {
+			return err
+		}
+		if c != 0 {
+			t.Errorf("%d messages of the new generation kept for a Range of the previous one", c)
+		}
+		return nil
+	})
+	if !errors.Is(err, store.ErrGenerationGone) {
+		t.Errorf("Range: %v, want %v", err, store.ErrGenerationGone)
+	}
+}
+
+// The numbers skipped a Truncate kept for a Range are deleted when the
+// store opens, as the messages are.
+func TestOpenDeletesSkippedKept(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := open(t, path, "S")
+	if err := s.SetNextSender(ctx, st.Generation, 101); err != nil {
+		t.Fatal(err)
+	}
+	err := s.Range(ctx, st.Generation, 1, 100, func(seq uint64, _ []byte, _ store.Hole) error {
+		if seq == 1 {
+			return s.Truncate(ctx, st.Generation, 101)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	open(t, path, "S")
+	var c int
+	if err := openDB(t, path).QueryRow("SELECT count(*) FROM fix2_skipped").Scan(&c); err != nil {
+		t.Fatal(err)
+	}
+	if c != 0 {
+		t.Errorf("%d ranges of numbers skipped kept once opened, want 0", c)
+	}
+}
