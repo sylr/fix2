@@ -12,6 +12,7 @@ import (
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/session/store"
 )
 
 // logonTags are the tags of a Logon the session writes, on top of the
@@ -441,7 +442,7 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	if len(windowID) > 0 {
 		id = windowID[0]
 	}
-	if err := s.store.Reset(context.Background(), gen, time.Now(), id); err != nil {
+	if err := s.storeLocked(func() error { return s.store.Reset(context.Background(), gen, time.Now(), id) }); err != nil {
 		s.log.LogAttrs(context.Background(), slog.LevelError, "resetting the store failed", slog.String("why", why), slog.Any("error", err))
 		err = fmt.Errorf("resetting the store (%s): %w", why, err)
 		if uncertain(err) {
@@ -452,7 +453,11 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 		}
 		return fmt.Errorf("session %s: %w", s.id, err)
 	}
-	st, err := s.store.Open(context.Background())
+	var st store.State
+	err := s.storeLocked(func() (err error) {
+		st, err = s.store.Open(context.Background())
+		return err
+	})
 	if err != nil {
 		err = fmt.Errorf("reloading the state of the store reset (%s): %w", why, err)
 		s.haltLocked(err)

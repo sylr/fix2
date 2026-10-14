@@ -170,7 +170,7 @@ func (s *Session) evictLocked(now time.Time) {
 	if before <= s.ret.floor || before-s.ret.floor < (s.st.NextSender-before)/8 {
 		return
 	}
-	if err := t.Truncate(context.Background(), s.st.Generation, before); err != nil {
+	if err := s.storeLocked(func() error { return t.Truncate(context.Background(), s.st.Generation, before) }); err != nil {
 		if diverged(err) {
 			s.haltLocked(fmt.Errorf("evicting messages before %d: %w", before, err))
 			return

@@ -183,25 +183,37 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
 ## A disk that stops answering
 
 A store's writes run under the session's lock: `Append`, for every message
-sent, and, with the SQLite store, the flush a `Sync` or a checkpoint makes
-it wait for. A disk that hangs holds the session, every call into it
-(`Send`, `State`, `Stop`, which closes the store) and its timers, until the
-disk answers; nothing the session does can interrupt a write the operating
-system does not return from.
+sent, `SetNextTarget`, `SetNextSender`, `Reset` and `Truncate`, and, with the
+SQLite store, the flush a `Sync` or a checkpoint makes them wait for.
+Nothing the session does can interrupt a write the operating system does
+not return from, nor release the lock it holds.
+
+`Config.StoreTimeout` (30s by default) bounds how long such a write may
+take before the session gives up on it. A write running longer, between
+once and one and a half times `StoreTimeout`, halts the session without
+waiting for it:
+
+- it logs `session halted: a store write has run longer than
+  StoreTimeout`, `Err` returns an error wrapping `session: a store write
+  took longer than StoreTimeout` at once, and `State` reports the session
+  stopped;
+- the connection is closed, so that the counterparty sees the session go;
+- `Stop` returns that error, its own Logout or the store's `Close` hanging
+  included; the session stops once the write returns, `Done` closing then,
+  and an `Acceptor` or `Initiator` frees its ID.
+
+The goroutines waiting for the lock stay blocked until the disk answers:
+`Send` and the other calls that take it, timers, the reader and writer.
+Once the write returns, the session stays halted, as for any store failure
+that leaves its state in doubt (see `Session.Err`): check the store, then
+remove the session and add it again, or restart the process; with the
+SQLite store, it resumes from what reached the disk. A `StoreTimeout` too
+short halts sessions on writes that were only slow: leave it well above
+what a `Reset` or `Truncate` of your largest sessions takes.
 
 A `Sync` running longer than `WriteTimeout`, between once and one and a
 half times it, is cancelled: the writer stops waiting for it, then, once
 it has the session's lock, drops the connection rather than send what may
 not be durable, and logs `making messages durable cancelled: not sent`.
-The flush itself goes on, and the SQLite store's next write waits for it:
-a `Send` storing a message meanwhile holds the session's lock while it
-waits, and the writer, waiting for that lock, neither disconnects nor logs
-until the disk answers.
-
-Watch for it from outside the session: a watchdog calling a session method
-that takes its lock, `State` for one, with a deadline of its own, reporting
-when it does not return. The counterparty sees the session stop answering
-and disconnects, after a delay its implementation decides: a fix2
-counterparty sends a TestRequest after 1.2 heartbeat intervals of silence
-and disconnects 1.2 intervals later. Restarting the process is the way
-out; with the SQLite store, it resumes from what reached the disk.
+The flush itself goes on, and the SQLite store's next write waits for it,
+under the session's lock: `StoreTimeout` then halts the session.

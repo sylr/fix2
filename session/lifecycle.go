@@ -70,17 +70,22 @@ func (s *Session) Stop(ctx context.Context) error {
 // wound down, and its store is closed. No handler callback of the session
 // runs after. It is closed by the time Stop returns, unless Stop's ctx
 // ended first or Stop was called from a callback, or with the ctx of a
-// callback that returned while one of the same kind runs (see Stop); the
-// errors of the store's Sync and Close made then are only logged.
+// callback that returned while one of the same kind runs (see Stop), or a
+// store write hangs (see Config.StoreTimeout), the session stopping once it
+// returns; the errors of the store's Sync and Close made then are only
+// logged.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) stop(ctx context.Context, text string) error {
-	s.mu.Lock()
-	s.stopping = true
-	s.mu.Unlock()
 	if s.ownCallback(ctx) {
+		// One stop, however many Stops are called, once a store write
+		// hangs (see below).
+		if s.stuck.Load() != nil && !s.stopQueued.CompareAndSwap(false, true) {
+			return nil
+		}
 		// What stopping waits for includes the callback calling it.
 		go func() {
+			s.markStopping()
 			s.Logout(context.Background(), text)
 			if idle := s.markStopped(); idle != nil {
 				<-idle
@@ -89,6 +94,37 @@ func (s *Session) stop(ctx context.Context, text string) error {
 		}()
 		return nil
 	}
+	// A store write that hangs holds the lock, and may be stopping's own,
+	// its Logout or its store's Close: Stop returns once it is found stuck
+	// (see storeStuck), and the stop goes on once the write returns, one
+	// stop however many Stops are called then.
+	if err := s.stuck.Load(); err != nil {
+		if s.stopQueued.CompareAndSwap(false, true) {
+			go s.stopNow(context.Background(), text)
+		}
+		return *err
+	}
+	stopped := make(chan error, 1)
+	go func() { stopped <- s.stopNow(ctx, text) }()
+	select {
+	case err := <-stopped:
+		return err
+	case <-s.stuckCh:
+		s.stopQueued.Store(true) // the stop started goes on
+		return *s.stuck.Load()
+	}
+}
+
+// markStopping records that the session is stopping.
+func (s *Session) markStopping() {
+	s.mu.Lock()
+	s.stopping = true
+	s.mu.Unlock()
+}
+
+// stopNow stops the session, as Stop does from no callback.
+func (s *Session) stopNow(ctx context.Context, text string) error {
+	s.markStopping()
 	err := s.Logout(ctx, text)
 	idle := s.markStopped()
 	if idle == nil {
@@ -106,7 +142,7 @@ func (s *Session) stop(ctx context.Context, text string) error {
 	serr := s.syncStored(ctx)
 	select {
 	case <-idle:
-		err = errors.Join(err, serr, s.store.Close())
+		err = errors.Join(err, serr, s.storeWrite(&s.closeWrites, s.store.Close))
 		close(s.done)
 		return err
 	default:
@@ -299,7 +335,7 @@ func (s *Session) closeLate() {
 		s.log.LogAttrs(context.Background(), slog.LevelError, "stopped late: making the messages sent durable failed", slog.Any("error", err))
 	}
 	cancel()
-	if err := s.store.Close(); err != nil {
+	if err := s.storeWrite(&s.closeWrites, s.store.Close); err != nil {
 		s.log.LogAttrs(context.Background(), slog.LevelError, "stopped late: closing the store failed", slog.Any("error", err))
 	}
 	close(s.done)
@@ -378,7 +414,7 @@ func (s *Session) SetNextSenderSeqNum(next uint64) error {
 	if next < s.st.NextSender {
 		return fmt.Errorf("session %s: NextSenderSeqNum can only move forward: %d is below %d", s.id, next, s.st.NextSender)
 	}
-	if err := s.store.SetNextSender(context.Background(), s.st.Generation, next); err != nil {
+	if err := s.storeLocked(func() error { return s.store.SetNextSender(context.Background(), s.st.Generation, next) }); err != nil {
 		if uncertain(err) {
 			// The store's NextSender may be ahead: the numbers below it may
 			// be taken.
@@ -402,7 +438,7 @@ func (s *Session) SetNextTargetSeqNum(next uint64) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.store.SetNextTarget(context.Background(), s.st.Generation, next); err != nil {
+	if err := s.storeLocked(func() error { return s.store.SetNextTarget(context.Background(), s.st.Generation, next) }); err != nil {
 		if diverged(err) {
 			// The store moved on without the session. An outcome unknown
 			// alone fails the call only: the next SetNextTarget settles it.

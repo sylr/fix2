@@ -234,6 +234,14 @@ type Config struct {
 	// WriteTimeout bounds each write, 10s if 0: a counterparty not reading
 	// is disconnected.
 	WriteTimeout time.Duration
+	// StoreTimeout is how long a store write made under the session's lock
+	// (Append, SetNextTarget, SetNextSender, Reset, Truncate) may take, 30s
+	// if 0. One taking longer, between once and one and a half times it,
+	// halts the session without waiting for it: State and Err tell it at
+	// once, the connection is closed, and Stop returns, the session
+	// stopping once the write returns. It stays halted then (see Err). The
+	// store's Close, when the session stops, is bounded alike.
+	StoreTimeout time.Duration
 	// MaxPendingMessages and MaxPendingBytes bound the messages waiting to
 	// be written, 10000 and 16 MiB if 0. Send waits for room or fails with
 	// ErrSlowConsumer: a message is queued only if the bytes waiting and
@@ -304,6 +312,7 @@ func (c Config) withDefaults() Config {
 	def(&c.LogonTimeout, 10*time.Second)
 	def(&c.LogoutTimeout, 2*time.Second)
 	def(&c.WriteTimeout, 10*time.Second)
+	def(&c.StoreTimeout, 30*time.Second)
 	def(&c.ResetDrainTimeout, 5*time.Second)
 	defInt(&c.MaxPendingMessages, 10000)
 	defInt(&c.MaxPendingBytes, 16<<20)
@@ -392,7 +401,7 @@ func (c *Config) Validate() error {
 		field string
 		v     time.Duration
 	}{
-		{"LogonTimeout", c.LogonTimeout}, {"LogoutTimeout", c.LogoutTimeout}, {"WriteTimeout", c.WriteTimeout},
+		{"LogonTimeout", c.LogonTimeout}, {"LogoutTimeout", c.LogoutTimeout}, {"WriteTimeout", c.WriteTimeout}, {"StoreTimeout", c.StoreTimeout},
 		{"MaxPendingAge", c.MaxPendingAge}, {"MaxDeliveryStall", c.MaxDeliveryStall},
 		{"ResetDrainTimeout", c.ResetDrainTimeout}, {"AckProbeMinInterval", c.AckProbeMinInterval},
 	} {

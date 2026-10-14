@@ -25,7 +25,8 @@
 //
 // The session waits for the disk under its lock, in Append: when a Sync
 // flushes meanwhile, and in the write that completes a checkpoint. A disk
-// that hangs holds the session, and Close, until it answers. On macOS, a
+// that hangs holds the session's lock, and Close, until it answers; the
+// session halts after session.Config.StoreTimeout without waiting for it. On macOS, a
 // flush reaches the drive, not its platters: SQLite only asks for that with
 // PRAGMA fullfsync, which slows every Sync tenfold. The store does not set
 // it, by design: on macOS, a Sync is not promised to survive a power loss.

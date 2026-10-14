@@ -206,6 +206,7 @@ func (s *Session) attach(tc transport.Conn, framer *fix2.Framer) (*conn, error) 
 		c.framer = fix2.NewFramer(tc, fix2.FramerOptions{})
 	}
 	s.c = c
+	s.cur.Store(c)
 	s.prev = c
 	s.phase = phaseAwaitingLogon
 	if s.initiator {
@@ -235,6 +236,7 @@ func (c *conn) startWriterLocked() <-chan struct{} {
 var (
 	errAlreadyConnected = errors.New("session: already connected")
 	errSyncTimeout      = errors.New("session: store Sync took longer than WriteTimeout")
+	errStoreTimeout     = errors.New("session: a store write took longer than StoreTimeout")
 )
 
 // run reads and handles the connection's messages until it closes, then
@@ -315,6 +317,7 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 	}
 	was := s.phase
 	s.c = nil
+	s.cur.Store(nil)
 	s.phase = phaseDisconnected
 	s.receipts.connectionLost()
 	s.recov = recovery{}

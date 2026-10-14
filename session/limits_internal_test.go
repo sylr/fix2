@@ -3,12 +3,14 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport"
 	"github.com/sylr/fix2/session/transport/mem"
@@ -351,5 +353,118 @@ func TestDeliveryFramePool(t *testing.T) {
 	d.releaseFrame(make([]byte, maxPooledBuffer+1))
 	if p, _ := d.pool.Get().(*[]byte); p != nil {
 		t.Errorf("a %d-byte frame kept", cap(*p))
+	}
+}
+
+// A store write that took longer than StoreTimeout fails, whatever it
+// returned, and halts the session.
+func TestStoreLocked_Stuck(t *testing.T) {
+	s := fenceSession(t, nil)
+	err := fmt.Errorf("stuck: %w", errStoreTimeout)
+	s.stuck.Store(&err)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.storeLocked(func() error { return nil }); !errors.Is(err, store.ErrUnknownOutcome) || !errors.Is(err, errStoreTimeout) {
+		t.Errorf("storeLocked: %v, want an unknown outcome and %v", err, errStoreTimeout)
+	}
+	if s.halted == nil {
+		t.Error("not halted")
+	}
+}
+
+// The store watchdog stops once the store is idle, keeping no timer for a
+// session no longer used.
+func TestWatchStoreStopsWhenIdle(t *testing.T) {
+	s := fenceSession(t, func(c *Config) { c.StoreTimeout = 10 * time.Millisecond })
+	err := s.storeWrite(&s.lockedWrites, func() error {
+		if !s.watching.Load() {
+			t.Error("no watchdog while a store write runs")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for s.watching.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("the watchdog still runs, the store idle")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// A Close that hangs is found stuck while writes made holding the lock go
+// on returning.
+func TestWatchStoreCloseHangsWritesGoOn(t *testing.T) {
+	s := fenceSession(t, func(c *Config) { c.StoreTimeout = 20 * time.Millisecond })
+	release := make(chan struct{})
+	defer close(release)
+	go s.storeWrite(&s.closeWrites, func() error { <-release; return nil })
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			s.storeWrite(&s.lockedWrites, func() error { return nil })
+		}
+	}()
+	select {
+	case <-s.stuckCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a Close hanging, writes going on: not found stuck")
+	}
+}
+
+// State called while a write that hangs holds the lock, before it is found
+// stuck, returns once it is.
+func TestStateWhileWriteHangs(t *testing.T) {
+	s := fenceSession(t, func(c *Config) { c.StoreTimeout = 20 * time.Millisecond })
+	release := make(chan struct{})
+	defer close(release)
+	go func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.storeLocked(func() error { <-release; return nil })
+	}()
+	for s.lockedWrites.Load()%2 == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	state := make(chan State, 1)
+	go func() { state <- s.State() }()
+	select {
+	case st := <-state:
+		if st != StateStopped {
+			t.Errorf("State() = %s, want %s", st, StateStopped)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("State waits for the write that hangs")
+	}
+}
+
+// Found stuck, the session halts once its lock is free, even when the
+// write returned before it could see it.
+func TestStoreStuckHalts(t *testing.T) {
+	s := fenceSession(t, nil)
+	s.storeStuck()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		halted := s.halted != nil
+		s.mu.Unlock()
+		if halted {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("not halted")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if st := s.State(); st != StateStopped {
+		t.Errorf("State() = %s, want %s", st, StateStopped)
 	}
 }

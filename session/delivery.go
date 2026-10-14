@@ -430,7 +430,7 @@ func (d *delivery) persistLocked(force bool) error {
 	if next == d.persisted || !force && next < d.persisted+64 {
 		return nil
 	}
-	err := s.store.SetNextTarget(context.Background(), s.st.Generation, next)
+	err := s.storeLocked(func() error { return s.store.SetNextTarget(context.Background(), s.st.Generation, next) })
 	if err == nil {
 		d.persisted, d.failed = next, false
 		d.holdLocked(0)

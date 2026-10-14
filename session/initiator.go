@@ -168,8 +168,9 @@ func (i *Initiator) Remove(ctx context.Context, id SessionID) error {
 	if is.cancel != nil {
 		is.cancel()
 		// The connection loop may be running the callback calling, or one
-		// stuck: Done tells when it ends.
-		if !is.s.ownCallback(ctx) {
+		// stuck: Done tells when it ends. A store write that hangs holds it
+		// too: it ends once the write returns.
+		if !is.s.ownCallback(ctx) && !errors.Is(err, errStoreTimeout) {
 			select {
 			case <-is.done:
 			case <-ctx.Done():

@@ -14,3 +14,6 @@ func HeldScanned(s *Session) uint64 {
 	defer s.mu.Unlock()
 	return s.heldScanned
 }
+
+// ErrStoreTimeout is errStoreTimeout, for tests.
+var ErrStoreTimeout = errStoreTimeout

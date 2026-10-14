@@ -91,6 +91,20 @@ type Session struct {
 	// without authentication.
 	authWarned atomic.Bool
 
+	// lockedWrites and closeWrites are bumped before and after each store
+	// write, odd while one runs (see watchStore): those made holding mu,
+	// one at a time, and the store's Close, made once, when the session
+	// stops, maybe while a setter writes. stuck holds why the session
+	// halted when one took longer than StoreTimeout, which watchStore tells
+	// without the lock the write holds; cur is the connection it closes.
+	lockedWrites atomic.Uint64
+	closeWrites  atomic.Uint64
+	stuck        atomic.Pointer[error]
+	stuckCh      chan struct{} // closed with stuck set
+	cur          atomic.Pointer[conn]
+	watching     atomic.Bool // a watchStore chain runs
+	stopQueued   atomic.Bool // a stop runs, to complete once the write stuck returns
+
 	// bodyPool holds the buffers Send encodes bodies into, of up to
 	// maxPooledBuffer bytes.
 	bodyPool sync.Pool
@@ -183,6 +197,7 @@ func New(cfg Config) (*Session, error) {
 		store:   cfg.Store,
 		heartBt: cfg.HeartBtInt,
 		done:    make(chan struct{}),
+		stuckCh: make(chan struct{}),
 	}
 	s.log = cfg.Logger.With(slog.String("session", cfg.ID.String()))
 	s.cbCtx = context.WithValue(context.Background(), callbackKey{}, s)
@@ -215,10 +230,12 @@ func (s *Session) Stats() *Stats { return &s.stats }
 
 // State returns where the session is.
 func (s *Session) State() State {
-	s.mu.Lock()
+	if !s.lockUnlessStuck() {
+		return StateStopped // its lock held by a store write that hangs
+	}
 	defer s.mu.Unlock()
 	switch {
-	case s.stopped || s.halted != nil:
+	case s.stopped || s.halted != nil || s.stuck.Load() != nil:
 		return StateStopped
 	case s.stalled:
 		return StateStalled
@@ -241,11 +258,147 @@ func (s *Session) State() State {
 // reset perhaps made, a generation moved under it), so it neither sends nor
 // connects again, and State reports it stopped. Reconcile the store, then
 // remove the session from its Initiator or Acceptor (Remove), which stops
-// it, and add it again.
+// it, and add it again. A store write taking longer than
+// Config.StoreTimeout halts it too, Err telling it even while the write
+// still runs.
 func (s *Session) Err() error {
-	s.mu.Lock()
+	if !s.lockUnlessStuck() {
+		return *s.stuck.Load()
+	}
 	defer s.mu.Unlock()
+	if s.halted == nil {
+		if err := s.stuck.Load(); err != nil {
+			return *err // stuck, the write not returned yet
+		}
+	}
 	return s.halted
+}
+
+// lockUnlessStuck takes mu and reports true, or reports false once the
+// session is stuck (see storeStuck): the store write holding mu may never
+// return, and a caller waiting for it before it was found stuck must not
+// wait with it. Contended, it waits in mu's queue on a goroutine of its
+// own, which hands mu over, or gives it back if the caller gave up.
+func (s *Session) lockUnlessStuck() bool {
+	if s.mu.TryLock() {
+		return true
+	}
+	if s.stuck.Load() != nil {
+		return false
+	}
+	got, gaveUp := make(chan struct{}), make(chan struct{})
+	go func() {
+		s.mu.Lock()
+		select {
+		case got <- struct{}{}:
+		case <-gaveUp:
+			s.mu.Unlock()
+		}
+	}()
+	select {
+	case <-got:
+		return true
+	case <-s.stuckCh:
+		close(gaveUp)
+		return false
+	}
+}
+
+// storeLocked runs f, a store write made holding mu, where watchStore sees
+// it: one that took longer than StoreTimeout halts the session once it
+// returns, and fails, whatever it returned, the caller not carrying on as
+// if the session were not halted.
+func (s *Session) storeLocked(f func() error) error {
+	err := s.storeWrite(&s.lockedWrites, f)
+	if s.stuck.Load() != nil {
+		s.haltLocked(errStoreTimeout)
+		return errors.Join(store.ErrUnknownOutcome, errStoreTimeout)
+	}
+	return err
+}
+
+// storeWrite runs f, a store write counted by writes, one at a time, where
+// watchStore sees it.
+func (s *Session) storeWrite(writes *atomic.Uint64, f func() error) error {
+	writes.Add(1)
+	if !s.watching.Load() && s.watching.CompareAndSwap(false, true) {
+		time.AfterFunc(max(s.cfg.StoreTimeout/2, time.Millisecond), func() { s.watchStore(writeWatch{}, writeWatch{}, 0) })
+	}
+	err := f()
+	writes.Add(1)
+	return err
+}
+
+// writeWatch is what watchStore saw of a kind of store writes: the count
+// of the one running, and at how many checks in a row.
+type writeWatch struct {
+	seen  uint64
+	times int
+}
+
+// see records n, the count of a kind of writes, and reports whether one
+// has run at three checks in a row: for StoreTimeout at least, and at most
+// half more.
+func (w *writeWatch) see(n uint64) bool {
+	switch {
+	case n%2 == 0:
+		w.times = 0
+	case n == w.seen:
+		w.times++
+	default:
+		w.seen, w.times = n, 1
+	}
+	return w.times >= 3
+}
+
+// watchStore checks, every half StoreTimeout, whether a store write, of
+// either kind, has run for StoreTimeout (see writeWatch.see): the session is
+// stuck (see storeStuck). It stops once none ran at two checks in a row,
+// idle counting them: the next write starts it again.
+func (s *Session) watchStore(locked, closing writeWatch, idle int) {
+	l, c := s.lockedWrites.Load(), s.closeWrites.Load()
+	if locked.see(l) || closing.see(c) {
+		s.storeStuck()
+		return
+	}
+	if l%2 == 0 && c%2 == 0 {
+		if idle++; idle >= 2 {
+			s.watching.Store(false)
+			// A write started meanwhile saw the chain running.
+			if s.lockedWrites.Load()%2 == 0 && s.closeWrites.Load()%2 == 0 || !s.watching.CompareAndSwap(false, true) {
+				return
+			}
+			idle = 0
+		}
+	} else {
+		idle = 0
+	}
+	time.AfterFunc(max(s.cfg.StoreTimeout/2, time.Millisecond), func() { s.watchStore(locked, closing, idle) })
+}
+
+// storeStuck halts the session whose lock a store write that does not
+// return holds, without that lock: State and Err tell it, the connection is
+// closed, so that the counterparty sees the session go, and Stop returns.
+// The write, once it returns, halts it for good.
+func (s *Session) storeStuck() {
+	err := fmt.Errorf("session %s halted, check the store before restarting: %w", s.id, errStoreTimeout)
+	if !s.stuck.CompareAndSwap(nil, &err) {
+		return
+	}
+	close(s.stuckCh)
+	if c := s.cur.Load(); c != nil {
+		c.tc.Close()
+	}
+	// The write may have returned just before stuck was set, not halting
+	// the session: halted, once the lock is free, whichever it is.
+	go func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.haltLocked(errStoreTimeout)
+	}()
+	// Last: a logger writing to the disk that hangs may hang too.
+	s.log.LogAttrs(context.Background(), slog.LevelError, "session halted: a store write has run longer than StoreTimeout",
+		slog.Duration("store_timeout", s.cfg.StoreTimeout))
 }
 
 // NextSenderSeqNum returns the MsgSeqNum of the next message sent.
@@ -379,7 +532,7 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 	start := len(*buf)
 	*buf = s.appendFrame(*buf, h, body)
 	raw := (*buf)[start:]
-	if err := s.store.Append(context.Background(), s.st.Generation, h.seq, raw); err != nil {
+	if err := s.storeLocked(func() error { return s.store.Append(context.Background(), s.st.Generation, h.seq, raw) }); err != nil {
 		*buf = (*buf)[:start]
 		if start == 0 {
 			// Nothing left for the writer, which would drop a buffer
