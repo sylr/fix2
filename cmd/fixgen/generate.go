@@ -948,7 +948,7 @@ func writeMessage(dict *dictionary.Dict, md *dictionary.MessageDef, mergedGroups
 		// The setter must not shadow a fix2.Builder method the generated
 		// code calls on the embedded builder.
 		if slices.Contains(builderMethods, "Set"+fi.name) {
-			return fmt.Errorf("field %s: its setter Set%s would shadow fix2.Builder.Set%s", fi.name, fi.name, fi.name)
+			return fmt.Errorf("field %s: its setter Set%s would shadow fix2.Builder.Set%s: rename the dictionary entries it comes from", fi.name, fi.name, fi.name)
 		}
 		if l := dict.Profile().DataLengthTag(fi.tag); l != 0 && dict.Fields[l] != nil {
 			addDataSetter(f, builderName, fi.name, dict.Fields[l].Name)

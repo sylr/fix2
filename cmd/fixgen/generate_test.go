@@ -2232,7 +2232,7 @@ func rejected(err error) bool {
 		"which must follow its LENGTH field",                     // checkNames
 		"define its LENGTH field",                                // withLengthFields
 		"written twice",                                          // generateWith
-		"rename the dictionary entries it comes from",            // checkGenerated
+		"rename the dictionary entries it comes from",            // checkGenerated, a setter shadowing fix2.Builder's
 	} {
 		if strings.Contains(err.Error(), why) {
 			return true
