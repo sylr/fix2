@@ -376,8 +376,8 @@ func (s *Session) activeResetLocked(c *conn, m *fix2.Message, in Inbound) {
 	// kept from eviction should the reset be refused.
 	s.unsentLocked(c)
 	c.replay, c.replayQueue = nil, nil
-	c.pending, c.frames = c.pending[:0], c.frames[:0]
-	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
+	c.pending, c.frames = reusable(c.pending, s.cfg.MaxPendingBytes), c.frames[:0]
+	c.held, c.heldFrames = reusable(c.held, s.cfg.MaxPendingBytes), c.heldFrames[:0]
 	c.signalRoomLocked()
 	s.recov = recovery{}
 	s.clearStashLocked()
@@ -412,8 +412,8 @@ func (s *Session) fenceReset(c *conn) {
 	}
 	// Whatever the old writer's last writes queued meanwhile belongs to the
 	// old generation too.
-	c.pending, c.frames = c.pending[:0], c.frames[:0]
-	c.held, c.heldFrames = c.held[:0], c.heldFrames[:0]
+	c.pending, c.frames = reusable(c.pending, s.cfg.MaxPendingBytes), c.frames[:0]
+	c.held, c.heldFrames = reusable(c.held, s.cfg.MaxPendingBytes), c.heldFrames[:0]
 	if err := s.resetStoreLocked("Logon with ResetSeqNumFlag on an established connection"); err != nil {
 		// Disconnected: not answered.
 		return

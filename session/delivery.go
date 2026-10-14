@@ -50,7 +50,7 @@ type delivery struct {
 	mu    sync.Mutex
 	items []item
 	head  int
-	size  int           // the bytes of the queued items' frames
+	size  int           // the bytes the queued items' frames hold, their capacity
 	room  chan struct{} // closed when the queue has room again
 	wake  chan struct{}
 	stop  bool
@@ -85,7 +85,7 @@ func newDelivery(s *Session) *delivery {
 func (d *delivery) push(it item) {
 	d.mu.Lock()
 	d.items = append(d.items, it)
-	d.size += len(it.frame)
+	d.size += cap(it.frame)
 	d.mu.Unlock()
 	select {
 	case d.wake <- struct{}{}:
@@ -115,8 +115,12 @@ func (d *delivery) copyFrame(frame []byte) []byte {
 	return append(b[:0], frame...)
 }
 
-// releaseFrame returns frame, from copyFrame, to the pool.
+// releaseFrame returns frame, from copyFrame, to the pool, unless it is
+// larger than maxPooledBuffer.
 func (d *delivery) releaseFrame(frame []byte) {
+	if cap(frame) > maxPooledBuffer {
+		return
+	}
 	frame = frame[:0]
 	d.pool.Put(&frame)
 }
@@ -216,7 +220,7 @@ func (d *delivery) run() {
 			next = d.head
 		}
 		it := d.items[next]
-		d.size -= len(it.frame)
+		d.size -= cap(it.frame)
 		if next != d.head {
 			// A notification going past held messages.
 			copy(d.items[next:], d.items[next+1:])

@@ -1,12 +1,15 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport"
 	"github.com/sylr/fix2/session/transport/mem"
 )
@@ -255,5 +258,98 @@ func TestReusable(t *testing.T) {
 	}
 	if b := reusable(make([]byte, 10, 300), 100); b != nil {
 		t.Errorf("a 300-byte buffer, MaxPendingBytes 100: kept")
+	}
+}
+
+// Send does not keep the buffer a large body grew for the next one. (That
+// it keeps a small one cannot be checked: sync.Pool may drop what it is
+// given, as it does at random under the race detector.)
+func TestSend_LargeBodyBufferNotPooled(t *testing.T) {
+	s, _ := limitSession(t)
+	s.cfg.MaxPendingBytes = 1 << 30
+	for s.bodyPool.Get() != nil {
+	}
+	if _, err := s.Send(t.Context(), sizedOrder(maxPooledBuffer+1)); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		bp, _ := s.bodyPool.Get().(*[]byte)
+		if bp == nil {
+			return
+		}
+		if cap(*bp) > maxPooledBuffer {
+			t.Fatalf("a buffer of %d bytes kept", cap(*bp))
+		}
+	}
+}
+
+// A sequence reset drops the old generation's queued messages without
+// keeping a buffer one oversized message grew.
+func TestReset_DropsOversizedBuffers(t *testing.T) {
+	s, c := limitSession(t)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c.pending, c.frames = make([]byte, 1000), []pendingFrame{{end: 1000, seq: 2}}
+	c.held, c.heldFrames = make([]byte, 1000), []pendingFrame{{end: 1000, seq: 3}}
+	s.activeResetLocked(c, new(fix2.Message), Inbound{})
+	if cap(c.pending) > 2*s.cfg.MaxPendingBytes || cap(c.held) > 2*s.cfg.MaxPendingBytes {
+		t.Errorf("after the reset: pending %d, held %d bytes kept", cap(c.pending), cap(c.held))
+	}
+}
+
+// appendFails fails every Append once fail is set.
+type appendFails struct {
+	*memstore.Store
+	fail *atomic.Bool
+}
+
+func (f appendFails) Append(ctx context.Context, gen, seq uint64, raw []byte) error {
+	if f.fail.Load() {
+		return errors.New("disk full")
+	}
+	return f.Store.Append(ctx, gen, seq, raw)
+}
+
+// A message the store refuses does not leave behind the buffer it grew.
+func TestSend_FailedAppendDropsOversizedBuffer(t *testing.T) {
+	fail := new(atomic.Bool)
+	s := fenceSession(t, func(c *Config) {
+		c.MaxPendingBytes = 100
+		c.Store = appendFails{Store: memstore.New(), fail: fail}
+	})
+	a, b := mem.Pipe()
+	t.Cleanup(func() { a.Close(); b.Close() })
+	c, err := s.attach(a, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.phase = phaseEstablished
+	s.mu.Unlock()
+	fail.Store(true)
+	if _, err := s.Send(t.Context(), sizedOrder(1000)); err == nil {
+		t.Fatal("Send succeeded, the store failing")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cap(c.pending) > 2*s.cfg.MaxPendingBytes {
+		t.Errorf("%d bytes kept in the pending buffer", cap(c.pending))
+	}
+}
+
+// The delivery queue counts what its frames hold, and keeps no large one
+// for reuse.
+func TestDeliveryFramePool(t *testing.T) {
+	s := &Session{cfg: Config{DeliveryQueue: 10, DeliveryQueueBytes: 1 << 20}}
+	d := &delivery{s: s, wake: make(chan struct{}, 1)}
+	d.push(item{kind: itemApp, frame: make([]byte, 10, 200)})
+	if d.size != 200 {
+		t.Errorf("size = %d for a 10-byte frame in 200 bytes, want 200", d.size)
+	}
+	for d.pool.Get() != nil {
+	}
+	d.releaseFrame(make([]byte, maxPooledBuffer+1))
+	if p, _ := d.pool.Get().(*[]byte); p != nil {
+		t.Errorf("a %d-byte frame kept", cap(*p))
 	}
 }

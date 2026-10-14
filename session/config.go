@@ -251,9 +251,10 @@ type Config struct {
 	// does those waiting: Send fails with ErrReplayInProgress beyond.
 	MaxHeldMessages int
 	// DeliveryQueue and DeliveryQueueBytes bound the received messages
-	// waiting for FromApp, 1024 and 64 MiB if 0: the reader waits for room
-	// before reading the next one, which may take the queue past
-	// DeliveryQueueBytes by its size.
+	// waiting for FromApp, 1024 and 64 MiB if 0, the bytes counted as the
+	// buffers holding them: the reader waits for room before reading the
+	// next one, which may take the queue past DeliveryQueueBytes by its
+	// size.
 	DeliveryQueue, DeliveryQueueBytes int
 	// MaxDeliveryStall disconnects when FromApp has not returned for this
 	// long while the delivery queue is full, max(30s, 2*HeartBtInt) if 0.

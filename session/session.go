@@ -91,7 +91,8 @@ type Session struct {
 	// without authentication.
 	authWarned atomic.Bool
 
-	// bodyPool holds the buffers Send encodes bodies into.
+	// bodyPool holds the buffers Send encodes bodies into, of up to
+	// maxPooledBuffer bytes.
 	bodyPool sync.Pool
 	// cbCtx is the context handler callbacks get.
 	cbCtx context.Context
@@ -262,6 +263,11 @@ func (s *Session) NextTargetSeqNum() uint64 {
 	return s.st.NextTarget
 }
 
+// maxPooledBuffer bounds the buffers kept for reuse, Send's for the next
+// bodies and the delivery queue's for the next messages received: one
+// large message does not keep its buffer.
+const maxPooledBuffer = 64 << 10
+
 // Send sends m to the counterparty and returns its receipt. The session
 // writes the standard header: m must not set the tags it does (BeginString,
 // MsgSeqNum, the CompIDs, SendingTime...). Send returns once the message is
@@ -275,7 +281,12 @@ func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 		b := make([]byte, 0, 512)
 		bp = &b
 	}
-	defer s.bodyPool.Put(bp)
+	defer func() {
+		// One large message does not keep its buffer.
+		if cap(*bp) <= maxPooledBuffer {
+			s.bodyPool.Put(bp)
+		}
+	}()
 	body, err := m.AppendBody((*bp)[:0], reserved)
 	*bp = body[:0]
 	if err != nil {
@@ -370,6 +381,11 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 	raw := (*buf)[start:]
 	if err := s.store.Append(context.Background(), s.st.Generation, h.seq, raw); err != nil {
 		*buf = (*buf)[:start]
+		if start == 0 {
+			// Nothing left for the writer, which would drop a buffer
+			// this message grew past reuse.
+			*buf = reusable(*buf, s.cfg.MaxPendingBytes)
+		}
 		s.log.LogAttrs(context.Background(), slog.LevelError, "storing a message failed",
 			slog.Uint64("seq", h.seq), slog.String("msg_type", h.msgType), slog.Any("error", err))
 		if uncertain(err) {
