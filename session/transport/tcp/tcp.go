@@ -120,9 +120,16 @@ func Listen(addr string, tlsConfig *tls.Config) (*Listener, error) {
 func (l *Listener) Accept(ctx context.Context) (transport.Conn, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	stop := context.AfterFunc(ctx, func() { l.l.SetDeadline(time.Unix(1, 0)) })
+	fired := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(fired)
+		l.l.SetDeadline(time.Unix(1, 0))
+	})
 	c, err := l.l.Accept()
 	if !stop() {
+		// The callback is scheduled or running: let it set its deadline
+		// before clearing it, or it would poison the next Accept.
+		<-fired
 		l.l.SetDeadline(time.Time{})
 		if c != nil {
 			c.Close()

@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -136,6 +137,76 @@ func TestAcceptContext(t *testing.T) {
 	}
 	defer c.Close()
 	roundTrip(t, c)
+}
+
+// acceptAfterCancel checks that the listener accepts a fresh connection.
+func acceptAfterCancel(t *testing.T, l *Listener) {
+	t.Helper()
+	c, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	a, err := l.Accept(ctx)
+	if err != nil {
+		t.Fatalf("Accept after a canceled Accept = %v, want success", err)
+	}
+	a.Close()
+}
+
+// A canceled Accept must not leave its deadline behind: the cancellation
+// callback can still be running when Accept clears the deadline. One P makes
+// the callback run after Accept returns when Accept does not wait for it.
+func TestAcceptCanceledReuse(t *testing.T) {
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	for range 100 {
+		l := listen(t, nil)
+		// A pending connection and an already canceled context.
+		pending, err := net.Dial("tcp", l.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := l.Accept(ctx); !errors.Is(err, context.Canceled) {
+			t.Fatalf("Accept = %v, want context.Canceled", err)
+		}
+		pending.Close()
+		acceptAfterCancel(t, l)
+		l.Close()
+	}
+}
+
+// Same, with the cancellation arriving while Accept blocks.
+func TestAcceptConcurrentCancelReuse(t *testing.T) {
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	for range 100 {
+		l := listen(t, nil)
+		ctx, cancel := context.WithCancel(context.Background())
+		errc := make(chan error, 1)
+		go func() {
+			c, err := l.Accept(ctx)
+			if c != nil {
+				c.Close()
+			}
+			errc <- err
+		}()
+		time.Sleep(time.Millisecond)
+		// A connection arrives as the context is canceled.
+		racing, err := net.Dial("tcp", l.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		cancel()
+		if err := <-errc; err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("Accept = %v, want nil or context.Canceled", err)
+		}
+		racing.Close()
+		acceptAfterCancel(t, l)
+		l.Close()
+	}
 }
 
 // testCert returns a self-signed certificate for 127.0.0.1 and localhost.
