@@ -1,0 +1,38 @@
+package main
+
+import (
+ "strings"
+ "testing"
+)
+
+func TestAudit5LengthOnlyGroup(t *testing.T) {
+ const xml = `<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages><message name="M" msgtype="M"><group name="NoG" required="N"><field name="RawDataLength" required="N"/>DATAREF</group></message></messages><fields><field number="35" name="MsgType" type="STRING"/><field number="500" name="NoG" type="NUMINGROUP"/><field number="95" name="RawDataLength" type="LENGTH"/><field number="96" name="RawData" type="DATA"/></fields></fix>`
+ for _, includeData := range []bool{true,false} {
+  t.Run(map[bool]string{true:"declared-data-control",false:"implicit-data"}[includeData],func(t *testing.T) {
+   ref := ""
+   if includeData {ref = `<field name="RawData" required="N"/>`}
+   runGenerated(t, strings.ReplaceAll(xml,"DATAREF",ref), "lengthonly", `package lengthonly
+import (
+ "testing"
+ fix2 "github.com/sylr/fix2"
+ "github.com/sylr/fix2/dictionary"
+)
+func TestWritableGroup(t *testing.T) {
+ rawControl := fix2.NewBuilder("FIX.4.4", "M").AppendInt(500,1).AppendInt(95,3).AppendString(96,"a\x01b").Build()
+ var control fix2.Message
+ if err := fix2.ParseInto(&control,rawControl,Dictionary().Profile()); err != nil { t.Fatal(err) }
+ if err := Dictionary().ValidateWith(&control,dictionary.CheckAll); err != nil { t.Fatalf("valid pair rejected: %v",err) }
+ if got := len(WrapM(&control).NoGEntries()); got != 1 {t.Fatalf("strict-valid control groups=%d", got)}
+ t.Logf("strict-valid control accepted and read one group: %q",rawControl)
+ type setter interface { SetRawData([]byte) *NoGEntryBuilder }
+ e, ok := any(NewNoGEntry()).(setter)
+ if !ok { t.Fatal("group has a LENGTH/DATA pair but no public way to populate it") }
+ raw := BuildM("FIX.4.4").AddNoGEntry(e.SetRawData([]byte("a\x01b"))).Build()
+ m, err := fix2.Parse(raw)
+ if err != nil {t.Fatal(err)}
+ if n := len(WrapM(&m).NoGEntries()); n != 1 {t.Fatalf("groups=%d raw=%q",n,raw)}
+}
+`)
+  })
+ }
+}

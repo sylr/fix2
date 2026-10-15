@@ -1,0 +1,7 @@
+for dir in contribs/binancemd contribs/coinbasemd contribs/store/sqlite3; do (cd $dir && go test -race -count=1 ./...) || exit 1; done
+ok  	github.com/sylr/fix2/contribs/binancemd	26.197s
+?   	github.com/sylr/fix2/contribs/binancemd/internal/spotmd	[no test files]
+ok  	github.com/sylr/fix2/contribs/coinbasemd	24.330s
+?   	github.com/sylr/fix2/contribs/coinbasemd/internal/fixt	[no test files]
+?   	github.com/sylr/fix2/contribs/coinbasemd/internal/md	[no test files]
+ok  	github.com/sylr/fix2/contribs/store/sqlite3	3.858s

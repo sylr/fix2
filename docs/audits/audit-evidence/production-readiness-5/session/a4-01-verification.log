@@ -1,0 +1,38 @@
+=== RUN   TestHeldLogoutStopsDrain
+=== RUN   TestHeldLogoutStopsDrain/missing_message
+=== RUN   TestHeldLogoutStopsDrain/reset_past_them
+--- PASS: TestHeldLogoutStopsDrain (0.00s)
+    --- PASS: TestHeldLogoutStopsDrain/missing_message (0.00s)
+    --- PASS: TestHeldLogoutStopsDrain/reset_past_them (0.00s)
+=== RUN   TestHeldArrival_Delivered
+=== RUN   TestHeldArrival_Delivered/missing_message
+=== RUN   TestHeldArrival_Delivered/gap_fill
+=== RUN   TestHeldArrival_Delivered/reset_past_it
+--- PASS: TestHeldArrival_Delivered (2.71s)
+    --- PASS: TestHeldArrival_Delivered/missing_message (0.90s)
+    --- PASS: TestHeldArrival_Delivered/gap_fill (0.90s)
+    --- PASS: TestHeldArrival_Delivered/reset_past_it (0.90s)
+=== RUN   TestHeldArrival_GapFill
+--- PASS: TestHeldArrival_GapFill (0.90s)
+=== RUN   TestHeldArrival_LogoutStopsHeld
+=== RUN   TestHeldArrival_LogoutStopsHeld/missing_message
+=== RUN   TestHeldArrival_LogoutStopsHeld/reset_past_them
+--- PASS: TestHeldArrival_LogoutStopsHeld (0.00s)
+    --- PASS: TestHeldArrival_LogoutStopsHeld/missing_message (0.00s)
+    --- PASS: TestHeldArrival_LogoutStopsHeld/reset_past_them (0.00s)
+=== RUN   TestHeldArrival_HeldLogoutStopsHeld
+--- PASS: TestHeldArrival_HeldLogoutStopsHeld (0.00s)
+=== RUN   TestHeldArrival_HeldLogoutStopsResetPast
+--- PASS: TestHeldArrival_HeldLogoutStopsResetPast (0.00s)
+=== RUN   TestHeldArrival_StaleLogout
+--- PASS: TestHeldArrival_StaleLogout (0.70s)
+=== RUN   TestHeldArrival_LogoutEndsChunk
+--- PASS: TestHeldArrival_LogoutEndsChunk (0.00s)
+=== RUN   TestLogoutAnsweredOnSlowWrite
+=== RUN   TestLogoutAnsweredOnSlowWrite/beyond_LogoutTimeout
+=== RUN   TestLogoutAnsweredOnSlowWrite/past_a_heartbeat
+--- PASS: TestLogoutAnsweredOnSlowWrite (3.60s)
+    --- PASS: TestLogoutAnsweredOnSlowWrite/beyond_LogoutTimeout (0.60s)
+    --- PASS: TestLogoutAnsweredOnSlowWrite/past_a_heartbeat (3.00s)
+PASS
+ok  	github.com/sylr/fix2/session	9.375s

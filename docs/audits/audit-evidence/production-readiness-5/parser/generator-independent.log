@@ -1,0 +1,18 @@
+=== RUN   TestAudit5LengthOnlyGroup
+=== RUN   TestAudit5LengthOnlyGroup/declared-data-control
+=== RUN   TestAudit5LengthOnlyGroup/implicit-data
+    audit5_length_group_test.go:14: go test failed:
+        --- FAIL: TestWritableGroup (0.00s)
+            gen_test.go:13: strict-valid control accepted and read one group: "8=FIX.4.4\x019=23\x0135=M\x01500=1\x0195=3\x0196=a\x01b\x0110=068\x01"
+            gen_test.go:16: group has a LENGTH/DATA pair but no public way to populate it
+        FAIL
+        FAIL	testgen	0.235s
+        FAIL
+        
+        exit status 1
+--- FAIL: TestAudit5LengthOnlyGroup (1.47s)
+    --- PASS: TestAudit5LengthOnlyGroup/declared-data-control (0.76s)
+    --- FAIL: TestAudit5LengthOnlyGroup/implicit-data (0.71s)
+FAIL
+FAIL	github.com/sylr/fix2/cmd/fixgen	1.839s
+FAIL

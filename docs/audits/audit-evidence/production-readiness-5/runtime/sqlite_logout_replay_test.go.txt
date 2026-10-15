@@ -1,0 +1,76 @@
+package sqlite3_test
+
+import (
+ "context"
+ "path/filepath"
+ "testing"
+ "time"
+
+ fix2 "github.com/sylr/fix2"
+ "github.com/sylr/fix2/contribs/store/sqlite3"
+ "github.com/sylr/fix2/session"
+ "github.com/sylr/fix2/session/transport/mem"
+)
+
+// Use the production SQLite store, its documented n+1 connection minimum,
+// and short, explicit limits for every stage. Only a cancellable pool read
+// waits; no application callback or disk operation is stuck.
+func audit5PoolReplay(t *testing.T) *poolReplay {
+ t.Helper()
+ db:=openDB(t,filepath.Join(t.TempDir(),"fix2.db"));db.SetMaxOpenConns(2)
+ r:=&poolReplay{l:mem.Listen("audit5"),ran:make(chan error,1)}
+ i:=session.NewInitiator(session.InitiatorOptions{ReconnectMin:10*time.Millisecond,ReconnectMax:10*time.Millisecond})
+ var err error
+ r.s,err=i.Add(session.Config{
+  ID:session.SessionID{BeginString:session.FIX44,SenderCompID:"INI",TargetCompID:"ACC"},
+  Store:sqlite3.New(db,"audit5"),Handler:session.BaseHandler{},
+  LogoutTimeout:50*time.Millisecond,WriteTimeout:50*time.Millisecond,
+  StoreTimeout:50*time.Millisecond,MaxPendingAge:50*time.Millisecond,
+ },r.l)
+ if err!=nil{t.Fatal(err)}
+ var ctx context.Context
+ ctx,r.run=context.WithCancel(context.Background())
+ go func(){r.ran<-i.Run(ctx)}()
+ t.Cleanup(func(){r.release();r.run();<-r.ran;r.l.Close()})
+ r.peer=accept(t,r.l,1);r.peer.expect("A");r.peer.send("A","98","0","108","30")
+ waitFor(t,"Logon",func()bool{return r.s.State()==session.StateLoggedOn})
+ if _,err:=r.s.Send(context.Background(),fix2.NewBuilder(session.FIX44,"D").SetString(11,"O1"));err!=nil{t.Fatal(err)}
+ r.peer.expect("D","34","2")
+ if r.spare,err=db.Conn(context.Background());err!=nil{t.Fatal(err)}
+ waits:=db.Stats().WaitCount
+ r.peer.send("2","7","1","16","0")
+ waitFor(t,"Range waiting for pool",func()bool{return db.Stats().WaitCount>waits})
+ return r
+}
+
+// A cancellable replay read and a peer Logout must not wait on each other:
+// the Logout response, held behind the replay, must have a finite deadline.
+func TestAudit5LogoutWhileReplayWaitsForSQLitePool(t *testing.T) {
+ for _,crossing:=range []bool{false,true}{
+  name:="peer initiated";if crossing{name="crossing Logout"}
+  t.Run(name,func(t *testing.T){
+   r:=audit5PoolReplay(t)
+   stopped:=make(chan error,1)
+   if crossing{
+    go func(){stopped<-r.s.Logout(context.Background(),"initiator logs out")}()
+    waitFor(t,"local Logout started",func()bool{return r.s.State()==session.StateLoggingOut})
+    r.peer.send("5")
+   }else{
+    r.peer.send("5","58","peer requests clean logout")
+    waitFor(t,"peer Logout processed",func()bool{return r.s.State()==session.StateLoggingOut})
+    go func(){stopped<-r.s.Stop(context.Background())}()
+   }
+   select{
+   case err:=<-stopped:t.Fatalf("Logout/Stop unexpectedly completed while pool held: %v",err)
+   case <-time.After(350*time.Millisecond): // Seven periods of every configured limit.
+   }
+   select{case <-r.s.Done():t.Fatal("Done unexpectedly closed");default:}
+   t.Logf("after 7x LogoutTimeout, WriteTimeout, StoreTimeout and MaxPendingAge: call still waits, state=%s err=%v",r.s.State(),r.s.Err())
+   // Keep the shared SQL connection reserved. Closing just the transport
+   // immediately cancels Range, showing its context is correctly obeyed.
+   r.peer.conn.Close()
+   select{case err:=<-stopped:t.Logf("call completed immediately after forced peer close, SQL connection still reserved: %v",err);case <-time.After(time.Second):t.Fatal("call did not finish after peer close")}
+   if !crossing{select{case <-r.s.Done():case <-time.After(time.Second):t.Fatal("Done did not close")}}
+  })
+ }
+}

@@ -1,0 +1,31 @@
+=== RUN   TestNewProfile_Errors
+=== RUN   TestNewProfile_Errors/zero_tag
+=== RUN   TestNewProfile_Errors/negative_tag
+=== RUN   TestNewProfile_Errors/tag_too_large
+=== RUN   TestNewProfile_Errors/same_tag_twice_in_a_pair
+=== RUN   TestNewProfile_Errors/tag_in_two_pairs
+--- PASS: TestNewProfile_Errors (0.00s)
+    --- PASS: TestNewProfile_Errors/zero_tag (0.00s)
+    --- PASS: TestNewProfile_Errors/negative_tag (0.00s)
+    --- PASS: TestNewProfile_Errors/tag_too_large (0.00s)
+    --- PASS: TestNewProfile_Errors/same_tag_twice_in_a_pair (0.00s)
+    --- PASS: TestNewProfile_Errors/tag_in_two_pairs (0.00s)
+=== RUN   TestDataPair_InRange
+--- PASS: TestDataPair_InRange (0.00s)
+PASS
+ok  	github.com/sylr/fix2	0.173s
+=== RUN   TestDictProfile_OutOfRangePairCost
+--- PASS: TestDictProfile_OutOfRangePairCost (0.00s)
+=== RUN   TestDictProfile
+--- PASS: TestDictProfile (0.00s)
+=== RUN   TestDictProfile_GroupScope
+--- PASS: TestDictProfile_GroupScope (0.00s)
+=== RUN   TestDictProfile_TopLevelPairBesideGroup
+--- PASS: TestDictProfile_TopLevelPairBesideGroup (0.00s)
+=== RUN   TestValidateWith_WideGroupCost
+    wide_group_test.go:140: width=64 entries=20000 CheckAll=1.256541ms
+    wide_group_test.go:140: width=4096 entries=20000 CheckAll=1.218167ms
+    wide_group_test.go:140: width=65536 entries=20000 CheckAll=1.259042ms
+--- PASS: TestValidateWith_WideGroupCost (0.23s)
+PASS
+ok  	github.com/sylr/fix2/dictionary	0.526s

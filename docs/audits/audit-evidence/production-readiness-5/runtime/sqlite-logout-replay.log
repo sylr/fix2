@@ -1,0 +1,12 @@
+=== RUN   TestAudit5LogoutWhileReplayWaitsForSQLitePool
+=== RUN   TestAudit5LogoutWhileReplayWaitsForSQLitePool/peer_initiated
+    audit5_logout_pool_test.go:68: after 7x LogoutTimeout, WriteTimeout, StoreTimeout and MaxPendingAge: call still waits, state=logging out err=<nil>
+    audit5_logout_pool_test.go:72: call completed immediately after forced peer close, SQL connection still reserved: <nil>
+=== RUN   TestAudit5LogoutWhileReplayWaitsForSQLitePool/crossing_Logout
+    audit5_logout_pool_test.go:68: after 7x LogoutTimeout, WriteTimeout, StoreTimeout and MaxPendingAge: call still waits, state=logging out err=<nil>
+    audit5_logout_pool_test.go:72: call completed immediately after forced peer close, SQL connection still reserved: <nil>
+--- PASS: TestAudit5LogoutWhileReplayWaitsForSQLitePool (0.72s)
+    --- PASS: TestAudit5LogoutWhileReplayWaitsForSQLitePool/peer_initiated (0.36s)
+    --- PASS: TestAudit5LogoutWhileReplayWaitsForSQLitePool/crossing_Logout (0.36s)
+PASS
+ok  	github.com/sylr/fix2/contribs/store/sqlite3	2.140s

@@ -1,0 +1,3 @@
+{"package": "github.com/sylr/fix2/session", "action": "pass", "elapsed_seconds": 121.476}
+test events: {"pass": 506}
+skips: []

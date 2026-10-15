@@ -1,0 +1,8 @@
+=== RUN   TestReplayWaitingForPoolReconnects
+--- PASS: TestReplayWaitingForPoolReconnects (0.03s)
+=== RUN   TestReplayWaitingForPoolStops
+--- PASS: TestReplayWaitingForPoolStops (0.11s)
+=== RUN   TestOpenWaitingForPool
+--- PASS: TestOpenWaitingForPool (0.05s)
+PASS
+ok  	github.com/sylr/fix2/contribs/store/sqlite3	1.340s

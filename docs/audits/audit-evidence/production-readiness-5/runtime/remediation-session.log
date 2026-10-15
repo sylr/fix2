@@ -1,0 +1,46 @@
+=== RUN   TestReceipts_SettledAcrossReset
+--- PASS: TestReceipts_SettledAcrossReset (0.02s)
+=== RUN   TestReceipts_EndedBounded
+=== RUN   TestReceipts_EndedBounded/receipts
+=== RUN   TestReceipts_EndedBounded/gap-filled_spans
+=== RUN   TestReceipts_EndedBounded/rejections
+=== RUN   TestReceipts_EndedBounded/generations
+--- PASS: TestReceipts_EndedBounded (0.01s)
+    --- PASS: TestReceipts_EndedBounded/receipts (0.00s)
+    --- PASS: TestReceipts_EndedBounded/gap-filled_spans (0.00s)
+    --- PASS: TestReceipts_EndedBounded/rejections (0.00s)
+    --- PASS: TestReceipts_EndedBounded/generations (0.01s)
+=== RUN   TestReceipts_EndedRejectionsCompact
+--- PASS: TestReceipts_EndedRejectionsCompact (0.01s)
+=== RUN   TestReceipt_SettledAcrossReset
+=== RUN   TestReceipt_SettledAcrossReset/written
+=== RUN   TestReceipt_SettledAcrossReset/acknowledged
+--- PASS: TestReceipt_SettledAcrossReset (0.40s)
+    --- PASS: TestReceipt_SettledAcrossReset/written (0.20s)
+    --- PASS: TestReceipt_SettledAcrossReset/acknowledged (0.20s)
+=== RUN   TestReceipt_SkippedAcrossReset
+--- PASS: TestReceipt_SkippedAcrossReset (0.20s)
+=== RUN   TestReceipt_RejectionAcrossReset
+--- PASS: TestReceipt_RejectionAcrossReset (0.21s)
+=== RUN   TestReceipt_ResetsBounded
+--- PASS: TestReceipt_ResetsBounded (0.20s)
+=== RUN   TestReceipt_ResetKeepingGeneration
+--- PASS: TestReceipt_ResetKeepingGeneration (0.01s)
+=== RUN   TestReplayCancelledByDisconnect
+=== RUN   TestReplayCancelledByDisconnect/waiting_to_read
+=== RUN   TestReplayCancelledByDisconnect/waiting_once_read
+--- PASS: TestReplayCancelledByDisconnect (0.51s)
+    --- PASS: TestReplayCancelledByDisconnect/waiting_to_read (0.26s)
+    --- PASS: TestReplayCancelledByDisconnect/waiting_once_read (0.25s)
+=== RUN   TestReplayCancelledAfterChunk
+--- PASS: TestReplayCancelledAfterChunk (0.26s)
+=== RUN   TestReplayCancelledByStop
+=== RUN   TestReplayCancelledByStop/Stop
+=== RUN   TestReplayCancelledByStop/Run_cancelled
+--- PASS: TestReplayCancelledByStop (0.40s)
+    --- PASS: TestReplayCancelledByStop/Stop (0.20s)
+    --- PASS: TestReplayCancelledByStop/Run_cancelled (0.20s)
+=== RUN   TestReplayCancelledInOnResend
+--- PASS: TestReplayCancelledInOnResend (0.26s)
+PASS
+ok  	github.com/sylr/fix2/session	3.986s

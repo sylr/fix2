@@ -1,0 +1,10 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/239 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 239/239 completed, now fuzzing with 4 workers
+fuzz: elapsed: 3s, execs: 154887 (51621/sec), new interesting: 26 (total: 265)
+fuzz: elapsed: 6s, execs: 423881 (89652/sec), new interesting: 41 (total: 280)
+fuzz: elapsed: 9s, execs: 489105 (21744/sec), new interesting: 51 (total: 290)
+fuzz: elapsed: 12s, execs: 571970 (27618/sec), new interesting: 52 (total: 291)
+fuzz: elapsed: 15s, execs: 612687 (13576/sec), new interesting: 62 (total: 301)
+fuzz: elapsed: 16s, execs: 612687 (0/sec), new interesting: 62 (total: 301)
+PASS
+ok  	github.com/sylr/fix2	16.409s

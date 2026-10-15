@@ -1,0 +1,90 @@
+package session_test
+
+import (
+	"context"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store/memstore"
+	"github.com/sylr/fix2/session/transport/mem"
+)
+
+// A cooperative gate makes Logout delivery wait without relying on slow
+// machines, sockets or sleeping while the peer sends one more frame.
+type audit5ClosingGate struct {
+	*memstore.Store
+	block   atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (st *audit5ClosingGate) Sync(ctx context.Context, gen, seq uint64) error {
+	if st.block.Load() {
+		select {
+		case st.entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-st.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func TestAudit5ClosingReplyIsLastFrame(t *testing.T) {
+	for _, extra := range []bool{false, true} {
+		name := "control"
+		if extra {
+			name = "TestRequest while Logout waits to write"
+		}
+		t.Run(name, func(t *testing.T) {
+			st := &audit5ClosingGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+			released := false
+			t.Cleanup(func() {
+				if !released {
+					close(st.release)
+				}
+			})
+			l := mem.Listen("acceptor")
+			s, rec := startInitiator(t, l, func(c *session.Config) { c.Store = st })
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.send("A", 0, "98", "0", "108", "30")
+			rec.wait(t, func() bool { return rec.logons == 1 })
+			st.block.Store(true)
+			p.send("5", 0)
+			select {
+			case <-st.entered:
+			case <-time.After(time.Second):
+				t.Fatal("Logout not waiting to write")
+			}
+			if extra {
+				p.send("1", 0, "112", "CROSSED-LOGOUT")
+				waitFor(t, func() bool { return s.NextTargetSeqNum() == 4 })
+			}
+			st.block.Store(false)
+			released = true
+			close(st.release)
+			logout := p.expect("5")
+			t.Logf("Logout sequence=%s next sender=%d", logout.Get(34), s.NextSenderSeqNum())
+			select {
+			case ev := <-p.frames:
+				if ev.err != nil {
+					return
+				}
+				m, err := fix2.Parse(ev.frame)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Fatalf("sent MsgType=%s sequence=%s after final Logout: %s", m.MsgType(), m.Get(34), visible(ev.frame))
+			case <-time.After(time.Second):
+				t.Fatal("closing connection did not retire")
+			}
+		})
+	}
+}

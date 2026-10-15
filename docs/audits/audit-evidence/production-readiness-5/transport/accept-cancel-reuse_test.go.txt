@@ -1,0 +1,39 @@
+package tcp
+
+import (
+	"context"
+	"errors"
+	"net"
+	"runtime"
+	"testing"
+	"time"
+)
+
+// A canceled Accept must leave the listener reusable, including when a
+// connection was already queued before cancellation.
+func TestAudit5CanceledAcceptDoesNotPoisonListener(t *testing.T) {
+	previous := runtime.GOMAXPROCS(1)
+	defer runtime.GOMAXPROCS(previous)
+	for attempt := range 100 {
+		l, err := Listen("127.0.0.1:0", nil)
+		if err != nil { t.Fatal(err) }
+		first, err := net.Dial("tcp", l.Addr().String())
+		if err != nil { l.Close(); t.Fatal(err) }
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		_, err = l.Accept(ctx)
+		first.Close()
+		if !errors.Is(err, context.Canceled) { l.Close(); t.Fatalf("canceled Accept: %v", err) }
+		// Let the cancellation callback finish before checking reuse.
+		time.Sleep(time.Millisecond)
+		second, err := net.Dial("tcp", l.Addr().String())
+		if err != nil { l.Close(); t.Fatal(err) }
+		nextCtx, nextCancel := context.WithTimeout(t.Context(), time.Second)
+		accepted, err := l.Accept(nextCtx)
+		nextCancel()
+		second.Close()
+		if accepted != nil { accepted.Close() }
+		l.Close()
+		if err != nil { t.Fatalf("attempt %d: canceled Accept left listener unusable: %v", attempt, err) }
+	}
+}

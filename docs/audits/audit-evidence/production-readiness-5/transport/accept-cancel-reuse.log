@@ -1,0 +1,12 @@
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+    audit5_accept_test.go:37: attempt 0: canceled Accept left listener unusable: accept tcp 127.0.0.1:52638: i/o timeout
+--- FAIL: TestAudit5CanceledAcceptDoesNotPoisonListener (0.00s)
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+    audit5_accept_test.go:37: attempt 0: canceled Accept left listener unusable: accept tcp 127.0.0.1:52641: i/o timeout
+--- FAIL: TestAudit5CanceledAcceptDoesNotPoisonListener (0.00s)
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+    audit5_accept_test.go:37: attempt 0: canceled Accept left listener unusable: accept tcp 127.0.0.1:52644: i/o timeout
+--- FAIL: TestAudit5CanceledAcceptDoesNotPoisonListener (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/session/transport/tcp	0.347s
+FAIL

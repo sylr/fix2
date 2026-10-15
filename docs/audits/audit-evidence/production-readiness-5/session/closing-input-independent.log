@@ -1,0 +1,12 @@
+=== RUN   TestAudit5ClosingReplyIsLastFrame
+=== RUN   TestAudit5ClosingReplyIsLastFrame/control
+    audit5_closing_input_test.go:74: Logout sequence=2 next sender=3
+=== RUN   TestAudit5ClosingReplyIsLastFrame/TestRequest_while_Logout_waits_to_write
+    audit5_closing_input_test.go:74: Logout sequence=2 next sender=4
+    audit5_closing_input_test.go:84: sent MsgType=0 sequence=3 after final Logout: 8=FIX.4.4|9=68|35=0|34=3|49=INI|52=20261015-17:29:13.581|56=ACC|112=CROSSED-LOGOUT|10=117|
+--- FAIL: TestAudit5ClosingReplyIsLastFrame (0.00s)
+    --- PASS: TestAudit5ClosingReplyIsLastFrame/control (0.00s)
+    --- FAIL: TestAudit5ClosingReplyIsLastFrame/TestRequest_while_Logout_waits_to_write (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/session	0.410s
+FAIL
