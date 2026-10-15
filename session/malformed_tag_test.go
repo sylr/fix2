@@ -608,7 +608,16 @@ func TestMalformedTagLogoutSent(t *testing.T) {
 // does, as received.
 func TestMalformedTagLogRedaction(t *testing.T) {
 	const secret = "S3CRET-VALUE"
-	rejected := func(s *session.Session, _ string) bool { return s.Stats().RejectsSent.Load() >= 1 }
+	// The Reject written: counted, it may be not yet, and the connection
+	// closed before it is.
+	rejected := func(_ *session.Session, log string) bool {
+		for l := range strings.SplitSeq(log, "\n") {
+			if strings.Contains(l, `msg="FIX out"`) && strings.Contains(l, "|35=3|") {
+				return true
+			}
+		}
+		return false
+	}
 	for _, tc := range []struct {
 		name, msg, secret string
 		done              func(*session.Session, string) bool
