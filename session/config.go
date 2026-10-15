@@ -240,7 +240,12 @@ type Config struct {
 	// halts the session without waiting for it: State and Err tell it at
 	// once, the connection is closed, and Stop returns, the session
 	// stopping once the write returns. It stays halted then (see Err). The
-	// store's Close, when the session stops, is bounded alike.
+	// store's Close, when the session stops, is bounded alike. The store's
+	// Open, when the session is created, gets a ctx ending after it: New,
+	// and the Add that calls it, fail rather than wait longer, unless the
+	// store ignores ctx, or finishes a write already started, as the SQLite
+	// store's migration of its tables: New may then return later, and
+	// succeed.
 	StoreTimeout time.Duration
 	// MaxPendingMessages and MaxPendingBytes bound the messages waiting to
 	// be written, 10000 and 16 MiB if 0. Send waits for room or fails with

@@ -97,7 +97,11 @@ var (
 type Store interface {
 	// Open loads the state, creating generation 1 with both sequence
 	// numbers at 1 if the store is empty. The session calls it once, before
-	// any other method; calling it again returns the current state.
+	// any other method; calling it again returns the current state. It
+	// should return once ctx is done: when the session is created, ctx
+	// ends after its StoreTimeout, and the creation fails. It may finish a
+	// write already started first, as a migration of its schema, and
+	// succeed: the session is then created late.
 	Open(ctx context.Context) (State, error)
 
 	// Append stores raw, a message sent with sequence number seq in
@@ -127,6 +131,16 @@ type Store interface {
 	// returns. Range stops at fn's first error and returns it. It returns
 	// ErrGenerationGone if gen is not the current generation, or stops being
 	// it before Range returns.
+	//
+	// It should return once ctx is done, with ctx.Err(), waiting for a
+	// connection of a pool included: the session resends what Range reads,
+	// and cancels it when the connection it resends to ends. Its fn returns
+	// ctx's error then, for a store that does not check ctx between
+	// messages. A Range that does not return holds back the end of that
+	// connection, and so the next connection and the session's Done, until
+	// it does: the session cannot interrupt it, and does not halt, as a
+	// read leaves the store's state as it was. Stop still returns when its
+	// ctx ends.
 	Range(ctx context.Context, gen, begin, end uint64, fn func(seq uint64, raw []byte, hole Hole) error) error
 
 	// Reset starts generation expectGen+1: both sequence numbers back to 1,

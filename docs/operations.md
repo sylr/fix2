@@ -149,7 +149,10 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
 - **Connections.** A store keeps one of the pool's connections while open;
   replays (`Range`) and checkpoints take others, a replay only while it
   reads a chunk. A `*sql.DB` shared by n stores must allow n+1 connections
-  at least.
+  at least. A replay waiting for a connection the application holds is
+  cancelled when its connection ends, and the session reconnects; a
+  session created meanwhile fails after `StoreTimeout`, its store unable
+  to open.
 - **Durability.** Each write is a commit a process crash does not lose; a
   machine crash may lose those since the last `Sync`, which the session
   calls before writing what it stored. On macOS, a flush reaches the drive,
@@ -217,3 +220,11 @@ it has the session's lock, drops the connection rather than send what may
 not be durable, and logs `making messages durable cancelled: not sent`.
 The flush itself goes on, and the SQLite store's next write waits for it,
 under the session's lock: `StoreTimeout` then halts the session.
+
+Reads are not watched: a replay's `Range` runs without the session's lock,
+and leaves the store's state as it was. It is cancelled when its
+connection ends, as on a disconnection, a Logout timing out or `Stop`; a
+store that honors its ctx then returns, as the SQLite store does, and the
+session reconnects or stops. One that does not return holds back the end
+of that connection, and so the next connection and `Done`, until it does;
+`Stop` still returns when its ctx ends.

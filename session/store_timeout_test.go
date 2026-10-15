@@ -5,12 +5,14 @@ import (
 	"errors"
 	"log/slog"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store"
 	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport/mem"
 )
@@ -237,5 +239,34 @@ func TestStoreTimeout_LoggerHangs(t *testing.T) {
 	p.expectEnd(5 * time.Second)
 	if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
 		t.Errorf("Err() = %v, want %v", err, session.ErrStoreTimeout)
+	}
+}
+
+// waitingOpenStore makes Open wait for its ctx, as for a connection of a
+// pool the application holds.
+type waitingOpenStore struct{ *memstore.Store }
+
+func (w waitingOpenStore) Open(ctx context.Context) (store.State, error) {
+	<-ctx.Done()
+	return store.State{}, ctx.Err()
+}
+
+// A store's Open that waits fails the session's creation after
+// StoreTimeout, rather than hang Add.
+func TestStoreTimeout_Open(t *testing.T) {
+	i := session.NewInitiator(session.InitiatorOptions{})
+	id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
+	added := make(chan error, 1)
+	go func() {
+		_, err := i.Add(session.Config{ID: id, Handler: newRecorder(), Store: waitingOpenStore{memstore.New()}, StoreTimeout: 50 * time.Millisecond}, mem.Listen("acceptor"))
+		added <- err
+	}()
+	select {
+	case err := <-added:
+		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "StoreTimeout") {
+			t.Errorf("Add: %v, want the store's Open past StoreTimeout", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Add waited for the store's Open")
 	}
 }

@@ -128,9 +128,17 @@ func (c *conn) runReplay(job *replayJob) {
 		gapStart = 0
 	}
 	var missing uint64 // a message missing from the store: the replay stops there
-	err := s.store.Range(context.Background(), gen, job.begin, job.end, func(seq uint64, raw []byte, hole store.Hole) error {
+	// Cancelled when the connection ends: a read waiting for the store, for
+	// a connection of a pool the application holds, say, would otherwise
+	// hold back the connection's end, and so the next connection and the
+	// session's stop. fn checks it too, for a store that does not between
+	// messages.
+	err := s.store.Range(c.ctx, gen, job.begin, job.end, func(seq uint64, raw []byte, hole store.Hole) error {
 		if writeErr != nil {
 			return writeErr
+		}
+		if err := c.ctx.Err(); err != nil {
+			return err
 		}
 		// Our own message: of our default version, unless its header says.
 		p := s.profileFor(raw, false)
@@ -180,6 +188,18 @@ func (c *conn) runReplay(job *replayJob) {
 	})
 	readErr := error(nil)
 	switch {
+	case c.ctx.Err() != nil:
+		// The connection ended, the replay with it, whatever Range
+		// returned: nothing more is written to it, and what was read but
+		// not written is neither resent nor gap-filled, nor reported lost.
+		// It is no read failure: the counterparty asks again, and, with
+		// Retention evicting, the connection's end noted what was not
+		// resent, which evictions keep (see unsentLocked). A store that
+		// moved on still halts the session, below.
+		readErr = c.ctx.Err()
+		buf = buf[:0]
+		s.log.LogAttrs(context.Background(), slog.LevelDebug, "resend cancelled: the connection ended",
+			slog.Uint64("begin", job.begin), slog.Uint64("end", job.end), slog.Any("error", err))
 	case err == nil:
 		gapFill(job.end + 1)
 	case errors.Is(err, errMissing):
@@ -235,6 +255,14 @@ func (c *conn) runReplay(job *replayJob) {
 	}
 	if missing == 0 && readErr == nil {
 		s.ret.deliveredLocked(job.begin, job.end)
+	}
+	if c.closed {
+		// No replay runs on a connection ended, nor is what it held back
+		// released: it is never written. Its end noted, for Retention, what
+		// it had not written, the replays queued and the frames held
+		// included (see unsentLocked), and its receipts lost the connection.
+		c.replay, c.replayQueue = nil, nil
+		return
 	}
 	c.replay = nil
 	for c.replay == nil && len(c.replayQueue) > 0 {

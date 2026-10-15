@@ -222,8 +222,17 @@ func New(cfg Config) (*Session, error) {
 	if s.dicts, err = newDicts(cfg, p); err != nil {
 		return nil, fmt.Errorf("session %s: %w", cfg.ID, err)
 	}
-	st, err := s.store.Open(context.Background())
+	// Bounded by StoreTimeout, as the Open after a Reset is, though through
+	// ctx alone: no lock is held, only the caller waits. A store waiting
+	// for a connection of a pool the application holds, say, fails Add
+	// rather than hang it.
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.StoreTimeout)
+	st, err := s.store.Open(ctx)
+	cancel()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("session %s: opening its store took longer than StoreTimeout (%s): %w", cfg.ID, cfg.StoreTimeout, err)
+		}
 		return nil, fmt.Errorf("session %s: opening its store: %w", cfg.ID, err)
 	}
 	s.st = st
