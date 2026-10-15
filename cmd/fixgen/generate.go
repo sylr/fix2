@@ -676,6 +676,13 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 		info := lookupType(fd.Type)
 		hasEnums := len(fd.Enums) > 0
 		addEntryGetter(f, entryName, fr.Tag, fd.Name, fd.Type, info, hasEnums, scoped)
+		// A group declaring only the LENGTH still gets the DATA getter, as
+		// specLiteral lets its readers accept both.
+		if d := dict.Profile().DataTag(fr.Tag); d != 0 && dict.Fields[d] != nil &&
+			!slices.ContainsFunc(mg.Fields, func(r dictionary.FieldRef) bool { return r.Tag == d }) {
+			dd := dict.Fields[d]
+			addEntryGetter(f, entryName, d, dd.Name, dd.Type, lookupType(dd.Type), len(dd.Enums) > 0, scoped)
+		}
 	}
 
 	// --- Nested groups: counter getter + iteration method on parent entry ---
@@ -709,7 +716,13 @@ func writeGroupFile(dict *dictionary.Dict, mg dictionary.GroupDef, allMerged map
 			continue
 		}
 		if isDataLength(dict, fr.Tag) {
-			continue // computed by the DATA setter
+			// Computed by the DATA setter, which a group declaring only the
+			// LENGTH still gets, as specLiteral lets its readers accept both.
+			d := dict.Profile().DataTag(fr.Tag)
+			if !slices.ContainsFunc(mg.Fields, func(r dictionary.FieldRef) bool { return r.Tag == d }) {
+				addEntryDataSetter(f, entryBuilderName, dict.Fields[d].Name, fd.Name)
+			}
+			continue
 		}
 		if l := dict.Profile().DataLengthTag(fr.Tag); l != 0 && dict.Fields[l] != nil {
 			addEntryDataSetter(f, entryBuilderName, fd.Name, dict.Fields[l].Name)

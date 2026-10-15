@@ -2240,3 +2240,64 @@ func rejected(err error) bool {
 	}
 	return false
 }
+
+// TestGenerateLengthOnlyGroup covers a group that lists only a LENGTH field
+// whose DATA partner exists globally: the entry builder must still offer the
+// DATA setter, and the entry it builds must pass strict validation and read
+// back, as the dictionary and the readers accept the pair.
+func TestGenerateLengthOnlyGroup(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages><message name="M" msgtype="M"><group name="NoG" required="N"><field name="RawDataLength" required="N"/>DATAREF</group></message></messages><fields><field number="35" name="MsgType" type="STRING"/><field number="500" name="NoG" type="NUMINGROUP"/><field number="95" name="RawDataLength" type="LENGTH"/><field number="96" name="RawData" type="DATA"/></fields></fix>`
+	for name, ref := range map[string]string{
+		"declared-data-control": `<field name="RawData" required="N"/>`,
+		"implicit-data":         "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			runGenerated(t, strings.ReplaceAll(xml, "DATAREF", ref), "lengthonly", `package lengthonly
+
+import (
+	"bytes"
+	"testing"
+
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
+)
+
+func TestWritableGroup(t *testing.T) {
+	// The wire form the dictionary and the reader accept.
+	rawControl := fix2.NewBuilder("FIX.4.4", "M").AppendInt(500, 1).AppendInt(95, 3).AppendString(96, "a\x01b").Build()
+	var control fix2.Message
+	if err := fix2.ParseInto(&control, rawControl, Dictionary().Profile()); err != nil {
+		t.Fatal(err)
+	}
+	if err := Dictionary().ValidateWith(&control, dictionary.CheckAll); err != nil {
+		t.Fatalf("valid pair rejected: %v", err)
+	}
+	if got := len(WrapM(&control).NoGEntries()); got != 1 {
+		t.Fatalf("control groups = %d", got)
+	}
+	if v, ok := WrapM(&control).NoGEntries()[0].RawData(); !ok || string(v) != "a\x01b" {
+		t.Errorf("control RawData = %q, %v", v, ok)
+	}
+
+	raw := BuildM("FIX.4.4").AddNoGEntry(NewNoGEntry().SetRawData([]byte("a\x01b"))).Build()
+	if !bytes.Contains(raw, []byte("\x01500=1\x0195=3\x0196=a\x01b\x01")) {
+		t.Errorf("unexpected layout %q", raw)
+	}
+	var m fix2.Message
+	if err := fix2.ParseInto(&m, raw, Dictionary().Profile()); err != nil {
+		t.Fatalf("ParseInto: %v", err)
+	}
+	if err := Dictionary().ValidateWith(&m, dictionary.CheckAll); err != nil {
+		t.Fatalf("built message rejected: %v", err)
+	}
+	if n := len(WrapM(&m).NoGEntries()); n != 1 {
+		t.Fatalf("groups = %d, raw = %q", n, raw)
+	}
+	if v, ok := WrapM(&m).NoGEntries()[0].RawData(); !ok || string(v) != "a\x01b" {
+		t.Errorf("built RawData = %q, %v", v, ok)
+	}
+}
+`)
+		})
+	}
+}
