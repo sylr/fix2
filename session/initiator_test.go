@@ -8,11 +8,13 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport"
 	"github.com/sylr/fix2/session/transport/mem"
 )
@@ -466,5 +468,107 @@ func TestLogoutAnsweredOnSlowWrite(t *testing.T) {
 				t.Errorf("logout reason %v, want the counterparty's", reason)
 			}
 		})
+	}
+}
+
+// syncGate is a store whose Sync, once block is set, tells entered and
+// waits for release: what the writer is about to write waits.
+type syncGate struct {
+	*memstore.Store
+	block   atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (g *syncGate) Sync(ctx context.Context, _, _ uint64) error {
+	if g.block.Load() {
+		g.entered <- struct{}{}
+		select {
+		case <-g.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+// The answer to the counterparty's Logout is the last message sent: what
+// the counterparty sends while it waits to be written goes unanswered, and
+// uses up no MsgSeqNum, a ResendRequest included.
+func TestLogoutAnswerIsLast(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		send func(*peer)
+	}{
+		{"nothing more", nil},
+		{"TestRequest", func(p *peer) { p.send("1", 0, "112", "PING") }},
+		{"Reject", func(p *peer) { p.send("1", 0) }},
+		{"ResendRequest", func(p *peer) { p.send("2", 0, "7", "1", "16", "0") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := &syncGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+			l := mem.Listen("acceptor")
+			s, rec := startInitiator(t, l, func(c *session.Config) { c.Store = st })
+			// Before the cleanup above, which would wait for the Sync.
+			release := sync.OnceFunc(func() { close(st.release) })
+			t.Cleanup(release)
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.send("A", 0, "98", "0", "108", "30")
+			rec.wait(t, func() bool { return rec.logons == 1 })
+			st.block.Store(true)
+			p.send("5", 0)
+			select {
+			case <-st.entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("our Logout not written")
+			}
+			if tc.send != nil {
+				tc.send(p)
+				waitFor(t, func() bool { return s.NextTargetSeqNum() == 4 })
+			}
+			st.block.Store(false)
+			release()
+			p.expect("5", "34", "2")
+			p.expectSilentEnd()
+			if n := s.NextSenderSeqNum(); n != 3 {
+				t.Errorf("NextSenderSeqNum = %d, want 3: nothing after our Logout", n)
+			}
+		})
+	}
+}
+
+// A replay asked for before the counterparty's Logout, waiting for the
+// writer, is still served: our answer, held back behind it, comes last.
+func TestLogoutAnswerAfterReplayAskedBefore(t *testing.T) {
+	st := &syncGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+	l := mem.Listen("acceptor")
+	s, rec := startInitiator(t, l, func(c *session.Config) { c.Store = st })
+	release := sync.OnceFunc(func() { close(st.release) })
+	t.Cleanup(release)
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 0, "98", "0", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	st.block.Store(true)
+	if _, err := s.Send(context.Background(), order("O1")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-st.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("order not written")
+	}
+	p.send("2", 0, "7", "2", "16", "0")
+	p.send("5", 0)
+	waitFor(t, func() bool { return s.NextTargetSeqNum() == 4 })
+	st.block.Store(false)
+	release()
+	p.expect("D", "34", "2", "11", "O1")
+	p.expect("D", "34", "2", "43", "Y", "11", "O1")
+	p.expect("5", "34", "3")
+	p.expectSilentEnd()
+	if n := s.NextSenderSeqNum(); n != 4 {
+		t.Errorf("NextSenderSeqNum = %d, want 4", n)
 	}
 }

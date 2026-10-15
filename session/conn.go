@@ -70,7 +70,8 @@ type conn struct {
 	readBlocked         time.Time // since when the reader waits for the delivery queue
 	logonDeadline       time.Time
 	logoutDeadline      time.Time
-	logoutText          string // the Text of our Logout, why we logged out
+	closeDeadline       time.Time // closing, when a replay holding back our Logout is cut short
+	logoutText          string    // the Text of our Logout, why we logged out
 	timer               *time.Timer
 	testReqs            uint64 // TestRequests sent, for their IDs
 	probeWanted         bool   // an acknowledgement probe waits for AckProbeMinInterval
@@ -237,6 +238,7 @@ var (
 	errAlreadyConnected = errors.New("session: already connected")
 	errSyncTimeout      = errors.New("session: store Sync took longer than WriteTimeout")
 	errStoreTimeout     = errors.New("session: a store write took longer than StoreTimeout")
+	errClosing          = errors.New("session: nothing is sent after our last Logout")
 )
 
 // run reads and handles the connection's messages until it closes, then
@@ -336,13 +338,19 @@ func (s *Session) disconnectLocked(c *conn, reason error) {
 }
 
 // closeAfterFlushLocked closes c once what is queued is written: after a
-// Logout.
+// Logout, the last message queued (see queueLocked). No replay is asked for
+// after it (see startReplayLocked); those asked for before it go first, our
+// Logout held back behind them for LogoutTimeout at most, as long as the
+// counterparty waits for it: then they are cut short (see onTimer). What is
+// left to write, WriteTimeout bounds.
 func (s *Session) closeAfterFlushLocked(c *conn, reason error) {
 	if c.closed || c.closing {
 		return
 	}
 	c.closing = true
 	c.reason = reason
+	c.closeDeadline = time.Now().Add(s.cfg.LogoutTimeout)
+	s.armLocked(c)
 	c.wakeWriter()
 }
 
@@ -543,9 +551,6 @@ func (c *conn) signalRoomLocked() {
 	}
 }
 
-// replayRunning reports whether the replay job is being run by the writer.
-func (c *conn) replayRunning() bool { return c.replay != nil && c.replay.running }
-
 // onTimer handles c's timer: logon and logout timeouts, heartbeats, test
 // requests and stalls.
 func (s *Session) onTimer(c *conn) {
@@ -555,6 +560,19 @@ func (s *Session) onTimer(c *conn) {
 		return
 	}
 	now := time.Now()
+	if c.closing && c.replaying() && !now.Before(c.closeDeadline) {
+		// Our Logout still held back behind a replay, whose read may wait
+		// for the store as long as a resource is held: the connection
+		// ending cancels it, and the replays queued after it. Otherwise the writer writes what is queued,
+		// our Logout last, which WriteTimeout bounds: not cut short.
+		reason := &LogoutError{Err: errors.New("our Logout, held back behind a resend, not written within " + s.cfg.LogoutTimeout.String())}
+		if le, ok := c.reason.(*LogoutError); ok {
+			reason.ByCounterparty, reason.Text = le.ByCounterparty, le.Text
+		}
+		c.reason = reason
+		s.disconnectLocked(c, reason)
+		return
+	}
 	switch s.phase {
 	case phaseAwaitingLogon, phaseLogonSent:
 		if !now.Before(c.logonDeadline) {
@@ -562,8 +580,7 @@ func (s *Session) onTimer(c *conn) {
 			return
 		}
 	case phaseLogoutSent:
-		// Closing, no Logout reply is awaited: WriteTimeout bounds what is
-		// left to write.
+		// Closing, no Logout reply is awaited: see closeAfterFlushLocked.
 		if !c.closing && !now.Before(c.logoutDeadline) {
 			s.disconnectLocked(c, &LogoutError{Text: "no Logout reply within " + s.cfg.LogoutTimeout.String()})
 			return
@@ -632,6 +649,9 @@ func (s *Session) armLocked(c *conn) {
 	}
 	if c.closing {
 		// Nothing more to send: see onTimer.
+		if c.replaying() {
+			at(c.closeDeadline)
+		}
 	} else if !c.readBlocked.IsZero() {
 		at(c.readBlocked.Add(s.cfg.deliveryStall(s.heartBt)))
 	} else if hb := s.heartBt; hb > 0 && (s.phase == phaseEstablished || s.phase == phaseLogoutSent) {

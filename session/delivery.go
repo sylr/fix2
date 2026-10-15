@@ -354,6 +354,11 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 			slog.Uint64("seq", it.seq), slog.Any("error", err))
 		return
 	}
+	if s.c.closing {
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "handler rejected a message after our Logout: not sent",
+			slog.Uint64("seq", it.seq), slog.Any("error", err))
+		return
+	}
 	if isReject(m.MsgType()) {
 		// A BusinessMessageReject the handler refuses, as a generated
 		// Dispatch without its handler does, is not rejected: a counterparty

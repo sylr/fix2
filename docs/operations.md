@@ -223,8 +223,16 @@ under the session's lock: `StoreTimeout` then halts the session.
 
 Reads are not watched: a replay's `Range` runs without the session's lock,
 and leaves the store's state as it was. It is cancelled when its
-connection ends, as on a disconnection, a Logout timing out or `Stop`; a
-store that honors its ctx then returns, as the SQLite store does, and the
+connection ends, as on a disconnection, a Logout timing out or `Stop`, or
+when our last Logout has waited `LogoutTimeout` behind it; a store that
+honors its ctx then returns, as the SQLite store does, and the
 session reconnects or stops. One that does not return holds back the end
 of that connection, and so the next connection and `Done`, until it does;
 `Stop` still returns when its ctx ends.
+
+Once a connection only waits to write our last Logout (the answer to the
+counterparty's, or ours once it has answered), nothing more is sent on it:
+what the counterparty sends meanwhile goes unanswered (a TestRequest, a
+message to reject, a ResendRequest, which it will ask again on the next
+connection), `Send` returns `ErrNotLoggedOn`, and a Reject the handler
+returns is logged, not sent. A resend asked for before still goes first.

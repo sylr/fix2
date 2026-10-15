@@ -489,7 +489,9 @@ func (s *Session) send(ctx context.Context, msgType string, body []byte) (Receip
 			return Receipt{}, ErrStopped
 		case s.resetting:
 			return Receipt{}, ErrResetting
-		case s.phase != phaseEstablished || s.c == nil:
+		case s.phase != phaseEstablished || s.c == nil || s.c.closing:
+			// Closing, after our Logout: a stalled handler's leaves the
+			// phase established.
 			return Receipt{}, ErrNotLoggedOn
 		}
 		c := s.c
@@ -529,10 +531,17 @@ func (s *Session) send(ctx context.Context, msgType string, body []byte) (Receip
 // queueLocked sequences a message with header h and body, stores it and
 // queues it on the current connection (held back if it is resending). A
 // control message may exceed the queue's bounds. It returns the MsgSeqNum.
+// Once the connection closes after our Logout, it refuses any other with
+// errClosing, using up no MsgSeqNum: what the counterparty sends meanwhile
+// goes unanswered, as the timer sends nothing then.
 func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, error) {
 	c := s.c
 	if c == nil {
 		return 0, ErrNotLoggedOn
+	}
+	if c.closing {
+		s.log.LogAttrs(context.Background(), slog.LevelDebug, "not sent after our Logout", slog.String("msg_type", h.msgType))
+		return 0, errClosing
 	}
 	h.seq = s.st.NextSender
 	if h.sendingTime.IsZero() {
@@ -618,9 +627,10 @@ func (s *Session) queueProbeLocked(id string) (uint64, error) {
 }
 
 // sendAdminLocked sends a session-level message with header h and body.
-// Failures disconnect: they are logged by queueLocked.
+// Failures disconnect: they are logged by queueLocked. One refused after
+// our Logout is dropped.
 func (s *Session) sendAdminLocked(h *header, body []byte) {
-	if _, err := s.queueLocked(h, body, true); err != nil && s.c != nil {
+	if _, err := s.queueLocked(h, body, true); err != nil && !errors.Is(err, errClosing) && s.c != nil {
 		s.disconnectLocked(s.c, &LogoutError{Text: "could not send " + h.msgType, Err: err})
 	}
 }

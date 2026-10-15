@@ -297,6 +297,65 @@ func TestReplayCancelledByStop(t *testing.T) {
 	}
 }
 
+// A replay waiting in Range holds back our answer to the counterparty's
+// Logout, or our Logout crossing its, LogoutTimeout at most: the connection
+// then ends, which cancels the replay, and the session tells why. Nothing
+// more is written, nothing reported lost, and the next connection resends
+// what it is asked for.
+func TestReplayWaitingHoldsBackLogout(t *testing.T) {
+	for _, crossing := range []bool{false, true} {
+		name := "counterparty's Logout"
+		if crossing {
+			name = "crossing Logouts"
+		}
+		t.Run(name, func(t *testing.T) {
+			st := newWaitingRangeStore(1)
+			w := replayWaiting(t, st, order("O1"))
+			done := make(chan error, 1)
+			if crossing {
+				go func() { done <- w.s.Logout(context.Background(), "end of day") }()
+				waitFor(t, func() bool { return w.s.State() == session.StateLoggingOut })
+				w.p.send("5", 0)
+			} else {
+				w.p.send("5", 0, "58", "bye")
+				waitFor(t, func() bool { return w.s.State() == session.StateLoggingOut })
+				go func() { done <- w.s.Stop(context.Background()) }()
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Errorf("logging out: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("logging out waited for the replay")
+			}
+			w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
+			w.h.mu.Lock()
+			reason := w.h.logouts[0]
+			w.h.mu.Unlock()
+			var le *session.LogoutError
+			if !errors.As(reason, &le) || le.ByCounterparty == crossing || le.Err == nil || !strings.Contains(le.Err.Error(), "held back behind a resend") {
+				t.Errorf("logout reason %v, want the Logout's, held back behind the resend", reason)
+			}
+			if !crossing {
+				waitDone(t, w.s)
+				w.checkRetired(t, 0, 0)
+				return
+			}
+			st.wait.Store(false)
+			p := acceptPeer(t, w.d.l)
+			p.seq = w.p.seq
+			p.expect("A", "34", "4")
+			p.send("A", 0, "98", "0", "108", "30")
+			w.h.wait(t, func() bool { return w.h.logons == 2 })
+			w.checkRetired(t, 0, 0)
+			p.send("2", 0, "7", "1", "16", "0")
+			p.expect("4", "34", "1", "36", "2", "123", "Y")
+			p.expect("D", "34", "2", "43", "Y", "11", "O1")
+		})
+	}
+}
+
 // blockingResend is a lossRecorder whose OnResend, once block is set, tells
 // entered and waits for release: the writer goroutine, preempted after it
 // checked the connection.

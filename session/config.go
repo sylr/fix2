@@ -229,7 +229,10 @@ type Config struct {
 	Leniency Leniency
 
 	// LogonTimeout is how long to wait for the counterparty's Logon, 10s if
-	// 0. LogoutTimeout is how long to wait for its Logout reply, 2s if 0.
+	// 0. LogoutTimeout is how long to wait for its Logout reply, 2s if 0,
+	// and how long a resend under way may hold back our last Logout, once
+	// nothing more is awaited: the resend is then cut short and the
+	// connection closed.
 	LogonTimeout, LogoutTimeout time.Duration
 	// WriteTimeout bounds each write, 10s if 0: a counterparty not reading
 	// is disconnected.

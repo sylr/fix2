@@ -197,6 +197,50 @@ func TestReplayWaitingForPoolStops(t *testing.T) {
 	}
 }
 
+// A replay waiting for a connection the application holds holds back our
+// answer to the counterparty's Logout, or our Logout crossing its,
+// LogoutTimeout at most: Stop, or Logout, returns then, the connection
+// still held.
+func TestLogoutWhileReplayWaitsForPool(t *testing.T) {
+	for _, crossing := range []bool{false, true} {
+		name := "counterparty's Logout"
+		if crossing {
+			name = "crossing Logouts"
+		}
+		t.Run(name, func(t *testing.T) {
+			r := replayWaitingForPool(t)
+			done := make(chan error, 1)
+			if crossing {
+				go func() { done <- r.s.Logout(context.Background(), "end of day") }()
+				waitFor(t, "our Logout", func() bool { return r.s.State() == session.StateLoggingOut })
+				r.peer.send("5")
+			} else {
+				r.peer.send("5", "58", "bye")
+				waitFor(t, "the Logout", func() bool { return r.s.State() == session.StateLoggingOut })
+				go func() { done <- r.s.Stop(context.Background()) }()
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Errorf("logging out: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("logging out waited for the replay")
+			}
+			if !crossing {
+				select {
+				case <-r.s.Done():
+				case <-time.After(5 * time.Second):
+					t.Fatal("Done waited for the replay")
+				}
+			}
+			if err := r.s.Err(); err != nil {
+				t.Errorf("Err = %v, want nil", err)
+			}
+		})
+	}
+}
+
 // A session whose store waits to open, the application holding every
 // connection of the pool, is not added, after StoreTimeout.
 func TestOpenWaitingForPool(t *testing.T) {

@@ -1048,6 +1048,12 @@ func (s *Session) rejectLocked(m *fix2.Message, reason dictionary.RejectReason, 
 	if s.c == nil {
 		return
 	}
+	if s.c.closing {
+		// Nothing is sent after our Logout (see queueLocked), nor counted.
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a message after our Logout",
+			s.msgTypeAttr(m), s.seqAttr(m), slog.Int("reason", int(reason)))
+		return
+	}
 	fallback := rejectText(reason, "value withheld")
 	if m == s.partial {
 		// Nothing of it can be told safe to repeat: the reason only,
@@ -1116,7 +1122,7 @@ func (s *Session) businessRejectLocked(m *fix2.Message, reason int, refID, text 
 		b = b.str(tagBusinessRejectRefID, refID)
 	}
 	b = b.int(tagBusinessRejectReason, uint64(reason))
-	if _, err := s.queueLocked(&header{msgType: "j", route: reverseRoute(m, s.id.BeginString)}, b, true); err != nil && s.c != nil {
+	if _, err := s.queueLocked(&header{msgType: "j", route: reverseRoute(m, s.id.BeginString)}, b, true); err != nil && !errors.Is(err, errClosing) && s.c != nil {
 		s.disconnectLocked(s.c, &LogoutError{Text: "could not send a BusinessMessageReject", Err: err})
 	}
 }
@@ -1124,7 +1130,8 @@ func (s *Session) businessRejectLocked(m *fix2.Message, reason int, refID, text 
 // logoutLocked sends a Logout with text and waits for the counterparty's,
 // at most LogoutTimeout, before disconnecting; not logged on, it disconnects.
 func (s *Session) logoutLocked(c *conn, text string) {
-	if c.closed || s.c != c {
+	if c.closed || c.closing || s.c != c {
+		// Closing, our Logout is queued already.
 		return
 	}
 	switch s.phase {

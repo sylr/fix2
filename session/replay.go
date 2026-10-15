@@ -39,8 +39,17 @@ const replayChunk = 64 << 10
 // replay; queued application messages of the range not yet handed to the
 // writer are dropped, to be sent by the replay as retransmissions, and
 // queued session-level ones are written first. A replay asked for while one
-// runs is queued, merged with an overlapping one.
+// runs is queued, merged with an overlapping one. None is once the
+// connection closes after our Logout.
 func (s *Session) startReplayLocked(c *conn, begin, end uint64, keepPending bool) {
+	if c.closing {
+		// Nothing goes out after our Logout: the counterparty will ask
+		// again.
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "not resent after our Logout",
+			slog.Uint64("begin", begin), slog.Uint64("end", end))
+		s.ret.holdLocked(begin, end)
+		return
+	}
 	if c.replay != nil {
 		for i, q := range c.replayQueue {
 			if begin <= q.end+1 && end+1 >= q.begin {
@@ -245,6 +254,11 @@ func (c *conn) runReplay(job *replayJob) {
 		// What it did not resend stays unwritten.
 		s.unsentLocked(c)
 		c.replay, c.replayQueue = nil, nil
+		if c.closing {
+			// Our Logout, held back behind it, is not written either.
+			s.disconnectLocked(c, &LogoutError{Text: text, Err: cause})
+			return
+		}
 		s.logoutLocked(c, text)
 		return
 	}
@@ -255,7 +269,8 @@ func (c *conn) runReplay(job *replayJob) {
 		c.replay = nil
 		return
 	}
-	if missing == 0 && readErr == nil {
+	if missing == 0 && readErr == nil && !c.closed {
+		// Cut short, it may have dropped its last chunk unwritten.
 		s.ret.deliveredLocked(job.begin, job.end)
 	}
 	if c.closed {
