@@ -124,10 +124,10 @@ func TestStashBytes(t *testing.T) {
 	s := fenceSession(t, func(c *Config) { c.MaxStashBytes = 100 })
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.stashLocked(1, make([]byte, 150), true) {
+	if !s.stashLocked(1, make([]byte, 150), time.Now(), true) {
 		t.Error("an empty stash refused a message bigger than MaxStashBytes")
 	}
-	if s.stashLocked(2, make([]byte, 1), true) {
+	if s.stashLocked(2, make([]byte, 1), time.Now(), true) {
 		t.Error("a full stash kept another message")
 	}
 	s.unstashLocked(1)
@@ -135,11 +135,11 @@ func TestStashBytes(t *testing.T) {
 		t.Errorf("stashSize = %d after unstashing, want 0", s.stashSize)
 	}
 	for seq, n := range map[uint64]int{3: 60, 4: 40} {
-		if !s.stashLocked(seq, make([]byte, n), true) {
+		if !s.stashLocked(seq, make([]byte, n), time.Now(), true) {
 			t.Errorf("message %d of %d bytes refused", seq, n)
 		}
 	}
-	if s.stashLocked(5, make([]byte, 1), true) {
+	if s.stashLocked(5, make([]byte, 1), time.Now(), true) {
 		t.Error("100 bytes kept: another byte kept")
 	}
 	s.clearStashLocked()
@@ -211,16 +211,16 @@ func TestStashMarkers(t *testing.T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.st.NextTarget = 2
-	s.stashLocked(3, make([]byte, 200), true) // MaxStashBytes taken
+	s.stashLocked(3, make([]byte, 200), time.Now(), true) // MaxStashBytes taken
 	s.markAheadLocked(4)
 	s.tooHighLocked(c, m, Inbound{Seq: 4}, nil)
-	if marker := s.stash[4]; len(marker) == 0 {
+	if marker := s.stash[4].frame; len(marker) == 0 {
 		t.Errorf("message 4 handled: stash holds %q, want its marker", marker)
 	}
 	s.markAheadLocked(5) // MaxStash taken
 	s.tooHighLocked(c, m, Inbound{Seq: 5}, nil)
-	if frame, ok := s.stash[5]; ok {
-		t.Errorf("message 5 handled, no room for its marker: stash holds %q", frame)
+	if kept, ok := s.stash[5]; ok {
+		t.Errorf("message 5 handled, no room for its marker: stash holds %q", kept.frame)
 	}
 }
 

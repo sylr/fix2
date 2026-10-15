@@ -415,15 +415,19 @@ func TestUnusableGapFillResetPast(t *testing.T) {
 // for nothing.
 func TestUnusableGapFillAfterLogout(t *testing.T) {
 	_, _, p := loggedOn(t, func(c *session.Config) { c.MaxLatency = 500 * time.Millisecond })
-	p.write(from(session.FIX44, 3), "0")
+	p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "5")
 	p.expect("2", "7", "2", "16", "0")
-	// Held this long, 3 is stale when its turn comes: rejected, it logs out.
-	time.Sleep(700 * time.Millisecond)
-	p.write(from(session.FIX44, 4), "4", "43", "Y", "123", "Y", "36", "5")
 	p.write(from(session.FIX44, 6), "0")
-	p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
-	p.expect("3", "45", "3", "373", "10")
+	// Stale when received, 7 is rejected: it logs out.
+	stale := from(session.FIX44, 7)
+	stale.sent = time.Now().Add(-time.Second)
+	p.write(stale, "0")
+	p.expect("3", "45", "7", "373", "10")
 	p.expect("5")
+	// Received while logging out, 2 is handled, and the GapFill held after
+	// it: counted, its NewSeqNo not applied.
+	p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+	p.expect("3", "45", "3", "371", "122")
 	for {
 		select {
 		case ev := <-p.frames:

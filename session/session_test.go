@@ -14,11 +14,12 @@ import (
 // recorder is a Handler recording what it is told.
 type recorder struct {
 	session.BaseHandler
-	mu      sync.Mutex
-	logons  int
-	logouts []error
-	apps    []string // ClOrdID of each application message
-	got     chan struct{}
+	mu       sync.Mutex
+	logons   int
+	logouts  []error
+	apps     []string    // ClOrdID of each application message
+	received []time.Time // Inbound.Received of each application message
+	got      chan struct{}
 }
 
 func newRecorder() *recorder { return &recorder{got: make(chan struct{}, 100)} }
@@ -37,9 +38,10 @@ func (r *recorder) OnLogout(_ context.Context, _ *session.Session, err error) {
 	r.got <- struct{}{}
 }
 
-func (r *recorder) FromApp(_ context.Context, _ *session.Session, m *fix2.Message, _ session.Inbound) error {
+func (r *recorder) FromApp(_ context.Context, _ *session.Session, m *fix2.Message, in session.Inbound) error {
 	r.mu.Lock()
 	r.apps = append(r.apps, string(m.Get(11)))
+	r.received = append(r.received, in.Received)
 	r.mu.Unlock()
 	r.got <- struct{}{}
 	return nil

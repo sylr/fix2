@@ -135,8 +135,8 @@ type Session struct {
 	// sentReset is set when our Logon carried ResetSeqNumFlag=Y.
 	sentReset bool
 	recov     recovery
-	stash     map[uint64][]byte // received ahead of a gap, by MsgSeqNum
-	stashSize int               // the bytes of stash's messages
+	stash     map[uint64]keptMsg // received ahead of a gap, by MsgSeqNum
+	stashSize int                // the bytes of stash's messages
 	receipts  receipts
 	deliv     *delivery
 	// committed is the MsgSeqNum of the last received message processed:

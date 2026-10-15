@@ -191,7 +191,7 @@ func TestAdvancePrunesAfterJump(t *testing.T) {
 	defer s.mu.Unlock()
 	s.c = c
 	s.st.NextTarget = 2
-	s.stash = map[uint64][]byte{5: []byte("x")}
+	s.stash = map[uint64]keptMsg{5: {frame: []byte("x")}}
 	s.advanceLocked(c, 6)
 	if len(s.stash) != 0 {
 		t.Errorf("stash after the jump: %v", s.stash)

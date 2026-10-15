@@ -490,8 +490,9 @@ func (s *Session) checkHeaderLocked(c *conn, m *fix2.Message, seq uint64, now ti
 	switch reason {
 	case dictionary.ReasonCompIDProblem, dictionary.ReasonSendingTimeAccuracyProblem:
 		if counts {
-			// Counted, but what is kept ahead of it is not processed: the
-			// session logs out, and asks for it again once logged on.
+			// Counted, but what is kept ahead of it is not processed now:
+			// the session logs out, and asks for it again once logged on,
+			// unless the gap is filled while logging out.
 			s.markLocked(seq)
 			s.st.NextTarget = seq + 1
 		}
@@ -670,7 +671,7 @@ func (s *Session) origTimeOK(c *conn, m *fix2.Message, inSequence bool) bool {
 func (s *Session) tooHighLocked(c *conn, m *fix2.Message, in Inbound, frame []byte) {
 	// A nil frame stands for a message handled already, whose marker
 	// markAheadLocked could not keep, or for a partial one, never kept.
-	if _, ok := s.stash[in.Seq]; !ok && m != s.partial && (frame == nil || !s.stashLocked(in.Seq, frame, true)) {
+	if _, ok := s.stash[in.Seq]; !ok && m != s.partial && (frame == nil || !s.stashLocked(in.Seq, frame, in.Received, true)) {
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "too many messages received ahead of a gap: dropped, to be asked for again",
 			s.numAttr(m, "seq", tagMsgSeqNum, int64(in.Seq)))
 	}
@@ -764,7 +765,10 @@ func (s *Session) refillLocked() {
 // advanceLocked records that the messages up to next-1 were received, then
 // handles the messages kept ahead of the gap that are now in sequence. Those
 // may advance further: a nested call only moves the expected MsgSeqNum, and
-// the outermost one goes on.
+// the outermost one goes on. One that starts a Logout stops it: those kept
+// after it are neither processed nor counted by it, nor asked for. They are
+// asked for again once logged on, unless the gap is filled while logging
+// out.
 func (s *Session) advanceLocked(c *conn, next uint64) {
 	if next > s.st.NextTarget+1 && !s.draining {
 		// A jump (a GapFill): what it skipped over is behind.
@@ -779,24 +783,29 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 	}
 	s.draining = true
 	defer func() { s.draining = false }()
+	// The phase the messages kept are handled in: one that changes it
+	// started a Logout, after which nothing more is handled nor asked for.
+	// While logging out already, they are handled as those received then
+	// are.
+	phase := s.phase
 	pruned := s.st.NextTarget
-	for {
+	for s.c == c && !c.closed && s.phase == phase {
 		if s.recov.active {
 			switch {
 			case s.st.NextTarget > s.recov.target:
 				s.recov = recovery{}
 			// The next chunk once this one is received, or once a GapFill
 			// ends at its last message, as QuickFIX asks for it.
-			case s.recov.chunkEnd != 0 && s.stash[s.st.NextTarget] == nil && (s.st.NextTarget > s.recov.chunkEnd || s.gapFilling && s.st.NextTarget == s.recov.chunkEnd):
+			case s.recov.chunkEnd != 0 && s.stash[s.st.NextTarget].frame == nil && (s.st.NextTarget > s.recov.chunkEnd || s.gapFilling && s.st.NextTarget == s.recov.chunkEnd):
 				s.sendResendRequestLocked(0)
 			}
 		}
-		frame, ok := s.stash[s.st.NextTarget]
-		if !ok || s.c != c || c.closed {
+		kept, ok := s.stash[s.st.NextTarget]
+		if !ok {
 			break
 		}
 		s.unstashLocked(s.st.NextTarget)
-		s.replayStashedLocked(c, frame)
+		s.replayStashedLocked(c, kept)
 		if s.st.NextTarget > pruned+1 {
 			// A jump (a GapFill): drop what it skipped over.
 			s.pruneStashLocked()
@@ -823,32 +832,41 @@ func (s *Session) pruneStashLocked() {
 	}
 }
 
-// stashLocked keeps frame, message seq received ahead of a gap, a copy if
-// clone is set, if MaxStash and MaxStashBytes leave room for it, and
-// reports whether it did.
-func (s *Session) stashLocked(seq uint64, frame []byte, clone bool) bool {
+// keptMsg is a message kept ahead of a gap: its frame, and when it was
+// received. It is handled as of then when its turn comes: its SendingTime
+// was checked against that time, and recovering the gap before it may take
+// longer than MaxLatency.
+type keptMsg struct {
+	frame    []byte
+	received time.Time
+}
+
+// stashLocked keeps frame, message seq received ahead of a gap at received,
+// a copy if clone is set, if MaxStash and MaxStashBytes leave room for it,
+// and reports whether it did.
+func (s *Session) stashLocked(seq uint64, frame []byte, received time.Time, clone bool) bool {
 	if len(s.stash) >= s.cfg.MaxStash || len(s.stash) > 0 && s.stashSize+len(frame) > s.cfg.MaxStashBytes {
 		return false
 	}
 	if clone {
 		frame = bytes.Clone(frame)
 	}
-	s.keepLocked(seq, frame)
+	s.keepLocked(seq, keptMsg{frame: frame, received: received})
 	return true
 }
 
-// keepLocked keeps frame for message seq in the stash.
-func (s *Session) keepLocked(seq uint64, frame []byte) {
+// keepLocked keeps k for message seq in the stash.
+func (s *Session) keepLocked(seq uint64, k keptMsg) {
 	if s.stash == nil {
-		s.stash = make(map[uint64][]byte)
+		s.stash = make(map[uint64]keptMsg)
 	}
-	s.stash[seq] = frame
-	s.stashSize += len(frame)
+	s.stash[seq] = k
+	s.stashSize += len(k.frame)
 }
 
 // unstashLocked drops message seq kept ahead of a gap.
 func (s *Session) unstashLocked(seq uint64) {
-	s.stashSize -= len(s.stash[seq])
+	s.stashSize -= len(s.stash[seq].frame)
 	delete(s.stash, seq)
 }
 
@@ -858,9 +876,10 @@ func (s *Session) clearStashLocked() {
 	s.stashSize = 0
 }
 
-// replayStashedLocked handles a message kept ahead of a gap, now in sequence.
-func (s *Session) replayStashedLocked(c *conn, frame []byte) {
-	m := &s.stashMsg
+// replayStashedLocked handles kept, a message kept ahead of a gap, now in
+// sequence, as of when it was received.
+func (s *Session) replayStashedLocked(c *conn, kept keptMsg) {
+	m, frame := &s.stashMsg, kept.frame
 	applVerID, err := s.parseApp(m, frame, s.peerApplVerID)
 	if err != nil {
 		return
@@ -871,7 +890,7 @@ func (s *Session) replayStashedLocked(c *conn, frame []byte) {
 		Generation: s.st.Generation,
 		PossDup:    bytes.Equal(m.Get(tagPossDupFlag), yes),
 		PossResend: bytes.Equal(m.Get(tagPossResend), yes),
-		Received:   time.Now(),
+		Received:   kept.received,
 	}
 	if !isAdmin(m.MsgType()) {
 		in.ApplVerID = applVerID
@@ -1264,12 +1283,15 @@ func (s *Session) resetPastLocked(c *conn, next uint64) {
 	// Looked at once: processing them only removes some.
 	stashed := slices.Sorted(maps.Keys(s.stash))
 	s.heldScanned += uint64(len(stashed))
+	// As in advanceLocked, one held that starts a Logout stops it.
+	phase := s.phase
 	for s.st.NextTarget < next {
-		if s.c != c || c.closed {
-			// What is left is asked for again once logged on.
+		if s.c != c || c.closed || s.phase != phase {
+			// What is left is asked for again once logged on, unless the
+			// gap is filled while logging out.
 			return
 		}
-		for len(stashed) > 0 && (stashed[0] < s.st.NextTarget || s.stash[stashed[0]] == nil) {
+		for len(stashed) > 0 && (stashed[0] < s.st.NextTarget || s.stash[stashed[0]].frame == nil) {
 			stashed = stashed[1:]
 		}
 		held := next
@@ -1352,7 +1374,8 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 // A marker is a few dozen bytes: MaxStash alone bounds them.
 func (s *Session) markAheadLocked(seq uint64) {
 	if _, ok := s.stash[seq]; !ok && len(s.stash) < s.cfg.MaxStash {
-		s.keepLocked(seq, handledMarker(s.id.BeginString, seq))
+		// Only counted when its turn comes: it needs no time.
+		s.keepLocked(seq, keptMsg{frame: handledMarker(s.id.BeginString, seq)})
 	}
 }
 

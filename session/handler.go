@@ -9,7 +9,9 @@ import (
 	fix2 "github.com/sylr/fix2"
 )
 
-// Inbound describes a received message to a Handler.
+// Inbound describes a received message to a Handler. A message received
+// ahead of a gap keeps its Received when delivered, once the gap is filled:
+// messages are delivered in sequence, not in the order of their Received.
 type Inbound struct {
 	Seq        uint64    // its MsgSeqNum
 	Generation uint64    // the sequence number generation it belongs to
