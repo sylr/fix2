@@ -490,7 +490,7 @@ func (t *receipts) evict() {
 // AckProbeMinInterval ago, in which case the timer sends it when due.
 func (s *Session) probeLocked(c *conn) {
 	t := &s.receipts
-	if t.pending != "" || len(t.probes) > 0 || c.replaying() || s.resetting || c.closed {
+	if t.pending != "" || len(t.probes) > 0 || c.replaying() || s.resetting || c.closed || c.closing {
 		return
 	}
 	if min := s.cfg.AckProbeMinInterval; min > 0 && time.Since(t.lastAt) < min {

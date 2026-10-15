@@ -562,12 +562,16 @@ func (s *Session) onTimer(c *conn) {
 			return
 		}
 	case phaseLogoutSent:
-		if !now.Before(c.logoutDeadline) {
+		// Closing, no Logout reply is awaited: WriteTimeout bounds what is
+		// left to write.
+		if !c.closing && !now.Before(c.logoutDeadline) {
 			s.disconnectLocked(c, &LogoutError{Text: "no Logout reply within " + s.cfg.LogoutTimeout.String()})
 			return
 		}
 	}
-	if !c.readBlocked.IsZero() && now.Sub(c.readBlocked) >= s.cfg.deliveryStall(s.heartBt) {
+	// Closing, the timer queues nothing after what is queued, our Logout
+	// last: no heartbeat, TestRequest or probe.
+	if !c.closing && !c.readBlocked.IsZero() && now.Sub(c.readBlocked) >= s.cfg.deliveryStall(s.heartBt) {
 		s.stalled = true
 		s.log.LogAttrs(context.Background(), slog.LevelError, "handler stalled: FromApp has not returned while the delivery queue is full",
 			slog.Duration("for", now.Sub(c.readBlocked)))
@@ -576,7 +580,7 @@ func (s *Session) onTimer(c *conn) {
 		return
 	}
 	if s.phase == phaseEstablished || s.phase == phaseLogoutSent {
-		if hb := s.heartBt; hb > 0 && c.readBlocked.IsZero() {
+		if hb := s.heartBt; hb > 0 && c.readBlocked.IsZero() && !c.closing {
 			grace := hb + hb/5
 			switch {
 			case c.testReqID != "" && now.Sub(c.testReqSent) >= grace:
@@ -595,7 +599,7 @@ func (s *Session) onTimer(c *conn) {
 				s.sendAdminLocked(&header{msgType: "0"}, nil)
 			}
 		}
-		if c.probeWanted {
+		if c.probeWanted && !c.closing {
 			s.probeLocked(c)
 		}
 		if age := s.cfg.MaxPendingAge; age > 0 && len(c.frames) > 0 && now.Sub(c.frames[0].queued) >= age {
@@ -622,9 +626,13 @@ func (s *Session) armLocked(c *conn) {
 	case phaseAwaitingLogon, phaseLogonSent:
 		at(c.logonDeadline)
 	case phaseLogoutSent:
-		at(c.logoutDeadline)
+		if !c.closing {
+			at(c.logoutDeadline)
+		}
 	}
-	if !c.readBlocked.IsZero() {
+	if c.closing {
+		// Nothing more to send: see onTimer.
+	} else if !c.readBlocked.IsZero() {
 		at(c.readBlocked.Add(s.cfg.deliveryStall(s.heartBt)))
 	} else if hb := s.heartBt; hb > 0 && (s.phase == phaseEstablished || s.phase == phaseLogoutSent) {
 		grace := hb + hb/5
@@ -638,7 +646,7 @@ func (s *Session) armLocked(c *conn) {
 	if age := s.cfg.MaxPendingAge; age > 0 && len(c.frames) > 0 {
 		at(c.frames[0].queued.Add(age))
 	}
-	if c.probeWanted {
+	if c.probeWanted && !c.closing {
 		at(s.receipts.lastAt.Add(s.cfg.AckProbeMinInterval))
 	}
 	c.timer.Reset(max(next.Sub(now), time.Millisecond))

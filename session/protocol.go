@@ -1056,9 +1056,11 @@ func (s *Session) rejectLocked(m *fix2.Message, reason dictionary.RejectReason, 
 	}
 	text = s.withholdLocked(m, tag, text, fallback)
 	s.stats.RejectsSent.Add(1)
-	s.log.LogAttrs(context.Background(), slog.LevelWarn, "rejecting a message",
-		s.msgTypeAttr(m), s.seqAttr(m),
-		slog.Int("reason", int(reason)), slog.Int("tag", tag), slog.String("text", text))
+	attrs := []slog.Attr{s.msgTypeAttr(m), s.seqAttr(m), slog.Int("reason", int(reason))}
+	if tag != noTag {
+		attrs = append(attrs, slog.Int("tag", tag))
+	}
+	s.log.LogAttrs(context.Background(), slog.LevelWarn, "rejecting a message", append(attrs, slog.String("text", text))...)
 	b := adminBody(nil)
 	if ref := m.Get(tagMsgSeqNum); ref != nil {
 		// A partial message's only if a sequence number: anything else

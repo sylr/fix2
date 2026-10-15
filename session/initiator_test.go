@@ -426,3 +426,45 @@ func TestLogoutReasonOnHangUp(t *testing.T) {
 		t.Errorf("logout reason %v, want ours, end of day, and the hang up", reason)
 	}
 }
+
+// The counterparty's Logout is answered however long writing the answer
+// takes, longer than LogoutTimeout or past a heartbeat due: answering it,
+// the session waits for no Logout reply, and sends nothing after it.
+func TestLogoutAnsweredOnSlowWrite(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		heartBt, write time.Duration
+	}{
+		{name: "beyond LogoutTimeout", heartBt: 30 * time.Second, write: 300 * time.Millisecond},
+		// Longer than the heartbeat interval: one falls due while our
+		// Logout is written, whatever was sent before it.
+		{name: "past a heartbeat", heartBt: time.Second, write: 1500 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := newSyncStore()
+			l := mem.Listen("acceptor")
+			_, rec := startInitiator(t, l, func(c *session.Config) { c.Store = st; c.HeartBtInt = tc.heartBt })
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.send("A", 0, "98", "0", "108", strconv.Itoa(int(tc.heartBt/time.Second)))
+			rec.wait(t, func() bool { return rec.logons == 1 })
+			st.delay.Store(int64(tc.write))
+			p.send("5", 0)
+			// Heartbeats before our Logout are due: none after it.
+			for _, m := range p.until("5") {
+				if typ := string(m.MsgType()); typ != "0" && typ != "5" {
+					t.Fatalf("got MsgType %s before our Logout", typ)
+				}
+			}
+			p.expectSilentEnd()
+			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			rec.mu.Lock()
+			reason := rec.logouts[0]
+			rec.mu.Unlock()
+			var le *session.LogoutError
+			if !errors.As(reason, &le) || !le.ByCounterparty {
+				t.Errorf("logout reason %v, want the counterparty's", reason)
+			}
+		})
+	}
+}
