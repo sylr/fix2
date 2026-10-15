@@ -1,0 +1,68 @@
+package sqlite3_test
+
+import (
+ "context"
+ "database/sql"
+ "errors"
+ "path/filepath"
+ "testing"
+ "time"
+
+ fix2 "github.com/sylr/fix2"
+ "github.com/sylr/fix2/contribs/store/sqlite3"
+ "github.com/sylr/fix2/session"
+ "github.com/sylr/fix2/session/store"
+ "github.com/sylr/fix2/session/transport/mem"
+)
+
+func TestAudit4SQLiteReplayPoolWaitSurvivesDisconnect(t *testing.T) {
+ db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "fix2.db"))
+ if err != nil { t.Fatal(err) }; defer db.Close()
+ db.SetMaxOpenConns(2) // Meets the documented n+1 for one Store.
+ st := sqlite3.New(db,"audit4")
+ ini := session.NewInitiator(session.InitiatorOptions{ReconnectMin:10*time.Millisecond,ReconnectMax:10*time.Millisecond})
+ listener := mem.Listen("audit4"); defer listener.Close()
+ s,err := ini.Add(session.Config{ID:session.SessionID{BeginString:session.FIX44,SenderCompID:"INI",TargetCompID:"ACC"},Store:st,Handler:session.BaseHandler{},LogoutTimeout:40*time.Millisecond,WriteTimeout:40*time.Millisecond,StoreTimeout:40*time.Millisecond},listener)
+ if err != nil { t.Fatal(err) }
+ // A shared DB application temporarily owns the sole spare connection.
+ spare,err:=db.Conn(context.Background()); if err != nil {t.Fatal(err)}; defer spare.Close()
+ // Control: SQLite's own Range correctly respects a deadline while waiting.
+ rctx,rcancel:=context.WithTimeout(context.Background(),30*time.Millisecond)
+ rerr:=st.Range(rctx,1,1,1,func(uint64,[]byte,store.Hole)error{return nil});rcancel()
+ if !errors.Is(rerr,context.DeadlineExceeded){t.Fatalf("control Range: %v",rerr)}
+ ctx,cancel:=context.WithCancel(context.Background());defer cancel()
+ runDone:=make(chan error,1);go func(){runDone<-ini.Run(ctx)}()
+ ac,acancel:=context.WithTimeout(context.Background(),time.Second);defer acancel()
+ peer,err:=listener.Accept(ac);if err!=nil{t.Fatal(err)};defer peer.Close()
+ fr:=fix2.NewFramer(peer,fix2.FramerOptions{})
+ if _,err:=fr.Next();err!=nil{t.Fatal(err)}
+ send:=func(typ string,seq int,fields map[int]string){
+  b:=fix2.NewBuilder(session.FIX44,typ).SetInt(34,seq).SetString(49,"ACC").SetString(56,"INI").SetString(52,time.Now().UTC().Format("20060102-15:04:05.000"))
+  for tag,v:=range fields {b.SetString(tag,v)}
+  if _,err:=peer.Write(b.Build());err!=nil{t.Fatal(err)}
+ }
+ send("A",1,map[int]string{98:"0",108:"30"})
+ wait:=func(name string,fn func()bool){t.Helper();deadline:=time.Now().Add(2*time.Second);for !fn(){if time.Now().After(deadline){t.Fatalf("timed out: %s, state=%s err=%v",name,s.State(),s.Err())};time.Sleep(time.Millisecond)}}
+ wait("logon",func()bool{return s.State()==session.StateLoggedOn})
+ before:=db.Stats().WaitCount
+ send("2",2,map[int]string{7:"1",16:"0"})
+ wait("replay waiting for DB connection",func()bool{return db.Stats().WaitCount>before})
+ peer.Close()
+ wait("disconnect",func()bool{return s.State()==session.StateDisconnected})
+ // The connection loop cannot reconnect while its old reader joins Range.
+ reconnectctx,reconnectcancel:=context.WithTimeout(context.Background(),100*time.Millisecond)
+ replacement,reconnecterr:=listener.Accept(reconnectctx);reconnectcancel()
+ if replacement != nil {replacement.Close();t.Fatal("unexpected reconnection before pool release")}
+ if !errors.Is(reconnecterr,context.DeadlineExceeded){t.Fatalf("reconnect wait: %v",reconnecterr)}
+ t.Logf("no reconnection during 100ms with ReconnectMax=10ms: %v",reconnecterr)
+ stopctx,stopcancel:=context.WithTimeout(context.Background(),30*time.Millisecond)
+ start:=time.Now();stopErr:=s.Stop(stopctx);stopcancel()
+ t.Logf("Stop(deadline 30ms) returned after %s with %v, Err=%v",time.Since(start),stopErr,s.Err())
+ cancel()
+ select{case err:=<-runDone:t.Fatalf("Run unexpectedly returned before pool release: %v",err);case <-time.After(1400*time.Millisecond):}
+ select{case <-s.Done():t.Fatal("Done unexpectedly closed before pool release");default:}
+ t.Logf("after peer disconnect, Stop deadline, cancellation, and 35 StoreTimeout periods: Run and Done still wait, state=%s err=%v",s.State(),s.Err())
+ spare.Close()
+ select{case err:=<-runDone:t.Logf("return after releasing unrelated application's DB connection: %v",err);case <-time.After(2*time.Second):t.Fatal("Run did not finish after pool release")}
+ select{case <-s.Done():case <-time.After(2*time.Second):t.Fatal("Done did not close after pool release")}
+}

@@ -1,0 +1,48 @@
+package session_test
+
+import (
+	"bytes"
+	"github.com/sylr/fix2/session"
+	"testing"
+	"time"
+)
+
+// The order is valid on arrival. Recovery takes longer than MaxLatency,
+// but the held frame's original receipt time should still validate it.
+func TestAudit4BufferedSendingTimeUsesOriginalArrival(t *testing.T) {
+	s, rec, p := loggedOn(t, func(c *session.Config) {
+		c.MaxLatency = 500 * time.Millisecond
+		c.LogoutTimeout = time.Second
+	})
+	p.write(from(session.FIX44, 3), "D", "11", "VALID-AT-ARRIVAL")
+	p.expect("2", "7", "2", "16", "0")
+	// The ResendRequest proves the original header check passed and the
+	// order was held, before we let it age beyond the latency limit.
+	time.Sleep(700 * time.Millisecond)
+	p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+	p.write(from(session.FIX44, 4), "1", "112", "BARRIER")
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case ev := <-p.frames:
+			if ev.err != nil {
+				t.Fatalf("connection ended before valid buffered order was delivered: %v", ev.err)
+			}
+			t.Logf("outbound: %s", visible(ev.frame))
+			if bytes.Contains(ev.frame, []byte("\x0135=5\x01")) {
+				rec.mu.Lock()
+				apps := append([]string(nil), rec.apps...)
+				rec.mu.Unlock()
+				t.Fatalf("valid-at-arrival order caused Logout after recovery: state=%v next=%d apps=%v", s.State(), s.NextTargetSeqNum(), apps)
+			}
+			rec.mu.Lock()
+			delivered := len(rec.apps) > 0
+			rec.mu.Unlock()
+			if delivered {
+				return
+			}
+		case <-deadline:
+			t.Fatal("valid buffered order not delivered")
+		}
+	}
+}

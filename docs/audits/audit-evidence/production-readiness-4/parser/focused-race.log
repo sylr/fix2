@@ -1,0 +1,4 @@
+ok  	github.com/sylr/fix2	3.645s
+ok  	github.com/sylr/fix2/dictionary	7.988s
+ok  	github.com/sylr/fix2/dictionary/xmldict	59.692s
+ok  	github.com/sylr/fix2/cmd/fixgen	21.703s

@@ -1,0 +1,48 @@
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery/missing_message
+    audit4_stale_stash_test.go:35: state=logging out next=5 apps=[MUST-STAY-BUFFERED]
+    audit4_stale_stash_test.go:37: delivered buffered application after earlier held header forced Logout: [MUST-STAY-BUFFERED]
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery/reset_past_gap
+    audit4_stale_stash_test.go:35: state=logging out next=6 apps=[MUST-STAY-BUFFERED]
+    audit4_stale_stash_test.go:37: delivered buffered application after earlier held header forced Logout: [MUST-STAY-BUFFERED]
+--- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery (3.41s)
+    --- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery/missing_message (1.70s)
+    --- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery/reset_past_gap (1.70s)
+=== RUN   TestAudit4BufferedSendingTimeUsesOriginalArrival
+    audit4_stash_time_test.go:31: outbound: 8=FIX.4.4|9=192|35=3|34=3|49=INI|52=20261015-15:10:01.260|56=ACC|45=3|58=SendingTime accuracy problem: SendingTime 20261015-15:10:00.559 is 702ms from our clock 20261015-15:10:01.260 (max 500ms)|372=D|373=10|10=233|
+    audit4_stash_time_test.go:31: outbound: 8=FIX.4.4|9=49|35=5|34=4|49=INI|52=20261015-15:10:01.260|56=ACC|10=121|
+    audit4_stash_time_test.go:36: valid-at-arrival order caused Logout after recovery: state=logging out next=5 apps=[]
+--- FAIL: TestAudit4BufferedSendingTimeUsesOriginalArrival (1.70s)
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery/missing_message
+    audit4_stale_stash_test.go:35: state=logging out next=5 apps=[MUST-STAY-BUFFERED]
+    audit4_stale_stash_test.go:37: delivered buffered application after earlier held header forced Logout: [MUST-STAY-BUFFERED]
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery/reset_past_gap
+    audit4_stale_stash_test.go:35: state=logging out next=6 apps=[MUST-STAY-BUFFERED]
+    audit4_stale_stash_test.go:37: delivered buffered application after earlier held header forced Logout: [MUST-STAY-BUFFERED]
+--- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery (3.40s)
+    --- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery/missing_message (1.70s)
+    --- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery/reset_past_gap (1.70s)
+=== RUN   TestAudit4BufferedSendingTimeUsesOriginalArrival
+    audit4_stash_time_test.go:31: outbound: 8=FIX.4.4|9=192|35=3|34=3|49=INI|52=20261015-15:10:06.368|56=ACC|45=3|58=SendingTime accuracy problem: SendingTime 20261015-15:10:05.667 is 701ms from our clock 20261015-15:10:06.368 (max 500ms)|372=D|373=10|10=009|
+    audit4_stash_time_test.go:31: outbound: 8=FIX.4.4|9=49|35=5|34=4|49=INI|52=20261015-15:10:06.368|56=ACC|10=135|
+    audit4_stash_time_test.go:36: valid-at-arrival order caused Logout after recovery: state=logging out next=5 apps=[]
+--- FAIL: TestAudit4BufferedSendingTimeUsesOriginalArrival (1.70s)
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery/missing_message
+    audit4_stale_stash_test.go:35: state=logging out next=5 apps=[MUST-STAY-BUFFERED]
+    audit4_stale_stash_test.go:37: delivered buffered application after earlier held header forced Logout: [MUST-STAY-BUFFERED]
+=== RUN   TestAudit4StaleHeldHeaderStopsBufferedDelivery/reset_past_gap
+    audit4_stale_stash_test.go:35: state=logging out next=6 apps=[MUST-STAY-BUFFERED]
+    audit4_stale_stash_test.go:37: delivered buffered application after earlier held header forced Logout: [MUST-STAY-BUFFERED]
+--- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery (3.41s)
+    --- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery/missing_message (1.70s)
+    --- FAIL: TestAudit4StaleHeldHeaderStopsBufferedDelivery/reset_past_gap (1.70s)
+=== RUN   TestAudit4BufferedSendingTimeUsesOriginalArrival
+    audit4_stash_time_test.go:31: outbound: 8=FIX.4.4|9=192|35=3|34=3|49=INI|52=20261015-15:10:11.476|56=ACC|45=3|58=SendingTime accuracy problem: SendingTime 20261015-15:10:10.775 is 702ms from our clock 20261015-15:10:11.476 (max 500ms)|372=D|373=10|10=254|
+    audit4_stash_time_test.go:31: outbound: 8=FIX.4.4|9=49|35=5|34=4|49=INI|52=20261015-15:10:11.476|56=ACC|10=131|
+    audit4_stash_time_test.go:36: valid-at-arrival order caused Logout after recovery: state=logging out next=5 apps=[]
+--- FAIL: TestAudit4BufferedSendingTimeUsesOriginalArrival (1.70s)
+FAIL
+FAIL	github.com/sylr/fix2/session	15.787s
+FAIL

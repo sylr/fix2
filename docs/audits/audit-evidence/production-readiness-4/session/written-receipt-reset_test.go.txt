@@ -1,0 +1,40 @@
+package session_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/sylr/fix2/session"
+)
+
+// A complete transport write remains a fact when a new sequence generation
+// starts, whether or not a peer acknowledged it before the reset.
+func TestAudit4WrittenReceiptSurvivesReset(t *testing.T) {
+	for _, acknowledged := range []bool{false, true} {
+		name := "written-only"
+		if acknowledged { name = "acknowledged-control" }
+		t.Run(name, func(t *testing.T) {
+			s, _, p := loggedOn(t, nil)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			r, err := s.Send(ctx, order("AUDIT4"))
+			if err != nil { t.Fatal(err) }
+			p.expect("D", "11", "AUDIT4")
+			if err := r.Wait(ctx, session.Written); err != nil { t.Fatal(err) }
+			if acknowledged {
+				done := make(chan error, 1)
+				go func() { done <- r.Wait(ctx, session.Acknowledged) }()
+				probe := p.expect("1")
+				p.send("0", 0, "112", string(probe.Get(112)))
+				if err := <-done; err != nil { t.Fatal(err) }
+			}
+			p.seq = 1
+			p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+			p.expect("A", "34", "1", "141", "Y")
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Errorf("Written receipt regressed after reset: %v", err)
+			}
+		})
+	}
+}

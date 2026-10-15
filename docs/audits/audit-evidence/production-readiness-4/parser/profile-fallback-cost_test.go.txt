@@ -1,0 +1,34 @@
+package xmldict_test
+
+import (
+ "fmt"
+ "runtime"
+ "strings"
+ "testing"
+ "time"
+ "github.com/sylr/fix2/dictionary/xmldict"
+)
+
+func TestAudit4ProfileFallbackCost(t *testing.T) {
+ for _, n := range []int{16, 64, 256, 1024, 4096} {
+  for _, outlier := range []bool{false, true} {
+   var x strings.Builder
+   x.WriteString(`<fix type="FIX" major="4" minor="4"><fields>`)
+   for i := 0; i < n; i++ {
+    fmt.Fprintf(&x, `<field number="%d" name="Blob%dLen" type="LENGTH"/><field number="%d" name="Blob%d" type="DATA"/>`,900000+2*i,i,900001+2*i,i)
+   }
+   if outlier { x.WriteString(`<field number="1048576" name="OutlierLen" type="LENGTH"/><field number="1048577" name="Outlier" type="DATA"/>`) }
+   x.WriteString(`</fields></fix>`)
+   runtime.GC()
+   var before, after runtime.MemStats
+   runtime.ReadMemStats(&before)
+   start := time.Now()
+   d, err := xmldict.Load(strings.NewReader(x.String()))
+   elapsed := time.Since(start)
+   runtime.ReadMemStats(&after)
+   if err != nil { t.Fatal(err) }
+   if len(d.Profile().DataPairs()) != n { t.Fatalf("pairs=%d want %d",len(d.Profile().DataPairs()),n) }
+   t.Logf("pairs=%d outlier=%t xml=%d alloc=%d elapsed=%s",n,outlier,x.Len(),after.TotalAlloc-before.TotalAlloc,elapsed)
+  }
+ }
+}

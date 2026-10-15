@@ -1,0 +1,7 @@
+=== RUN   TestAudit4SQLiteReplayPoolWaitSurvivesDisconnect
+    audit4_replay_cancel_test.go:54: Stop(deadline 30ms) returned after 30.569167ms with session FIX.4.4:INI->ACC: making the messages sent durable: context deadline exceeded, Err=<nil>
+    audit4_replay_cancel_test.go:58: after peer disconnect, Stop deadline, cancellation, and 35 StoreTimeout periods: Run and Done still wait, state=stopped err=<nil>
+    audit4_replay_cancel_test.go:60: return after releasing unrelated application's DB connection: <nil>
+--- PASS: TestAudit4SQLiteReplayPoolWaitSurvivesDisconnect (1.48s)
+PASS
+ok  	github.com/sylr/fix2/contribs/store/sqlite3	2.895s

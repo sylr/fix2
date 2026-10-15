@@ -1,0 +1,10 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/38 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 38/38 completed, now fuzzing with 4 workers
+fuzz: elapsed: 3s, execs: 264495 (88146/sec), new interesting: 104 (total: 142)
+fuzz: elapsed: 6s, execs: 528866 (88140/sec), new interesting: 194 (total: 232)
+fuzz: elapsed: 9s, execs: 718685 (63263/sec), new interesting: 239 (total: 277)
+fuzz: elapsed: 12s, execs: 990762 (90702/sec), new interesting: 263 (total: 301)
+fuzz: elapsed: 15s, execs: 1197231 (68827/sec), new interesting: 295 (total: 333)
+fuzz: elapsed: 15s, execs: 1197231 (0/sec), new interesting: 295 (total: 333)
+PASS
+ok  	github.com/sylr/fix2/dictionary	15.722s

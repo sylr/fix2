@@ -1,0 +1,10 @@
+=== RUN   TestAudit4WrittenReceiptSurvivesReset
+=== RUN   TestAudit4WrittenReceiptSurvivesReset/written-only
+    audit4_receipt_test.go:36: Written receipt regressed after reset: session: delivery unknown, sequence numbers reset or session ended first
+=== RUN   TestAudit4WrittenReceiptSurvivesReset/acknowledged-control
+--- FAIL: TestAudit4WrittenReceiptSurvivesReset (0.41s)
+    --- FAIL: TestAudit4WrittenReceiptSurvivesReset/written-only (0.20s)
+    --- PASS: TestAudit4WrittenReceiptSurvivesReset/acknowledged-control (0.20s)
+FAIL
+FAIL	github.com/sylr/fix2/session	0.862s
+FAIL

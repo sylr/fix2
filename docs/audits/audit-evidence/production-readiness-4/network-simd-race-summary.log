@@ -1,0 +1,4 @@
+{"package": "github.com/sylr/fix2/session/transport/tcp", "action": "pass", "elapsed_seconds": 1.358}
+{"package": "github.com/sylr/fix2/tests/e2e", "action": "pass", "elapsed_seconds": 1.389}
+test events: {"pass": 9}
+skips: []

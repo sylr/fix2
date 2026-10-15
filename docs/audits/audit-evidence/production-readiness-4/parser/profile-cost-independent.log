@@ -1,0 +1,14 @@
+=== RUN   TestAudit4ProfileFallbackCost
+    audit4_profile_cost_test.go:31: pairs=16 outlier=false xml=1719 alloc=3649376 elapsed=760.209µs
+    audit4_profile_cost_test.go:31: pairs=16 outlier=true xml=1828 alloc=61340960 elapsed=2.609667ms
+    audit4_profile_cost_test.go:31: pairs=64 outlier=false xml=6759 alloc=3762944 elapsed=321.458µs
+    audit4_profile_cost_test.go:31: pairs=64 outlier=true xml=6868 alloc=234472112 elapsed=5.904875ms
+    audit4_profile_cost_test.go:31: pairs=256 outlier=false xml=27231 alloc=4220912 elapsed=775.167µs
+    audit4_profile_cost_test.go:31: pairs=256 outlier=true xml=27340 alloc=927033728 elapsed=32.437625ms
+    audit4_profile_cost_test.go:31: pairs=1024 outlier=false xml=109455 alloc=6225464 elapsed=2.736792ms
+    audit4_profile_cost_test.go:31: pairs=1024 outlier=true xml=109564 alloc=3701150480 elapsed=144.133833ms
+    audit4_profile_cost_test.go:31: pairs=4096 outlier=false xml=444303 alloc=14816520 elapsed=13.382875ms
+    audit4_profile_cost_test.go:31: pairs=4096 outlier=true xml=444412 alloc=14844840944 elapsed=833.042667ms
+--- PASS: TestAudit4ProfileFallbackCost (1.04s)
+PASS
+ok  	github.com/sylr/fix2/dictionary/xmldict	1.380s

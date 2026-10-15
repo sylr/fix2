@@ -1,0 +1,41 @@
+package session_test
+
+import (
+	"github.com/sylr/fix2/session"
+	"testing"
+	"time"
+)
+
+func TestAudit4StaleHeldHeaderStopsBufferedDelivery(t *testing.T) {
+	for _, reset := range []bool{false, true} {
+		name := "missing message"
+		if reset {
+			name = "reset past gap"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, rec, p := loggedOn(t, func(c *session.Config) {
+				c.MaxLatency = 500 * time.Millisecond
+				c.LogoutTimeout = time.Second
+			})
+			p.write(from(session.FIX44, 3), "0")
+			p.expect("2", "7", "2", "16", "0")
+			time.Sleep(700 * time.Millisecond)
+			p.write(from(session.FIX44, 4), "D", "11", "MUST-STAY-BUFFERED")
+			if reset {
+				p.write(from(session.FIX44, 5), "4", "36", "6")
+			} else {
+				p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+			}
+			p.expect("3", "45", "3", "373", "10")
+			p.expect("5")
+			time.Sleep(30 * time.Millisecond)
+			rec.mu.Lock()
+			apps := append([]string(nil), rec.apps...)
+			rec.mu.Unlock()
+			t.Logf("state=%s next=%d apps=%v", s.State(), s.NextTargetSeqNum(), apps)
+			if len(apps) != 0 {
+				t.Fatalf("delivered buffered application after earlier held header forced Logout: %v", apps)
+			}
+		})
+	}
+}

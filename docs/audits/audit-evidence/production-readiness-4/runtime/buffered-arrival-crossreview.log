@@ -1,0 +1,8 @@
+=== RUN   TestAudit4BufferedSendingTimeUsesOriginalArrival
+    audit4_arrival_crossreview_test.go:31: outbound: 8=FIX.4.4|9=192|35=3|34=3|49=INI|52=20261015-15:11:35.316|56=ACC|45=3|58=SendingTime accuracy problem: SendingTime 20261015-15:11:34.616 is 701ms from our clock 20261015-15:11:35.316 (max 500ms)|372=D|373=10|10=254|
+    audit4_arrival_crossreview_test.go:31: outbound: 8=FIX.4.4|9=49|35=5|34=4|49=INI|52=20261015-15:11:35.316|56=ACC|10=131|
+    audit4_arrival_crossreview_test.go:36: valid-at-arrival order caused Logout after recovery: state=logging out next=5 apps=[]
+--- FAIL: TestAudit4BufferedSendingTimeUsesOriginalArrival (1.70s)
+FAIL
+FAIL	github.com/sylr/fix2/session	2.142s
+FAIL

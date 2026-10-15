@@ -1,0 +1,60 @@
+{"package": "github.com/sylr/fix2/internal/dicttest", "action": "pass", "elapsed_seconds": 0.427}
+{"package": "github.com/sylr/fix2/internal/hrtimer", "action": "pass", "elapsed_seconds": 1.514}
+{"package": "github.com/sylr/fix2/session/store/storetest", "action": "pass", "elapsed_seconds": 0.396}
+{"package": "github.com/sylr/fix2/session/store", "action": "pass", "elapsed_seconds": 0.397}
+{"package": "github.com/sylr/fix2/session/transport", "action": "pass", "elapsed_seconds": 0.461}
+{"package": "github.com/sylr/fix2/session/transport/mem", "action": "pass", "elapsed_seconds": 0.269}
+{"package": "github.com/sylr/fix2/session/schedule", "action": "pass", "elapsed_seconds": 1.3519999999999999}
+{"package": "github.com/sylr/fix2/session/store/memstore", "action": "pass", "elapsed_seconds": 1.3559999999999999}
+{"package": "github.com/sylr/fix2/session/transport/tcp", "action": "pass", "elapsed_seconds": 1.423}
+{"package": "github.com/sylr/fix2", "action": "pass", "elapsed_seconds": 8.055}
+{"package": "github.com/sylr/fix2/tests/dicts/fix40", "action": "pass", "elapsed_seconds": 1.431}
+{"package": "github.com/sylr/fix2/tests/dicts/fix44", "action": "pass", "elapsed_seconds": 1.328}
+{"package": "github.com/sylr/fix2/tests/dicts/fixlatest", "action": "pass", "elapsed_seconds": 1.412}
+{"package": "github.com/sylr/fix2/tests/dicts/fix50sp2", "action": "pass", "elapsed_seconds": 1.591}
+{"package": "github.com/sylr/fix2/tests/dicts/fixt11", "action": "pass", "elapsed_seconds": 1.444}
+{"package": "github.com/sylr/fix2/tests/e2e", "action": "pass", "elapsed_seconds": 1.494}
+{"package": "github.com/sylr/fix2/tests/quickfix-go", "action": "pass", "elapsed_seconds": 6.101}
+{"package": "github.com/sylr/fix2/dictionary", "action": "pass", "elapsed_seconds": 14.99}
+{"package": "github.com/sylr/fix2/cmd/fixgen", "action": "pass", "elapsed_seconds": 23.238}
+{"package": "github.com/sylr/fix2/session", "action": "pass", "elapsed_seconds": 119.033}
+{"package": "github.com/sylr/fix2/dictionary/xmldict", "action": "pass", "elapsed_seconds": 159.15}
+test events: {"pass": 2909, "skip": 9}
+skips: ["TestWideSpecDoesNotAllocate", "TestRewriteForResend_DoesNotAllocate", "TestPlain", "TestDialerFailover", "TestAcceptContext", "TestMutualTLS", "TestOrderFlow/FIX50SP2/tcp", "TestOrderFlow/FIX44/tcp", "TestConformance"]
+github.com/sylr/fix2/internal/dicttest		coverage: 0.0% of statements
+coverage: 96.6% of statements
+ok  	github.com/sylr/fix2/internal/hrtimer	1.513s	coverage: 96.6% of statements
+github.com/sylr/fix2/session/store/storetest		coverage: 0.0% of statements
+github.com/sylr/fix2/session/transport		coverage: 0.0% of statements
+github.com/sylr/fix2/session/store		coverage: 0.0% of statements
+coverage: 85.9% of statements
+coverage: 91.9% of statements
+github.com/sylr/fix2/session/transport/mem		coverage: 0.0% of statements
+coverage: 4.8% of statements
+coverage: 98.6% of statements
+coverage: 63.0% of statements
+coverage: 2.2% of statements
+ok  	github.com/sylr/fix2/session/schedule	1.351s	coverage: 85.9% of statements
+ok  	github.com/sylr/fix2/session/store/memstore	1.355s	coverage: 91.9% of statements
+coverage: 2.9% of statements
+ok  	github.com/sylr/fix2/session/transport/tcp	1.421s	coverage: 4.8% of statements
+ok  	github.com/sylr/fix2	8.054s	coverage: 98.6% of statements
+coverage: 59.5% of statements
+ok  	github.com/sylr/fix2/tests/dicts/fix40	1.430s	coverage: 63.0% of statements
+ok  	github.com/sylr/fix2/tests/dicts/fix44	1.328s	coverage: 2.2% of statements
+coverage: 60.5% of statements
+coverage: [no statements]
+ok  	github.com/sylr/fix2/tests/dicts/fixlatest	1.411s	coverage: 2.9% of statements
+ok  	github.com/sylr/fix2/tests/dicts/fix50sp2	1.591s	coverage: 59.5% of statements
+ok  	github.com/sylr/fix2/tests/dicts/fixt11	1.444s	coverage: 60.5% of statements
+ok  	github.com/sylr/fix2/tests/e2e	1.494s	coverage: [no statements]
+coverage: [no statements]
+ok  	github.com/sylr/fix2/tests/quickfix-go	6.100s	coverage: [no statements]
+coverage: 97.5% of statements
+ok  	github.com/sylr/fix2/dictionary	14.990s	coverage: 97.5% of statements
+coverage: 95.0% of statements
+ok  	github.com/sylr/fix2/cmd/fixgen	23.237s	coverage: 95.0% of statements
+coverage: 92.6% of statements
+ok  	github.com/sylr/fix2/session	119.031s	coverage: 92.6% of statements
+coverage: 99.1% of statements
+ok  	github.com/sylr/fix2/dictionary/xmldict	159.149s	coverage: 99.1% of statements

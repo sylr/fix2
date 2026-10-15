@@ -1,0 +1,5 @@
+-: internal error in importing "internal/byteorder" (cannot decode "internal/byteorder", export data version 5 is greater than maximum supported version 4); please report an issue (compile)
+-: internal error in importing "internal/cpu" (cannot decode "internal/cpu", export data version 5 is greater than maximum supported version 4); please report an issue (compile)
+-: internal error in importing "internal/goarch" (cannot decode "internal/goarch", export data version 5 is greater than maximum supported version 4); please report an issue (compile)
+-: internal error in importing "internal/goos" (cannot decode "internal/goos", export data version 5 is greater than maximum supported version 4); please report an issue (compile)
+-: internal error in importing "math/bits" (cannot decode "math/bits", export data version 5 is greater than maximum supported version 4); please report an issue (compile)

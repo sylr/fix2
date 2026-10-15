@@ -1,0 +1,15 @@
+=== RUN   TestAudit4BufferedSendingTimeUsesOriginalArrival
+    audit4_arrival_time_test.go:31: outbound: 8=FIX.4.4|9=192|35=3|34=3|49=INI|52=20261015-15:11:30.850|56=ACC|45=3|58=SendingTime accuracy problem: SendingTime 20261015-15:11:30.147 is 703ms from our clock 20261015-15:11:30.849 (max 500ms)|372=D|373=10|10=255|
+    audit4_arrival_time_test.go:31: outbound: 8=FIX.4.4|9=49|35=5|34=4|49=INI|52=20261015-15:11:30.850|56=ACC|10=129|
+    audit4_arrival_time_test.go:36: valid-at-arrival order caused Logout after recovery: state=logging out next=5 apps=[]
+--- FAIL: TestAudit4BufferedSendingTimeUsesOriginalArrival (1.71s)
+=== RUN   TestAudit4WrittenReceiptSurvivesReset
+=== RUN   TestAudit4WrittenReceiptSurvivesReset/written-only
+    audit4_receipt_test.go:36: Written receipt regressed after reset: session: delivery unknown, sequence numbers reset or session ended first
+=== RUN   TestAudit4WrittenReceiptSurvivesReset/acknowledged-control
+--- FAIL: TestAudit4WrittenReceiptSurvivesReset (0.41s)
+    --- FAIL: TestAudit4WrittenReceiptSurvivesReset/written-only (0.20s)
+    --- PASS: TestAudit4WrittenReceiptSurvivesReset/acknowledged-control (0.20s)
+FAIL
+FAIL	github.com/sylr/fix2/session	2.539s
+FAIL

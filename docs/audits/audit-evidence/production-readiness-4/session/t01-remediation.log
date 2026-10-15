@@ -1,0 +1,144 @@
+=== RUN   TestMalformedTagRejected
+--- PASS: TestMalformedTagRejected (0.20s)
+=== RUN   TestMalformedTagHeaderChecked
+=== RUN   TestMalformedTagHeaderChecked/wrong_SenderCompID
+=== RUN   TestMalformedTagHeaderChecked/wrong_SenderCompID,_tag_within_the_header
+=== RUN   TestMalformedTagHeaderChecked/wrong_TargetCompID
+=== RUN   TestMalformedTagHeaderChecked/wrong_TargetCompID,_tag_within_the_header
+=== RUN   TestMalformedTagHeaderChecked/inaccurate_SendingTime
+=== RUN   TestMalformedTagHeaderChecked/inaccurate_SendingTime,_tag_within_the_header
+--- PASS: TestMalformedTagHeaderChecked (1.23s)
+    --- PASS: TestMalformedTagHeaderChecked/wrong_SenderCompID (0.20s)
+    --- PASS: TestMalformedTagHeaderChecked/wrong_SenderCompID,_tag_within_the_header (0.22s)
+    --- PASS: TestMalformedTagHeaderChecked/wrong_TargetCompID (0.21s)
+    --- PASS: TestMalformedTagHeaderChecked/wrong_TargetCompID,_tag_within_the_header (0.20s)
+    --- PASS: TestMalformedTagHeaderChecked/inaccurate_SendingTime (0.20s)
+    --- PASS: TestMalformedTagHeaderChecked/inaccurate_SendingTime,_tag_within_the_header (0.20s)
+=== RUN   TestMalformedTagAbsentHeaderField
+=== RUN   TestMalformedTagAbsentHeaderField/SendingTime_missing
+=== RUN   TestMalformedTagAbsentHeaderField/SendingTime_after_the_tag
+=== RUN   TestMalformedTagAbsentHeaderField/OrigSendingTime_missing
+=== RUN   TestMalformedTagAbsentHeaderField/OrigSendingTime_after_the_tag
+--- PASS: TestMalformedTagAbsentHeaderField (0.81s)
+    --- PASS: TestMalformedTagAbsentHeaderField/SendingTime_missing (0.20s)
+    --- PASS: TestMalformedTagAbsentHeaderField/SendingTime_after_the_tag (0.20s)
+    --- PASS: TestMalformedTagAbsentHeaderField/OrigSendingTime_missing (0.20s)
+    --- PASS: TestMalformedTagAbsentHeaderField/OrigSendingTime_after_the_tag (0.20s)
+=== RUN   TestMalformedTagSubAndLocationIDs
+=== RUN   TestMalformedTagSubAndLocationIDs/before_the_tag
+=== RUN   TestMalformedTagSubAndLocationIDs/after_the_tag,_within_the_header
+=== RUN   TestMalformedTagSubAndLocationIDs/missing
+=== RUN   TestMalformedTagSubAndLocationIDs/wrong_SubID,_tag_within_the_header
+=== RUN   TestMalformedTagSubAndLocationIDs/wrong_LocationID,_tag_within_the_header
+--- PASS: TestMalformedTagSubAndLocationIDs (1.01s)
+    --- PASS: TestMalformedTagSubAndLocationIDs/before_the_tag (0.20s)
+    --- PASS: TestMalformedTagSubAndLocationIDs/after_the_tag,_within_the_header (0.20s)
+    --- PASS: TestMalformedTagSubAndLocationIDs/missing (0.20s)
+    --- PASS: TestMalformedTagSubAndLocationIDs/wrong_SubID,_tag_within_the_header (0.20s)
+    --- PASS: TestMalformedTagSubAndLocationIDs/wrong_LocationID,_tag_within_the_header (0.20s)
+=== RUN   TestMalformedTagBeginString
+--- PASS: TestMalformedTagBeginString (0.20s)
+=== RUN   TestMalformedTagTooLow
+=== RUN   TestMalformedTagTooLow/PossDupFlag_missing
+=== RUN   TestMalformedTagTooLow/PossDupFlag_after_the_tag
+--- PASS: TestMalformedTagTooLow (0.40s)
+    --- PASS: TestMalformedTagTooLow/PossDupFlag_missing (0.20s)
+    --- PASS: TestMalformedTagTooLow/PossDupFlag_after_the_tag (0.20s)
+=== RUN   TestMalformedTagTooHigh
+=== RUN   TestMalformedTagTooHigh/recovery_started_by_it
+=== RUN   TestMalformedTagTooHigh/the_recovery's_only_missing_one
+=== RUN   TestMalformedTagTooHigh/recovery_under_way
+=== RUN   TestMalformedTagTooHigh/chunked_ResendRequests
+=== RUN   TestMalformedTagTooHigh/GapFill_past_it
+=== RUN   TestMalformedTagTooHigh/GapFillFlag_after_the_tag
+=== RUN   TestMalformedTagTooHigh/malformed_GapFill_of_several
+=== RUN   TestMalformedTagTooHigh/malformed_GapFills,_over_and_over
+=== RUN   TestMalformedTagTooHigh/malformed_GapFill_ending_a_chunk
+--- PASS: TestMalformedTagTooHigh (1.82s)
+    --- PASS: TestMalformedTagTooHigh/recovery_started_by_it (0.20s)
+    --- PASS: TestMalformedTagTooHigh/the_recovery's_only_missing_one (0.20s)
+    --- PASS: TestMalformedTagTooHigh/recovery_under_way (0.20s)
+    --- PASS: TestMalformedTagTooHigh/chunked_ResendRequests (0.20s)
+    --- PASS: TestMalformedTagTooHigh/GapFill_past_it (0.20s)
+    --- PASS: TestMalformedTagTooHigh/GapFillFlag_after_the_tag (0.20s)
+    --- PASS: TestMalformedTagTooHigh/malformed_GapFill_of_several (0.20s)
+    --- PASS: TestMalformedTagTooHigh/malformed_GapFills,_over_and_over (0.20s)
+    --- PASS: TestMalformedTagTooHigh/malformed_GapFill_ending_a_chunk (0.20s)
+=== RUN   TestMalformedTagSequenceReset
+--- PASS: TestMalformedTagSequenceReset (0.20s)
+=== RUN   TestMalformedTagRefSeqNum
+--- PASS: TestMalformedTagRefSeqNum (0.20s)
+=== RUN   TestMalformedTagSequenceResetWithoutGapFillFlag
+--- PASS: TestMalformedTagSequenceResetWithoutGapFillFlag (0.20s)
+=== RUN   TestUnusableGapFillAsksAgain
+=== RUN   TestUnusableGapFillAsksAgain/OrigSendingTime_missing
+=== RUN   TestUnusableGapFillAsksAgain/SendingTime_missing
+=== RUN   TestUnusableGapFillAsksAgain/NewSeqNo_invalid
+=== RUN   TestUnusableGapFillAsksAgain/malformed_tag,_OrigSendingTime_missing
+=== RUN   TestUnusableGapFillAsksAgain/malformed_tag,_SendingTime_missing
+=== RUN   TestUnusableGapFillAsksAgain/malformed_tag
+--- PASS: TestUnusableGapFillAsksAgain (1.21s)
+    --- PASS: TestUnusableGapFillAsksAgain/OrigSendingTime_missing (0.20s)
+    --- PASS: TestUnusableGapFillAsksAgain/SendingTime_missing (0.20s)
+    --- PASS: TestUnusableGapFillAsksAgain/NewSeqNo_invalid (0.20s)
+    --- PASS: TestUnusableGapFillAsksAgain/malformed_tag,_OrigSendingTime_missing (0.20s)
+    --- PASS: TestUnusableGapFillAsksAgain/malformed_tag,_SendingTime_missing (0.20s)
+    --- PASS: TestUnusableGapFillAsksAgain/malformed_tag (0.20s)
+=== RUN   TestUnusableGapFillResetPast
+--- PASS: TestUnusableGapFillResetPast (0.20s)
+=== RUN   TestUnusableGapFillAfterLogout
+--- PASS: TestUnusableGapFillAfterLogout (0.90s)
+=== RUN   TestUnusableGapFillChunked
+--- PASS: TestUnusableGapFillChunked (0.20s)
+=== RUN   TestUnusableGapFillsWarned
+=== RUN   TestUnusableGapFillsWarned/OrigSendingTime_missing
+=== RUN   TestUnusableGapFillsWarned/malformed_tag
+--- PASS: TestUnusableGapFillsWarned (0.40s)
+    --- PASS: TestUnusableGapFillsWarned/OrigSendingTime_missing (0.20s)
+    --- PASS: TestUnusableGapFillsWarned/malformed_tag (0.20s)
+=== RUN   TestMalformedTagHeaderOfDictionary
+=== RUN   TestMalformedTagHeaderOfDictionary/FIX_4.4/tag_within_the_header
+=== RUN   TestMalformedTagHeaderOfDictionary/FIX_4.4/tag_within_a_header_group
+=== RUN   TestMalformedTagHeaderOfDictionary/FIX_4.4/SendingTime_missing
+=== RUN   TestMalformedTagHeaderOfDictionary/FIXT_1.1/tag_within_the_header
+=== RUN   TestMalformedTagHeaderOfDictionary/FIXT_1.1/tag_within_a_header_group
+=== RUN   TestMalformedTagHeaderOfDictionary/FIXT_1.1/SendingTime_missing
+--- PASS: TestMalformedTagHeaderOfDictionary (1.56s)
+    --- PASS: TestMalformedTagHeaderOfDictionary/FIX_4.4/tag_within_the_header (0.31s)
+    --- PASS: TestMalformedTagHeaderOfDictionary/FIX_4.4/tag_within_a_header_group (0.31s)
+    --- PASS: TestMalformedTagHeaderOfDictionary/FIX_4.4/SendingTime_missing (0.31s)
+    --- PASS: TestMalformedTagHeaderOfDictionary/FIXT_1.1/tag_within_the_header (0.21s)
+    --- PASS: TestMalformedTagHeaderOfDictionary/FIXT_1.1/tag_within_a_header_group (0.21s)
+    --- PASS: TestMalformedTagHeaderOfDictionary/FIXT_1.1/SendingTime_missing (0.21s)
+=== RUN   TestMalformedTagLogoutAnswer
+--- PASS: TestMalformedTagLogoutAnswer (0.30s)
+=== RUN   TestMalformedTagLastMsgSeqNumProcessed
+--- PASS: TestMalformedTagLastMsgSeqNumProcessed (0.20s)
+=== RUN   TestMalformedTagLogoutSent
+--- PASS: TestMalformedTagLogoutSent (0.00s)
+=== RUN   TestMalformedTagLogRedaction
+=== RUN   TestMalformedTagLogRedaction/MsgType
+=== RUN   TestMalformedTagLogRedaction/wrong_SenderCompID
+=== RUN   TestMalformedTagLogRedaction/SendingTime
+=== RUN   TestMalformedTagLogRedaction/MsgSeqNum_too_low
+=== RUN   TestMalformedTagLogRedaction/MsgSeqNum_too_high
+--- PASS: TestMalformedTagLogRedaction (0.01s)
+    --- PASS: TestMalformedTagLogRedaction/MsgType (0.00s)
+    --- PASS: TestMalformedTagLogRedaction/wrong_SenderCompID (0.00s)
+    --- PASS: TestMalformedTagLogRedaction/SendingTime (0.00s)
+    --- PASS: TestMalformedTagLogRedaction/MsgSeqNum_too_low (0.00s)
+    --- PASS: TestMalformedTagLogRedaction/MsgSeqNum_too_high (0.00s)
+=== RUN   TestMalformedTagLogonAnswer
+--- PASS: TestMalformedTagLogonAnswer (0.00s)
+=== RUN   TestHeaderProblemCountsTheMessage
+=== RUN   TestHeaderProblemCountsTheMessage/wrong_CompID
+=== RUN   TestHeaderProblemCountsTheMessage/inaccurate_SendingTime
+=== RUN   TestHeaderProblemCountsTheMessage/wrong_CompID,_a_message_kept_ahead
+=== RUN   TestHeaderProblemCountsTheMessage/Reset-mode_SequenceReset
+--- PASS: TestHeaderProblemCountsTheMessage (0.81s)
+    --- PASS: TestHeaderProblemCountsTheMessage/wrong_CompID (0.20s)
+    --- PASS: TestHeaderProblemCountsTheMessage/inaccurate_SendingTime (0.20s)
+    --- PASS: TestHeaderProblemCountsTheMessage/wrong_CompID,_a_message_kept_ahead (0.20s)
+    --- PASS: TestHeaderProblemCountsTheMessage/Reset-mode_SequenceReset (0.20s)
+PASS
+ok  	github.com/sylr/fix2/session	13.510s
