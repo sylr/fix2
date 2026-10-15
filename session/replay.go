@@ -97,7 +97,9 @@ func (c *conn) runReplay(job *replayJob) {
 		lost     [][2]uint64  // those of them a GapFill written covers
 	)
 	flush := func() {
-		if len(buf) == 0 || writeErr != nil {
+		// The connection may have ended since fn checked it, while OnResend
+		// ran: what was rewritten is dropped, as when it ended before.
+		if len(buf) == 0 || writeErr != nil || c.ctx.Err() != nil {
 			buf, frames, covered = buf[:0], frames[:0], covered[:0]
 			return
 		}

@@ -3,6 +3,7 @@ package session
 import (
 	"cmp"
 	"context"
+	"maps"
 	"slices"
 	"time"
 )
@@ -434,7 +435,11 @@ func (t *receipts) newGeneration(gen, next uint64) {
 	slices.Sort(e.written)
 	slices.Sort(e.acked)
 	if len(t.rejections) > 0 {
-		e.rejections = t.rejections
+		// A copy sized to them: a map keeps the room of the most it held,
+		// up to maxRejections, which their count does not account for.
+		// maps.Clone copies that room too.
+		e.rejections = make(map[uint64]RejectInfo, len(t.rejections))
+		maps.Copy(e.rejections, t.rejections)
 		t.rejections = make(map[uint64]RejectInfo)
 	}
 	t.ended = append(t.ended, e)

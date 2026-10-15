@@ -1283,13 +1283,18 @@ func (s *Session) resetPastLocked(c *conn, next uint64) {
 	// Looked at once: processing them only removes some.
 	stashed := slices.Sorted(maps.Keys(s.stash))
 	s.heldScanned += uint64(len(stashed))
-	// As in advanceLocked, one held that starts a Logout stops it.
+	// As in advanceLocked, one held that starts a Logout stops it, the
+	// last drain to next too: one that reached next would otherwise start
+	// another, in the Logout's phase.
 	phase := s.phase
-	for s.st.NextTarget < next {
+	for {
 		if s.c != c || c.closed || s.phase != phase {
 			// What is left is asked for again once logged on, unless the
 			// gap is filled while logging out.
 			return
+		}
+		if s.st.NextTarget >= next {
+			break
 		}
 		for len(stashed) > 0 && (stashed[0] < s.st.NextTarget || s.stash[stashed[0]].frame == nil) {
 			stashed = stashed[1:]

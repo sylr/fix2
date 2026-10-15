@@ -147,6 +147,29 @@ func TestHeldArrival_HeldLogoutStopsHeld(t *testing.T) {
 	}
 }
 
+// Under CompatStrict2020, a Logout held ahead of a gap that a Reset-mode
+// SequenceReset moves past stops what is held after it, even when answering
+// it reaches the NewSeqNo: the order after it is neither processed nor
+// counted.
+func TestHeldArrival_HeldLogoutStopsResetPast(t *testing.T) {
+	s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+	p.write(from(session.FIX44, 3), "5")
+	p.expect("2", "7", "2", "16", "0")
+	p.write(from(session.FIX44, 4), "D", "11", "AFTER-LOGOUT")
+	p.write(from(session.FIX44, 2), "4", "36", "4")
+	p.expect("5")
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	rec.mu.Lock()
+	apps := append([]string(nil), rec.apps...)
+	rec.mu.Unlock()
+	if len(apps) != 0 {
+		t.Errorf("delivered %q after the Logout held, want none", apps)
+	}
+	if n := s.NextTargetSeqNum(); n != 4 {
+		t.Errorf("NextTargetSeqNum = %d, want 4", n)
+	}
+}
+
 // Under CompatStrict2020, a Logout held ahead of a gap for longer than
 // MaxLatency is answered when its turn comes, not rejected for its
 // SendingTime.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -294,4 +295,75 @@ func TestReplayCancelledByStop(t *testing.T) {
 			w.checkRetired(t, 0, 0)
 		})
 	}
+}
+
+// blockingResend is a lossRecorder whose OnResend, once block is set, tells
+// entered and waits for release: the writer goroutine, preempted after it
+// checked the connection.
+type blockingResend struct {
+	*lossRecorder
+	block   atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (h *blockingResend) OnResend(context.Context, *session.Session, uint64, *fix2.Message) bool {
+	if h.block.Load() {
+		h.entered <- struct{}{}
+		<-h.release
+	}
+	return true
+}
+
+// A replay whose connection ends while OnResend runs writes nothing to it
+// once ended: not the chunk the message it goes on to rewrite fills.
+func TestReplayCancelledInOnResend(t *testing.T) {
+	h := &blockingResend{lossRecorder: &lossRecorder{recorder: newRecorder()}, entered: make(chan struct{}, 1), release: make(chan struct{})}
+	w := &waitingReplay{h: h.lossRecorder, d: &endDialer{l: mem.Listen("acceptor")}, st: newWaitingRangeStore(0), ran: make(chan struct{})}
+	i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
+	var err error
+	w.s, err = i.Add(session.Config{
+		ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+		Handler:       h,
+		Store:         w.st,
+		LogoutTimeout: 200 * time.Millisecond,
+	}, w.d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ctx context.Context
+	ctx, w.cancel = context.WithCancel(context.Background())
+	go func() { defer close(w.ran); i.Run(ctx) }()
+	t.Cleanup(func() { w.cancel(); <-w.ran })
+	// Before the cleanup above, which would wait for OnResend.
+	release := sync.OnceFunc(func() { close(h.release) })
+	t.Cleanup(release)
+	w.p = acceptPeer(t, w.d.l)
+	w.p.expect("A")
+	w.p.send("A", 0, "98", "0", "108", "30")
+	w.h.wait(t, func() bool { return w.h.logons == 1 })
+	// More than a chunk on its own: written as soon as rewritten.
+	if _, err := w.s.Send(context.Background(), order("O1").SetString(58, strings.Repeat("x", 70<<10))); err != nil {
+		t.Fatal(err)
+	}
+	w.p.expect("D", "34", "2")
+	h.block.Store(true)
+	w.p.send("2", 0, "7", "1", "16", "0")
+	select {
+	case <-h.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnResend not called")
+	}
+	w.p.conn.Close()
+	w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
+	h.block.Store(false)
+	release()
+
+	// The next connection waits for the replay of the one ended.
+	p := acceptPeer(t, w.d.l)
+	p.seq = w.p.seq
+	p.expect("A", "34", "3")
+	p.send("A", 0, "98", "0", "108", "30")
+	w.h.wait(t, func() bool { return w.h.logons == 2 })
+	w.checkRetired(t, 0, 0)
 }

@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -136,5 +137,41 @@ func TestReceipts_EndedBounded(t *testing.T) {
 				check(t, Receipt{s: s, gen: gen, seq: 1}, nil, nil, false)
 			}
 		})
+	}
+}
+
+// A generation ended keeps its rejections in a map sized to them: one that
+// held the most a generation keeps, then forgot all but one, does not keep
+// the room it grew to, which its count would not account for.
+func TestReceipts_EndedRejectionsCompact(t *testing.T) {
+	s := fenceSession(t, nil)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rs := &s.receipts
+	heap := func() uint64 {
+		var ms runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&ms)
+		return ms.HeapAlloc
+	}
+	const gens = 4
+	before := heap()
+	for range gens {
+		for seq := uint64(1); seq <= maxRejections; seq++ {
+			rs.rejected(rs.gen, seq, maxRejections+1, RejectInfo{})
+		}
+		// Past the window, it makes the rejections before it forgotten.
+		rs.rejected(rs.gen, 2*maxRejections, 2*maxRejections+1, RejectInfo{})
+		endGeneration(rs)
+	}
+	kept := heap()
+	for _, e := range rs.ended {
+		if len(e.rejections) != 1 {
+			t.Fatalf("generation %d kept %d rejections, want 1", e.gen, len(e.rejections))
+		}
+	}
+	// Each map grown to maxRejections takes about 2 MiB.
+	if kept > before && kept-before > 1<<20 {
+		t.Errorf("%d generations ended with a rejection each retain %d KiB, want under 1 MiB", gens, (kept-before)>>10)
 	}
 }
