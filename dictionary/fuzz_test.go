@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 
 // fuzzDicts are the dictionaries FuzzValidate runs against: the test
 // dictionaries of cmd/fixgen, FIX 5.0 SP2 composed with FIXT 1.1 as a session
-// does.
+// does, and one whose groups are too wide for a bitset on the stack.
 var fuzzDicts = sync.OnceValue(func() []fuzzDict {
 	load := func(name string) *dictionary.Dict {
 		d, err := xmldict.LoadFile("../cmd/fixgen/testdata/" + name + ".xml")
@@ -24,10 +25,15 @@ var fuzzDicts = sync.OnceValue(func() []fuzzDict {
 		}
 		return d
 	}
+	wide, err := xmldict.Load(strings.NewReader(wideNestedXML))
+	if err != nil {
+		panic(err)
+	}
 	return []fuzzDict{
 		{"FIX.4.0", load("FIX40")},
 		{"FIX.4.4", load("FIX44")},
 		{"FIXT.1.1", dictionary.Compose(load("FIXT11"), load("FIX50SP2"))},
+		{"FIX.4.4", wide},
 	}
 })
 
@@ -84,6 +90,9 @@ func FuzzValidate(f *testing.F) {
 		// and a tag the message does not define before one of its groups.
 		{0, "35=D|" + hdr + "11=O1|58=a\rb\tc\\d|"},
 		{2, "35=D|" + hdr + "11=O|54=1|60=20231001-12:00:00|40=2|55=X|30=X|78=1|79=A|"},
+		// Wide groups, nested, with an optional component.
+		{3, "35=Z|73=2|1000=a|1299=b|1300=d|1301=c|74=2|2000=e|2150=f|2299=g|2000=h|2299=i|1000=j|74=1|2000=k|2299=l|"},
+		{3, "35=Z|73=1|1000=a|1299=b|1301=c|74=2|2000=e|2299=g|2150=f|2000=h|1000=j|"},
 	} {
 		f.Add(s.sel, uint16(dictionary.CheckAll), []byte(s.body))
 		f.Add(s.sel, uint16(0), []byte(s.body))

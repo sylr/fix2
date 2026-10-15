@@ -381,26 +381,46 @@ type groupRules struct {
 	rank     []int32 // a tag's place in the group's Layout, -1 if none
 	required []int
 	conds    []entryCond
+	// activates holds, by position, the indexes in conds of the conditions
+	// its tag activates; nil without conditions.
+	activates [][]int
+	// pos maps a tag to its position, as its entry's slot, for groups of
+	// at least indexedGroup tags and nested groups; empty for narrower ones,
+	// which position scans.
+	pos tagTable
 }
+
+// indexedGroup is the number of tags and nested groups from which position
+// looks a tag up in groupRules.pos rather than scanning, as fix2.GroupSpec
+// does: below it, scanning is as fast, and a wide group then costs no more
+// per field than a narrow one.
+const indexedGroup = 16
 
 // entryCond is a Condition of a group's entries, its tags by position.
 type entryCond struct {
-	component            string
-	activation, required []int
+	component string
+	required  []int
 }
 
 // rulesOf returns the rules of the entries of gd, of spec s.
 func (d *Dict) rulesOf(gd GroupDef, s *fix2.GroupSpec) *groupRules {
 	n := len(s.Tags) + len(s.Nested)
 	r := &groupRules{name: gd.Name, rank: make([]int32, n)}
-	// Positions by tag, a nested counter's winning as in position.
-	pos := make(map[int]int, n)
-	for k := range n {
-		pos[tagAt(s, k)] = k
+	// Positions by tag, the first winning and a nested counter's over a
+	// tag's, as in position.
+	pos := make(map[int]tagEntry, n)
+	for k := len(s.Tags) - 1; k >= 0; k-- {
+		pos[s.Tags[k]] = tagEntry{slot: int32(k)}
+	}
+	for k := n - 1; k >= len(s.Tags); k-- {
+		pos[tagAt(s, k)] = tagEntry{slot: int32(k)}
+	}
+	if n >= indexedGroup {
+		r.pos = newTagTable(pos)
 	}
 	at := func(tag int) int {
-		if k, ok := pos[tag]; ok {
-			return k
+		if e, ok := pos[tag]; ok {
+			return int(e.slot)
 		}
 		return -1
 	}
@@ -447,9 +467,10 @@ func (d *Dict) rulesOf(gd GroupDef, s *fix2.GroupSpec) *groupRules {
 	declared := once(func() map[int]bool { return groupTags(gd) })
 	for _, c := range gd.Conditions {
 		ec := entryCond{component: c.Component}
+		var activation []int
 		for _, tag := range d.activation(c.Activation, declared) {
 			if k := at(tag); k >= 0 {
-				ec.activation = append(ec.activation, k)
+				activation = append(activation, k)
 			}
 		}
 		for _, tag := range c.Required {
@@ -457,9 +478,21 @@ func (d *Dict) rulesOf(gd GroupDef, s *fix2.GroupSpec) *groupRules {
 				ec.required = append(ec.required, k)
 			}
 		}
-		if len(ec.activation) > 0 && len(ec.required) > 0 {
-			r.conds = append(r.conds, ec)
+		if len(activation) == 0 || len(ec.required) == 0 {
+			continue
 		}
+		// An entry finds the conditions it activates from the tags it
+		// holds, not from every activation tag: a wide optional component
+		// then costs nothing to an entry without it.
+		if r.activates == nil {
+			r.activates = make([][]int, n)
+		}
+		for _, k := range activation {
+			if as := r.activates[k]; len(as) == 0 || as[len(as)-1] != len(r.conds) {
+				r.activates[k] = append(as, len(r.conds))
+			}
+		}
+		r.conds = append(r.conds, ec)
 	}
 	return r
 }

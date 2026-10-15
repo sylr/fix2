@@ -1,6 +1,7 @@
 package dictionary_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -69,6 +70,21 @@ func BenchmarkValidate_FIX44Groups(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				_ = validate()
+			}
+		})
+	}
+}
+
+// Small entries of groups of growing width, with an optional component they
+// do not hold (see TestValidateWith_WideGroupCost).
+func BenchmarkValidateWith_WideGroup(b *testing.B) {
+	for _, width := range []int{64, 4096, 65536} {
+		d := wideGroupDict(b, width)
+		m := wideGroupMsg(b, d, width, 1000)
+		b.Run(fmt.Sprintf("width=%d", width), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				_ = d.ValidateWith(m, dictionary.CheckAll)
 			}
 		})
 	}

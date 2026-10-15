@@ -2,8 +2,10 @@ package dictionary
 
 import (
 	"fmt"
+	"math/bits"
 	"slices"
 	"strconv"
+	"sync"
 
 	fix2 "github.com/sylr/fix2"
 )
@@ -344,10 +346,58 @@ type entryState struct {
 	parent *entryState
 }
 
+// scratch is the state the entries of a group of more than 256 tags and
+// nested groups share, as fix2.GroupSpec's reader has it: their bitset,
+// kept zeroed between groups, and the words of it the current entry set,
+// so that many small entries do not cost the group's width each.
+type scratch struct {
+	seen    []uint64
+	touched []int
+}
+
+// scratchPool holds scratches between groups.
+var scratchPool sync.Pool
+
+// wideScratch returns a zeroed scratch of n words, from scratchPool.
+func wideScratch(n int) *scratch {
+	sc, _ := scratchPool.Get().(*scratch)
+	if sc == nil {
+		sc = new(scratch)
+	}
+	if cap(sc.seen) < n {
+		sc.seen = make([]uint64, n)
+	}
+	sc.seen = sc.seen[:n]
+	return sc
+}
+
+// releaseScratch zeroes the words of sc the last entry set and returns it
+// to scratchPool; sc may be nil.
+func releaseScratch(sc *scratch) {
+	if sc == nil {
+		return
+	}
+	for _, w := range sc.touched {
+		sc.seen[w] = 0
+	}
+	sc.touched = sc.touched[:0]
+	scratchPool.Put(sc)
+}
+
 // position returns the position of tag in spec.Tags, then spec.Nested, a
 // nested counter first as GroupsOf has it, or -1, and the spec of the nested
-// group it counts, if any.
-func position(spec *fix2.GroupSpec, tag int) (int, *fix2.GroupSpec) {
+// group it counts, if any. rules, spec's, may be nil.
+func position(spec *fix2.GroupSpec, rules *groupRules, tag int) (int, *fix2.GroupSpec) {
+	if rules != nil && rules.pos.entries != nil {
+		k := -1
+		if e := rules.pos.get(tag); e != nil {
+			k = int(e.slot)
+		}
+		if k >= len(spec.Tags) {
+			return k, spec.Nested[k-len(spec.Tags)]
+		}
+		return k, nil
+	}
 	for c, n := range spec.Nested {
 		if n.Counter == tag {
 			return len(spec.Tags) + c, n
@@ -366,14 +416,18 @@ func position(spec *fix2.GroupSpec, tag int) (int, *fix2.GroupSpec) {
 func (w *groupWalk) group(at int, spec *fix2.GroupSpec, parent *entryState) (int, error) {
 	count, cerr := fix2.ParseInt(w.fields[at].Value)
 	// The tags of an entry, on the stack for groups of up to 256 tags and
-	// nested groups.
+	// nested groups, from scratchPool for wider ones.
 	var small [4]uint64
-	// The rules stay out of e: an error built from them must not make
-	// every entryState, linked to its parent, escape.
+	// The rules and the scratch stay out of e: an error built from the
+	// rules, or the scratch going back to its pool, must not make every
+	// entryState, linked to its parent, escape.
 	rules := w.d.groupRules[spec]
 	e := entryState{spec: spec, seen: small[:], parent: parent}
+	var wide *scratch
 	if n := (len(spec.Tags) + len(spec.Nested) + 63) / 64; n > len(small) {
-		e.seen = make([]uint64, n)
+		wide = wideScratch(n)
+		defer releaseScratch(wide)
+		e.seen = wide.seen
 	}
 	i, n := at+1, 0
 	// The first entry missing a required field, reported after the
@@ -381,11 +435,11 @@ func (w *groupWalk) group(at int, spec *fix2.GroupSpec, parent *entryState) (int
 	var missing error
 	for ; n < count && i < len(w.fields) && w.fields[i].Tag == spec.Delim; n++ {
 		var err error
-		if i, err = w.entry(i, &e, rules, n+1); err != nil {
+		if i, err = w.entry(i, &e, rules, wide, n+1); err != nil {
 			return 0, err
 		}
 		if w.required && rules != nil && missing == nil {
-			missing = w.complete(&e, rules, n+1)
+			missing = w.complete(&e, rules, wide, n+1)
 		}
 	}
 	more := w.check && n == count && i < len(w.fields) && w.fields[i].Tag == spec.Delim && !w.holds(parent, spec.Delim)
@@ -408,20 +462,31 @@ func (w *groupWalk) group(at int, spec *fix2.GroupSpec, parent *entryState) (int
 }
 
 // entry walks the entry of e.spec, of rules, whose delimiter is at
-// fields[i], the group's nth, and returns the index just past it.
-func (w *groupWalk) entry(i int, e *entryState, rules *groupRules, nth int) (int, error) {
-	clear(e.seen)
+// fields[i], the group's nth, and returns the index just past it. wide is
+// the scratch of e.seen for a wide group, nil otherwise.
+func (w *groupWalk) entry(i int, e *entryState, rules *groupRules, wide *scratch, nth int) (int, error) {
+	if wide != nil {
+		for _, word := range wide.touched {
+			e.seen[word] = 0
+		}
+		wide.touched = wide.touched[:0]
+	} else {
+		clear(e.seen)
+	}
 	spec := e.spec
 	last := int32(-1) // the rank of the last field ordered
 	for start := i; i < len(w.fields); {
 		tag := w.fields[i].Tag
-		k, child := position(spec, tag)
+		k, child := position(spec, rules, tag)
 		if i > start && (tag == spec.Delim || k < 0 && (spec.Unknown == nil || !spec.Unknown(tag))) {
 			break // the next entry, or not part of this group
 		}
 		if k >= 0 {
 			if e.seen[k/64]&(1<<(k%64)) != 0 {
 				break // a tag cannot repeat within an entry
+			}
+			if wide != nil && e.seen[k/64] == 0 {
+				wide.touched = append(wide.touched, k/64)
 			}
 			e.seen[k/64] |= 1 << (k % 64)
 			if w.order && rules != nil {
@@ -450,8 +515,8 @@ func (w *groupWalk) entry(i int, e *entryState, rules *groupRules, nth int) (int
 
 // complete returns an error if e, the nth entry of its group, of rules,
 // misses a required field or nested group, or one of an optional component
-// it holds.
-func (w *groupWalk) complete(e *entryState, rules *groupRules, nth int) error {
+// it holds. wide is the scratch of e.seen for a wide group, nil otherwise.
+func (w *groupWalk) complete(e *entryState, rules *groupRules, wide *scratch, nth int) error {
 	for _, k := range rules.required {
 		if !bitSet(e.seen, k) {
 			tag := tagAt(e.spec, k)
@@ -459,10 +524,37 @@ func (w *groupWalk) complete(e *entryState, rules *groupRules, nth int) error {
 				fmt.Sprintf("required tag %d%s missing", tag, w.d.fieldName(tag)))
 		}
 	}
-	for _, c := range rules.conds {
-		if !anySet(e.seen, c.activation) {
-			continue
+	if rules.activates == nil {
+		return nil
+	}
+	// The conditions the entry activates, found from the words of seen it
+	// set: all of them in a narrow group's few, those touched in a wide
+	// group's. They are kept distinct while they fit on the stack, then
+	// sorted and compacted: checked in their order, the first missing tag
+	// is the one reported. An entry activating more than 16 allocates.
+	var buf [16]int
+	active := buf[:0]
+	n := len(e.seen)
+	if wide != nil {
+		n = len(wide.touched)
+	}
+	for i := range n {
+		word := i
+		if wide != nil {
+			word = wide.touched[i]
 		}
+		for b := e.seen[word]; b != 0; b &= b - 1 {
+			for _, c := range rules.activates[word*64+bits.TrailingZeros64(b)] {
+				if cap(active) == len(buf) && slices.Contains(active, c) {
+					continue
+				}
+				active = append(active, c)
+			}
+		}
+	}
+	slices.Sort(active)
+	for _, i := range slices.Compact(active) {
+		c := &rules.conds[i]
 		for _, k := range c.required {
 			if !bitSet(e.seen, k) {
 				tag := tagAt(e.spec, k)
@@ -474,18 +566,8 @@ func (w *groupWalk) complete(e *entryState, rules *groupRules, nth int) error {
 	return nil
 }
 
-// bitSet reports whether bit k of bits is set.
-func bitSet(bits []uint64, k int) bool { return bits[k/64]&(1<<(k%64)) != 0 }
-
-// anySet reports whether any of the bits ks of bits is set.
-func anySet(bits []uint64, ks []int) bool {
-	for _, k := range ks {
-		if bitSet(bits, k) {
-			return true
-		}
-	}
-	return false
-}
+// bitSet reports whether bit k of seen is set.
+func bitSet(seen []uint64, k int) bool { return seen[k/64]&(1<<(k%64)) != 0 }
 
 // entryError returns the error err, for reason, about tag in the nth entry
 // of the group of counter, of rules, what says what.
@@ -509,7 +591,7 @@ func (w *groupWalk) holds(e *entryState, tag int) bool {
 		if tag == e.spec.Delim {
 			return true
 		}
-		if k, _ := position(e.spec, tag); k >= 0 {
+		if k, _ := position(e.spec, w.d.groupRules[e.spec], tag); k >= 0 {
 			if e.seen[k/64]&(1<<(k%64)) == 0 {
 				return true
 			}
