@@ -435,7 +435,8 @@ func (s *Session) fenceReset(c *conn) {
 // restart at 1. Receipts of the previous generation without evidence end with
 // ErrUnknownDelivery. A failure disconnects; one leaving the store's
 // generation uncertain halts the session, as does failing to reload the
-// state once reset: the session's own is stale, and it does not guess.
+// state once reset, or reloading a generation not later than the one reset:
+// the session's own is stale, and it does not guess.
 func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	gen := s.st.Generation
 	id := s.st.WindowID
@@ -458,6 +459,11 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 		st, err = s.store.Open(context.Background())
 		return err
 	})
+	if err == nil && st.Generation <= gen {
+		// The store broke Reset's contract: the receipts of the generation
+		// ended would read those of the next.
+		err = fmt.Errorf("generation %d after resetting generation %d, not a later one", st.Generation, gen)
+	}
 	if err != nil {
 		err = fmt.Errorf("reloading the state of the store reset (%s): %w", why, err)
 		s.haltLocked(err)

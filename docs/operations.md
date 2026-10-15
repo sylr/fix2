@@ -21,10 +21,10 @@ is as large as the application makes it.
 | Received messages waiting for `FromApp` | `DeliveryQueue` (1 024), `DeliveryQueueBytes` (64 MiB), counting the buffers holding them | 64 MiB plus one message (1 MiB); buffers over 64 KiB are not kept for the next messages | The reader stops reading: TCP slows the counterparty down; `MaxDeliveryStall` disconnects a handler stuck too long |
 | Received messages kept ahead of a gap | `MaxStash` (10 000), `MaxStashBytes` (64 MiB) | 64 MiB, or one message of any size | Messages beyond are dropped, and asked for again |
 | Messages kept ahead of a gap, once it is filled | — | Moved to the delivery queue at once, past `DeliveryQueue`: up to `MaxStashBytes` more there | `MaxDeliveryStall` may trip while a slow handler works through them |
-| Receipts tracked | `MaxTrackedReceipts` (1 048 576) | A few dozen bytes each: tens of MiB | The oldest are forgotten: their `Receipt` reports `ErrReceiptUntracked` |
-| Rejections received, for `Receipt.Rejection` | The last 16 384 messages sent (fewer if `MaxTrackedReceipts` is) | 16 384 × the first 1 KiB of their Text: about 20 MiB | Older ones are forgotten |
+| Receipts tracked | `MaxTrackedReceipts` (1 048 576), and as many again of the last 1 024 generations a sequence reset ended | A few dozen bytes each: tens of MiB; 8 bytes each of earlier generations: 8 MiB | The oldest are forgotten: their `Receipt` reports `ErrReceiptUntracked`. Earlier generations go whole, the earliest first, once together they pass any bound of one generation (receipts, gap-filled spans, rejections) or 1 024 generations: many rejections or gap-fills can make an earlier generation forget sooner what it wrote or had acknowledged |
+| Rejections received, for `Receipt.Rejection` | The last 16 384 messages sent (fewer if `MaxTrackedReceipts` is), and as many again of earlier generations | 2 × 16 384 × the first 1 KiB of their Text: about 40 MiB | Older ones are forgotten |
 
-At the defaults, a session's buffers stay under about 280 MiB in the worst
+At the defaults, a session's buffers stay under about 310 MiB in the worst
 case, most of it only while a gap is recovered and the handler is slow,
 plus the messages the application is sending meanwhile, and any larger
 than 1 MiB while it waits. Lower the byte settings for many sessions in one

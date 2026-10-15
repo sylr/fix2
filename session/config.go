@@ -291,7 +291,8 @@ type Config struct {
 	// AckProbeMinInterval is the least time between two probes.
 	AckProbeMinInterval time.Duration
 	// MaxTrackedReceipts bounds the messages whose acknowledgement is
-	// tracked, 1<<20 if 0.
+	// tracked, 1<<20 if 0. As many again, of the generations sequence
+	// resets ended, keep what their receipts reached.
 	MaxTrackedReceipts int
 	// Retention evicts sent messages from the store, which must then
 	// implement store.Truncater: none by default.

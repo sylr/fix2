@@ -11,6 +11,7 @@ import (
 	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/dictionary"
 	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport/mem"
 )
 
@@ -136,6 +137,172 @@ func TestReceipt_UnknownAfterReset(t *testing.T) {
 	}
 	if got := s.NextSenderSeqNum(); got != 2 {
 		t.Errorf("NextSenderSeqNum after the reset = %d, want 2", got)
+	}
+}
+
+// resetSeqs has the peer reset the sequence numbers on the connection, and
+// waits for the session's answer.
+func (p *peer) resetSeqs() {
+	p.seq = 1
+	p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+	p.expect("A", "34", "1", "141", "Y")
+}
+
+// A sequence reset keeps what a receipt reached: a message written stays
+// written, acknowledged or not; one not acknowledged by then never will be.
+func TestReceipt_SettledAcrossReset(t *testing.T) {
+	for _, acknowledged := range []bool{false, true} {
+		name := "written"
+		if acknowledged {
+			name = "acknowledged"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, _, p := loggedOn(t, nil)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			r, err := s.Send(ctx, order("O1"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.expect("D", "11", "O1")
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Fatal(err)
+			}
+			if acknowledged {
+				done := make(chan error, 1)
+				go func() { done <- r.Wait(ctx, session.Acknowledged) }()
+				probe := p.expect("1")
+				p.send("0", 0, "112", string(probe.Get(112)))
+				if err := <-done; err != nil {
+					t.Fatal(err)
+				}
+			}
+			p.resetSeqs()
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Errorf("Wait(Written) after the reset = %v, want nil", err)
+			}
+			var want error
+			if !acknowledged {
+				want = session.ErrUnknownDelivery
+			}
+			if err := r.Wait(ctx, session.Acknowledged); !errors.Is(err, want) {
+				t.Errorf("Wait(Acknowledged) after the reset = %v, want %v", err, want)
+			}
+			if err := r.Err(); !errors.Is(err, want) {
+				t.Errorf("Err after the reset = %v, want %v", err, want)
+			}
+		})
+	}
+}
+
+// A message gap-filled stays skipped after a reset, and written if it was.
+func TestReceipt_SkippedAcrossReset(t *testing.T) {
+	var rec *recorder
+	s, _, p := loggedOn(t, func(c *session.Config) {
+		rec = c.Handler.(*recorder)
+		c.Handler = noResend{rec}
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	r, err := s.Send(ctx, order("O1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.expect("D")
+	p.send("2", 0, "7", "2", "16", "0")
+	p.expect("4", "34", "2", "36", "3")
+	if err := r.Wait(ctx, session.Acknowledged); !errors.Is(err, session.ErrSkipped) {
+		t.Fatalf("Wait = %v, want ErrSkipped", err)
+	}
+	p.resetSeqs()
+	if err := r.Wait(ctx, session.Acknowledged); !errors.Is(err, session.ErrSkipped) {
+		t.Errorf("Wait(Acknowledged) after the reset = %v, want ErrSkipped", err)
+	}
+	if err := r.Wait(ctx, session.Written); err != nil {
+		t.Errorf("Wait(Written) after the reset = %v, want nil", err)
+	}
+}
+
+// A rejection stays after a reset.
+func TestReceipt_RejectionAcrossReset(t *testing.T) {
+	s, _, p := loggedOn(t, nil)
+	r, err := s.Send(t.Context(), order("O1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.expect("D")
+	p.send("3", 0, "45", "2", "58", "bad order", "373", "5", "371", "11")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, ok := r.Rejection(); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no rejection recorded")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	p.resetSeqs()
+	ri, ok := r.Rejection()
+	if !ok || ri.MsgType != "3" || ri.Reason != 5 || ri.RefTagID != 11 || ri.Text != "bad order" {
+		t.Errorf("Rejection after the reset = %+v, %v", ri, ok)
+	}
+}
+
+// Generations are kept within MaxTrackedReceipts, the oldest forgotten
+// first: their receipts report ErrReceiptUntracked, as receipts too old do
+// within a generation.
+func TestReceipt_ResetsBounded(t *testing.T) {
+	s, _, p := loggedOn(t, func(c *session.Config) { c.MaxTrackedReceipts = 2 })
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var rs []session.Receipt
+	for i := range 3 {
+		r, err := s.Send(ctx, order(fmt.Sprint("O", i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.expect("D")
+		if err := r.Wait(ctx, session.Written); err != nil {
+			t.Fatal(err)
+		}
+		rs = append(rs, r)
+		p.resetSeqs()
+	}
+	if err := rs[0].Wait(ctx, session.Written); !errors.Is(err, session.ErrReceiptUntracked) {
+		t.Errorf("Wait(Written) of the first generation = %v, want ErrReceiptUntracked", err)
+	}
+	if err := rs[2].Wait(ctx, session.Written); err != nil {
+		t.Errorf("Wait(Written) of the last generation = %v, want nil", err)
+	}
+	if err := rs[2].Wait(ctx, session.Acknowledged); !errors.Is(err, session.ErrUnknownDelivery) {
+		t.Errorf("Wait(Acknowledged) of the last generation = %v, want ErrUnknownDelivery", err)
+	}
+}
+
+// stuckStore resets nothing: its generation stays.
+type stuckStore struct{ *memstore.Store }
+
+func (stuckStore) Reset(context.Context, uint64, time.Time, string) error { return nil }
+
+// A store whose generation does not move on with a reset halts the session:
+// the receipts of the generation ended would read those of the next.
+func TestReceipt_ResetKeepingGeneration(t *testing.T) {
+	s, _, p := loggedOn(t, func(c *session.Config) { c.Store = stuckStore{memstore.New()} })
+	p.seq = 1
+	p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+	deadline := time.Now().Add(5 * time.Second)
+	for s.Err() == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the session did not halt")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := s.Err(); !strings.Contains(err.Error(), "not a later one") {
+		t.Errorf("Err = %v, want the generation not moving on", err)
+	}
+	if st := s.State(); st != session.StateStopped {
+		t.Errorf("State = %s, want stopped", st)
 	}
 }
 

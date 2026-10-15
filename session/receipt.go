@@ -1,7 +1,9 @@
 package session
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"time"
 )
 
@@ -62,7 +64,10 @@ type RejectInfo struct {
 // ErrSkipped, ErrUnknownDelivery or ErrReceiptUntracked if it never will;
 // ctx's error; or ErrWaitInHandler, at once, with a handler callback's ctx.
 // Waiting for Acknowledged makes the session probe the counterparty (see
-// Config.AckProbe).
+// Config.AckProbe). A sequence reset keeps what the message reached, as long
+// as its receipt is tracked: a message written stays written, one gap-filled
+// stays skipped; one not acknowledged by then never will be, and fails with
+// ErrUnknownDelivery.
 func (r Receipt) Wait(ctx context.Context, level Level) error {
 	if r.s == nil {
 		return ErrReceiptUntracked
@@ -104,17 +109,23 @@ func (r Receipt) Err() error {
 // sent for the message, if any so far, and if it is one of the last 16384
 // sent (fewer if Config.MaxTrackedReceipts is): Text holds the first 1 KiB
 // of its Text (58). A rejection does not change what Wait reports: a
-// message can be read, then rejected.
+// message can be read, then rejected. A sequence reset keeps it, as Wait
+// keeps what the message reached.
 func (r Receipt) Rejection() (RejectInfo, bool) {
 	if r.s == nil {
 		return RejectInfo{}, false
 	}
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
-	if r.gen != r.s.receipts.gen {
+	t := &r.s.receipts
+	if r.gen != t.gen {
+		if e := t.endedGen(r.gen); e != nil {
+			ri, ok := e.rejections[r.seq]
+			return ri, ok
+		}
 		return RejectInfo{}, false
 	}
-	ri, ok := r.s.receipts.rejections[r.seq]
+	ri, ok := t.rejections[r.seq]
 	return ri, ok
 }
 
@@ -127,10 +138,11 @@ func (s *Session) receiptState(r Receipt, level Level, probe bool) (done bool, e
 	defer s.mu.Unlock()
 	t := &s.receipts
 	if r.gen != t.gen {
-		if acked, ok := t.oldAcked[r.gen]; ok && acked[r.seq] {
-			return true, nil, nil
+		if e := t.endedGen(r.gen); e != nil {
+			return true, e.state(r.seq, level), nil
 		}
-		return true, ErrUnknownDelivery, nil
+		// A generation ended so long ago it was dropped.
+		return true, ErrReceiptUntracked, nil
 	}
 	rec, tracked := t.recs[r.seq]
 	switch {
@@ -138,7 +150,7 @@ func (s *Session) receiptState(r Receipt, level Level, probe bool) (done bool, e
 		return true, nil, nil
 	case rec.acked:
 		return true, nil, nil
-	case t.skipped(r.seq):
+	case skipped(t.skips, r.seq):
 		return true, ErrSkipped, nil
 	case !tracked && r.seq < t.oldest:
 		return true, ErrReceiptUntracked, nil
@@ -164,6 +176,44 @@ type span struct{ begin, end uint64 }
 // maxSkipped bounds the gap-filled spans remembered.
 const maxSkipped = 1024
 
+// maxGenerations bounds the earlier generations whose receipts are
+// remembered: a counterparty resetting the sequence numbers at every logon
+// could hold memory otherwise, each generation kept costing some even with
+// nothing in it.
+const maxGenerations = 1024
+
+// ended is what the receipts of a generation that ended had reached, for
+// them to keep reporting it.
+type ended struct {
+	gen        uint64
+	written    []uint64 // MsgSeqNums written, not acknowledged, in order
+	acked      []uint64 // MsgSeqNums acknowledged, in order
+	oldest     uint64   // lowest MsgSeqNum still tracked when it ended
+	skips      []span
+	rejections map[uint64]RejectInfo
+}
+
+// state tells what Wait reports for message seq of e at level: what it did
+// before e ended, a message not settled by then failing with
+// ErrUnknownDelivery.
+func (e *ended) state(seq uint64, level Level) error {
+	if _, ok := slices.BinarySearch(e.acked, seq); ok {
+		return nil
+	}
+	_, written := slices.BinarySearch(e.written, seq)
+	switch {
+	case written && level == Written:
+		return nil
+	case skipped(e.skips, seq):
+		return ErrSkipped
+	case !written && seq < e.oldest:
+		// A late write of a connection replaced can track a message below
+		// oldest again.
+		return ErrReceiptUntracked
+	}
+	return ErrUnknownDelivery
+}
+
 // receipts tracks sent messages for their Receipts.
 type receipts struct {
 	max        int
@@ -182,9 +232,14 @@ type receipts struct {
 	pending  string
 	answered bool
 	lastAt   time.Time // when the last probe was queued
-	// oldAcked holds, by earlier generation, the messages acknowledged.
-	oldAcked map[uint64]map[uint64]bool
-	wake     chan struct{}
+	// ended holds what the receipts of earlier generations reached, the
+	// oldest generation first. When what they hold together exceeds any
+	// bound of one generation, receipts, gap-filled spans or rejections, or
+	// maxGenerations, the oldest are dropped whole: many rejections or
+	// gap-fills can make an earlier generation forget sooner the messages it
+	// wrote or had acknowledged.
+	ended []ended
+	wake  chan struct{}
 }
 
 func (t *receipts) init(max int, gen uint64) {
@@ -193,8 +248,17 @@ func (t *receipts) init(max int, gen uint64) {
 	t.recs = make(map[uint64]record)
 	t.rejections = make(map[uint64]RejectInfo)
 	t.probes = make(map[string]uint64)
-	t.oldAcked = make(map[uint64]map[uint64]bool)
 	t.oldest = 1
+}
+
+// endedGen returns what is kept of generation gen, ended, nil if nothing.
+// Generations end in increasing order: resetStoreLocked sees to it.
+func (t *receipts) endedGen(gen uint64) *ended {
+	i, ok := slices.BinarySearchFunc(t.ended, gen, func(e ended, gen uint64) int { return cmp.Compare(e.gen, gen) })
+	if !ok {
+		return nil
+	}
+	return &t.ended[i]
 }
 
 // changed returns a channel closed on the next change.
@@ -212,10 +276,10 @@ func (t *receipts) notify() {
 	}
 }
 
-// skipped reports whether we gap-filled seq.
-func (t *receipts) skipped(seq uint64) bool {
-	for i := len(t.skips) - 1; i >= 0; i-- {
-		if s := t.skips[i]; seq >= s.begin && seq < s.end {
+// skipped reports whether skips, the spans we gap-filled, hold seq.
+func skipped(skips []span, seq uint64) bool {
+	for i := len(skips) - 1; i >= 0; i-- {
+		if s := skips[i]; seq >= s.begin && seq < s.end {
 			return true
 		}
 	}
@@ -348,35 +412,54 @@ func (t *receipts) gapFilled(gen, begin, end uint64) {
 	t.notify()
 }
 
-// newGeneration ends generation gen, starting generation next: its
-// receipts acknowledged stay so, the others fail.
+// newGeneration ends generation gen, starting generation next: its receipts
+// keep what they reached, written, acknowledged, gap-filled or rejected: a
+// level reached stays reached. The others fail.
 func (t *receipts) newGeneration(gen, next uint64) {
-	acked := map[uint64]bool{}
+	// Two sorted slices sharing one array, rather than maps: 8 bytes a
+	// message, for up to max of them.
+	seqs := make([]uint64, len(t.recs))
+	w, a := 0, len(seqs)
 	for seq, rec := range t.recs {
-		if rec.acked {
-			acked[seq] = true
+		switch {
+		case rec.acked:
+			a--
+			seqs[a] = seq
+		case rec.epoch != 0:
+			seqs[w] = seq
+			w++
 		}
 	}
-	if len(acked) > 0 {
-		t.oldAcked[gen] = acked
+	e := ended{gen: gen, written: seqs[:w:w], acked: seqs[a:], oldest: t.oldest, skips: slices.Clone(t.skips)}
+	slices.Sort(e.written)
+	slices.Sort(e.acked)
+	if len(t.rejections) > 0 {
+		e.rejections = t.rejections
+		t.rejections = make(map[uint64]RejectInfo)
 	}
-	// Bound what is kept of earlier generations.
-	total := 0
-	for _, a := range t.oldAcked {
-		total += len(a)
+	t.ended = append(t.ended, e)
+	// Bound what is kept of earlier generations as one generation is, the
+	// oldest dropped first, the generation just ended always kept.
+	var recs, skips, rejections int
+	for _, e := range t.ended {
+		recs += len(e.written) + len(e.acked)
+		skips += len(e.skips)
+		rejections += len(e.rejections)
 	}
-	for g := range t.oldAcked {
-		if total <= t.max {
+	window := min(t.max, maxRejections)
+	drop := 0
+	for ; drop < len(t.ended)-1; drop++ {
+		if recs <= t.max && skips <= maxSkipped && rejections <= window && len(t.ended)-drop <= maxGenerations {
 			break
 		}
-		if g != gen {
-			total -= len(t.oldAcked[g])
-			delete(t.oldAcked, g)
-		}
+		e := &t.ended[drop]
+		recs -= len(e.written) + len(e.acked)
+		skips -= len(e.skips)
+		rejections -= len(e.rejections)
 	}
+	t.ended = slices.Delete(t.ended, 0, drop)
 	t.gen = next
 	clear(t.recs)
-	clear(t.rejections)
 	t.skips = t.skips[:0]
 	t.oldest = 1
 	t.connectionLost()
