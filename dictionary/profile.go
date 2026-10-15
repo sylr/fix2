@@ -107,14 +107,16 @@ func (d *Dict) dataProfile() *fix2.Profile {
 		walkRefs(d.Messages[mt].Fields, inGroups)
 	}
 
+	// Tags out of the profile's range: parse those fields as plain. Testing
+	// each pair with NewProfile would build a table per pair, as large as its
+	// highest tag.
+	pairs = slices.DeleteFunc(pairs, func(p fix2.DataPair) bool { return !p.InRange() })
+	// Pairs share no tag and a pair's tags differ, so NewProfile cannot fail
+	// here. A nil profile would parse as the default one, silently changing
+	// which fields are DATA.
 	p, err := fix2.NewProfile(pairs)
 	if err != nil {
-		// Tags out of the profile's range: parse those fields as plain.
-		pairs = slices.DeleteFunc(pairs, func(p fix2.DataPair) bool {
-			_, err := fix2.NewProfile([]fix2.DataPair{p})
-			return err != nil
-		})
-		p, _ = fix2.NewProfile(pairs)
+		panic(err)
 	}
 	return p
 }

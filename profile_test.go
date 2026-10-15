@@ -28,6 +28,28 @@ func TestNewProfile_Errors(t *testing.T) {
 	}
 }
 
+// InRange agrees with NewProfile on the tags it accepts.
+func TestDataPair_InRange(t *testing.T) {
+	for _, tc := range []struct {
+		pair DataPair
+		want bool
+	}{
+		{DataPair{1, 2}, true},
+		{DataPair{1<<20 - 2, 1<<20 - 1}, true},
+		{DataPair{0, 2}, false},
+		{DataPair{1, -1}, false},
+		{DataPair{1 << 20, 2}, false},
+		{DataPair{1, 1 << 20}, false},
+	} {
+		if got := tc.pair.InRange(); got != tc.want {
+			t.Errorf("%v.InRange() = %v, want %v", tc.pair, got, tc.want)
+		}
+		if _, err := NewProfile([]DataPair{tc.pair}); (err == nil) != tc.want {
+			t.Errorf("NewProfile(%v) error = %v, InRange says %v", tc.pair, err, tc.want)
+		}
+	}
+}
+
 func TestProfile_Lookups(t *testing.T) {
 	p, err := NewProfile([]DataPair{{1525, 1527}, {95, 96}})
 	if err != nil {

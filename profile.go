@@ -11,6 +11,12 @@ type DataPair struct {
 	Length, Data int
 }
 
+// InRange reports whether both tags of p are positive and below 2^20, the
+// range NewProfile accepts.
+func (p DataPair) InRange() bool {
+	return p.Length > 0 && p.Length < maxProfileTag && p.Data > 0 && p.Data < maxProfileTag
+}
+
 // maxProfileTag bounds the tags a Profile classifies with its lookup table:
 // one int32 per tag up to the highest one, 4 MiB at most.
 const maxProfileTag = 1 << 20
