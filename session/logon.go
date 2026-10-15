@@ -223,7 +223,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.T
 		}
 	}
 	if in.Seq < s.st.NextTarget {
-		s.sendLogoutLocked(c, seqTooLowText(m, s.st.NextTarget, in.Seq))
+		s.sendLogoutLocked(c, s.seqTooLowText(m, s.st.NextTarget, in.Seq))
 		s.closeAfterFlushLocked(c, &LogoutError{Text: "Logon MsgSeqNum too low"})
 		return
 	}

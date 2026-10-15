@@ -103,10 +103,21 @@ func withholdAttrs(m *fix2.Message, attrs []slog.Attr) {
 	}
 }
 
+// withholdLocked is withhold for a text the session logs, or keeps as why it
+// logged out: for m parsed only up to a malformed tag (see partial), it
+// returns fallback whatever text is, withhold not seeing what follows the
+// tag.
+func (s *Session) withholdLocked(m *fix2.Message, tag int, text, fallback string) string {
+	if m == s.partial {
+		return fallback
+	}
+	return withhold(m, tag, text, fallback)
+}
+
 // numAttr logs v, a number of m's field tag, or worked out from one, as key:
 // withheld if it may show a credential, as a misplaced one would.
-func numAttr(m *fix2.Message, key string, tag int, v int64) slog.Attr {
-	return slog.String(key, withhold(m, tag, strconv.FormatInt(v, 10), "withheld"))
+func (s *Session) numAttr(m *fix2.Message, key string, tag int, v int64) slog.Attr {
+	return slog.String(key, s.withholdLocked(m, tag, strconv.FormatInt(v, 10), "withheld"))
 }
 
 // quoteValue quotes a field value for a Text, escaping control characters

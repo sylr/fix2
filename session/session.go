@@ -147,6 +147,14 @@ type Session struct {
 	// replyTo is the MsgSeqNum of the message being handled, which our
 	// answers to it give as LastMsgSeqNumProcessed.
 	replyTo uint64
+	// partial is the message being handled if it was parsed only up to a
+	// malformed tag: a credential may follow the tag, unseen by withhold,
+	// so nothing taken from it is logged, as garbled logs nothing (see
+	// withholdLocked). headerCut tells the tag is within its header: a
+	// header field it lacks may follow the tag rather than be missing (see
+	// unseen).
+	partial   *fix2.Message
+	headerCut bool
 	// gapFilling is set while a GapFill moves the expected MsgSeqNum.
 	gapFilling bool
 	// draining is set while advanceLocked handles messages kept ahead.
@@ -167,6 +175,10 @@ type Session struct {
 
 // Stats counts what a session did; its fields are read atomically.
 type Stats struct {
+	// MessagesReceived and BytesReceived count the messages handled, those
+	// rejected for a malformed tag included. Those the Observer does not
+	// see: it would show what follows the tag, where the session cannot
+	// tell a credential (see garbled).
 	MessagesSent, MessagesReceived atomic.Uint64
 	BytesSent, BytesReceived       atomic.Uint64
 	RejectsSent, Garbled           atomic.Uint64

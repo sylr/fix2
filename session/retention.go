@@ -84,7 +84,7 @@ func (s *Session) ackedLocked(m *fix2.Message, seq uint64, source int, from uint
 		if !s.ret.warned {
 			s.ret.warned = true
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty acknowledges messages we never sent: ignored",
-				slog.String("tag", fieldDesc(nil, source)), numAttr(m, "acked", source, int64(seq)), slog.Uint64("last_sent", s.st.NextSender-1))
+				slog.String("tag", fieldDesc(nil, source)), s.numAttr(m, "acked", source, int64(seq)), slog.Uint64("last_sent", s.st.NextSender-1))
 		}
 		return
 	}

@@ -28,6 +28,21 @@ type recovery struct {
 	// chunkEnd is the end of the range last asked for, 0 for "up to the
 	// last".
 	chunkEnd uint64
+	// asked is the BeginSeqNo of the last ResendRequest.
+	asked uint64
+	// refill tells a GapFill replayed from those held was counted without
+	// its NewSeqNo applied: what is missing after them is asked again.
+	refill bool
+	// pastReset is set while a Reset-mode SequenceReset moves past the
+	// messages held: what it skips is not asked for again.
+	pastReset bool
+	// crawl counts the requests asked again in a row whose previous one
+	// moved the sequence by one message only; crawlWarned tells it was
+	// warned of. noOrig tells the last GapFill asked again for lacked
+	// OrigSendingTime.
+	crawl       int
+	crawlWarned bool
+	noOrig      bool
 	// withheld tells a MsgSeqNum received too high may show a credential:
 	// the ends of the ranges reported lost, worked out from them, are not
 	// logged.
@@ -43,14 +58,23 @@ func (c *conn) handleFrame(frame []byte) {
 	applVerID, err := s.parseInbound(m, frame)
 	if err != nil {
 		if tag, ok := badTagNumber(frame, m, err); ok {
+			// Not logged on, the session has no sequence to reject it in:
+			// it is garbled.
 			s.mu.Lock()
-			if s.c == c && !c.closed && s.phase == phaseEstablished {
+			loggedOn := s.phase != phaseAwaitingLogon && s.phase != phaseLogonSent
+			if loggedOn && s.c == c && !c.closed {
+				s.stats.MessagesReceived.Add(1)
+				s.stats.BytesReceived.Add(uint64(len(frame)))
 				c.lastRead = now
-				s.invalidTagLocked(c, m, tag)
-				s.armLocked(c)
+				s.invalidTagLocked(c, m, tag, now)
+				if !c.closed {
+					s.armLocked(c)
+				}
 			}
 			s.mu.Unlock()
-			return
+			if loggedOn {
+				return
+			}
 		}
 		c.garbled(frame, err)
 		return
@@ -144,16 +168,87 @@ func badTagNumber(frame []byte, m *fix2.Message, err error) (int, bool) {
 	return tag, true
 }
 
-// invalidTagLocked rejects m, whose tag is not a valid tag number, and counts
-// it as received if it is the one expected.
-func (s *Session) invalidTagLocked(c *conn, m *fix2.Message, tag int) {
-	seq, err := fix2.ParseInt(m.Get(tagMsgSeqNum))
-	if err != nil || uint64(seq) != s.st.NextTarget {
+// invalidTagLocked handles m, parsed only up to tag, not a valid tag number,
+// on a logged on session: as any message, in the same order, its
+// BeginString, its header and its MsgSeqNum are checked, then it is rejected
+// and counted as received if it is the one expected. Only the fields before
+// tag are known: the header fields after it, if it is within the header,
+// are not judged (see unseen), and a SequenceReset's NewSeqNo is not
+// trusted.
+func (s *Session) invalidTagLocked(c *conn, m *fix2.Message, tag int, now time.Time) {
+	s.partial, s.headerCut = m, s.cutInHeader(m)
+	defer func() { s.partial, s.headerCut = nil, false }()
+	seq, ok := s.msgSeqNumLocked(c, m)
+	if !ok {
 		return
 	}
-	s.rejectLocked(m, dictionary.ReasonInvalidTagNumber, tag, rejectText(dictionary.ReasonInvalidTagNumber, "malformed tag number"))
-	s.markLocked(uint64(seq))
-	s.advanceLocked(c, uint64(seq)+1)
+	s.replyTo = seq
+	defer func() { s.replyTo = 0 }()
+	// The header first: checking the sequence may move it on, and handle
+	// the messages kept ahead of a gap.
+	if !s.checkHeaderLocked(c, m, seq, now) {
+		return
+	}
+	text := rejectText(dictionary.ReasonInvalidTagNumber, "")
+	if s.resetMode(m) {
+		s.rejectLocked(m, dictionary.ReasonInvalidTagNumber, tag, text)
+		return
+	}
+	in := Inbound{Seq: seq, Generation: s.st.Generation, PossDup: bytes.Equal(m.Get(tagPossDupFlag), yes), Received: now}
+	switch s.checkSeqLocked(c, m, in) {
+	case seqTooHigh:
+		// Not kept, it would not parse again: asked for again with those
+		// missing before it, it is rejected in sequence.
+		s.tooHighLocked(c, m, in, nil)
+		return
+	case seqIgnore, seqDone:
+		return
+	}
+	s.lastProcessedLocked(m, in)
+	s.rejectLocked(m, dictionary.ReasonInvalidTagNumber, tag, text)
+	s.markLocked(seq)
+	s.advanceLocked(c, seq+1)
+	s.gapFillCountedLocked(c, m)
+}
+
+// cutInHeader tells whether m, parsed only up to a malformed tag, holds no
+// field after its standard header: the tag is within the header. FIX puts
+// the header first: once a field after it is seen, a header field m lacks
+// is missing. The header is the session dictionary's or, without one, that
+// of any version (see anyHeader).
+func (s *Session) cutInHeader(m *fix2.Message) bool {
+	if d := s.dicts.session; d != nil {
+		return !slices.ContainsFunc(d.Sections(m), func(sec dictionary.Section) bool { return sec != dictionary.SectionHeader })
+	}
+	return !slices.ContainsFunc(m.Fields(), func(f fix2.Field) bool {
+		return !slices.Contains(fixtHeader[:], f.Tag) && !slices.Contains(anyHeader[:], f.Tag)
+	})
+}
+
+// anyHeader are the standard header fields of FIX 4.x not in FIXT 1.1's:
+// OnBehalfOfSendingTime (370), of FIX 4.2 and 4.3.
+var anyHeader = [...]int{370}
+
+// unseen tells whether m lacks its header field tag only for being parsed up
+// to a malformed tag within its header: the field may follow the tag. Such a
+// field is not judged missing.
+func (s *Session) unseen(m *fix2.Message, tag int) bool {
+	return m == s.partial && s.headerCut && m.Get(tag) == nil
+}
+
+// resetMode tells whether m is a SequenceReset in Reset mode, without
+// GapFillFlag (123) Y. One parsed up to a malformed tag is only with a
+// GapFillFlag seen, which may otherwise follow the tag: taken as a GapFill,
+// it counts if in sequence, as a GapFill whose NewSeqNo cannot be used does,
+// rather than leave the sequence waiting for it. A Reset-mode one without
+// GapFillFlag, which its NewSeqNo would move past, is taken as a GapFill
+// too: counted, it moves the sequence by one rather than not at all.
+func (s *Session) resetMode(m *fix2.Message) bool {
+	flag := m.Get(tagGapFillFlag)
+	if m == s.partial && flag == nil {
+		return false
+	}
+	return string(m.MsgType()) == "4" && !bytes.Equal(flag, yes)
 }
 
 // garbled handles a frame that does not parse: FIX ignores it, without
@@ -293,35 +388,12 @@ func (s *Session) parseApp(m *fix2.Message, frame []byte, peer string) (string, 
 // FromAdmin, if anything.
 func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, applVerID string, now time.Time) (Inbound, bool) {
 	msgType := m.MsgType()
-	if string(m.BeginString()) != s.id.BeginString {
-		received := withhold(m, noTag, quoteValue(m.BeginString()), "withheld")
-		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
-			s.disconnectLocked(c, &LogoutError{Text: fmt.Sprintf("Logon with BeginString %s, expected %s", received, s.id.BeginString)})
-			return Inbound{}, false
-		}
-		s.logoutLocked(c, fmt.Sprintf("Incorrect BeginString: expected %s, received %s", s.id.BeginString, received))
-		return Inbound{}, false
-	}
-	seq, err := fix2.ParseInt(m.Get(tagMsgSeqNum))
-	resetMode := string(msgType) == "4" && !bytes.Equal(m.Get(tagGapFillFlag), yes)
-	if resetMode && (err != nil || seq < 0) {
-		seq, err = 0, nil // ignored in Reset mode
-	}
-	if err != nil || seq <= 0 && !resetMode {
-		text := "MsgSeqNum (34) missing"
-		if m.Get(tagMsgSeqNum) != nil {
-			text = withhold(m, tagMsgSeqNum, "MsgSeqNum (34) is not a positive integer: "+quoteValue(m.Get(tagMsgSeqNum)),
-				"MsgSeqNum (34) is not a positive integer")
-		}
-		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
-			s.disconnectLocked(c, &LogoutError{Text: text})
-		} else {
-			s.logoutLocked(c, text)
-		}
+	seq, ok := s.msgSeqNumLocked(c, m)
+	if !ok {
 		return Inbound{}, false
 	}
 	in := Inbound{
-		Seq:        uint64(seq),
+		Seq:        seq,
 		Generation: s.st.Generation,
 		PossDup:    bytes.Equal(m.Get(tagPossDupFlag), yes),
 		PossResend: bytes.Equal(m.Get(tagPossResend), yes),
@@ -367,6 +439,41 @@ func (s *Session) onMessageLocked(c *conn, m *fix2.Message, frame []byte, applVe
 	return s.onRegularLocked(c, m, frame, in, now)
 }
 
+// msgSeqNumLocked checks m's BeginString and MsgSeqNum, received on c, and
+// returns the latter: 0 for a Reset-mode SequenceReset without a valid one,
+// which does not count. On a problem it logs out, or disconnects if not
+// logged on, and returns false.
+func (s *Session) msgSeqNumLocked(c *conn, m *fix2.Message) (uint64, bool) {
+	if string(m.BeginString()) != s.id.BeginString {
+		received := s.withholdLocked(m, noTag, quoteValue(m.BeginString()), "withheld")
+		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
+			s.disconnectLocked(c, &LogoutError{Text: fmt.Sprintf("Logon with BeginString %s, expected %s", received, s.id.BeginString)})
+			return 0, false
+		}
+		s.logoutLocked(c, fmt.Sprintf("Incorrect BeginString: expected %s, received %s", s.id.BeginString, received))
+		return 0, false
+	}
+	seq, err := fix2.ParseInt(m.Get(tagMsgSeqNum))
+	resetMode := s.resetMode(m)
+	if resetMode && (err != nil || seq < 0) {
+		seq, err = 0, nil // ignored in Reset mode
+	}
+	if err != nil || seq <= 0 && !resetMode {
+		text := "MsgSeqNum (34) missing"
+		if m.Get(tagMsgSeqNum) != nil {
+			text = s.withholdLocked(m, tagMsgSeqNum, "MsgSeqNum (34) is not a positive integer: "+quoteValue(m.Get(tagMsgSeqNum)),
+				"MsgSeqNum (34) is not a positive integer")
+		}
+		if s.phase == phaseAwaitingLogon || s.phase == phaseLogonSent {
+			s.disconnectLocked(c, &LogoutError{Text: text})
+		} else {
+			s.logoutLocked(c, text)
+		}
+		return 0, false
+	}
+	return uint64(seq), true
+}
+
 // checkHeaderLocked checks the CompIDs and SendingTime of an established
 // session's message, received with sequence number seq. On a problem it
 // rejects the message, counts it as received if it is the one expected, and
@@ -379,8 +486,7 @@ func (s *Session) checkHeaderLocked(c *conn, m *fix2.Message, seq uint64, now ti
 		return true
 	}
 	s.rejectLocked(m, reason, tag, text)
-	reset := string(m.MsgType()) == "4" && !bytes.Equal(m.Get(tagGapFillFlag), yes)
-	counts := seq == s.st.NextTarget && !reset
+	counts := seq == s.st.NextTarget && !s.resetMode(m)
 	switch reason {
 	case dictionary.ReasonCompIDProblem, dictionary.ReasonSendingTimeAccuracyProblem:
 		if counts {
@@ -394,6 +500,7 @@ func (s *Session) checkHeaderLocked(c *conn, m *fix2.Message, seq uint64, now ti
 		if counts {
 			s.markLocked(seq)
 			s.advanceLocked(c, seq+1)
+			s.gapFillCountedLocked(c, m)
 		}
 	}
 	return false
@@ -419,6 +526,7 @@ func (s *Session) compIDProblem(m *fix2.Message) (dictionary.RejectReason, strin
 	} {
 		v := m.Get(f.tag)
 		switch {
+		case s.unseen(m, f.tag):
 		case v == nil && (f.tag == tagSenderCompID || f.tag == tagTargetCompID):
 			return dictionary.ReasonRequiredTagMissing, rejectText(dictionary.ReasonRequiredTagMissing, fieldDesc(nil, f.tag))
 		case v != nil && len(v) == 0:
@@ -457,6 +565,9 @@ func compIDTag(reason dictionary.RejectReason, m *fix2.Message) int {
 // sendingTimeProblem checks m's SendingTime against our clock.
 func (s *Session) sendingTimeProblem(m *fix2.Message, now time.Time) (dictionary.RejectReason, int, string) {
 	v := m.Get(tagSendingTime)
+	if s.unseen(m, tagSendingTime) {
+		return 0, 0, ""
+	}
 	if v == nil {
 		return dictionary.ReasonRequiredTagMissing, tagSendingTime, rejectText(dictionary.ReasonRequiredTagMissing, fieldDesc(nil, tagSendingTime))
 	}
@@ -497,7 +608,12 @@ func (s *Session) checkSeqLocked(c *conn, m *fix2.Message, in Inbound) seqVerdic
 		return seqTooHigh
 	}
 	if !in.PossDup {
-		s.logoutLocked(c, seqTooLowText(m, s.st.NextTarget, in.Seq))
+		if s.unseen(m, tagPossDupFlag) {
+			// A retransmission maybe, whose PossDupFlag follows the
+			// malformed tag: ignored as one.
+			return seqIgnore
+		}
+		s.logoutLocked(c, s.seqTooLowText(m, s.st.NextTarget, in.Seq))
 		return seqDone
 	}
 	if !s.origTimeOK(c, m, false) {
@@ -515,7 +631,12 @@ func (s *Session) origTimeOK(c *conn, m *fix2.Message, inSequence bool) bool {
 			seq, _ := fix2.ParseInt(m.Get(tagMsgSeqNum))
 			s.markLocked(uint64(seq))
 			s.advanceLocked(c, uint64(seq)+1)
+			s.gapFillCountedLocked(c, m)
 		}
+	}
+	if s.unseen(m, tagOrigSendingTime) || s.unseen(m, tagSendingTime) {
+		// It may follow the malformed tag: the two cannot be compared.
+		return true
 	}
 	orig := m.Get(tagOrigSendingTime)
 	if orig == nil {
@@ -548,28 +669,29 @@ func (s *Session) origTimeOK(c *conn, m *fix2.Message, inSequence bool) bool {
 // there is room, and the missing messages are asked for.
 func (s *Session) tooHighLocked(c *conn, m *fix2.Message, in Inbound, frame []byte) {
 	// A nil frame stands for a message handled already, whose marker
-	// markAheadLocked could not keep.
-	if _, ok := s.stash[in.Seq]; !ok && (frame == nil || !s.stashLocked(in.Seq, frame, true)) {
+	// markAheadLocked could not keep, or for a partial one, never kept.
+	if _, ok := s.stash[in.Seq]; !ok && m != s.partial && (frame == nil || !s.stashLocked(in.Seq, frame, true)) {
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "too many messages received ahead of a gap: dropped, to be asked for again",
-			numAttr(m, "seq", tagMsgSeqNum, int64(in.Seq)))
+			s.numAttr(m, "seq", tagMsgSeqNum, int64(in.Seq)))
 	}
 	if in.Seq > s.recov.target {
 		s.recov.target = in.Seq
 	}
-	if withhold(m, tagMsgSeqNum, strconv.FormatUint(in.Seq, 10), "") == "" {
+	if s.withholdLocked(m, tagMsgSeqNum, strconv.FormatUint(in.Seq, 10), "") == "" {
 		s.recov.withheld = true
 	}
 	if !s.recov.active {
 		s.recov.active = true
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "MsgSeqNum too high, asking for the missing messages",
-			slog.Uint64("expected", s.st.NextTarget), numAttr(m, "received", tagMsgSeqNum, int64(in.Seq)))
-		s.sendResendRequestLocked()
+			slog.Uint64("expected", s.st.NextTarget), s.numAttr(m, "received", tagMsgSeqNum, int64(in.Seq)))
+		s.sendResendRequestLocked(0)
 	}
 }
 
 // sendResendRequestLocked asks for the messages from the one expected up to
-// the recovery target, in chunks if configured.
-func (s *Session) sendResendRequestLocked() {
+// the recovery target, in chunks if configured, or up to upTo if not 0:
+// the next request is then made as a chunk's.
+func (s *Session) sendResendRequestLocked(upTo uint64) {
 	begin := s.st.NextTarget
 	end := s.prof.infinity
 	s.recov.chunkEnd = 0
@@ -577,7 +699,66 @@ func (s *Session) sendResendRequestLocked() {
 		end = begin + n - 1
 		s.recov.chunkEnd = end
 	}
+	if upTo != 0 && (s.recov.chunkEnd == 0 || upTo < end) {
+		end = upTo
+		s.recov.chunkEnd = end
+	}
+	s.recov.asked = begin
 	s.sendAdminLocked(&header{msgType: "2"}, adminBody(nil).int(tagBeginSeqNo, begin).int(tagEndSeqNo, end))
+}
+
+// gapFillCountedLocked follows the counting, on c, of m if it is a GapFill
+// whose NewSeqNo was not applied: during a recovery, the messages it may
+// have stood for are asked for again, the recovery waiting for them
+// otherwise. One replayed from those held is followed once they are handled
+// (see advanceLocked). A GapFill whose NewSeqNo, read, is not past it stood
+// for no other: it needs none.
+func (s *Session) gapFillCountedLocked(c *conn, m *fix2.Message) {
+	if string(m.MsgType()) != "4" || s.resetMode(m) || !s.recov.active || s.recov.pastReset ||
+		s.c != c || c.closed || s.phase != phaseEstablished {
+		return
+	}
+	s.recov.noOrig = m != s.partial && bytes.Equal(m.Get(tagPossDupFlag), yes) && m.Get(tagOrigSendingTime) == nil
+	if s.draining {
+		s.recov.refill = true
+		return
+	}
+	s.refillLocked()
+}
+
+// crawlWarning is how many requests asked again in a row, each after one
+// moving the sequence by one message, are warned of.
+const crawlWarning = 3
+
+// refillLocked asks again for the messages missing from the one expected:
+// only those up to the first held, or to the recovery target, which asked
+// each time to the last would be resent over and over. Nothing is asked if
+// a request from the one expected was just made. A counterparty whose every
+// GapFill is unusable is warned of, once: the gap is then recovered one
+// message per request.
+func (s *Session) refillLocked() {
+	if s.recov.asked == s.st.NextTarget {
+		return
+	}
+	s.recov.crawl++
+	if s.st.NextTarget != s.recov.asked+1 {
+		s.recov.crawl = 0
+	}
+	if s.recov.crawl == crawlWarning && !s.recov.crawlWarned {
+		s.recov.crawlWarned = true
+		text := "the counterparty's GapFills are unusable: the gap is recovered one message per ResendRequest"
+		if s.recov.noOrig {
+			text += ", its PossDup ones lacking OrigSendingTime (122): see Leniency.SequenceResetWithoutOrigSendingTime"
+		}
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, text, slog.Uint64("expected", s.st.NextTarget))
+	}
+	end := s.recov.target
+	for seq := range s.stash {
+		if seq > s.st.NextTarget && seq <= end {
+			end = seq - 1
+		}
+	}
+	s.sendResendRequestLocked(end)
 }
 
 // advanceLocked records that the messages up to next-1 were received, then
@@ -607,7 +788,7 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 			// The next chunk once this one is received, or once a GapFill
 			// ends at its last message, as QuickFIX asks for it.
 			case s.recov.chunkEnd != 0 && s.stash[s.st.NextTarget] == nil && (s.st.NextTarget > s.recov.chunkEnd || s.gapFilling && s.st.NextTarget == s.recov.chunkEnd):
-				s.sendResendRequestLocked()
+				s.sendResendRequestLocked(0)
 			}
 		}
 		frame, ok := s.stash[s.st.NextTarget]
@@ -624,6 +805,12 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 	}
 	if len(s.stash) > 0 && s.st.NextTarget > pruned {
 		s.pruneStashLocked()
+	}
+	if s.recov.refill {
+		s.recov.refill = false
+		if s.recov.active && s.c == c && !c.closed && s.phase == phaseEstablished {
+			s.refillLocked()
+		}
 	}
 }
 
@@ -833,7 +1020,7 @@ func (s *Session) rejectValidationLocked(m *fix2.Message, verr *dictionary.Valid
 func (s *Session) logUnanswered(m *fix2.Message, tag int, text string) {
 	text = withhold(m, tag, text, "value withheld")
 	s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a reject",
-		msgTypeAttr(m), seqAttr(m),
+		s.msgTypeAttr(m), s.seqAttr(m),
 		slog.String("text", text))
 }
 
@@ -842,20 +1029,32 @@ func (s *Session) rejectLocked(m *fix2.Message, reason dictionary.RejectReason, 
 	if s.c == nil {
 		return
 	}
-	text = withhold(m, tag, text, rejectText(reason, "value withheld"))
+	fallback := rejectText(reason, "value withheld")
+	if m == s.partial {
+		// Nothing of it can be told safe to repeat: the reason only,
+		// RefTagID telling which field.
+		fallback = rejectText(reason, "")
+	}
+	text = s.withholdLocked(m, tag, text, fallback)
 	s.stats.RejectsSent.Add(1)
 	s.log.LogAttrs(context.Background(), slog.LevelWarn, "rejecting a message",
-		msgTypeAttr(m), seqAttr(m),
+		s.msgTypeAttr(m), s.seqAttr(m),
 		slog.Int("reason", int(reason)), slog.Int("tag", tag), slog.String("text", text))
 	b := adminBody(nil)
 	if ref := m.Get(tagMsgSeqNum); ref != nil {
-		b = b.bytes(tagRefSeqNum, ref)
+		// A partial message's only if a sequence number: anything else
+		// may be part of a credential.
+		if n, err := fix2.ParseInt(ref); m != s.partial || err == nil && n > 0 {
+			b = b.bytes(tagRefSeqNum, ref)
+		}
 	}
 	if s.prof.rejectReason {
 		b = b.str(tagText, cleanText(text))
 		if tag != noTag {
 			b = fix2.AppendTagInt(b, tagRefTagID, int64(tag))
 		}
+		// As received, a partial message's too: QuickFIX's acceptance
+		// tests expect it (14a). An Observer shows it as it is sent.
 		b = b.bytes(tagRefMsgType, m.MsgType())
 		if s.prof.reasonAllowed(reason) {
 			b = b.int(tagSessionRejectReason, uint64(reason))
@@ -1009,6 +1208,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 		if gapFill {
 			s.markLocked(in.Seq)
 			s.advanceLocked(c, in.Seq+1)
+			s.gapFillCountedLocked(c, m)
 		}
 		return
 	}
@@ -1016,7 +1216,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 	switch {
 	case uint64(newSeq) > expected:
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset",
-			slog.Bool("gap_fill", gapFill), slog.Uint64("from", expected), numAttr(m, "to", tagNewSeqNo, int64(newSeq)))
+			slog.Bool("gap_fill", gapFill), slog.Uint64("from", expected), s.numAttr(m, "to", tagNewSeqNo, int64(newSeq)))
 		if !gapFill {
 			s.resetPastLocked(c, uint64(newSeq))
 			return
@@ -1026,7 +1226,7 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 		s.advanceLocked(c, uint64(newSeq))
 		s.gapFilling = false
 	case uint64(newSeq) == expected && !gapFill:
-		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset to the expected MsgSeqNum, nothing to do", numAttr(m, "new_seq_no", tagNewSeqNo, int64(newSeq)))
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset to the expected MsgSeqNum, nothing to do", s.numAttr(m, "new_seq_no", tagNewSeqNo, int64(newSeq)))
 	default:
 		reason := fmt.Sprintf("NewSeqNo %d is not greater than the expected MsgSeqNum %d", newSeq, expected)
 		tag := tagNewSeqNo
@@ -1055,6 +1255,8 @@ var errResetPast = errors.New("counterparty reset its sequence numbers past them
 // never have sent.
 func (s *Session) resetPastLocked(c *conn, next uint64) {
 	recovering, last, withheld := s.recov.active, s.recov.target, s.recov.withheld
+	s.recov.pastReset = true
+	defer func() { s.recov.pastReset = false }()
 	// The chunks of a chunked ResendRequest below next are given up: none is
 	// asked for while the messages held are processed.
 	chunkEnd := s.recov.chunkEnd
@@ -1126,11 +1328,11 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix2.Message, in Inbound, no
 			// Handled below: too low without PossDup logs out.
 		} else if uint64(begin) <= e {
 			s.log.LogAttrs(context.Background(), slog.LevelInfo, "resending at the counterparty's request",
-				numAttr(m, "begin", tagBeginSeqNo, int64(begin)), numAttr(m, "end", tagEndSeqNo, int64(e)))
+				s.numAttr(m, "begin", tagBeginSeqNo, int64(begin)), s.numAttr(m, "end", tagEndSeqNo, int64(e)))
 			s.startReplayLocked(c, uint64(begin), e, false)
 		} else {
 			s.log.LogAttrs(context.Background(), slog.LevelInfo, "ResendRequest for nothing sent yet",
-				numAttr(m, "begin", tagBeginSeqNo, int64(begin)), numAttr(m, "end", tagEndSeqNo, int64(end)), slog.Uint64("last_sent", last))
+				s.numAttr(m, "begin", tagBeginSeqNo, int64(begin)), s.numAttr(m, "end", tagEndSeqNo, int64(end)), slog.Uint64("last_sent", last))
 		}
 	}
 	switch s.checkSeqLocked(c, m, in) {
@@ -1185,16 +1387,16 @@ func logonRefusal(m *fix2.Message) string {
 
 // seqTooLowText is the Text of the Logout answering m, received with
 // MsgSeqNum seq while next was expected.
-func seqTooLowText(m *fix2.Message, next, seq uint64) string {
-	return withhold(m, tagMsgSeqNum, fmt.Sprintf("MsgSeqNum too low, expecting %d but received %d", next, seq), "MsgSeqNum too low")
+func (s *Session) seqTooLowText(m *fix2.Message, next, seq uint64) string {
+	return s.withholdLocked(m, tagMsgSeqNum, fmt.Sprintf("MsgSeqNum too low, expecting %d but received %d", next, seq), "MsgSeqNum too low")
 }
 
 // msgTypeAttr and seqAttr log m's MsgType and MsgSeqNum, withheld if they
 // may show a credential.
-func msgTypeAttr(m *fix2.Message) slog.Attr {
-	return slog.String("msg_type", withhold(m, tagMsgType, string(m.MsgType()), "withheld"))
+func (s *Session) msgTypeAttr(m *fix2.Message) slog.Attr {
+	return slog.String("msg_type", s.withholdLocked(m, tagMsgType, string(m.MsgType()), "withheld"))
 }
 
-func seqAttr(m *fix2.Message) slog.Attr {
-	return slog.String("seq", withhold(m, tagMsgSeqNum, string(m.Get(tagMsgSeqNum)), "withheld"))
+func (s *Session) seqAttr(m *fix2.Message) slog.Attr {
+	return slog.String("seq", s.withholdLocked(m, tagMsgSeqNum, string(m.Get(tagMsgSeqNum)), "withheld"))
 }
