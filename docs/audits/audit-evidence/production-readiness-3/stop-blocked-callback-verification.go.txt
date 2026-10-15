@@ -1,0 +1,74 @@
+package session_test
+
+import (
+    "context"
+    "sync"
+    "testing"
+    "time"
+
+    fix2 "github.com/sylr/fix2"
+    "github.com/sylr/fix2/session"
+    "github.com/sylr/fix2/session/transport/mem"
+)
+
+type audit3BlockCallback struct {
+    session.BaseHandler
+    kind string
+    entered chan struct{}
+    release chan struct{}
+    once sync.Once
+}
+
+func (h *audit3BlockCallback) block(kind string) {
+    if h.kind == kind {
+        h.once.Do(func() { close(h.entered) })
+        <-h.release
+    }
+}
+func (h *audit3BlockCallback) ToAdmin(context.Context, *session.Session, string, *fix2.Builder) error {
+    h.block("ToAdmin")
+    return nil
+}
+func (h *audit3BlockCallback) SignLogon(context.Context, *session.Session, session.LogonHeader, *fix2.Builder) error {
+    h.block("SignLogon")
+    return nil
+}
+
+// A normal caller's deadline still bounds Stop while an initial Logon
+// callback blocks; Done must remain open until the callback is released.
+func TestAudit3StopDeadlineDuringBlockedLogonCallback(t *testing.T) {
+    for _, kind := range []string{"ToAdmin", "SignLogon"} {
+        t.Run(kind, func(t *testing.T) {
+            l := mem.Listen("audit3")
+            h := &audit3BlockCallback{kind: kind, entered: make(chan struct{}), release: make(chan struct{})}
+            s, _ := startInitiator(t, l, func(c *session.Config) { c.Handler = h })
+            var release sync.Once
+            unblock := func() { release.Do(func() { close(h.release) }) }
+            t.Cleanup(unblock)
+            p := acceptPeer(t, l)
+            defer p.conn.Close()
+            select {
+            case <-h.entered:
+            case <-time.After(2*time.Second): t.Fatal("callback did not start")
+            }
+            ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+            defer cancel()
+            stopped := make(chan error, 1)
+            go func() { stopped <- s.Stop(ctx) }()
+            select {
+            case err := <-stopped: t.Logf("Stop while %s blocks: %v", kind, err)
+            case <-time.After(500*time.Millisecond):
+                t.Error("Stop exceeded its 50ms deadline by more than 450ms")
+            }
+            select {
+            case <-s.Done(): t.Error("Done closed while callback still runs")
+            default:
+            }
+            unblock()
+            select {
+            case <-s.Done():
+            case <-time.After(2*time.Second): t.Error("Done did not close after releasing callback")
+            }
+        })
+    }
+}

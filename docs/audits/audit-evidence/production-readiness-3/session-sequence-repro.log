@@ -1,0 +1,11 @@
+=== RUN   TestSweepTooLowMalformed
+    audit3_sweep_test.go:19: after too-low malformed: got 0 state=logged on next=3
+--- PASS: TestSweepTooLowMalformed (0.20s)
+=== RUN   TestSweepTooHighMalformed
+    audit3_sweep_test.go:28: after too-high malformed: first reply 0 state=logged on next=3
+--- PASS: TestSweepTooHighMalformed (0.20s)
+=== RUN   TestSweepTooLowWellFormed
+    audit3_sweep_test.go:36: well-formed too-low: 5 MsgSeqNum too low, expecting 2 but received 1
+--- PASS: TestSweepTooLowWellFormed (0.20s)
+PASS
+ok  	github.com/sylr/fix2/session	2.196s

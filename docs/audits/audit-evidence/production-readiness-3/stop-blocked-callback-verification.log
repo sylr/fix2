@@ -1,0 +1,10 @@
+=== RUN   TestAudit3StopDeadlineDuringBlockedLogonCallback
+=== RUN   TestAudit3StopDeadlineDuringBlockedLogonCallback/ToAdmin
+    audit3_stop_blocked_callback_test.go:59: Stop while ToAdmin blocks: <nil>
+=== RUN   TestAudit3StopDeadlineDuringBlockedLogonCallback/SignLogon
+    audit3_stop_blocked_callback_test.go:59: Stop while SignLogon blocks: <nil>
+--- PASS: TestAudit3StopDeadlineDuringBlockedLogonCallback (0.10s)
+    --- PASS: TestAudit3StopDeadlineDuringBlockedLogonCallback/ToAdmin (0.05s)
+    --- PASS: TestAudit3StopDeadlineDuringBlockedLogonCallback/SignLogon (0.05s)
+PASS
+ok  	github.com/sylr/fix2/session	1.498s

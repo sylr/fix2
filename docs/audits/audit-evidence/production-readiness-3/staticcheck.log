@@ -1,0 +1,41 @@
+cmd/fixgen/generate.go:99:7: QF1001: could apply De Morgan's law (staticcheck)
+			if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
+			   ^
+cmd/fixgen/generate.go:1485:3: QF1002: could use tagged switch on out[0] (staticcheck)
+		switch {
+		^
+cmd/fixgen/generate_test.go:2214:71: QF1001: could apply De Morgan's law (staticcheck)
+				if dict.Defines(md.MsgType, tag) != slices.Contains(tags, tag) && !(len(dict.Header) == 0 && slices.Contains(fixtEnvelope, tag)) {
+				                                                                  ^
+dictionary/profile.go:34:36: QF1001: could apply De Morgan's law (staticcheck)
+		if used[length] || used[data] || !(isLength(length) || undeclared && d.Fields[length] == nil) {
+		                                 ^
+dictionary/xmldict/orchestra.go:31:17: ST1005: error strings should not be capitalized (staticcheck)
+		return false, fmt.Errorf("Orchestra namespace %q is not supported, only %q", root.Name.Space, orchestraNS)
+		              ^
+session/auth_warning_test.go:35:11: QF1008: could remove embedded field "recorder" from selector (staticcheck)
+	return d.recorder.BaseHandler.Authenticate(ctx, req)
+	         ^
+session/receipt.go:125:80: ST1008: error should be returned as the last argument (staticcheck)
+func (s *Session) receiptState(r Receipt, level Level, probe bool) (done bool, err error, wake <-chan struct{}) {
+                                                                               ^
+session/store_failure_test.go:111:13: QF1008: could remove embedded field "Store" from selector (staticcheck)
+	st, _ := b.Store.Open(context.Background())
+	           ^
+session/store_failure_test.go:477:13: QF1008: could remove embedded field "Store" from selector (staticcheck)
+	st, _ := f.Store.Open(context.Background())
+	           ^
+tests/dicts/fix40/dictionary_test.go:20:5: SA4000: identical expressions on the left and right side of the '!=' operator (staticcheck)
+	if Dictionary() != Dictionary() {
+	   ^
+tests/dicts/fix44/dictionary_test.go:20:5: SA4000: identical expressions on the left and right side of the '!=' operator (staticcheck)
+	if Dictionary() != Dictionary() {
+	   ^
+tests/dicts/fix50sp2/dictionary_test.go:20:5: SA4000: identical expressions on the left and right side of the '!=' operator (staticcheck)
+	if Dictionary() != Dictionary() {
+	   ^
+tests/e2e/e2e_test.go:349:3: QF1002: could use tagged switch on i (staticcheck)
+		switch {
+		^
+13 issues:
+* staticcheck: 13

@@ -1,0 +1,13 @@
+=== RUN   TestAudit3MalformedTagStillChecksHeader
+=== RUN   TestAudit3MalformedTagStillChecksHeader/wrong_SenderCompID
+    audit3_malformed_header_test.go:27: State=logged on NextTarget=4: invalid header consumed and subsequent message accepted
+    audit3_malformed_header_test.go:29: invalid header did not log out: malformed tag bypassed header validation
+=== RUN   TestAudit3MalformedTagStillChecksHeader/stale_SendingTime
+    audit3_malformed_header_test.go:27: State=logged on NextTarget=4: invalid header consumed and subsequent message accepted
+    audit3_malformed_header_test.go:29: invalid header did not log out: malformed tag bypassed header validation
+--- FAIL: TestAudit3MalformedTagStillChecksHeader (0.41s)
+    --- FAIL: TestAudit3MalformedTagStillChecksHeader/wrong_SenderCompID (0.20s)
+    --- FAIL: TestAudit3MalformedTagStillChecksHeader/stale_SendingTime (0.20s)
+FAIL
+FAIL	github.com/sylr/fix2/session	0.890s
+FAIL

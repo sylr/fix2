@@ -1,0 +1,14 @@
+=== RUN   TestThirdAuditWideGroupCost
+    audit3_wide_group_test.go:53: schemaWidth=64 schemaBytes=5645 wireBytes=280040 entries=20000 Validate=681.959µs CheckAll=2.230167ms
+    audit3_wide_group_test.go:53: schemaWidth=4096 schemaBytes=340301 wireBytes=280040 entries=20000 Validate=599.25µs CheckAll=44.374042ms
+    audit3_wide_group_test.go:53: schemaWidth=65536 schemaBytes=5609429 wireBytes=300040 entries=20000 Validate=1.090417ms CheckAll=659.393958ms
+--- PASS: TestThirdAuditWideGroupCost (0.89s)
+=== RUN   TestThirdAuditStandardGroupWidth
+    audit3_wide_group_test.go:80: FIX40 max direct fields/nested counters=3 group=NoMiscFees
+    audit3_wide_group_test.go:80: FIX44 max direct fields/nested counters=7 group=NoDlvyInst
+    audit3_wide_group_test.go:80: FIX50SP2 max direct fields/nested counters=76 group=NoLegs
+    audit3_wide_group_test.go:80: FIXT11 max direct fields/nested counters=4 group=NoMsgTypes
+    audit3_wide_group_test.go:80: OrchestraFIXLatest max direct fields/nested counters=9 group=NoAttachments
+--- PASS: TestThirdAuditStandardGroupWidth (0.01s)
+PASS
+ok  	github.com/sylr/fix2/dictionary	1.221s

@@ -1,0 +1,82 @@
+package dictionary_test
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/dictionary/xmldict"
+)
+
+// This diagnostic deliberately logs timings rather than asserting a machine-
+// dependent threshold. Its fixed-size messages expose O(entries * schemaWidth)
+// strict validation, while ordinary Validate uses GroupSpec's indexed lookups.
+func TestThirdAuditWideGroupCost(t *testing.T) {
+	const entries = 20000
+	for _, width := range []int{64, 4096, 65536} {
+		var schema strings.Builder
+		schema.WriteString(`<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/><messages><message name="M" msgtype="Z"><group name="NoG" required="Y">`)
+		for i := range width {
+			fmt.Fprintf(&schema, `<field name="F%d" required="N"/>`, 1000+i)
+		}
+		schema.WriteString(`</group></message></messages><components/><fields><field number="35" name="MsgType" type="STRING"/><field number="73" name="NoG" type="NUMINGROUP"/>`)
+		for i := range width {
+			fmt.Fprintf(&schema, `<field number="%d" name="F%d" type="STRING"/>`, 1000+i, 1000+i)
+		}
+		schema.WriteString(`</fields></fix>`)
+		d, err := xmldict.Load(strings.NewReader(schema.String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b := fix2.NewBuilder("FIX.4.4", "Z").AppendInt(73, entries)
+		for range entries {
+			b.AppendString(1000, "x").AppendString(1000+width-1, "y")
+		}
+		raw := b.Build()
+		var m fix2.Message
+		if err := fix2.ParseInto(&m, raw, d.Profile()); err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		if err := d.Validate(&m); err != nil {
+			t.Fatal(err)
+		}
+		base := time.Since(start)
+		start = time.Now()
+		if err := d.ValidateWith(&m, dictionary.CheckAll); err != nil {
+			t.Fatal(err)
+		}
+		strict := time.Since(start)
+		t.Logf("schemaWidth=%d schemaBytes=%d wireBytes=%d entries=%d Validate=%v CheckAll=%v", width, schema.Len(), len(raw), entries, base, strict)
+	}
+}
+
+func TestThirdAuditStandardGroupWidth(t *testing.T) {
+	for _, name := range []string{"FIX40", "FIX44", "FIX50SP2", "FIXT11", "OrchestraFIXLatest"} {
+		d, err := xmldict.LoadFile("../cmd/fixgen/testdata/" + name + ".xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		maxWidth := 0
+		widest := ""
+		var walk func([]dictionary.GroupDef)
+		walk = func(gs []dictionary.GroupDef) {
+			for _, g := range gs {
+				if w := len(g.Fields) + len(g.Groups); w > maxWidth {
+					maxWidth = w
+					widest = g.Name
+				}
+				walk(g.Groups)
+			}
+		}
+		walk(d.HeaderGroups)
+		walk(d.TrailerGroups)
+		for _, m := range d.Messages {
+			walk(m.Groups)
+		}
+		t.Logf("%s max direct fields/nested counters=%d group=%s", name, maxWidth, widest)
+	}
+}

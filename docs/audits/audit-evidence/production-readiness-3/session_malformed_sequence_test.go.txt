@@ -1,0 +1,37 @@
+package session_test
+
+import (
+	"testing"
+	"time"
+
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session"
+)
+
+func ts(t time.Time) string { return string(fix2.AppendUTCTimestamp(nil, t, fix2.Milliseconds)) }
+
+// Too low, no PossDup: the normal path logs out.
+func TestSweepTooLowMalformed(t *testing.T) {
+	s, _, p := loggedOn(t, nil)
+	p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=1|52="+ts(time.Now())+"|11=O1|abc=1|", ""))
+	p.write(from(session.FIX44, 2), "1", "112", "X")
+	m := p.expect("0")
+	t.Logf("after too-low malformed: got %s state=%v next=%d", m.MsgType(), s.State(), s.NextTargetSeqNum())
+}
+
+// Too high: the normal path sends a ResendRequest.
+func TestSweepTooHighMalformed(t *testing.T) {
+	s, _, p := loggedOn(t, nil)
+	p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=5|52="+ts(time.Now())+"|11=O1|abc=1|", ""))
+	p.write(from(session.FIX44, 2), "1", "112", "X")
+	m := p.expect("0")
+	t.Logf("after too-high malformed: first reply %s state=%v next=%d", m.MsgType(), s.State(), s.NextTargetSeqNum())
+}
+
+// Too low compared with a normal well-formed message, for reference.
+func TestSweepTooLowWellFormed(t *testing.T) {
+	_, _, p := loggedOn(t, nil)
+	p.write(from(session.FIX44, 1), "D", "11", "O1")
+	m := p.expect("5")
+	t.Logf("well-formed too-low: %s %s", m.MsgType(), m.Get(58))
+}

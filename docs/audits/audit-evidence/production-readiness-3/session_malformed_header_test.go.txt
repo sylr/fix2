@@ -1,0 +1,33 @@
+package session_test
+
+import (
+	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/session"
+	"testing"
+	"time"
+)
+
+// A malformed body field must not bypass CompID / SendingTime validation.
+func TestAudit3MalformedTagStillChecksHeader(t *testing.T) {
+	for _, tc := range []struct {
+		name, sender string
+		sent         time.Time
+	}{
+		{"wrong SenderCompID", "WRONG", time.Now()},
+		{"stale SendingTime", "ACC", time.Now().Add(-time.Hour)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, p := loggedOn(t, nil)
+			// Build a checked frame with an invalid tag after a valid header.
+			sent := string(fix2.AppendUTCTimestamp(nil, tc.sent, fix2.Milliseconds))
+			p.writeRaw(rawFrame("35=D|49="+tc.sender+"|56=INI|34=2|52="+sent+"|11=O1|abc=1|", ""))
+			p.expect("3", "373", "0")
+			p.write(from(session.FIX44, 3), "1", "112", "AFTER")
+			p.expect("0", "112", "AFTER")
+			t.Logf("State=%v NextTarget=%d: invalid header consumed and subsequent message accepted", s.State(), s.NextTargetSeqNum())
+			if s.State() == session.StateLoggedOn {
+				t.Fatal("invalid header did not log out: malformed tag bypassed header validation")
+			}
+		})
+	}
+}

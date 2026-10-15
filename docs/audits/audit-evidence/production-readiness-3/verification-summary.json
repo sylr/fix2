@@ -1,0 +1,436 @@
+{
+  "revision": "f24332d945009938ebfc92f697cab00bf6f5ab82",
+  "date": "2026-10-15",
+  "environment": {
+    "go": "go1.27.2",
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "tests": {
+    "root-tests.json": {
+      "test_events": {
+        "pass": 2824,
+        "fail": 0,
+        "skip": 3
+      },
+      "skipped_tests": [
+        "TestWideSpecDoesNotAllocate",
+        "TestRewriteForResend_DoesNotAllocate",
+        "TestConformance"
+      ],
+      "package_outcomes": [
+        {
+          "package": "github.com/sylr/fix2/internal/hrtimer",
+          "action": "pass",
+          "elapsed_seconds": 1.5350000000000001
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/dicttest",
+          "action": "pass",
+          "elapsed_seconds": 4.369
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport",
+          "action": "pass",
+          "elapsed_seconds": 0.425
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store",
+          "action": "pass",
+          "elapsed_seconds": 0.435
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/storetest",
+          "action": "pass",
+          "elapsed_seconds": 0.455
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/mem",
+          "action": "pass",
+          "elapsed_seconds": 0.369
+        },
+        {
+          "package": "github.com/sylr/fix2/session/schedule",
+          "action": "pass",
+          "elapsed_seconds": 1.358
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/memstore",
+          "action": "pass",
+          "elapsed_seconds": 1.405
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/tcp",
+          "action": "pass",
+          "elapsed_seconds": 1.565
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix40",
+          "action": "pass",
+          "elapsed_seconds": 1.579
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary",
+          "action": "pass",
+          "elapsed_seconds": 11.101
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix44",
+          "action": "pass",
+          "elapsed_seconds": 1.363
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixlatest",
+          "action": "pass",
+          "elapsed_seconds": 1.526
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix50sp2",
+          "action": "pass",
+          "elapsed_seconds": 1.717
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixt11",
+          "action": "pass",
+          "elapsed_seconds": 1.5659999999999998
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/e2e",
+          "action": "pass",
+          "elapsed_seconds": 1.533
+        },
+        {
+          "package": "github.com/sylr/fix2",
+          "action": "pass",
+          "elapsed_seconds": 19.87
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/quickfix-go",
+          "action": "pass",
+          "elapsed_seconds": 5.693
+        },
+        {
+          "package": "github.com/sylr/fix2/cmd/fixgen",
+          "action": "pass",
+          "elapsed_seconds": 29.291
+        },
+        {
+          "package": "github.com/sylr/fix2/session",
+          "action": "pass",
+          "elapsed_seconds": 102.221
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary/xmldict",
+          "action": "pass",
+          "elapsed_seconds": 125.821
+        }
+      ],
+      "coverage": {
+        "github.com/sylr/fix2/internal/hrtimer": "coverage: 96.6% of statements",
+        "github.com/sylr/fix2/session/schedule": "coverage: 85.9% of statements",
+        "github.com/sylr/fix2/session/store/memstore": "coverage: 91.9% of statements",
+        "github.com/sylr/fix2/session/transport/tcp": "coverage: 92.1% of statements",
+        "github.com/sylr/fix2/tests/dicts/fix40": "coverage: 63.0% of statements",
+        "github.com/sylr/fix2/dictionary": "coverage: 97.5% of statements",
+        "github.com/sylr/fix2/tests/dicts/fix44": "coverage: 2.2% of statements",
+        "github.com/sylr/fix2/tests/dicts/fixlatest": "coverage: 2.9% of statements",
+        "github.com/sylr/fix2/tests/dicts/fix50sp2": "coverage: 59.5% of statements",
+        "github.com/sylr/fix2/tests/dicts/fixt11": "coverage: 60.5% of statements",
+        "github.com/sylr/fix2/tests/e2e": "coverage: [no statements]",
+        "github.com/sylr/fix2": "coverage: 98.6% of statements",
+        "github.com/sylr/fix2/tests/quickfix-go": "coverage: [no statements]",
+        "github.com/sylr/fix2/cmd/fixgen": "coverage: 95.0% of statements",
+        "github.com/sylr/fix2/session": "coverage: 92.1% of statements",
+        "github.com/sylr/fix2/dictionary/xmldict": "coverage: 99.1% of statements"
+      }
+    },
+    "simd-tests.json": {
+      "test_events": {
+        "pass": 2824,
+        "fail": 0,
+        "skip": 3
+      },
+      "skipped_tests": [
+        "TestWideSpecDoesNotAllocate",
+        "TestRewriteForResend_DoesNotAllocate",
+        "TestConformance"
+      ],
+      "package_outcomes": [
+        {
+          "package": "github.com/sylr/fix2/internal/dicttest",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2",
+          "action": "pass",
+          "elapsed_seconds": 2.316
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/hrtimer",
+          "action": "pass",
+          "elapsed_seconds": 1.454
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/storetest",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/mem",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary",
+          "action": "pass",
+          "elapsed_seconds": 3.166
+        },
+        {
+          "package": "github.com/sylr/fix2/session/schedule",
+          "action": "pass",
+          "elapsed_seconds": 1.308
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix44",
+          "action": "pass",
+          "elapsed_seconds": 1.312
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/memstore",
+          "action": "pass",
+          "elapsed_seconds": 1.4020000000000001
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/tcp",
+          "action": "pass",
+          "elapsed_seconds": 1.467
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix40",
+          "action": "pass",
+          "elapsed_seconds": 1.4689999999999999
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix50sp2",
+          "action": "pass",
+          "elapsed_seconds": 1.601
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixlatest",
+          "action": "pass",
+          "elapsed_seconds": 1.383
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixt11",
+          "action": "pass",
+          "elapsed_seconds": 1.351
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/e2e",
+          "action": "pass",
+          "elapsed_seconds": 1.453
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/quickfix-go",
+          "action": "pass",
+          "elapsed_seconds": 5.435
+        },
+        {
+          "package": "github.com/sylr/fix2/cmd/fixgen",
+          "action": "pass",
+          "elapsed_seconds": 20.826
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary/xmldict",
+          "action": "pass",
+          "elapsed_seconds": 46.48
+        },
+        {
+          "package": "github.com/sylr/fix2/session",
+          "action": "pass",
+          "elapsed_seconds": 102.23
+        }
+      ],
+      "coverage": {}
+    },
+    "conformance-tests.json": {
+      "test_events": {
+        "pass": 506,
+        "fail": 0,
+        "skip": 0
+      },
+      "skipped_tests": [],
+      "package_outcomes": [
+        {
+          "package": "github.com/sylr/fix2/session",
+          "action": "pass",
+          "elapsed_seconds": 118.844
+        }
+      ],
+      "coverage": {}
+    }
+  },
+  "vulnerabilities": {
+    "binancemd-vulncheck.json": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": []
+    },
+    "sqlite3-vulncheck.json": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": []
+    },
+    "coinbasemd-vulncheck.json": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": []
+    },
+    "root-vulncheck.json": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": []
+    }
+  },
+  "staticcheck": {
+    "binancemd-staticcheck.log": {
+      "issue_count": 0,
+      "checks": {}
+    },
+    "coinbasemd-staticcheck.log": {
+      "issue_count": 0,
+      "checks": {}
+    },
+    "sqlite3-staticcheck.log": {
+      "issue_count": 0,
+      "checks": {}
+    },
+    "staticcheck.log": {
+      "issue_count": 13,
+      "checks": {
+        "QF1001": 3,
+        "QF1002": 2,
+        "ST1005": 1,
+        "QF1008": 3,
+        "ST1008": 1,
+        "SA4000": 3
+      }
+    }
+  },
+  "fuzz": {
+    "fuzz-session.log": {
+      "passed": true,
+      "executions": 60126,
+      "requested_seconds": 15
+    },
+    "fuzz-groups.log": {
+      "passed": true,
+      "executions": 2572146,
+      "requested_seconds": 15
+    },
+    "fuzz-dictionary.log": {
+      "passed": true,
+      "executions": 3707488,
+      "requested_seconds": 15
+    }
+  },
+  "raw_artifacts": {
+    "binancemd-vulncheck.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/binancemd-vulncheck.json",
+      "bytes": 576582,
+      "sha256": "9e97ef48e99c6bb318333e55325eaefd6cc82cbb3eb323f97b8e77d41eb7498b"
+    },
+    "coinbasemd-vulncheck.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/coinbasemd-vulncheck.json",
+      "bytes": 576645,
+      "sha256": "77dbe105ec95f46a9c3515003ee0d7ec3f3ebaaa29df44ee0bf7952aa46db763"
+    },
+    "conformance-tests.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/conformance-tests.json",
+      "bytes": 891949,
+      "sha256": "0e5dbec60d1e001f735acbd061aba22c8fa90dc9ba2b3b612a819e16e4953002"
+    },
+    "root-coverage.out": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/root-coverage.out",
+      "bytes": 871382,
+      "sha256": "01ca29933d5845e2a166e23256f4d151b34fd36716262dabf05e596f1e7b9cbb"
+    },
+    "root-tests.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/root-tests.json",
+      "bytes": 2082637,
+      "sha256": "3a8e185b73a56dede53da572b8f0208e6a1a99fdec8d25773b02329328bb0cdf"
+    },
+    "root-vulncheck.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/root-vulncheck.json",
+      "bytes": 572832,
+      "sha256": "c95a2d4cd562a95f0f5c90d21d76de4c36f5a0b4d73c7806f769f1ceaab01f96"
+    },
+    "simd-tests.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/simd-tests.json",
+      "bytes": 2079446,
+      "sha256": "929aeaad1b5260b5d5042621287389fa9b6b6bb153664a8638b7c30d00364f87"
+    },
+    "sqlite3-vulncheck.json": {
+      "path": "/private/tmp/fix2-production-readiness-3-f24332d/sqlite3-vulncheck.json",
+      "bytes": 572021,
+      "sha256": "602b7f7fd2a4f21181d09e7c2bbd1e2d8efb1aa495aa429676b04ab547308674"
+    }
+  },
+  "commands": {
+    "root_race": "go test -race -count=1 -json -coverprofile=<evidence>/root-coverage.out ./...",
+    "simd_race": "GOEXPERIMENT=simd go test -race -count=1 -json ./...",
+    "contrib_race": "make test-contribs GO_TEST_FLAGS='-race -count=1'",
+    "vet": "make vet",
+    "conformance": "FIX2_QUICKFIX_TESTS=/Users/sylvain/git/quickfix-go/_test go test -race -count=1 -parallel=4 -json -run '^TestConformance$' ./session",
+    "staticcheck": "golangci-lint run --no-config --default none --enable staticcheck --timeout 5m ./...",
+    "vulnerability_scan": "govulncheck -json ./..."
+  },
+  "conformance_fixture_revision": "236c791cfcbca8d57a36f92927f9e8265349359b"
+}
