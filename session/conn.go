@@ -72,6 +72,7 @@ type conn struct {
 	logoutDeadline      time.Time
 	closeDeadline       time.Time // closing, when a replay holding back our Logout is cut short
 	logoutText          string    // the Text of our Logout, why we logged out
+	peerLoggedOut       bool      // the counterparty's Logout handled: what it sends after is not
 	timer               *time.Timer
 	testReqs            uint64 // TestRequests sent, for their IDs
 	probeWanted         bool   // an acknowledgement probe waits for AckProbeMinInterval

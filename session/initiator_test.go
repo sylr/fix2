@@ -526,8 +526,9 @@ func TestLogoutAnswerIsLast(t *testing.T) {
 				t.Fatal("our Logout not written")
 			}
 			if tc.send != nil {
+				n := s.Stats().MessagesReceived.Load()
 				tc.send(p)
-				waitFor(t, func() bool { return s.NextTargetSeqNum() == 4 })
+				waitFor(t, func() bool { return s.Stats().MessagesReceived.Load() > n })
 			}
 			st.block.Store(false)
 			release()
@@ -603,8 +604,9 @@ func TestLogoutAnswerIsLastBusinessReject(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("our Logout not written")
 	}
+	n := s.Stats().MessagesReceived.Load()
 	p.send("D", 0)
-	waitFor(t, func() bool { return s.NextTargetSeqNum() == 4 })
+	waitFor(t, func() bool { return s.Stats().MessagesReceived.Load() > n })
 	st.block.Store(false)
 	release()
 	p.expect("5", "34", "2")

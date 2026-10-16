@@ -236,3 +236,5 @@ what the counterparty sends meanwhile goes unanswered (a TestRequest, a
 message to reject, a ResendRequest, which it will ask again on the next
 connection), `Send` returns `ErrNotLoggedOn`, and a Reject the handler
 returns is logged, not sent. A resend asked for before still goes first.
+What the counterparty sends after its own Logout, or held after it, is not
+handled at all: it is asked for again on the next connection.

@@ -119,6 +119,13 @@ func (c *conn) handleFrame(frame []byte) {
 		return
 	}
 	c.lastRead = now
+	if c.peerLoggedOut {
+		// Its last message: what follows is not handled, as what it held
+		// after it is not (see advanceLocked).
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "message after the counterparty's Logout ignored", s.msgTypeAttr(m), s.seqAttr(m))
+		s.mu.Unlock()
+		return
+	}
 	in, fromAdmin := s.onMessageLocked(c, m, frame, applVerID, now)
 	if !c.closed {
 		s.armLocked(c)
@@ -765,10 +772,10 @@ func (s *Session) refillLocked() {
 // advanceLocked records that the messages up to next-1 were received, then
 // handles the messages kept ahead of the gap that are now in sequence. Those
 // may advance further: a nested call only moves the expected MsgSeqNum, and
-// the outermost one goes on. One that starts a Logout stops it: those kept
-// after it are neither processed nor counted by it, nor asked for. They are
-// asked for again once logged on, unless the gap is filled while logging
-// out.
+// the outermost one goes on. One that starts a Logout stops it, as does
+// closing: those kept after it are neither processed nor counted by it, nor
+// asked for. They are asked for again once logged on,
+// unless the gap is filled while logging out.
 func (s *Session) advanceLocked(c *conn, next uint64) {
 	if next > s.st.NextTarget+1 && !s.draining {
 		// A jump (a GapFill): what it skipped over is behind.
@@ -784,12 +791,12 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 	s.draining = true
 	defer func() { s.draining = false }()
 	// The phase the messages kept are handled in: one that changes it
-	// started a Logout, after which nothing more is handled nor asked for.
-	// While logging out already, they are handled as those received then
-	// are.
+	// started a Logout, after which nothing more is handled nor asked for,
+	// as once closing. While our Logout awaits its answer, they are handled
+	// as those received then are.
 	phase := s.phase
 	pruned := s.st.NextTarget
-	for s.c == c && !c.closed && s.phase == phase {
+	for s.c == c && !c.closed && !c.closing && s.phase == phase {
 		if s.recov.active {
 			switch {
 			case s.st.NextTarget > s.recov.target:
@@ -817,7 +824,7 @@ func (s *Session) advanceLocked(c *conn, next uint64) {
 	}
 	if s.recov.refill {
 		s.recov.refill = false
-		if s.recov.active && s.c == c && !c.closed && s.phase == phaseEstablished {
+		if s.recov.active && s.c == c && !c.closed && !c.closing && s.phase == phaseEstablished {
 			s.refillLocked()
 		}
 	}
@@ -1180,9 +1187,9 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 				slog.String("problem", withhold(m, noTag, wrong, "value withheld")))
 			return
 		}
-		if in.Seq == s.st.NextTarget {
+		next := in.Seq == s.st.NextTarget
+		if next {
 			s.markLocked(in.Seq)
-			s.advanceLocked(c, in.Seq+1)
 		}
 		// Why we logged out, rather than the answer's Text: an answer
 		// usually has none, and crossing Logouts both give theirs.
@@ -1191,7 +1198,12 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 		}
 		// After what is queued: crossing Logouts, ours may not be written
 		// yet.
+		c.peerLoggedOut = true
 		s.closeAfterFlushLocked(c, &LogoutError{ByCounterparty: false, Text: text})
+		if next {
+			// Closing: what is kept after the answer stays kept.
+			s.advanceLocked(c, in.Seq+1)
+		}
 		return
 	}
 	if !s.checkHeaderLocked(c, m, in.Seq, now) {
@@ -1206,13 +1218,22 @@ func (s *Session) onLogoutLocked(c *conn, m *fix2.Message, frame []byte, in Inbo
 	}
 	s.lastProcessedLocked(m, in)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty logged out", slog.String("text", text))
-	if in.Seq == s.st.NextTarget {
+	// Marked before it is answered, for the answer's
+	// LastMsgSeqNumProcessed; the answer queued before closing, which
+	// refuses anything more.
+	next := in.Seq == s.st.NextTarget
+	if next {
 		s.markLocked(in.Seq)
-		s.advanceLocked(c, in.Seq+1)
 	}
 	s.sendLogoutLocked(c, "")
 	s.phase = phaseLogoutSent
+	c.peerLoggedOut = true
 	s.closeAfterFlushLocked(c, &LogoutError{ByCounterparty: true, Text: text})
+	if next {
+		// Closing: what is kept after the Logout stays kept, as when the
+		// Logout itself was kept.
+		s.advanceLocked(c, in.Seq+1)
+	}
 }
 
 // onSequenceResetLocked handles a SequenceReset: in GapFill mode it fills a
@@ -1249,6 +1270,13 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix2.Message, frame []byte, 
 	expected := s.st.NextTarget
 	switch {
 	case uint64(newSeq) > expected:
+		if !gapFill && c.closing {
+			// As resetPastLocked would: what it passes is asked for again
+			// on the next connection.
+			s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset ignored after our Logout",
+				slog.Uint64("from", expected), s.numAttr(m, "to", tagNewSeqNo, int64(newSeq)))
+			return
+		}
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "SequenceReset",
 			slog.Bool("gap_fill", gapFill), slog.Uint64("from", expected), s.numAttr(m, "to", tagNewSeqNo, int64(newSeq)))
 		if !gapFill {
@@ -1298,12 +1326,12 @@ func (s *Session) resetPastLocked(c *conn, next uint64) {
 	// Looked at once: processing them only removes some.
 	stashed := slices.Sorted(maps.Keys(s.stash))
 	s.heldScanned += uint64(len(stashed))
-	// As in advanceLocked, one held that starts a Logout stops it, the
-	// last drain to next too: one that reached next would otherwise start
-	// another, in the Logout's phase.
+	// As in advanceLocked, one held that starts a Logout, or closing, stops
+	// it, the last drain to next too: one that reached next would otherwise
+	// start another, in the Logout's phase.
 	phase := s.phase
 	for {
-		if s.c != c || c.closed || s.phase != phase {
+		if s.c != c || c.closed || c.closing || s.phase != phase {
 			// What is left is asked for again once logged on, unless the
 			// gap is filled while logging out.
 			return

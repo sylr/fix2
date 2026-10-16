@@ -176,9 +176,10 @@ type Session struct {
 // Stats counts what a session did; its fields are read atomically.
 type Stats struct {
 	// MessagesReceived and BytesReceived count the messages handled, those
-	// rejected for a malformed tag included. Those the Observer does not
-	// see: it would show what follows the tag, where the session cannot
-	// tell a credential (see garbled).
+	// ignored after the counterparty's Logout included, and those rejected
+	// for a malformed tag, which the Observer does not see: it would show
+	// what follows the tag, where the session cannot tell a credential (see
+	// garbled).
 	MessagesSent, MessagesReceived atomic.Uint64
 	BytesSent, BytesReceived       atomic.Uint64
 	RejectsSent, Garbled           atomic.Uint64

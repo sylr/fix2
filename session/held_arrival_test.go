@@ -1,6 +1,8 @@
 package session_test
 
 import (
+	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -212,4 +214,117 @@ func TestHeldArrival_LogoutEndsChunk(t *testing.T) {
 			t.Fatal("connection still open")
 		}
 	}
+}
+
+// Under CompatStrict2020, a counterparty's Logout filling the gap ahead of a
+// message held stops what is held after it, as a Logout itself held does,
+// the answer to ours too: the order after it is neither processed nor
+// counted. A Heartbeat filling it lets the order through.
+func TestHeldArrival_InSequenceLogoutStopsHeld(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		ours   bool     // we log out first
+		held   bool     // the Logout, 3, is held too, the order 4
+		filler string   // the message 2
+		apps   []string // delivered
+		next   uint64   // NextTargetSeqNum after
+	}{
+		{"Heartbeat", false, false, "0", []string{"AFTER-LOGOUT"}, 4},
+		{"counterparty's Logout", false, false, "5", nil, 3},
+		{"answer to ours", true, false, "5", nil, 3},
+		{"answer to ours, held", true, true, "0", nil, 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+			order := 3
+			if tc.held {
+				p.write(from(session.FIX44, 3), "5")
+				p.expect("2", "7", "2", "16", "0")
+				order = 4
+			}
+			p.write(from(session.FIX44, order), "D", "11", "AFTER-LOGOUT")
+			if !tc.held {
+				p.expect("2", "7", "2", "16", "0")
+			}
+			done := make(chan error, 1)
+			if tc.ours {
+				go func() { done <- s.Logout(context.Background(), "end of day") }()
+				p.expect("5")
+			}
+			p.write(from(session.FIX44, 2), tc.filler, "43", "Y", "122", origSendingTime())
+			if tc.filler == "0" && !tc.ours {
+				rec.wait(t, func() bool { return len(rec.apps) == 1 })
+			} else {
+				if !tc.ours {
+					p.expect("5")
+				}
+				rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			}
+			if tc.ours {
+				select {
+				case err := <-done:
+					if err != nil {
+						t.Errorf("Logout: %v", err)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("Logout did not return")
+				}
+			}
+			rec.mu.Lock()
+			apps := append([]string(nil), rec.apps...)
+			rec.mu.Unlock()
+			if !slices.Equal(apps, tc.apps) {
+				t.Errorf("delivered %q, want %q", apps, tc.apps)
+			}
+			if n := s.NextTargetSeqNum(); n != tc.next {
+				t.Errorf("NextTargetSeqNum = %d, want %d", n, tc.next)
+			}
+		})
+	}
+}
+
+// A counterparty's Logout is its last message: what it sends after, the
+// answer to ours included, is not handled.
+func TestLogoutIsLastHandled(t *testing.T) {
+	for _, ours := range []bool{false, true} {
+		name := "counterparty's Logout"
+		if ours {
+			name = "answer to ours"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, rec, p := loggedOn(t, nil)
+			done := make(chan error, 1)
+			if ours {
+				go func() { done <- s.Logout(context.Background(), "end of day") }()
+				p.expect("5")
+			}
+			// In one write: read before the connection closes.
+			p.writeRaw(append(from(session.FIX44, 2).build("5").Build(), from(session.FIX44, 3).build("D", "11", "AFTER-LOGOUT").Build()...))
+			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			rec.mu.Lock()
+			apps := append([]string(nil), rec.apps...)
+			rec.mu.Unlock()
+			if len(apps) != 0 {
+				t.Errorf("delivered %q after the Logout, want none", apps)
+			}
+			if n := s.NextTargetSeqNum(); n != 3 {
+				t.Errorf("NextTargetSeqNum = %d, want 3", n)
+			}
+		})
+	}
+}
+
+// Under CompatStrict2020, a counterparty's Logout in sequence ending a chunk
+// of a chunked ResendRequest is answered: the next chunk is not asked for.
+func TestHeldArrival_InSequenceLogoutEndsChunk(t *testing.T) {
+	_, _, p := loggedOn(t, func(c *session.Config) {
+		c.Compatibility = session.CompatStrict2020
+		c.ResendChunkSize = 2
+	})
+	p.write(from(session.FIX44, 5), "D", "11", "AFTER-LOGOUT")
+	p.expect("2", "7", "2", "16", "3")
+	p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+	p.write(from(session.FIX44, 3), "5")
+	p.expect("5")
+	p.expectSilentEnd()
 }
