@@ -4,6 +4,10 @@
 // Usage:
 //
 //	fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]
+//	fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]
+//
+// sbe generates codecs of the messages of an SBE 1.0 message schema: a Go
+// struct per message, encoded and decoded whole (see docs/sbe.md).
 //
 // tagvalue generates readers and builders of FIX tagvalue messages from a
 // QuickFIX XML dictionary, or from a FIX Orchestra repository such as those
@@ -22,10 +26,15 @@ import (
 	"os"
 
 	"github.com/sylr/fix2/fix/dictionary/xmldict"
+	"github.com/sylr/fix2/internal/gen/sbe"
 	"github.com/sylr/fix2/internal/gen/tagvalue"
 )
 
-const usage = "Usage: fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]\n"
+const (
+	tagValueUsage = "fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]"
+	sbeUsage      = "fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]"
+	usage         = "Usage:\n  " + tagValueUsage + "\n  " + sbeUsage + "\n"
+)
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stderr))
@@ -41,6 +50,8 @@ func run(args []string, stderr io.Writer) int {
 	switch args[0] {
 	case "tagvalue":
 		return runTagValue(args[1:], stderr)
+	case "sbe":
+		return runSBE(args[1:], stderr)
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stderr, usage)
 		return 0
@@ -76,6 +87,37 @@ func runTagValue(args []string, stderr io.Writer) int {
 	}
 
 	if err := tagvalue.Generate(dict, *pkg, *outDir, tagvalue.Options{Dispatch: *dispatch, Bytes: *raw}); err != nil {
+		fmt.Fprintf(stderr, "fix2gen: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func runSBE(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet("fix2gen sbe", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	schemaPath := fs.String("schema", "", "SBE message schema file (required)")
+	pkg := fs.String("pkg", "", "Go package name for output (required)")
+	outDir := fs.String("out", ".", "output directory")
+	if err := fs.Parse(args); err == flag.ErrHelp {
+		return 0
+	} else if err != nil {
+		return 2
+	}
+
+	if *schemaPath == "" || *pkg == "" || fs.NArg() > 0 {
+		fmt.Fprint(stderr, usage)
+		fs.PrintDefaults()
+		return 1
+	}
+
+	s, err := sbe.LoadFile(*schemaPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "fix2gen: %v\n", err)
+		return 1
+	}
+
+	if err := sbe.Generate(s, *pkg, *outDir); err != nil {
 		fmt.Fprintf(stderr, "fix2gen: %v\n", err)
 		return 1
 	}

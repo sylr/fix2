@@ -1,0 +1,73 @@
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+
+import org.agrona.concurrent.UnsafeBuffer;
+
+import rich.*;
+
+/**
+ * Encodes, with Real Logic's codecs of fix2's rich.xml (or bigrich.xml), the
+ * messages fix2's Go tests encode, and prints them in hexadecimal: the
+ * cross-check of fix2gen sbe against an independent encoder. Its argument is
+ * the schema's byte order, "little" or "big".
+ */
+public class RichCheck {
+    public static void main(String[] args) {
+        ByteOrder order = args[0].equals("big") ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN;
+        UnsafeBuffer buf = new UnsafeBuffer(new byte[4096]);
+        MessageHeaderEncoder h = new MessageHeaderEncoder();
+
+        OrderEncoder o = new OrderEncoder();
+        o.wrapAndApplyHeader(buf, 0, h);
+        h.numGroups(2).numVarDataFields(2);
+        o.id(0x0102).code("ABC").color(Color.Blue).level(Level.High);
+        o.flags().urgent(true).last(true);
+        o.price().mantissa(-12345).exponent((byte) -2);
+        o.stamp().time(1_700_000_000_000_000_000L);
+        TaggedEncoder t = o.tagged();
+        t.kind(Kind.B);
+        t.price().mantissa(42).exponent((byte) 3);
+        t.bits().x(true).y(true);
+        t.note("hi");
+        o.putTriple(-1, 0, Integer.MAX_VALUE);
+        o.optU8((short) 254).optI16((short) -300).optU32(0).optChar((byte) 'z').optFloat(1.5f).optDouble(2.25);
+
+        // Real Logic does not fill a dimension's numGroups and
+        // numVarDataFields: Legs has one group, Fees, and one data, Note.
+        int legsAt = o.limit();
+        OrderEncoder.LegsEncoder legs = o.legsCount(2);
+        buf.putShort(legsAt + 4, (short) 1, order);
+        buf.putShort(legsAt + 6, (short) 1, order);
+        legs.next().leg(1);
+        legs.price().mantissa(100).exponent((byte) -1);
+        legs.feesCount(1).next().amount(-5).putMemo(bytes("fee"), 0, 3);
+        legs.note("first leg");
+        legs.next().leg(2);
+        legs.price().mantissa(PriceEncoder.mantissaNullValue()).exponent((byte) -1);
+        OrderEncoder.LegsEncoder.FeesEncoder fees = legs.feesCount(2);
+        fees.next().amount(OrderEncoder.LegsEncoder.FeesEncoder.amountNullValue()).putMemo(new byte[0], 0, 0);
+        fees.next().amount(7).putMemo(bytes("0123456789"), 0, 10);
+        legs.note("");
+        o.extrasCount(2).next().key(9).next().key(10);
+        o.text("free text");
+        o.putLate(bytes("late"), 0, 4);
+        print("order", buf, MessageHeaderEncoder.ENCODED_LENGTH + o.encodedLength());
+
+        PingEncoder p = new PingEncoder();
+        p.wrapAndApplyHeader(buf, 0, h);
+        print("ping", buf, MessageHeaderEncoder.ENCODED_LENGTH + p.encodedLength());
+    }
+
+    static byte[] bytes(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    static void print(String name, UnsafeBuffer buf, int length) {
+        StringBuilder b = new StringBuilder(name).append(' ');
+        for (int i = 0; i < length; i++) {
+            b.append(String.format("%02x", buf.getByte(i)));
+        }
+        System.out.println(b);
+        buf.setMemory(0, buf.capacity(), (byte) 0);
+    }
+}

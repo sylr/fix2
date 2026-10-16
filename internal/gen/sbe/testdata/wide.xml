@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A schema whose header, dimensions and data lengths are wider than an int
+  may be (64 and 32 bits), whose data has a minimum length, and with an
+  optional field of a required type, its null the primitive's.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+    package="wide" id="3" version="1" byteOrder="littleEndian">
+<types>
+    <composite name="messageHeader">
+        <type name="blockLength" primitiveType="uint64"/>
+        <type name="templateId" primitiveType="uint16"/>
+        <type name="schemaId" primitiveType="uint16"/>
+        <type name="version" primitiveType="uint64"/>
+    </composite>
+    <composite name="groupSizeEncoding">
+        <type name="blockLength" primitiveType="uint64"/>
+        <type name="numInGroup" primitiveType="uint64"/>
+    </composite>
+    <composite name="midGroupSize">
+        <type name="blockLength" primitiveType="uint32"/>
+        <type name="numInGroup" primitiveType="uint32"/>
+    </composite>
+    <composite name="label" description="1 to 8 bytes">
+        <type name="length" primitiveType="uint32" minValue="1" maxValue="8"/>
+        <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+    <type name="u32" primitiveType="uint32"/>
+    <type name="u64" primitiveType="uint64"/>
+</types>
+
+<sbe:message name="Batch" id="1">
+    <field name="Seq" id="1" type="u64" presence="optional"/>
+    <field name="Late" id="2" type="u32" sinceVersion="1"/>
+    <group name="Items" id="3">
+        <field name="Qty" id="4" type="u32"/>
+        <group name="Parts" id="5" dimensionType="midGroupSize">
+            <field name="Part" id="6" type="u32"/>
+        </group>
+        <data name="Tag" id="7" type="label"/>
+    </group>
+    <data name="Name" id="8" type="label"/>
+</sbe:message>
+</sbe:messageSchema>

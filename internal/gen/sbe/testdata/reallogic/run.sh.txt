@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Compiles Real Logic's codecs with the cross-check programs and runs them.
+set -euo pipefail
+F=/tmp/claude-501/fixp
+JAR=$F/m2/uk/co/real-logic/sbe-all/1.33.0/sbe-all-1.33.0.jar
+export JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=$F/jtmp"
+JAVA="nix shell nixpkgs#jdk21 -c"
+OPENS="--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-exports java.base/jdk.internal.misc=ALL-UNNAMED"
+build() { # name schema-dir main
+  rm -rf "$F/rl/classes/$1" && mkdir -p "$F/rl/classes/$1"
+  $JAVA javac -cp "$JAR" -d "$F/rl/classes/$1" $(find "$F/rl/gen/$2" -name '*.java') "$F/rl/$3.java"
+}
+build rich rich RichCheck
+build big big RichCheck
+build fixp fixp FixpCheck
+$JAVA java $OPENS -cp "$JAR:$F/rl/classes/rich" RichCheck little > "$F/rl/rich.hex"
+$JAVA java $OPENS -cp "$JAR:$F/rl/classes/big" RichCheck big > "$F/rl/bigrich.hex"
+$JAVA java $OPENS -cp "$JAR:$F/rl/classes/fixp" FixpCheck > "$F/rl/fixp.hex"
+wc -l "$F/rl/"*.hex

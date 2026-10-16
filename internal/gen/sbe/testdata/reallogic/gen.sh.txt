@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Generates Real Logic's Java codecs for the cross-check schemas.
+set -euo pipefail
+F=/tmp/claude-501/fixp
+REPO=/Users/sylvain/git/fix2/.claude/worktrees/robust-popping-koala
+JAR=$F/m2/uk/co/real-logic/sbe-all/1.33.0/sbe-all-1.33.0.jar
+export JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=$F/jtmp"
+rm -rf "$F/rl/gen" && mkdir -p "$F/rl/gen"
+for s in rich:internal/gen/sbe/testdata/rich.xml big:internal/gen/sbe/testdata/bigrich.xml fixp:fixp/internal/codec/SBEschemaForFIXP.xml examples:internal/gen/sbe/testdata/examples.xml; do
+  out=${s%%:*} path=$REPO/${s#*:}
+  echo "== $path"
+  nix shell nixpkgs#jdk21 -c java -Dsbe.output.dir="$F/rl/gen/$out" -Dsbe.target.language=Java -Dsbe.validation.stop.on.error=true -Dsbe.validation.warnings.fatal=false -jar "$JAR" "$path"
+done
+find "$F/rl/gen" -maxdepth 1 -type d

@@ -29,6 +29,8 @@ the root.
   readers, builders and the dictionary as Go code, from a QuickFIX
   dictionary or an Orchestra repository; `-dispatch` adds a typed handler
   interface, `-bytes` getters of raw values (exact decimal prices, for one).
+  `fix2gen sbe` writes the codecs of a Simple Binary Encoding schema, a
+  struct per message ([docs/sbe.md](docs/sbe.md)).
 - **Sessions** (`fix/session`): initiators and acceptors for FIX 4.0 to 4.4 and
   FIXT 1.1, configured in Go:
   - many sessions per process and per listener, each with its own

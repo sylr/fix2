@@ -1,0 +1,131 @@
+import java.nio.charset.StandardCharsets;
+
+import org.agrona.concurrent.UnsafeBuffer;
+
+import FIXP.*;
+
+/**
+ * Encodes, with Real Logic's codecs of the FIXP schema, every FIXP session
+ * message with fixed values, and prints them in hexadecimal: the fixtures of
+ * fix2's generated FIXP codec. Its values are those of fix2's tests.
+ */
+public class FixpCheck {
+    static final byte[] SESSION = new byte[16];
+    static {
+        for (int i = 0; i < 16; i++) {
+            SESSION[i] = (byte) (0x10 + i);
+        }
+    }
+    static final long TS = 1_700_000_000_123_456_789L;
+
+    public static void main(String[] args) {
+        UnsafeBuffer buf = new UnsafeBuffer(new byte[4096]);
+        MessageHeaderEncoder h = new MessageHeaderEncoder();
+
+        NegotiateEncoder neg = new NegotiateEncoder();
+        neg.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).timestamp(TS).clientFlow(FlowType.Idempotent)
+            .putCredentials(bytes("user\0secret"), 0, 11);
+        print("Negotiate", buf, neg.encodedLength());
+
+        NegotiationResponseEncoder nr = new NegotiationResponseEncoder();
+        nr.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).serverFlow(FlowType.Recoverable)
+            .putCredentials(new byte[0], 0, 0);
+        print("NegotiationResponse", buf, nr.encodedLength());
+
+        NegotiationRejectEncoder nj = new NegotiationRejectEncoder();
+        nj.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).code(NegotiationRejectCode.Credentials)
+            .reason("bad credentials");
+        print("NegotiationReject", buf, nj.encodedLength());
+
+        TopicEncoder tp = new TopicEncoder();
+        tp.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).flow(FlowType.Idempotent).keepaliveInterval(500)
+            .putClassification(bytes("MD"), 0, 2);
+        print("Topic", buf, tp.encodedLength());
+
+        EstablishEncoder est = new EstablishEncoder();
+        est.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).timestamp(TS).keepaliveInterval(1000).nextSeqNo(1)
+            .putCredentials(bytes("user"), 0, 4);
+        print("Establish", buf, est.encodedLength());
+        est.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).timestamp(TS).keepaliveInterval(1000)
+            .nextSeqNo(EstablishEncoder.nextSeqNoNullValue()).putCredentials(new byte[0], 0, 0);
+        print("EstablishNoNextSeqNo", buf, est.encodedLength());
+
+        EstablishmentAckEncoder ack = new EstablishmentAckEncoder();
+        ack.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).keepaliveInterval(2000).nextSeqNo(100);
+        print("EstablishmentAck", buf, ack.encodedLength());
+        ack.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).keepaliveInterval(2000)
+            .nextSeqNo(EstablishmentAckEncoder.nextSeqNoNullValue());
+        print("EstablishmentAckNoNextSeqNo", buf, ack.encodedLength());
+
+        EstablishmentRejectEncoder ej = new EstablishmentRejectEncoder();
+        ej.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).code(EstablishmentRejectCode.KeepaliveInterval)
+            .reason("too short");
+        print("EstablishmentReject", buf, ej.encodedLength());
+
+        SequenceEncoder seq = new SequenceEncoder();
+        seq.wrapAndApplyHeader(buf, 0, h).nextSeqNo(42);
+        print("Sequence", buf, seq.encodedLength());
+
+        ContextEncoder ctx = new ContextEncoder();
+        ctx.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).nextSeqNo(7);
+        print("Context", buf, ctx.encodedLength());
+
+        UnsequencedHeartbeatEncoder hb = new UnsequencedHeartbeatEncoder();
+        hb.wrapAndApplyHeader(buf, 0, h);
+        print("UnsequencedHeartbeat", buf, hb.encodedLength());
+
+        RetransmitRequestEncoder rr = new RetransmitRequestEncoder();
+        rr.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).timestamp(TS).fromSeqNo(10).count(5);
+        print("RetransmitRequest", buf, rr.encodedLength());
+
+        RetransmissionEncoder rt = new RetransmissionEncoder();
+        rt.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).nextSeqNo(10).count(5);
+        print("Retransmission", buf, rt.encodedLength());
+
+        RestransmitRejectEncoder rj = new RestransmitRejectEncoder();
+        rj.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).requestTimestamp(TS).code(RetransmitRejectCode.OutOfRange)
+            .reason("gone");
+        print("RestransmitReject", buf, rj.encodedLength());
+
+        TerminateEncoder te = new TerminateEncoder();
+        te.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).code(TerminationCode.Finished).reason("");
+        print("Terminate", buf, te.encodedLength());
+
+        FinishedSendingEncoder fs = new FinishedSendingEncoder();
+        fs.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).lastSeqNo(99);
+        print("FinishedSending", buf, fs.encodedLength());
+        fs.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16).lastSeqNo(FinishedSendingEncoder.lastSeqNoNullValue());
+        print("FinishedSendingNoLastSeqNo", buf, fs.encodedLength());
+
+        FinishedReceivingEncoder fr = new FinishedReceivingEncoder();
+        fr.wrapAndApplyHeader(buf, 0, h).putSessionId(SESSION, 0, 16);
+        print("FinishedReceiving", buf, fr.encodedLength());
+
+        AppliedEncoder ap = new AppliedEncoder();
+        ap.wrapAndApplyHeader(buf, 0, h).fromSeqNo(1).count(3);
+        print("Applied", buf, ap.encodedLength());
+
+        NotAppliedEncoder na = new NotAppliedEncoder();
+        na.wrapAndApplyHeader(buf, 0, h).fromSeqNo(4).count(6);
+        print("NotApplied", buf, na.encodedLength());
+
+        MessageTemplateEncoder mt = new MessageTemplateEncoder();
+        mt.wrapAndApplyHeader(buf, 0, h).encodingType(0xEB50).effectiveTime(MessageTemplateEncoder.effectiveTimeNullValue())
+            .putVersion(bytes("1.0"), 0, 3).putTemplate(bytes("<xml/>"), 0, 6);
+        print("MessageTemplate", buf, mt.encodedLength());
+    }
+
+    static byte[] bytes(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    static void print(String name, UnsafeBuffer buf, int bodyLength) {
+        int length = MessageHeaderEncoder.ENCODED_LENGTH + bodyLength;
+        StringBuilder b = new StringBuilder(name).append(' ');
+        for (int i = 0; i < length; i++) {
+            b.append(String.format("%02x", buf.getByte(i)));
+        }
+        System.out.println(b);
+        buf.setMemory(0, buf.capacity(), (byte) 0);
+    }
+}

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A schema exercising what fix2gen sbe supports and SBE 1.0's examples do
+  not: nested groups, data in groups, versions, optionals of every kind,
+  constants, sets, references, offsets and padding, header and dimension
+  counters, bounded counts and lengths, arrays. bigrich.xml is the same
+  schema, big-endian.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+    package="rich" id="7" version="2" byteOrder="littleEndian">
+<types>
+    <composite name="messageHeader">
+        <type name="blockLength" primitiveType="uint16"/>
+        <type name="templateId" primitiveType="uint16"/>
+        <type name="schemaId" primitiveType="uint16"/>
+        <type name="version" primitiveType="uint16"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="groupSizeEncoding">
+        <type name="blockLength" primitiveType="uint16"/>
+        <type name="numInGroup" primitiveType="uint16"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="smallGroupSize" description="At most 3 entries, at least 1">
+        <type name="blockLength" primitiveType="uint8"/>
+        <type name="numInGroup" primitiveType="uint8" minValue="1" maxValue="3"/>
+    </composite>
+    <composite name="varString">
+        <type name="length" primitiveType="uint16"/>
+        <type name="varData" primitiveType="uint8" length="0" characterEncoding="UTF-8"/>
+    </composite>
+    <composite name="shortData" description="At most 10 bytes">
+        <type name="length" primitiveType="uint8" maxValue="10"/>
+        <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+
+    <type name="optU8" primitiveType="uint8" presence="optional"/>
+    <type name="optI16" primitiveType="int16" presence="optional" nullValue="0"/>
+    <type name="optU32" primitiveType="uint32" presence="optional"/>
+    <type name="optI64" primitiveType="int64" presence="optional"/>
+    <type name="optFloat" primitiveType="float" presence="optional"/>
+    <type name="optDouble" primitiveType="double" presence="optional" nullValue="-1"/>
+    <type name="optChar" primitiveType="char" presence="optional"/>
+    <type name="code4" primitiveType="char" length="4"/>
+    <type name="triple" primitiveType="int32" length="3"/>
+    <type name="venue" primitiveType="char" presence="constant">XPAR</type>
+    <type name="seven" primitiveType="uint16" presence="constant">7</type>
+    <type name="u16" primitiveType="uint16"/>
+
+    <enum name="Color" encodingType="char">
+        <validValue name="Red">R</validValue>
+        <validValue name="Green">G</validValue>
+        <validValue name="Blue" sinceVersion="1">B</validValue>
+    </enum>
+    <enum name="Level" encodingType="u16">
+        <validValue name="Low">1</validValue>
+        <validValue name="High">1000</validValue>
+    </enum>
+    <set name="Flags" encodingType="uint8">
+        <choice name="Urgent">0</choice>
+        <choice name="Retry">3</choice>
+        <choice name="Last">7</choice>
+    </set>
+    <composite name="Price" description="Decimal with an exponent on the wire">
+        <type name="mantissa" primitiveType="int64" presence="optional"/>
+        <type name="exponent" primitiveType="int8"/>
+    </composite>
+    <composite name="Stamp">
+        <type name="time" primitiveType="uint64"/>
+        <type name="unit" primitiveType="uint8" presence="constant" valueRef="TimeUnit.nanosecond"/>
+    </composite>
+    <enum name="TimeUnit" encodingType="uint8">
+        <validValue name="second">0</validValue>
+        <validValue name="nanosecond">9</validValue>
+    </enum>
+    <composite name="Tagged" description="Inline types and a reference, aligned">
+        <enum name="kind" encodingType="uint8">
+            <validValue name="A">1</validValue>
+            <validValue name="B">2</validValue>
+        </enum>
+        <ref name="price" type="Price" offset="2"/>
+        <set name="bits" encodingType="uint16" offset="12">
+            <choice name="x">0</choice>
+            <choice name="y">15</choice>
+        </set>
+        <type name="note" primitiveType="char" length="2" sinceVersion="1"/>
+    </composite>
+</types>
+
+<sbe:message name="Order" id="1" blockLength="88" description="Every kind of field">
+    <field name="Id" id="1" type="u16"/>
+    <field name="Code" id="2" type="code4"/>
+    <field name="Color" id="3" type="Color"/>
+    <field name="Level" id="4" type="Level" presence="optional"/>
+    <field name="Flags" id="5" type="Flags"/>
+    <field name="Price" id="6" type="Price" offset="16"/>
+    <field name="Stamp" id="7" type="Stamp"/>
+    <field name="Tagged" id="8" type="Tagged"/>
+    <field name="Triple" id="9" type="triple"/>
+    <field name="OptU8" id="10" type="optU8"/>
+    <field name="OptI16" id="11" type="optI16"/>
+    <field name="OptU32" id="12" type="optU32"/>
+    <field name="OptChar" id="13" type="optChar"/>
+    <field name="Venue" id="14" type="venue"/>
+    <field name="Seven" id="15" type="seven"/>
+    <field name="Unit" id="16" type="TimeUnit" presence="constant" valueRef="TimeUnit.second"/>
+    <field name="OptFloat" id="17" type="optFloat" sinceVersion="1"/>
+    <field name="OptDouble" id="18" type="optDouble" sinceVersion="2"/>
+    <group name="Legs" id="20">
+        <field name="Leg" id="21" type="u16"/>
+        <field name="Price" id="22" type="Price"/>
+        <group name="Fees" id="23" dimensionType="smallGroupSize">
+            <field name="Amount" id="24" type="optI64"/>
+            <data name="Memo" id="25" type="shortData"/>
+        </group>
+        <data name="Note" id="26" type="varString"/>
+    </group>
+    <group name="Extras" id="30" sinceVersion="1">
+        <field name="Key" id="31" type="u16"/>
+    </group>
+    <data name="Text" id="40" type="varString"/>
+    <data name="Late" id="41" type="shortData" sinceVersion="2"/>
+</sbe:message>
+
+<sbe:message name="Ping" id="2" description="No field at all"/>
+</sbe:messageSchema>
