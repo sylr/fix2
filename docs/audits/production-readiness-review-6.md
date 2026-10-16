@@ -23,7 +23,7 @@ The [fifth report](production-readiness-review-5.md), including its review adden
 
 ### A6-01 — P3: direct peer Logout releases later-numbered buffered orders
 
-**Fixed in:** [`2544dc3`](https://github.com/sylr/fix2/commit/2544dc3f744862ac56d0dfde08e5acba207a2eeb).
+**Fixed in:** [`2544dc3`](https://github.com/sylr/fix2/commit/2544dc3f744862ac56d0dfde08e5acba207a2eeb), [`a2e8e42`](https://github.com/sylr/fix2/commit/a2e8e421b204c7f2a4b7ca78f73faf7cfa4bb74f) (a malformed message after the Logout ignored too).
 
 **Confidence: high for the observed inconsistency; independently reproduced and cross-reviewed.**
 
@@ -57,7 +57,7 @@ The finding was then confirmed in the source, and this pass agrees with P3.
 
 ### A6-01 widened: the answer to our own Logout has the same gap
 
-**Fixed in:** [`2544dc3`](https://github.com/sylr/fix2/commit/2544dc3f744862ac56d0dfde08e5acba207a2eeb).
+**Fixed in:** [`2544dc3`](https://github.com/sylr/fix2/commit/2544dc3f744862ac56d0dfde08e5acba207a2eeb), [`a2e8e42`](https://github.com/sylr/fix2/commit/a2e8e421b204c7f2a4b7ca78f73faf7cfa4bb74f) (a malformed message after the Logout ignored too).
 
 The drain in [`advanceLocked`](../../session/protocol.go#L792) stops only when the phase changes. Answering our own Logout does not change the phase: [the answer branch](../../session/protocol.go#L1183) is already in `phaseLogoutSent`, and it calls `advanceLocked` and then `closeAfterFlushLocked`, which sets `closing` but leaves the phase as it was.
 
