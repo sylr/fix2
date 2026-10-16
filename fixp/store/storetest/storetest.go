@@ -189,13 +189,19 @@ func testFinalize(t *testing.T, s store.Store) {
 	must(t, err)
 	t1 := time.Unix(1_700_000_200, 0).UTC()
 	out := store.Finish{Finishing: true, LastSeqNo: 9}
-	must(t, ss.SetFinish(ctx, out, store.Finish{}, t1))
+	must(t, ss.SetFinish(ctx, out, store.Finish{}))
 	if st := ss.State(); st.OutboundFinish != out || !st.FinalizedAt.IsZero() {
 		t.Fatalf("finishing: %+v", st)
 	}
 	out.Finished = true
 	in := store.Finish{Finishing: true, LastSeqNo: 4, Finished: true}
-	must(t, ss.SetFinish(ctx, out, in, t1))
+	must(t, ss.SetFinish(ctx, out, in))
+	// Both finished, not finalized: that is the engine's to say.
+	if st := ss.State(); st.OutboundFinish != out || st.InboundFinish != in || !st.FinalizedAt.IsZero() {
+		t.Fatalf("finished: %+v", st)
+	}
+	must(t, ss.Finalize(ctx, t1))
+	must(t, ss.Finalize(ctx, t1.Add(time.Hour)))
 	if st := ss.State(); !st.FinalizedAt.Equal(t1) || st.Retired {
 		t.Fatalf("finalized: %+v", st)
 	}
@@ -281,7 +287,7 @@ func testReopen(t *testing.T, s store.Store, reopen func(t *testing.T, s store.S
 	must(t, ss.Append(ctx, 1, []byte("msg-1")))
 	must(t, ss.Append(ctx, 2, []byte("msg-2")))
 	must(t, ss.SetInbound(ctx, 3))
-	must(t, ss.SetFinish(ctx, store.Finish{Finishing: true, LastSeqNo: 2}, store.Finish{Finishing: true, LastSeqNo: 3}, time.Time{}))
+	must(t, ss.SetFinish(ctx, store.Finish{Finishing: true, LastSeqNo: 2}, store.Finish{Finishing: true, LastSeqNo: 3}))
 	must(t, ss.Sync(ctx))
 	want := ss.State()
 
@@ -289,7 +295,8 @@ func testReopen(t *testing.T, s store.Store, reopen func(t *testing.T, s store.S
 	fin, err := s.Create(ctx, meta(store.Server))
 	must(t, err)
 	done := store.Finish{Finishing: true, Finished: true}
-	must(t, fin.SetFinish(ctx, done, done, time.Unix(1_700_000_500, 0).UTC()))
+	must(t, fin.SetFinish(ctx, done, done))
+	must(t, fin.Finalize(ctx, time.Unix(1_700_000_500, 0).UTC()))
 	must(t, fin.Sync(ctx))
 	ret, err := s.Create(ctx, meta(store.Server))
 	must(t, err)

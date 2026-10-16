@@ -107,6 +107,16 @@ func (c *Client) Run(ctx context.Context) error {
 		if s.State() == StateFinalized {
 			return nil
 		}
+		// Both flows finished, the Terminate exchange lost, the server
+		// retired it: the session is over.
+		var rej *fixp.EstablishmentRejectedError
+		if out, in := s.finishes(); out.Finished && in.Finished && errors.As(err, &rej) && rej.Code == fixp.EstablishmentUnnegotiated {
+			s.finalize()
+			if s.State() == StateFinalized {
+				return nil
+			}
+			return s.Err()
+		}
 		var re *retryError
 		if err != nil && !errors.As(err, &re) && ctx.Err() == nil {
 			s.logWarn("stopping", "err", err)

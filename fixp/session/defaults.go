@@ -102,6 +102,9 @@ func (c Config) resolve() (Config, error) {
 	if c.MaxFrameLength < 256 {
 		return c, &ConfigError{"MaxFrameLength", "at least 256 bytes"}
 	}
+	if c.MaxStoredMessages < 0 {
+		return c, &ConfigError{"MaxStoredMessages", "negative"}
+	}
 	if c.MaxReasonLength > 65534 {
 		return c, &ConfigError{"MaxReasonLength", "65534 bytes at most, what a reason's uint16 length holds"}
 	}

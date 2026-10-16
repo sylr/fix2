@@ -33,6 +33,25 @@ type entry struct {
 	// answer marks an answer to a request of the peer's, counted in its
 	// connection's answers until written.
 	answer bool
+	// finishing marks our FinishedSending; finRecv our FinishedReceiving.
+	finishing, finRecv bool
+}
+
+// pushFinish queues our FinishedSending (finRecv false) or
+// FinishedReceiving (finRecv true) on connection c.
+func (q *queue) pushFinish(c *conn, frame []byte, finRecv bool) {
+	q.mu.Lock()
+	q.entries = append(q.entries, entry{frame: frame, kind: entryEndsNumbering, conn: c, finishing: !finRecv, finRecv: finRecv})
+	q.mu.Unlock()
+	notify(q.signal)
+}
+
+// wakeRoom wakes every Send waiting for room, to look again.
+func (q *queue) wakeRoom() {
+	q.mu.Lock()
+	close(q.room)
+	q.room = make(chan struct{})
+	q.mu.Unlock()
 }
 
 // queue holds the frames a session's writer is to write, in order.

@@ -156,9 +156,11 @@ type Session interface {
 	// SetInbound records the inbound position (State.Inbound). ErrSequence
 	// if it is below the current one.
 	SetInbound(ctx context.Context, seq uint64) error
-	// SetFinish records the flows' finalization, atomically, and finalizes
-	// the session at t once both are Finished.
-	SetFinish(ctx context.Context, outbound, inbound Finish, t time.Time) error
+	// SetFinish records the flows' finalization, both, atomically.
+	SetFinish(ctx context.Context, outbound, inbound Finish) error
+	// Finalize finalizes the session at t: its flows finished, the peer
+	// told, the session is over. Its ID stays refused until forgotten.
+	Finalize(ctx context.Context, t time.Time) error
 	// Retire finalizes the session at t, its flows as they are.
 	Retire(ctx context.Context, t time.Time) error
 

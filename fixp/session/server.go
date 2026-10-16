@@ -65,18 +65,23 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		}
 		s := newSession(cfg.Config, store.Server)
 		s.adopt(st)
+		srv.track(s)
 		srv.sessions[state.ID] = s
 	}
 	// Once loaded: a retirement due already runs at once, and deletes from
 	// the map, which is not iterated then.
-	var unestablished []*Session
+	var idles []*Session
 	for _, s := range srv.sessions {
-		if s.st.State().EstablishedAt.IsZero() {
-			unestablished = append(unestablished, s)
+		if idle(s, s.st) {
+			idles = append(idles, s)
 		}
 	}
-	for _, s := range unestablished {
-		srv.scheduleRetirement(s, s.st.State().NegotiatedAt)
+	for _, s := range idles {
+		from := s.st.State().NegotiatedAt
+		if !s.st.State().EstablishedAt.IsZero() {
+			from = time.Now() // finished, unbound since the restart
+		}
+		srv.scheduleRetirement(s, from)
 	}
 	return srv, nil
 }
@@ -223,10 +228,10 @@ func (srv *Server) retireSession(s *Session, reason string, automatic bool) erro
 	case s.state == StateFinalized || st == nil:
 		s.mu.Unlock()
 		return ErrNoSession
-	case automatic && s.state == StateEstablishing && st.State().EstablishedAt.IsZero():
+	case automatic && s.state == StateEstablishing && idle(s, st):
 		s.mu.Unlock()
 		return errEstablishing
-	case automatic && (s.state != StateUnbound || !st.State().EstablishedAt.IsZero()):
+	case automatic && (s.state != StateUnbound || !idle(s, st)):
 		s.mu.Unlock()
 		return nil
 	}
@@ -269,13 +274,45 @@ func (srv *Server) retireSession(s *Session, reason string, automatic bool) erro
 	return nil
 }
 
+// idle reports, under s.mu, whether s is retired automatically when
+// unbound for the UnestablishedTimeout: never established, or both flows
+// finished without the Terminate exchange that finalizes it.
+func idle(s *Session, st store.Session) bool {
+	return st.State().EstablishedAt.IsZero() || s.outFin.Finished && s.inFin.Finished
+}
+
+// track hooks the server to s's finalization and unbinding.
+func (srv *Server) track(s *Session) {
+	s.onFinalized = func(s *Session) {
+		srv.mu.Lock()
+		if srv.sessions[s.ID()] == s {
+			delete(srv.sessions, s.ID())
+		}
+		if t := srv.retire[s]; t != nil {
+			t.Stop()
+			delete(srv.retire, s)
+		}
+		srv.mu.Unlock()
+		s.closeStore()
+	}
+	s.onUnbound = func(s *Session) {
+		if out, in := s.finishes(); out.Finished && in.Finished {
+			srv.scheduleRetirement(s, time.Now())
+		}
+	}
+}
+
 // scheduleRetirement retires s if it is not established within the
-// UnestablishedTimeout of its negotiation.
+// UnestablishedTimeout of its negotiation, or of the end of its last
+// connection, both its flows finished.
 func (srv *Server) scheduleRetirement(s *Session, negotiatedAt time.Time) {
 	d := time.Until(negotiatedAt.Add(srv.cfg.UnestablishedTimeout))
 	// Published before the callback can retire s, which deletes it.
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
+	if t := srv.retire[s]; t != nil {
+		t.Stop() // replaced
+	}
 	srv.retire[s] = time.AfterFunc(max(d, 0), func() {
 		if errors.Is(srv.retireSession(s, "never established", true), errEstablishing) {
 			// Retired later if the establishment fails.
@@ -497,6 +534,7 @@ func (srv *Server) negotiate(ctx context.Context, t transport.Conn, msg []byte) 
 	}
 	s := newSession(srv.cfg.Config, store.Server)
 	s.adopt(st)
+	srv.track(s)
 	srv.sessions[id] = s
 	srv.mu.Unlock()
 	srv.scheduleRetirement(s, now)

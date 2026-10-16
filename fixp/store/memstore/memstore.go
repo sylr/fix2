@@ -235,15 +235,22 @@ func (ss *session) SetInbound(ctx context.Context, seq uint64) error {
 	return nil
 }
 
-func (ss *session) SetFinish(ctx context.Context, outbound, inbound store.Finish, t time.Time) error {
+func (ss *session) SetFinish(ctx context.Context, outbound, inbound store.Finish) error {
 	if err := ss.lock(ctx); err != nil {
 		return err
 	}
 	defer ss.s.mu.Unlock()
-	st := &ss.r.state
-	st.OutboundFinish, st.InboundFinish = outbound, inbound
-	if outbound.Finished && inbound.Finished && st.FinalizedAt.IsZero() {
-		st.FinalizedAt = t
+	ss.r.state.OutboundFinish, ss.r.state.InboundFinish = outbound, inbound
+	return nil
+}
+
+func (ss *session) Finalize(ctx context.Context, t time.Time) error {
+	if err := ss.lock(ctx); err != nil {
+		return err
+	}
+	defer ss.s.mu.Unlock()
+	if ss.r.state.FinalizedAt.IsZero() {
+		ss.r.state.FinalizedAt = t
 	}
 	return nil
 }

@@ -54,6 +54,9 @@ const (
 	StateEstablished State = "established"
 	// StateTerminating: a Terminate sent, its answer awaited.
 	StateTerminating State = "terminating"
+	// StateFinalizing: both flows finished and the Terminate exchanged, the
+	// finalization being recorded: no establishment any more.
+	StateFinalizing State = "finalizing"
 	// StateFinalized: both flows finished, or the session retired; it is
 	// over.
 	StateFinalized State = "finalized"
@@ -120,10 +123,20 @@ type Session struct {
 	st      store.Session // nil until negotiated
 	conn    *conn
 	err     error
+	// outFin and inFin are the flows' finalization, as stored, changed
+	// under finishMu.
+	outFin, inFin store.Finish
+
+	finishMu sync.Mutex
+	// onFinalized and onUnbound, if set, tell the session's Server.
+	onFinalized, onUnbound func(*Session)
 
 	// inbound is the store's State.Inbound, owned by the reader of the
 	// session's connection, of which there is one at a time.
 	inbound uint64
+	// evicted is the sequence number messages are evicted below, the
+	// writer's, of which there is one at a time.
+	evicted uint64
 }
 
 func newSession(cfg Config, role store.Role) *Session {
@@ -153,6 +166,7 @@ func (s *Session) adopt(st store.Session) {
 		s.out, s.in = state.ServerFlow, state.ClientFlow
 	}
 	s.state = StateUnbound
+	s.outFin, s.inFin = state.OutboundFinish, state.InboundFinish
 	s.mu.Unlock()
 	s.inbound = state.Inbound
 	s.q.setNext(state.NextOutbound)
@@ -302,6 +316,10 @@ func (s *Session) send(ctx context.Context, f []byte) (uint64, error) {
 		return 0, fmt.Errorf("%w: a frame of %d bytes, MaxPendingBytes %d", ErrTooLarge, len(f), s.cfg.MaxPendingBytes)
 	}
 	for {
+		// Finishing, Send waits no more: Finish wakes it.
+		if s.outFinishing() {
+			return 0, fmt.Errorf("%w: finishing", fixp.ErrNoFlow)
+		}
 		// The assignment is taken as the queue's room is: a callback
 		// never waits for it, another Send waits as long as its ctx.
 		if cb {
@@ -318,6 +336,12 @@ func (s *Session) send(ctx context.Context, f []byte) (uint64, error) {
 			case <-s.done:
 				return 0, ErrStopped
 			}
+		}
+		// Again under the assignment, which Finish holds: finishing since
+		// the check above, no room will come.
+		if s.outFinishing() {
+			<-s.assign
+			return 0, fmt.Errorf("%w: finishing", fixp.ErrNoFlow)
 		}
 		ok, room := s.q.hasRoom(len(f), s.cfg.MaxPendingMessages, s.cfg.MaxPendingBytes)
 		if ok {
@@ -359,10 +383,14 @@ func (s *Session) sendInternal(f []byte) (uint64, error) {
 // s.assign.
 func (s *Session) enqueue(f []byte) (uint64, error) {
 	s.mu.Lock()
-	state, out, st := s.state, s.out, s.st
+	state, out, st, finishing := s.state, s.out, s.st, s.outFin.Finishing
 	s.mu.Unlock()
-	if state == StateStopped || state == StateFinalized {
+	switch {
+	case state == StateStopped || state == StateFinalized:
 		return 0, ErrStopped
+	case finishing:
+		// FinishedSending is out, or queued: nothing after (§4.7, §6.3).
+		return 0, fmt.Errorf("%w: finishing", fixp.ErrNoFlow)
 	}
 	var seq uint64
 	if out.Sequenced() {
@@ -405,6 +433,34 @@ func (s *Session) syncTo(seq uint64) error {
 	return nil
 }
 
+// retain evicts the messages of a Recoverable flow written before the last
+// MaxStoredMessages, once a tenth of it more were written: the writer's,
+// written being the highest sequence number out of the queue.
+func (s *Session) retain(written uint64) {
+	n := uint64(s.cfg.MaxStoredMessages)
+	if n == 0 || written <= n {
+		return
+	}
+	if out, _ := s.Flows(); out != fixp.Recoverable {
+		return
+	}
+	below := written - n + 1
+	if below < s.evicted+max(1, n/10) {
+		return
+	}
+	s.mu.Lock()
+	st := s.st
+	s.mu.Unlock()
+	ctx, cancel := s.storeCtx()
+	defer cancel()
+	if err := st.Evict(ctx, below); err != nil {
+		// Kept longer: a retention target, not a durability promise.
+		s.logWarn("evicting stored messages", "below", below, "err", err)
+		return
+	}
+	s.evicted = below
+}
+
 // setInbound records the inbound position, durably if sync.
 func (s *Session) setInbound(seq uint64, sync bool) error {
 	s.mu.Lock()
@@ -444,14 +500,6 @@ func (s *Session) Terminate(ctx context.Context, reason string) error {
 	s.mu.Unlock()
 	c.terminate(reason)
 	return nil
-}
-
-// Finish finishes our flow: FinishedSending, stored, then repeated until
-// the peer's FinishedReceiving (§4.7). Send fails after it. Finish returns
-// once FinishedSending is stored and queued, without waiting for the
-// answer: Handler.OnFinalized tells when both flows are finished. (M7)
-func (s *Session) Finish(ctx context.Context) error {
-	return errors.New("fixp/session: Finish is not supported yet")
 }
 
 // Done is closed once the session is finalized or stopped.
@@ -518,25 +566,39 @@ func (s *Session) run(ctx context.Context, c *conn, reason string) {
 	// already or not.
 	stop := context.AfterFunc(ctx, func() { s.Terminate(context.Background(), reason) })
 	defer stop()
-	s.stats.Establishments.Add(1)
+	c.number = s.stats.Establishments.Add(1)
 	s.logInfo("established", "remote", c.t.RemoteAddr().String())
 	s.handler.OnEstablished(s.cbCtx, s)
 	go c.writeLoop()
-	if err := c.startRecovery(); err != nil {
+	err := c.startRecovery()
+	if err == nil {
+		err = c.startFinish()
+	}
+	if err != nil {
 		c.failOn(err)
 	} else {
 		c.readLoop()
 	}
 	c.waitWriter()
 	c.close(nil)
-	err := c.result()
+	err = c.result()
+	finished := c.finishedExchange()
 	s.mu.Lock()
 	s.conn = nil
 	if s.state == StateEstablished || s.state == StateTerminating {
 		s.state = StateUnbound
+		if finished {
+			// Never unbound for another connection: it is over.
+			s.state = StateFinalizing
+		}
 	}
 	s.mu.Unlock()
 	s.logInfo("unbound", "err", err)
 	s.handler.OnUnbound(s.cbCtx, s, err)
 	close(c.unbound)
+	if finished {
+		s.finalize()
+	} else if s.onUnbound != nil {
+		s.onUnbound(s)
+	}
 }

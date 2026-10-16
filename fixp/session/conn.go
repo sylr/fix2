@@ -26,6 +26,15 @@ type conn struct {
 	// peerKeepalive is the peer's interval: its silence beyond it, times
 	// the leniency, ends the connection.
 	peerKeepalive time.Duration
+	// number numbers the session's connections, from 1.
+	number uint64
+	// finSent is set once our FinishedSending is written on this
+	// connection, the writer's: only then is it the heartbeat, which would
+	// overtake messages queued before it otherwise.
+	finSent bool
+	// finRecvQueued is set while a FinishedReceiving answer is queued and
+	// not written: repetitions of the peer's FinishedSending share it.
+	finRecvQueued atomic.Bool
 
 	closing    chan struct{} // closed once the connection is closing
 	closeOnce  sync.Once
@@ -40,9 +49,11 @@ type conn struct {
 	// ours is our Terminate, queued or written; peers the peer's, when it
 	// terminated first.
 	ours, peers *fixp.TerminatedError
-	// written is set once our graceful Terminate is written: what follows
-	// is ignored, but the answer.
-	written bool
+	// written is set as our graceful Terminate is being written: what
+	// follows is ignored, but the answer; sent once its Write returned;
+	// answered once the answer came, the connection closing when sent
+	// (closeWhenSent).
+	written, sent, answered, closeWhenSent bool
 	// cause is the error that closed the connection, if any.
 	cause error
 
@@ -59,6 +70,10 @@ type conn struct {
 	// own: an earlier one ending late leaves the next in place.
 	retransmitting atomic.Uint64
 	jobs           atomic.Uint64
+
+	// The reader's finalization: the peer's FinishedSending received, then
+	// answered; our final Terminate sent.
+	peerFinishing, peerAnswered, finalTerminate bool
 	// answers counts the answers to the peer's requests queued and not
 	// yet written: a peer asking faster than it reads is cut off.
 	answers atomic.Int64
@@ -207,11 +222,16 @@ func (c *conn) takeUrgent() []byte {
 }
 
 // write writes a frame, bounded by the write timeout.
-func (c *conn) write(f []byte) error {
+func (c *conn) write(f []byte) error { return c.writeSeq(f, 0, false) }
+
+// writeSeq writes a frame, an application message's of sequence number
+// seq for the observer.
+func (c *conn) writeSeq(f []byte, seq uint64, retransmission bool) error {
 	c.t.SetWriteDeadline(time.Now().Add(c.s.cfg.WriteTimeout))
 	_, err := c.t.Write(f)
 	if err == nil {
 		c.s.stats.BytesSent.Add(uint64(len(f)))
+		c.observeOut(f, seq, retransmission)
 	}
 	return err
 }
@@ -249,7 +269,18 @@ func (c *conn) writeLoop() {
 				}
 				if e.kind == entryTerminate {
 					terminated = true
+					c.mu.Lock()
+					c.sent = true
+					closeNow := c.closeWhenSent
+					c.mu.Unlock()
+					if closeNow {
+						c.close(nil) // answered while we wrote it
+						return
+					}
 					c.closeAfter(ka)
+				}
+				if e.finishing {
+					c.finSent = true // the heartbeat may be FinishedSending now
 				}
 				idle.Reset(ka)
 				continue
@@ -280,6 +311,9 @@ func (c *conn) writeEntry(e entry) error {
 	if e.answer {
 		defer c.answers.Add(-1)
 	}
+	if e.finRecv {
+		defer c.finRecvQueued.Store(false)
+	}
 	switch e.kind {
 	case entryRetransmit:
 		return c.retransmit(e.job)
@@ -301,6 +335,7 @@ func (c *conn) writeEntry(e entry) error {
 		// was sent (the write may fail, the connection ending).
 		if e.seq > s.written.Load() {
 			s.written.Store(e.seq) // the writer's alone
+			s.retain(e.seq)
 		}
 		if c.outNext != e.seq {
 			if err := c.write(sequenceFrame(e.seq)); err != nil {
@@ -308,7 +343,7 @@ func (c *conn) writeEntry(e entry) error {
 			}
 		}
 	}
-	if err := c.write(e.frame); err != nil {
+	if err := c.writeSeq(e.frame, e.seq, false); err != nil {
 		return err
 	}
 	if e.seq != 0 {
@@ -324,18 +359,23 @@ func (c *conn) heartbeat() error {
 	s := c.s
 	var f []byte
 	var next uint64
-	if out, _ := s.Flows(); out.Sequenced() {
+	fin, _ := s.finishes()
+	switch out, _ := s.Flows(); {
+	case c.finSent || fin.Finished:
+		// Finishing, or finished and waiting for the peer's flow: the
+		// heartbeat is FinishedSending (§4.7.1, §7.5.2), once the first
+		// is out: before, it would overtake what Send queued before it.
+		f = s.finishedSendingFrame()
+	case out.Sequenced():
 		next = s.q.nextToWrite()
 		f = sequenceFrame(next)
-	} else {
+	default:
 		f = heartbeatFrame()
 	}
 	if err := c.write(f); err != nil {
 		return err
 	}
-	if next != 0 {
-		c.outNext = next
-	}
+	c.outNext = next
 	s.stats.HeartbeatsSent.Add(1)
 	return nil
 }
@@ -391,6 +431,7 @@ func (c *conn) readLoop() {
 			return
 		}
 		s.stats.BytesReceived.Add(uint64(sofh.HeaderLen + len(msg)))
+		c.observeIn(enc, msg)
 		if err := c.handle(enc, msg, time.Now()); err != nil {
 			c.failOn(err)
 			return
@@ -425,7 +466,23 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 	if c.terminating() {
 		// Waiting for the answer to our Terminate: the rest is ignored.
 		if kind == codec.Session && h.TemplateId == codec.TerminateTemplateID {
-			c.close(nil)
+			// The answer, if it is one: of this session, well-formed.
+			if err := c.term.DecodeBody(h, body); err != nil || c.term.SessionId != c.s.ID() {
+				c.close(nil)
+				return errStop
+			}
+			// Ours may still be on its way, its Write not returned:
+			// closing now would cut it, the peer seeing only EOF.
+			c.mu.Lock()
+			c.answered = true
+			sent := c.sent
+			if !sent {
+				c.closeWhenSent = true
+			}
+			c.mu.Unlock()
+			if sent {
+				c.close(nil)
+			}
 			return errStop
 		}
 		return nil
@@ -470,8 +527,10 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 	case codec.RestransmitRejectTemplateID:
 		c.inNext = 0
 		return c.onRetransmitReject(h, body)
-	case codec.FinishedSendingTemplateID, codec.FinishedReceivingTemplateID:
-		return c.onFinish(h)
+	case codec.FinishedSendingTemplateID:
+		return c.onFinishedSending(h, body)
+	case codec.FinishedReceivingTemplateID:
+		return c.onFinishedReceiving(h, body)
 	}
 	return protocolf("unexpected session message, template %d", h.TemplateId)
 }
@@ -492,9 +551,12 @@ func (c *conn) onSequence(next uint64) error {
 	if expected == 0 {
 		expected = c.highestKnown() + 1
 	}
+	_, fin := s.finishes()
 	switch {
 	case next < expected:
 		return protocolf("Sequence %d below the next sequence number expected, %d", next, expected)
+	case fin.Finishing && next > fin.LastSeqNo+1:
+		return protocolf("Sequence %d beyond FinishedSending's LastSeqNo %d", next, fin.LastSeqNo)
 	case next > expected:
 		c.inNext = next
 		return c.gap(expected, next)
@@ -512,12 +574,19 @@ func (c *conn) onApplication(h codec.MessageHeader, msg, body []byte, received t
 	}
 	inb := Inbound{Header: readHeader(msg), Received: received}
 	s.stats.MessagesReceived.Add(1)
+	_, fin := s.finishes()
 	if !in.Sequenced() {
+		if fin.Finishing {
+			return protocolf("application message after FinishedSending")
+		}
 		return c.deliver(h, msg, body, inb)
 	}
 	if c.rec.batch {
 		inb.Seq, inb.Retransmission = c.rec.batchNext, true
 		c.rec.batchNext++
+		if fin.Finishing && inb.Seq > fin.LastSeqNo {
+			return protocolf("retransmitted message %d beyond FinishedSending's LastSeqNo %d", inb.Seq, fin.LastSeqNo)
+		}
 		return c.onRecoverable(h, msg, body, inb)
 	}
 	if c.inNext == 0 {
@@ -525,6 +594,9 @@ func (c *conn) onApplication(h codec.MessageHeader, msg, body []byte, received t
 	}
 	inb.Seq = c.inNext
 	c.inNext++
+	if fin.Finishing && inb.Seq > fin.LastSeqNo {
+		return protocolf("application message %d after FinishedSending's LastSeqNo %d", inb.Seq, fin.LastSeqNo)
+	}
 	if in == fixp.Recoverable {
 		return c.onRecoverable(h, msg, body, inb)
 	}
@@ -606,11 +678,6 @@ func (c *conn) startRecovery() error {
 // errUnsupported is what M5 answers to what M7 implements.
 func errUnsupported(what string) error {
 	return protocolf("%s is not supported yet", what)
-}
-
-// onFinish handles finalization. (M7)
-func (c *conn) onFinish(h codec.MessageHeader) error {
-	return errUnsupported("finalization")
 }
 
 // waitWriter waits for the writer to end, closing the connection if it

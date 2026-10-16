@@ -138,7 +138,16 @@ func (c *conn) onRecoverable(h codec.MessageHeader, msg, body []byte, inb Inboun
 			c.inNext = 0
 		}
 	}
-	return c.recover()
+	return c.progress()
+}
+
+// progress asks for what is still missing, and answers the peer's
+// FinishedSending once nothing is.
+func (c *conn) progress() error {
+	if err := c.recover(); err != nil {
+		return err
+	}
+	return c.completePeerFlow()
 }
 
 // deliverRecoverable delivers the next message, and records it delivered
@@ -265,7 +274,7 @@ func (c *conn) onRetransmitReject(h codec.MessageHeader, body []byte) error {
 		// InvalidSession, our request carrying our own ID, or unknown.
 		return protocolf("RetransmitReject code %d: %s", rj.Code, reason)
 	}
-	return c.recover()
+	return c.progress()
 }
 
 // notApplied reports the peer's messages from to to, never received on an
@@ -277,13 +286,18 @@ func (c *conn) notApplied(from, to uint64) error {
 	if to-from+1 > math.MaxUint32 {
 		return protocolf("a gap of %d messages, from %d", to-from+1, from)
 	}
-	if out, _ := s.Flows(); out.Sequenced() {
+	// Our flow finishing, no application message follows its
+	// FinishedSending: the gap goes unreported to the peer, as on an
+	// unsequenced return flow.
+	if out, _ := s.Flows(); out.Sequenced() && !s.outFinishing() {
 		_, err := s.sendInternal(mustFrame(&codec.NotApplied{FromSeqNo: from, Count: uint32(to - from + 1)}))
 		switch {
 		case errors.Is(err, errInternalFull):
 			// Not reported, so not passed: the next establishment
 			// finds the gap again.
 			return protocolf("gaps faster than NotApplied can be written")
+		case errors.Is(err, fixp.ErrNoFlow):
+			// Finish won the assignment meanwhile: unreported, as above.
 		case err != nil:
 			return errHalted
 		}
@@ -396,7 +410,7 @@ func (c *conn) retransmit(j retransmitJob) error {
 			// one: before this Write returns, but not before the rest.
 			c.retransmitting.CompareAndSwap(j.id, 0)
 		}
-		if err := c.write(buf); err != nil {
+		if err := c.writeSeq(buf, seq, true); err != nil {
 			return errWrite{err}
 		}
 		s.stats.MessagesRetransmitted.Add(1)

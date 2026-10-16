@@ -266,24 +266,37 @@ no longer valid, nor its messages recoverable. The standard also lets the
 side that started finalization terminate after one FinishedReceiving
 (§4.7.2); see [the contradictions](#where-the-standard-contradicts-itself).
 
-- `Session.Finish` sends FinishedSending, with `LastSeqNo` on a
-  Recoverable or Idempotent flow and without on an Unsequenced or None
-  one, and repeats it as the heartbeat until FinishedReceiving comes
-  (§4.7.1, §7.5.2). Meanwhile the engine still answers
-  RetransmitRequests (§7.5.5).
+- `Session.Finish` sends FinishedSending, after every message `Send`
+  accepted, with `LastSeqNo` on a Recoverable or Idempotent flow and
+  without on an Unsequenced or None one; `Send` fails after it. The
+  engine sends it again on every establishment until FinishedReceiving
+  comes, and it is the heartbeat until the session terminates (§4.7.1,
+  §7.5.2). Meanwhile the engine still answers RetransmitRequests (§7.5.5);
+  gaps it finds on the peer's flow then go unreported, no application
+  message following FinishedSending.
 - On the peer's FinishedSending, the engine first completes the flow:
   RetransmitRequest up to `LastSeqNo` on a Recoverable flow, NotApplied for
   a gap on an Idempotent one (§4.7.1, §7.5.3). It then tells the handler,
-  which may send its last messages, and answers FinishedReceiving.
-- After its FinishedReceiving, the engine sends no application message
-  (§6.3), and sends its own FinishedSending at once if it has not yet.
-- Once both sides have sent and received FinishedReceiving, the side that
-  started finalization sends Terminate `Finished` (§4.7.2, §7.5.1); the
-  other terminates after one keepalive interval without it.
+  which may send its last messages, or refuse (the connection terminated,
+  the flow unfinished); then it finishes its own flow, behind every
+  message accepted, and answers FinishedReceiving: nothing of its follows
+  (§6.3). A FinishedSending again is answered again. A `LastSeqNo` missing
+  on a sequenced flow, changed, or below messages received is a protocol
+  violation, as is an application message after it, or FinishedReceiving
+  for a flow not finishing.
+- Once both sides have sent and received FinishedReceiving, either
+  terminates (§7.5.1): the engine sends Terminate `Finished` at once, and
+  two Terminates crossing each take the other as its answer.
+- The session is finalized once that Terminate exchange completes: the
+  peer heard everything. Finalizing as soon as both flows were finished
+  could strand a peer whose FinishedReceiving was lost in a crash. A
+  connection ending before the exchange leaves the session
+  re-establishable, both flows finished, for the exchange to happen on the
+  next one; a server retires it, unbound so for its unestablished timeout,
+  and a client told `Unnegotiated` then knows it over.
 - A Terminate before both flows are finished is answered, and the session
-  stays as it is: finalized if both flows were, re-establishable
-  otherwise, the finished flow staying finished.
-- Each flow's finalization is stored as it happens (see
+  stays re-establishable, the finished flow staying finished.
+- Each flow's finalization is stored, and synced, as it happens (see
   [Persistence](#persistence)): a restart neither reopens a finished flow
   nor forgets a FinishedSending awaiting its answer.
 
@@ -404,7 +417,15 @@ Every buffer is bounded: frame length (1 MiB by default), credentials,
 reasons, messages kept beyond a gap, retransmission batch, sessions per
 server, and the time Negotiate and Establish may take (the keepalive
 interval by default, §7.1.7.6, §7.2.5.9). A malformed frame or message
-ends the connection (§4.4). Logs and observers never show credentials.
+ends the connection (§4.4). Logs and observers never show credentials:
+an observer sees every frame of an established connection, before it is
+handled or once written, a Negotiate's, a NegotiationResponse's or an
+Establish's credentials zeroed whenever they come.
+
+A Recoverable flow keeps its messages for retransmission up to a
+retention target, the last N written (`MaxStoredMessages`), evicting the
+older by batches; a peer asking for them is told they are no longer
+available. Messages queued and not written are never evicted.
 
 A frame may hold bytes after the SBE message it carries: SBE lets a later
 schema version append fields, and Silverflash pads its session messages
@@ -424,7 +445,7 @@ it all.
 | Messages no longer kept | — | RetransmitReject with code `ReRequestOutOfBounds`, a termination code (§7.4.5.5) | RetransmitReject `OutOfRange`, reason "no longer available" |
 | Application messages after FinishedReceiving | forbidden to its sender (§6.3) | sent until the sender's own FinishedSending (§7.5.1, §7.5.6) | sends none; accepts them from a peer |
 | RetransmitRequest after one's own FinishedSending | allowed: the receiving flow is not finished (§4.7) | a protocol violation (§7.5.6) | sends it when its inbound flow needs it; accepts it from a peer |
-| When the session is finalized | the side that started finalization terminates on one FinishedReceiving (§4.7.2) | both sides send and receive FinishedReceiving first (§7.5.1); terminating earlier is a violation (§7.5.4) | waits for both flows; a peer's early Terminate leaves the unfinished flow re-establishable |
+| When the session is finalized | the side that started finalization terminates on one FinishedReceiving (§4.7.2) | both sides send and receive FinishedReceiving first (§7.5.1); terminating earlier is a violation (§7.5.4) | waits for both flows, then either side terminates; finalized once that exchange completes; a peer's early Terminate leaves the unfinished flow re-establishable |
 | Example §7.1.4 | — | titled "Client None and Server Recoverable", shows a server Unsequenced flow | no consequence |
 
 The choices aim at messages a peer of either reading handles, and accept
@@ -519,6 +540,6 @@ lost or garbled. The evidence is from the corrected harness.
 | M4 | `fixp/internal/codec`, generated; classification by encoding, schema and template; fuzzing | yes |
 | M5 | `fixp/session`, both roles: negotiation, establishment, keepalive, termination, Unsequenced and None flows, limits, credential-free logs, persisted session state | yes; sequenced flows run while nothing is missed: a gap, retransmission and finalization terminate the connection as not supported yet, until M6 and M7 |
 | M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step | yes; restarts tested with a store losing what was not synced, failing each write in turn, its failed write lost or made |
-| M7 | Finalization, retention, observers | |
+| M7 | Finalization, retention, observers | yes; finalization tested crashing the server at every write |
 | M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide | |
 | M9 | Benchmarks: codecs, then sessions | |

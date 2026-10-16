@@ -96,6 +96,11 @@ func (r *recorder) OnLost(_ context.Context, _ *Session, from, count uint64) err
 	return errLost
 }
 
+func (r *recorder) OnPeerFinished(context.Context, *Session) error {
+	r.events <- event{kind: "peerfinished"}
+	return nil
+}
+
 func (r *recorder) OnFinalized(context.Context, *Session) {
 	r.events <- event{kind: "finalized"}
 }
@@ -190,7 +195,7 @@ func credentials(name string) func(context.Context, CredentialsRequest) ([]byte,
 	return func(context.Context, CredentialsRequest) ([]byte, error) { return []byte("user:" + name), nil }
 }
 
-func newServer(t testing.TB, l *mem.Listener, st store.Store, h Handler, flow fixp.FlowType, opt func(*ServerConfig)) (*Server, context.CancelFunc, chan error) {
+func newServer(t testing.TB, l transport.Listener, st store.Store, h Handler, flow fixp.FlowType, opt func(*ServerConfig)) (*Server, context.CancelFunc, chan error) {
 	t.Helper()
 	cfg := ServerConfig{Config: fast(h), Flow: flow, Store: st, Authenticate: authenticate, MinKeepalive: 10 * time.Millisecond}
 	if opt != nil {

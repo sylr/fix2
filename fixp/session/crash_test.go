@@ -222,10 +222,16 @@ func (cs *crashSession) SetInbound(ctx context.Context, seq uint64) error {
 	})
 }
 
-func (cs *crashSession) SetFinish(ctx context.Context, out, in store.Finish, t time.Time) error {
+func (cs *crashSession) SetFinish(ctx context.Context, out, in store.Finish) error {
 	return cs.update(func(i *crashImage) error {
 		i.state.OutboundFinish, i.state.InboundFinish = out, in
-		if out.Finished && in.Finished && i.state.FinalizedAt.IsZero() {
+		return nil
+	})
+}
+
+func (cs *crashSession) Finalize(ctx context.Context, t time.Time) error {
+	return cs.update(func(i *crashImage) error {
+		if i.state.FinalizedAt.IsZero() {
 			i.state.FinalizedAt = t
 		}
 		return nil

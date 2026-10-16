@@ -62,6 +62,14 @@ type Config struct {
 	// MaxReasonLength bounds the reasons we send, longer ones truncated,
 	// and those we log, 256 bytes if 0.
 	MaxReasonLength int
+	// MaxStoredMessages is the retention target of a Recoverable flow: the
+	// messages written before the last MaxStoredMessages are evicted from
+	// the store, by batches of a tenth of it; the peer asking for them is
+	// answered RetransmitReject OutOfRange "no longer available". Messages
+	// queued and not written yet are never evicted. 0 keeps every message.
+	MaxStoredMessages int
+	// Observer, if set, sees every frame of an established connection.
+	Observer Observer
 	// Logger receives the session's events, never credentials; nothing is
 	// logged if nil.
 	Logger *slog.Logger
