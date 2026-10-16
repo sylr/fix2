@@ -861,8 +861,7 @@ var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 						Layout: []int{
 							TagEventType, TagEventTime,
 						},
-						Name:     "NoEvents",
-						Required: true,
+						Name: "NoEvents",
 					},
 					{
 						CounterTag: TagNoLegs,
@@ -947,6 +946,17 @@ var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 				},
 				Groups: []dictionary.GroupDef{
 					{
+						Conditions: []dictionary.Condition{
+							{
+								Activation: []int{
+									TagNoEvents, TagEventType, TagEventTime,
+								},
+								Component: "EvntGrp",
+								Required: []int{
+									TagNoEvents,
+								},
+							},
+						},
 						CounterTag: TagNoRelatedSym,
 						DelimTag:   TagSymbol,
 						Fields: []dictionary.FieldRef{
@@ -970,8 +980,7 @@ var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 								Layout: []int{
 									TagEventType, TagEventTime,
 								},
-								Name:     "NoEvents",
-								Required: true,
+								Name: "NoEvents",
 							},
 							{
 								CounterTag: TagNoLegs,
@@ -998,8 +1007,7 @@ var Dictionary = sync.OnceValue(func() *dictionary.Dict {
 							TagSettlPriceType, TagNoUnderlyings, TagUnderlyingSymbol, TagTradingReferenceDate,
 							TagOpenInterestQty, TagClearedVolume, TagNoLegs,
 						},
-						Name:     "NoRelatedSym",
-						Required: true,
+						Name: "NoRelatedSym",
 					},
 				},
 				MsgCat:  "app",
