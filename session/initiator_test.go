@@ -14,7 +14,6 @@ import (
 	"time"
 
 	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/dictionary/xmldict"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport"
@@ -509,8 +508,12 @@ func TestLogoutAnswerIsLast(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st := &syncGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+			buf := &logBuffer{}
 			l := mem.Listen("acceptor")
-			s, rec := startInitiator(t, l, func(c *session.Config) { c.Store = st })
+			s, rec := startInitiator(t, l, func(c *session.Config) {
+				c.Store = st
+				c.Logger = slog.New(slog.NewTextHandler(buf, nil))
+			})
 			// Before the cleanup above, which would wait for the Sync.
 			release := sync.OnceFunc(func() { close(st.release) })
 			t.Cleanup(release)
@@ -526,9 +529,8 @@ func TestLogoutAnswerIsLast(t *testing.T) {
 				t.Fatal("our Logout not written")
 			}
 			if tc.send != nil {
-				n := s.Stats().MessagesReceived.Load()
 				tc.send(p)
-				waitFor(t, func() bool { return s.Stats().MessagesReceived.Load() > n })
+				waitFor(t, func() bool { return strings.Contains(buf.String(), "after the counterparty's Logout ignored") })
 			}
 			st.block.Store(false)
 			release()
@@ -576,42 +578,82 @@ func TestLogoutAnswerAfterReplayAskedBefore(t *testing.T) {
 	}
 }
 
-// A BusinessMessageReject not sent after our Logout is not counted either.
-func TestLogoutAnswerIsLastBusinessReject(t *testing.T) {
-	st := &syncGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
-	l := mem.Listen("acceptor")
-	// D a MsgType without a message: the reader rejects it with a
-	// BusinessMessageReject.
-	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4" servicepack="0">
-<header><field name="BeginString" required="Y"/><field name="BodyLength" required="Y"/><field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/><field name="TargetCompID" required="Y"/><field name="MsgSeqNum" required="Y"/><field name="SendingTime" required="Y"/></header>
-<trailer><field name="CheckSum" required="Y"/></trailer>
-<messages><message name="Logon" msgtype="A" msgcat="admin"><field name="EncryptMethod" required="Y"/><field name="HeartBtInt" required="Y"/></message><message name="Logout" msgtype="5" msgcat="admin"/></messages>
-<fields><field number="8" name="BeginString" type="STRING"/><field number="9" name="BodyLength" type="LENGTH"/><field number="10" name="CheckSum" type="STRING"/><field number="34" name="MsgSeqNum" type="SEQNUM"/><field number="35" name="MsgType" type="STRING"><value enum="A" description="Logon"/><value enum="5" description="Logout"/><value enum="D" description="NewOrderSingle"/></field><field number="49" name="SenderCompID" type="STRING"/><field number="52" name="SendingTime" type="UTCTIMESTAMP"/><field number="56" name="TargetCompID" type="STRING"/><field number="98" name="EncryptMethod" type="INT"/><field number="108" name="HeartBtInt" type="INT"/></fields></fix>`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, rec := startInitiator(t, l, func(c *session.Config) { c.Store, c.Dictionaries.Session = st, d })
-	release := sync.OnceFunc(func() { close(st.release) })
-	t.Cleanup(release)
-	p := acceptPeer(t, l)
-	p.expect("A")
-	p.send("A", 0, "98", "0", "108", "30")
-	rec.wait(t, func() bool { return rec.logons == 1 })
-	st.block.Store(true)
-	p.send("5", 0)
-	select {
-	case <-st.entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("our Logout not written")
-	}
-	n := s.Stats().MessagesReceived.Load()
-	p.send("D", 0)
-	waitFor(t, func() bool { return s.Stats().MessagesReceived.Load() > n })
-	st.block.Store(false)
-	release()
-	p.expect("5", "34", "2")
-	p.expectSilentEnd()
-	if n := s.Stats().RejectsSent.Load(); n != 0 {
-		t.Errorf("RejectsSent = %d, want 0: nothing sent after our Logout", n)
+// A counterparty's Logout is its last message: what it sends while our answer
+// waits to be written, or after its answer to ours, is not handled, a message
+// with a malformed tag included, nor counted as processed.
+func TestLogoutIsLastHandled(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		ours      bool // we log out first
+		malformed bool
+	}{
+		{"counterparty's Logout", false, false},
+		{"counterparty's Logout, malformed after", false, true},
+		{"answer to ours", true, false},
+		{"answer to ours, malformed after", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := &syncGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+			buf := &logBuffer{}
+			l := mem.Listen("acceptor")
+			s, rec := startInitiator(t, l, func(c *session.Config) {
+				c.Store = st
+				c.Logger = slog.New(slog.NewTextHandler(buf, nil))
+			})
+			release := sync.OnceFunc(func() { close(st.release) })
+			t.Cleanup(release)
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.send("A", 0, "98", "0", "108", "30")
+			rec.wait(t, func() bool { return rec.logons == 1 })
+			// Our Logout, or our answer to the counterparty's, waits to be
+			// written.
+			st.block.Store(true)
+			done := make(chan error, 1)
+			if tc.ours {
+				go func() { done <- s.Logout(context.Background(), "end of day") }()
+			} else {
+				p.send("5", 0)
+			}
+			select {
+			case <-st.entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("our Logout not written")
+			}
+			if tc.ours {
+				p.send("5", 0)
+			}
+			body := "35=D|49=ACC|56=INI|34=3|52=" + sendingTime() + "|11=AFTER-LOGOUT|"
+			if tc.malformed {
+				body += "abc=1|"
+			}
+			p.writeRaw(rawFrame(body, ""))
+			waitFor(t, func() bool { return strings.Contains(buf.String(), "after the counterparty's Logout ignored") })
+			st.block.Store(false)
+			release()
+			p.expect("5", "34", "2")
+			p.expectSilentEnd()
+			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			rec.mu.Lock()
+			apps := append([]string(nil), rec.apps...)
+			rec.mu.Unlock()
+			if len(apps) != 0 {
+				t.Errorf("delivered %q after the Logout, want none", apps)
+			}
+			if n := s.NextTargetSeqNum(); n != 3 {
+				t.Errorf("NextTargetSeqNum = %d, want 3", n)
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for {
+				state, err := st.Store.Open(context.Background())
+				if err == nil && state.NextTarget == 3 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("stored NextTarget = %d (%v), want 3", state.NextTarget, err)
+				}
+				time.Sleep(time.Millisecond)
+			}
+		})
 	}
 }

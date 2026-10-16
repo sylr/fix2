@@ -66,7 +66,12 @@ func (c *conn) handleFrame(frame []byte) {
 				s.stats.MessagesReceived.Add(1)
 				s.stats.BytesReceived.Add(uint64(len(frame)))
 				c.lastRead = now
-				s.invalidTagLocked(c, m, tag, now)
+				if c.peerLoggedOut {
+					// As a message whole (see below).
+					s.log.LogAttrs(context.Background(), slog.LevelInfo, "malformed message after the counterparty's Logout ignored")
+				} else {
+					s.invalidTagLocked(c, m, tag, now)
+				}
 				if !c.closed {
 					s.armLocked(c)
 				}

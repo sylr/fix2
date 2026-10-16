@@ -283,37 +283,6 @@ func TestHeldArrival_InSequenceLogoutStopsHeld(t *testing.T) {
 	}
 }
 
-// A counterparty's Logout is its last message: what it sends after, the
-// answer to ours included, is not handled.
-func TestLogoutIsLastHandled(t *testing.T) {
-	for _, ours := range []bool{false, true} {
-		name := "counterparty's Logout"
-		if ours {
-			name = "answer to ours"
-		}
-		t.Run(name, func(t *testing.T) {
-			s, rec, p := loggedOn(t, nil)
-			done := make(chan error, 1)
-			if ours {
-				go func() { done <- s.Logout(context.Background(), "end of day") }()
-				p.expect("5")
-			}
-			// In one write: read before the connection closes.
-			p.writeRaw(append(from(session.FIX44, 2).build("5").Build(), from(session.FIX44, 3).build("D", "11", "AFTER-LOGOUT").Build()...))
-			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
-			rec.mu.Lock()
-			apps := append([]string(nil), rec.apps...)
-			rec.mu.Unlock()
-			if len(apps) != 0 {
-				t.Errorf("delivered %q after the Logout, want none", apps)
-			}
-			if n := s.NextTargetSeqNum(); n != 3 {
-				t.Errorf("NextTargetSeqNum = %d, want 3", n)
-			}
-		})
-	}
-}
-
 // Under CompatStrict2020, a counterparty's Logout in sequence ending a chunk
 // of a chunked ResendRequest is answered: the next chunk is not asked for.
 func TestHeldArrival_InSequenceLogoutEndsChunk(t *testing.T) {
