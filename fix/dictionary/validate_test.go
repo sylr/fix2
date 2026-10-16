@@ -656,7 +656,7 @@ func TestValidate_RequiredTagGroupShapes(t *testing.T) {
 }
 
 func TestValidate_HeaderNoHops(t *testing.T) {
-	d, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIXT11.xml")
+	d, err := xmldict.LoadFile("testdata/FIXT11.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

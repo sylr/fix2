@@ -10,7 +10,7 @@ import (
 // TestDictionaryMatchesXML checks that the generated dictionary is the one
 // xmldict.Load reads from the XML it was generated from.
 func TestDictionaryMatchesXML(t *testing.T) {
-	want, err := xmldict.LoadFile("../../../cmd/fixgen/testdata/FIXT11.xml")
+	want, err := xmldict.LoadFile("../../../dictionary/testdata/FIXT11.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

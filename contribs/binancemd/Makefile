@@ -132,7 +132,7 @@ clean:
 
 .PHONY: generate generate-verify
 
-# Regenerates internal/spotmd from Binance's dictionary with fixgen.
+# Regenerates internal/spotmd from Binance's dictionary with fix2gen.
 generate:
 	$(GO) generate ./...
 

@@ -188,10 +188,10 @@ func TestLoadOrchestra(t *testing.T) {
 	}
 }
 
-// TestLoadOrchestraFile loads the trimmed FIX Latest repository fixgen tests
+// TestLoadOrchestraFile loads the trimmed FIX Latest repository fix2gen tests
 // with, read whole and byte by byte.
 func TestLoadOrchestraFile(t *testing.T) {
-	data, err := os.ReadFile("../../cmd/fixgen/testdata/OrchestraFIXLatest.xml")
+	data, err := os.ReadFile("../testdata/OrchestraFIXLatest.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

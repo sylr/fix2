@@ -1,5 +1,5 @@
 // Package xmldict reads FIX data dictionaries from QuickFIX XML, or from the
-// FIX Orchestra repositories the FIX Trading Community publishes. fixgen uses
+// FIX Orchestra repositories the FIX Trading Community publishes. fix2gen uses
 // it to generate packages, whose dictionaries need no XML at run time; a
 // program that only learns its dictionary at run time can load it here.
 package xmldict

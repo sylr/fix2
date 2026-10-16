@@ -220,7 +220,7 @@ func contains(s []string, v string) bool {
 
 // Before FIX 4.2, CHAR fields held any string.
 func TestValidateWith_CharBeforeFIX42(t *testing.T) {
-	d, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX40.xml")
+	d, err := xmldict.LoadFile("testdata/FIX40.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestValidateWith_StructureEdges(t *testing.T) {
 
 // FIX 4.0 timestamps have whole seconds.
 func TestValidateWith_FIX40Time(t *testing.T) {
-	d, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX40.xml")
+	d, err := xmldict.LoadFile("testdata/FIX40.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -559,7 +559,7 @@ func TestValidate_NestedGroupBoundaries(t *testing.T) {
 // requires and the counters of its groups, and every other tag of the
 // message outside them or in its groups' entries.
 func TestValidate_RealDictionariesTopLevel(t *testing.T) {
-	files, err := filepath.Glob("../cmd/fixgen/testdata/*.xml")
+	files, err := filepath.Glob("testdata/*.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

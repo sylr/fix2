@@ -1,5 +1,5 @@
 // Package micro measures, below the session, what the fix2 agent spends
-// reading the scenarios' messages through the code fixgen generates from
+// reading the scenarios' messages through the code fix2gen generates from
 // spec/FIX44.xml (gen/fix2/fix44, make generate): the messages each end
 // reads, parsed once, read as the agent reads them, every field its
 // handlers read, the group entries' among them.

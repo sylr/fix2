@@ -67,7 +67,7 @@ func fuzzDictionaries(cfg uint32) session.Dictionaries {
 	d := &fuzzLoaded
 	d.once.Do(func() {
 		load := func(name string) *dictionary.Dict {
-			dict, err := xmldict.LoadFile("../cmd/fixgen/testdata/" + name)
+			dict, err := xmldict.LoadFile("../dictionary/testdata/" + name)
 			if err != nil {
 				panic(err)
 			}

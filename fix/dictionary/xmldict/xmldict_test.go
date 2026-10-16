@@ -543,7 +543,7 @@ func TestLoad_EnvelopeNotCopiedPerMessage(t *testing.T) {
 }
 
 func TestLoad_HeaderGroups(t *testing.T) {
-	d, err := LoadFile("../../cmd/fixgen/testdata/FIXT11.xml")
+	d, err := LoadFile("../testdata/FIXT11.xml")
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}

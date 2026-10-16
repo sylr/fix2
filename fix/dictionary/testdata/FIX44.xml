@@ -8,7 +8,7 @@
   (PARTIALLY_FILLED, STOP_LIMIT): a value FIX 4.4 defines but this
   dictionary leaves out is rejected as incorrect.
   NewOrderSingle's NoAllocs nests NoDlvyInst, a group of our own (5000 to
-  5007), for fixgen's tests of nested groups.
+  5007), for the generator's tests of nested groups.
   Derived from https://github.com/quickfixgo/quickfix/blob/eff945dd59a41caeaed20f71916f08d37e0fda99/spec/FIX44.xml
 -->
 <fix major='4' type='FIX' servicepack='0' minor='4'>

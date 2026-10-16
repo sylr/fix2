@@ -51,7 +51,7 @@ func TestDecodeMatchesEncodingXML(t *testing.T) {
 </f:fix>`,
 	}
 	// The QuickFIX dictionaries: Orchestra repositories decode differently.
-	files, _ := filepath.Glob("../../cmd/fixgen/testdata/FIX*.xml")
+	files, _ := filepath.Glob("../testdata/FIX*.xml")
 	if len(files) == 0 {
 		t.Fatal("no test dictionaries found")
 	}
@@ -260,7 +260,7 @@ func FuzzLoad(f *testing.F) {
 		f.Add([]byte(seed))
 	}
 	for _, name := range []string{"FIX40", "FIX44", "FIXT11", "OrchestraFIXLatest"} {
-		if data, err := os.ReadFile("../../cmd/fixgen/testdata/" + name + ".xml"); err == nil {
+		if data, err := os.ReadFile("../testdata/" + name + ".xml"); err == nil {
 			f.Add(data)
 		}
 	}

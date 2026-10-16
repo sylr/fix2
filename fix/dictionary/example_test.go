@@ -14,7 +14,7 @@ import (
 // against a data dictionary: one valid order, one missing a required field and
 // one with an enum value the dictionary does not define.
 func ExampleDict_Validate() {
-	dict, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX40.xml")
+	dict, err := xmldict.LoadFile("testdata/FIX40.xml")
 	if err != nil {
 		log.Fatal(err)
 	}

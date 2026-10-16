@@ -10,7 +10,7 @@ import (
 // TestDictionaryMatchesXML checks that the generated dictionary is the one
 // xmldict.Load reads from the Orchestra repository it was generated from.
 func TestDictionaryMatchesXML(t *testing.T) {
-	want, err := xmldict.LoadFile("../../../cmd/fixgen/testdata/OrchestraFIXLatest.xml")
+	want, err := xmldict.LoadFile("../../../dictionary/testdata/OrchestraFIXLatest.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

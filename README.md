@@ -25,10 +25,10 @@ the root.
   [FIXTradingCommunity/orchestrations](https://github.com/FIXTradingCommunity/orchestrations)),
   or generated ones, with the SessionRejectReason of each error; `Compose`
   for FIXT 1.1 application messages.
-- **Code generation** (`fix/cmd/fixgen`): typed readers, builders and the
-  dictionary as Go code, from a QuickFIX dictionary or an Orchestra
-  repository; `-dispatch` adds a typed handler interface, `-bytes` getters
-  of raw values (exact decimal prices, for one).
+- **Code generation** (`cmd/fix2gen`): `fix2gen tagvalue` writes typed
+  readers, builders and the dictionary as Go code, from a QuickFIX
+  dictionary or an Orchestra repository; `-dispatch` adds a typed handler
+  interface, `-bytes` getters of raw values (exact decimal prices, for one).
 - **Sessions** (`fix/session`): initiators and acceptors for FIX 4.0 to 4.4 and
   FIXT 1.1, configured in Go:
   - many sessions per process and per listener, each with its own
@@ -62,8 +62,8 @@ run from their directories: `go test ./...` at the root leaves them out.
 The tools each have a Makefile: `make` builds `dist/<name>`, `make all`
 cross builds with checksums, `make test`, `make lint` and `make
 generate-verify` (the generated code is up to date). Their
-messages come from packages fixgen generates from the venues' dictionaries
-(`go generate ./...` runs fixgen as a Go tool), they sign their Logon with
+messages come from packages fix2gen generates from the venues' dictionaries
+(`go generate ./...` runs fix2gen as a Go tool), they sign their Logon with
 the session's `LogonSigner` hook, resubscribe after every reconnection, and
 log every message field by field with `--trace`.
 

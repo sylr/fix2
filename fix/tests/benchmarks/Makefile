@@ -40,17 +40,17 @@ CMAKE_BUILD_ID := $(shell printf '%s\n%s\n' '$(CXX_PATH)' '$(QUICKFIX_CPP)' | ck
 .PHONY: generate build bench stats micro vet clean
 
 # generate generates the Go engines' code from $(DICT), into gen/: fix2's
-# with fixgen, QuickFIX/Go's with its generate-fix, both Go tools of the
+# with fix2gen, QuickFIX/Go's with its generate-fix, both Go tools of the
 # module. The Java and C++ agents generate theirs as they build.
 generate: gen/fix2/.stamp gen/quickfixgo/.stamp
 
-# fixgen is built from the fix2 of the repository: its sources count, and
+# fix2gen is built from the fix2 of the repository: its sources count, and
 # go.mod, which pins QuickFIX/Go's generate-fix.
-FIXGEN_SRC := $(shell find ../../cmd/fixgen ../../dictionary -name '*.go' ! -name '*_test.go')
+FIX2GEN_SRC := $(shell find ../../../cmd/fix2gen ../../../internal/gen ../../dictionary -name '*.go' ! -name '*_test.go')
 
-gen/fix2/.stamp: $(DICT) go.mod go.sum $(FIXGEN_SRC)
+gen/fix2/.stamp: $(DICT) go.mod go.sum $(FIX2GEN_SRC)
 	rm -rf gen/fix2 && mkdir -p gen/fix2/fix44
-	$(GO) tool fixgen -dict $(DICT) -pkg fix44 -out gen/fix2/fix44 -dispatch
+	$(GO) tool fix2gen tagvalue -dict $(DICT) -pkg fix44 -out gen/fix2/fix44 -dispatch
 	touch $@
 
 gen/quickfixgo/.stamp: $(DICT) go.mod go.sum

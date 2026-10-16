@@ -62,7 +62,7 @@ func (r report) equal(o report) bool {
 }
 
 // dialect writes and reads orders and execution reports in one FIX version,
-// with the package fixgen generated from its limited dictionary.
+// with the package fix2gen generated from its limited dictionary.
 type dialect struct {
 	name         string
 	beginString  string

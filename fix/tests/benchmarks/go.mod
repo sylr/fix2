@@ -23,5 +23,5 @@ replace github.com/sylr/fix2 => ../../..
 
 tool (
 	github.com/quickfixgo/quickfix/cmd/generate-fix
-	github.com/sylr/fix2/fix/cmd/fixgen
+	github.com/sylr/fix2/cmd/fix2gen
 )

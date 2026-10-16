@@ -419,7 +419,7 @@ func pair(t *testing.T, iniChange, accChange func(*session.Config)) (ini, acc *s
 	return ini, acc, ir, ar
 }
 
-// dict loads a dictionary of cmd/fixgen/testdata: FIX40, FIX44, FIX50SP2 or
+// dict loads a dictionary of fix/dictionary/testdata: FIX40, FIX44, FIX50SP2 or
 // FIXT11.
 func dict(t testing.TB, name string) *dictionary.Dict {
 	t.Helper()
@@ -437,7 +437,7 @@ func dict(t testing.TB, name string) *dictionary.Dict {
 		}
 		dir = parent
 	}
-	d, err := xmldict.LoadFile(filepath.Join(dir, "fix", "cmd", "fixgen", "testdata", name+".xml"))
+	d, err := xmldict.LoadFile(filepath.Join(dir, "fix", "dictionary", "testdata", name+".xml"))
 	if err != nil {
 		t.Fatal(err)
 	}

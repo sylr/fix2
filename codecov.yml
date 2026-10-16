@@ -11,7 +11,7 @@ coverage:
 ignore:
   # The contribs, binancemd and coinbasemd: tools, not the library.
   - "contribs"
-  # Packages fixgen generates for tests.
+  # Packages fix2gen generates for tests.
   - "fix/tests"
   # Test helpers.
   - "fix/internal/dicttest"

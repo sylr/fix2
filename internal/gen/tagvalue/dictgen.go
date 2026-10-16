@@ -1,4 +1,4 @@
-package main
+package tagvalue
 
 import (
 	"maps"

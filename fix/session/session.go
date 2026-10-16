@@ -63,7 +63,7 @@ const (
 	StateResettingSeqs State = "resetting sequence numbers"
 )
 
-// Outgoing is a message to send: fix.Builder and the builders fixgen
+// Outgoing is a message to send: fix.Builder and the builders fix2gen
 // generates, which embed it, are Outgoing. AppendBody appends the fields
 // after the standard header the session writes, and fails if a field's tag
 // is one reserved reports true for.

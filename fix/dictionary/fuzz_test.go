@@ -15,11 +15,11 @@ import (
 )
 
 // fuzzDicts are the dictionaries FuzzValidate runs against: the test
-// dictionaries of cmd/fixgen, FIX 5.0 SP2 composed with FIXT 1.1 as a session
+// dictionaries of testdata, FIX 5.0 SP2 composed with FIXT 1.1 as a session
 // does, and one whose groups are too wide for a bitset on the stack.
 var fuzzDicts = sync.OnceValue(func() []fuzzDict {
 	load := func(name string) *dictionary.Dict {
-		d, err := xmldict.LoadFile("../cmd/fixgen/testdata/" + name + ".xml")
+		d, err := xmldict.LoadFile("testdata/" + name + ".xml")
 		if err != nil {
 			panic(err)
 		}

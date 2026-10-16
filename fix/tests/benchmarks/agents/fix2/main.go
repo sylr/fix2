@@ -1,7 +1,7 @@
 // Command fix2 is the benchmark agent of fix2: the acceptor or the
 // initiator of the scenarios (see package scenario), with fix2's defaults
 // but for what the scenarios set. It builds and reads every message with
-// the code fixgen generates from the dictionary (gen/fix2/fix44), and
+// the code fix2gen generates from the dictionary (gen/fix2/fix44), and
 // dispatches those it receives with its generated Dispatch.
 package main
 

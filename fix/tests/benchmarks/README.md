@@ -48,7 +48,7 @@ each engine validates every message it receives against it:
 
 | | generator | generated | dispatch |
 |---|---|---|---|
-| fix2 | `fix/cmd/fixgen -dispatch`, a Go tool of the module (`make generate`) | `gen/fix2/fix44`: builders, typed readers, group entries | `fix44.Dispatch` |
+| fix2 | `fix2gen tagvalue -dispatch`, a Go tool of the module (`make generate`) | `gen/fix2/fix44`: builders, typed readers, group entries | `fix44.Dispatch` |
 | QuickFIX/Go | its `cmd/generate-fix`, a Go tool of the module (`make generate`) | `gen/quickfixgo`: `fix44/<message>`, `field`, `enum`, `tag` | `quickfix.MessageRouter`, the generated `Route`s |
 | QuickFIX/J | `quickfixj-codegenerator`, as the agent builds | `quickfix.fix44` and `quickfix.field`, as QuickFIX/J's published messages are generated (`decimal=false`) | the generated `quickfix.fix44.MessageCracker` |
 | QuickFIX C++ | its Ruby generator and `MessageCracker.xsl`, in the flake's build of it | the library's `FIX44::` messages, fields and values | the generated `FIX44::MessageCracker` |
@@ -158,7 +158,7 @@ read through `gen/fix2/fix44` as the fix2 agent's handlers read them
 (`BenchmarkRead`), their group entries without their fields
 (`BenchmarkEntries`), snapshots of 2 to 200 entries (`BenchmarkReadSnapshot`).
 `make micro` runs them 10 times (`MICRO_COUNT`), for benchstat to compare
-two versions of fix2, each with the code its fixgen generates.
+two versions of fix2, each with the code its fix2gen generates.
 
 ## Fairness
 

@@ -132,7 +132,7 @@ clean:
 
 .PHONY: generate generate-verify
 
-# Regenerates internal/fixt and internal/md from Coinbase's dictionaries with fixgen.
+# Regenerates internal/fixt and internal/md from Coinbase's dictionaries with fix2gen.
 generate:
 	$(GO) generate ./...
 

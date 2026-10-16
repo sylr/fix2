@@ -118,7 +118,7 @@ func TestSlogObserver(t *testing.T) {
 
 // With a dictionary, header, body and trailer are logged field by field.
 func TestSlogObserverDictionary(t *testing.T) {
-	d, err := xmldict.LoadFile("../cmd/fixgen/testdata/FIX44.xml")
+	d, err := xmldict.LoadFile("../dictionary/testdata/FIX44.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

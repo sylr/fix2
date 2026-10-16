@@ -1,4 +1,4 @@
-package main
+package tagvalue
 
 // standardLengthNames names the LENGTH field of each standard DATA field
 // (see fix.DefaultProfile), as the FIX repository does.

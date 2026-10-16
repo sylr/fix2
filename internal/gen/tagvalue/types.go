@@ -1,4 +1,4 @@
-package main
+package tagvalue
 
 // goTypeInfo describes how a FIX type maps to Go.
 type goTypeInfo struct {
