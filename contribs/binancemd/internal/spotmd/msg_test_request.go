@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type TestRequest struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapTestRequest(msg *fix2.Message) *TestRequest {
+func WrapTestRequest(msg *fix.Message) *TestRequest {
 	return &TestRequest{msg: msg}
 }
 func (m *TestRequest) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *TestRequest) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *TestRequest) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *TestRequest) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *TestRequest) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *TestRequest) TestReqID() (string, bool) {
@@ -66,11 +66,11 @@ func (m *TestRequest) TestReqID() (string, bool) {
 // TestRequestBuilder builds a TestRequest message. A copy shares its fields and
 // groups with the original.
 type TestRequestBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildTestRequest(beginString string) *TestRequestBuilder {
-	b := &TestRequestBuilder{Builder: fix2.NewBuilder(beginString, "1")}
+	b := &TestRequestBuilder{Builder: fix.NewBuilder(beginString, "1")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -87,10 +87,10 @@ func (b *TestRequestBuilder) SetMsgSeqNum(v int) *TestRequestBuilder {
 	return b
 }
 func (b *TestRequestBuilder) SetSendingTime(v time.Time) *TestRequestBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *TestRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *TestRequestBuilder {
+func (b *TestRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *TestRequestBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Heartbeat struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapHeartbeat(msg *fix2.Message) *Heartbeat {
+func WrapHeartbeat(msg *fix.Message) *Heartbeat {
 	return &Heartbeat{msg: msg}
 }
 func (m *Heartbeat) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *Heartbeat) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *Heartbeat) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Heartbeat) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *Heartbeat) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *Heartbeat) TestReqID() (string, bool) {
@@ -66,11 +66,11 @@ func (m *Heartbeat) TestReqID() (string, bool) {
 // HeartbeatBuilder builds a Heartbeat message. A copy shares its fields and
 // groups with the original.
 type HeartbeatBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
-	b := &HeartbeatBuilder{Builder: fix2.NewBuilder(beginString, "0")}
+	b := &HeartbeatBuilder{Builder: fix.NewBuilder(beginString, "0")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -87,10 +87,10 @@ func (b *HeartbeatBuilder) SetMsgSeqNum(v int) *HeartbeatBuilder {
 	return b
 }
 func (b *HeartbeatBuilder) SetSendingTime(v time.Time) *HeartbeatBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *HeartbeatBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *HeartbeatBuilder {
+func (b *HeartbeatBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *HeartbeatBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

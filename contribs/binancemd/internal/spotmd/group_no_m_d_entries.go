@@ -3,14 +3,14 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"strconv"
 	"time"
 )
 
 type NoMDEntriesEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoMDEntriesEntry) MDEntryType() (MDEntryType, bool) {
@@ -30,7 +30,7 @@ func (e *NoMDEntriesEntry) TransactTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (e *NoMDEntriesEntry) MDEntryPxBytes() ([]byte, bool) {
@@ -42,7 +42,7 @@ func (e *NoMDEntriesEntry) MDEntryPx() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoMDEntriesEntry) MDEntrySizeBytes() ([]byte, bool) {
@@ -54,7 +54,7 @@ func (e *NoMDEntriesEntry) MDEntrySize() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoMDEntriesEntry) MDUpdateAction() (MDUpdateAction, bool) {
@@ -70,7 +70,7 @@ func (e *NoMDEntriesEntry) TradeID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoMDEntriesEntry) AggressorSide() (AggressorSide, bool) {
@@ -86,7 +86,7 @@ func (e *NoMDEntriesEntry) FirstBookUpdateID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoMDEntriesEntry) LastBookUpdateIDBytes() ([]byte, bool) {
@@ -98,59 +98,59 @@ func (e *NoMDEntriesEntry) LastBookUpdateID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 type NoMDEntriesEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoMDEntriesEntry() *NoMDEntriesEntryBuilder {
 	return &NoMDEntriesEntryBuilder{}
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntryType(v MDEntryType) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntryType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagMDEntryType, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetSymbol(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSymbol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagSymbol, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetTransactTime(v time.Time) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
+	e.fields = fix.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(fix.TimeFormatTimestamp)))
 	return e
 }
-func (e *NoMDEntriesEntryBuilder) SetTransactTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(f)))
+func (e *NoMDEntriesEntryBuilder) SetTransactTimeWithFormat(v time.Time, f fix.TimeFormat) *NoMDEntriesEntryBuilder {
+	e.fields = fix.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntryPx(v float64) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntryPx, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMDEntryPx, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntrySize(v float64) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntrySize, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMDEntrySize, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDUpdateAction(v MDUpdateAction) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDUpdateAction, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagMDUpdateAction, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetTradeID(v int) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTradeID, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagTradeID, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetAggressorSide(v AggressorSide) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagAggressorSide, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagAggressorSide, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetFirstBookUpdateID(v int) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagFirstBookUpdateID, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagFirstBookUpdateID, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetLastBookUpdateID(v int) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLastBookUpdateID, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagLastBookUpdateID, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 
@@ -158,11 +158,11 @@ func (e *NoMDEntriesEntryBuilder) SetLastBookUpdateID(v int) *NoMDEntriesEntryBu
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoMDEntriesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoMDEntriesEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

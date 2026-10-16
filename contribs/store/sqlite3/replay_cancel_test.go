@@ -9,18 +9,18 @@ import (
 	"testing"
 	"time"
 
-	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/contribs/store/sqlite3"
-	"github.com/sylr/fix2/session"
-	"github.com/sylr/fix2/session/transport"
-	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/transport"
+	"github.com/sylr/fix2/transport/mem"
 )
 
 // counterparty is the scripted end of a session's connection.
 type counterparty struct {
 	t      *testing.T
 	conn   transport.Conn
-	framer *fix2.Framer
+	framer *fix.Framer
 	seq    int
 }
 
@@ -34,16 +34,16 @@ func accept(t *testing.T, l *mem.Listener, seq int) *counterparty {
 		t.Fatalf("no connection: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
-	return &counterparty{t: t, conn: conn, framer: fix2.NewFramer(conn, fix2.FramerOptions{}), seq: seq}
+	return &counterparty{t: t, conn: conn, framer: fix.NewFramer(conn, fix.FramerOptions{}), seq: seq}
 }
 
 // send writes a message of msgType with fields after the header, at the
 // next sequence number.
 func (c *counterparty) send(msgType string, fields ...string) {
 	c.t.Helper()
-	b := fix2.NewBuilder(session.FIX44, msgType).
+	b := fix.NewBuilder(session.FIX44, msgType).
 		SetString(49, "ACC").SetString(56, "INI").SetInt(34, c.seq).
-		SetString(52, string(fix2.AppendUTCTimestamp(nil, time.Now(), fix2.Milliseconds)))
+		SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds)))
 	c.seq++
 	for i := 0; i+1 < len(fields); i += 2 {
 		tag, _ := strconv.Atoi(fields[i])
@@ -62,7 +62,7 @@ func (c *counterparty) expect(msgType string, fields ...string) {
 	if err != nil {
 		c.t.Fatalf("expected MsgType %s: %v", msgType, err)
 	}
-	m, err := fix2.Parse(frame)
+	m, err := fix.Parse(frame)
 	if err != nil {
 		c.t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func replayWaitingForPool(t *testing.T) *poolReplay {
 	r.peer.expect("A")
 	r.peer.send("A", "98", "0", "108", "30")
 	waitFor(t, "the Logon", func() bool { return r.s.State() == session.StateLoggedOn })
-	if _, err := r.s.Send(context.Background(), fix2.NewBuilder(session.FIX44, "D").SetString(11, "O1")); err != nil {
+	if _, err := r.s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "O1")); err != nil {
 		t.Fatal(err)
 	}
 	r.peer.expect("D", "34", "2")

@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Logout struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapLogout(msg *fix2.Message) *Logout {
+func WrapLogout(msg *fix.Message) *Logout {
 	return &Logout{msg: msg}
 }
 func (m *Logout) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *Logout) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *Logout) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Logout) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *Logout) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *Logout) Text() (string, bool) {
@@ -66,11 +66,11 @@ func (m *Logout) Text() (string, bool) {
 // LogoutBuilder builds a Logout message. A copy shares its fields and
 // groups with the original.
 type LogoutBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildLogout(beginString string) *LogoutBuilder {
-	b := &LogoutBuilder{Builder: fix2.NewBuilder(beginString, "5")}
+	b := &LogoutBuilder{Builder: fix.NewBuilder(beginString, "5")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -87,10 +87,10 @@ func (b *LogoutBuilder) SetMsgSeqNum(v int) *LogoutBuilder {
 	return b
 }
 func (b *LogoutBuilder) SetSendingTime(v time.Time) *LogoutBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LogoutBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogoutBuilder {
+func (b *LogoutBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LogoutBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

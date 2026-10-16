@@ -3,19 +3,19 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type MarketDataIncrementalRefresh struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataIncrementalRefresh(msg *fix2.Message) *MarketDataIncrementalRefresh {
+func WrapMarketDataIncrementalRefresh(msg *fix.Message) *MarketDataIncrementalRefresh {
 	return &MarketDataIncrementalRefresh{msg: msg}
 }
 
-var marketDataIncrementalRefresh_specs = []*fix2.GroupSpec{marketDataIncrementalRefresh_NoMDEntries_spec}
+var marketDataIncrementalRefresh_specs = []*fix.GroupSpec{marketDataIncrementalRefresh_NoMDEntries_spec}
 
 func (m *MarketDataIncrementalRefresh) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -34,7 +34,7 @@ func (m *MarketDataIncrementalRefresh) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataIncrementalRefresh) SendingTimeBytes() ([]byte, bool) {
@@ -46,7 +46,7 @@ func (m *MarketDataIncrementalRefresh) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *MarketDataIncrementalRefresh) RecvWindowBytes() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *MarketDataIncrementalRefresh) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *MarketDataIncrementalRefresh) MDReqID() (string, bool) {
@@ -74,12 +74,12 @@ func (m *MarketDataIncrementalRefresh) NoMDEntries() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // marketDataIncrementalRefresh_unknown reports whether MarketDataIncrementalRefresh does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func marketDataIncrementalRefresh_unknown(tag int) bool {
 	switch tag {
 	case
@@ -94,7 +94,7 @@ func marketDataIncrementalRefresh_unknown(tag int) bool {
 	return true
 }
 
-var marketDataIncrementalRefresh_NoMDEntries_spec = &fix2.GroupSpec{
+var marketDataIncrementalRefresh_NoMDEntries_spec = &fix.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDUpdateAction,
 	Tags:    []int{TagMDUpdateAction, TagMDEntryPx, TagMDEntrySize, TagMDEntryType, TagSymbol, TagTransactTime, TagTradeID, TagAggressorSide, TagFirstBookUpdateID, TagLastBookUpdateID},
@@ -107,7 +107,7 @@ func (m *MarketDataIncrementalRefresh) NoMDEntriesEntries() []NoMDEntriesEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataIncrementalRefresh_specs, func(g fix2.Group) NoMDEntriesEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, marketDataIncrementalRefresh_specs, func(g fix.Group) NoMDEntriesEntry {
 		return NoMDEntriesEntry{
 			grp:  g,
 			spec: spec,
@@ -122,13 +122,13 @@ type marketDataIncrementalRefresh_groups struct {
 // MarketDataIncrementalRefreshBuilder builds a MarketDataIncrementalRefresh message. A copy shares its fields and
 // groups with the original.
 type MarketDataIncrementalRefreshBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *marketDataIncrementalRefresh_groups
 }
 
 func BuildMarketDataIncrementalRefresh(beginString string) *MarketDataIncrementalRefreshBuilder {
 	b := &MarketDataIncrementalRefreshBuilder{
-		Builder: fix2.NewBuilder(beginString, "X"),
+		Builder: fix.NewBuilder(beginString, "X"),
 		groups:  &marketDataIncrementalRefresh_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -149,10 +149,10 @@ func (b *MarketDataIncrementalRefreshBuilder) SetMsgSeqNum(v int) *MarketDataInc
 	return b
 }
 func (b *MarketDataIncrementalRefreshBuilder) SetSendingTime(v time.Time) *MarketDataIncrementalRefreshBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *MarketDataIncrementalRefreshBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *MarketDataIncrementalRefreshBuilder {
+func (b *MarketDataIncrementalRefreshBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *MarketDataIncrementalRefreshBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -179,9 +179,9 @@ func (b *marketDataIncrementalRefresh_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *marketDataIncrementalRefresh_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *marketDataIncrementalRefresh_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noMDEntriesEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMDEntries, len(b.noMDEntriesEntries))
+		dst = fix.AppendCount(dst, TagNoMDEntries, len(b.noMDEntriesEntries))
 		for _, entry := range b.noMDEntriesEntries {
 			dst = entry.appendTo(dst, marketDataIncrementalRefresh_NoMDEntries_layout)
 		}

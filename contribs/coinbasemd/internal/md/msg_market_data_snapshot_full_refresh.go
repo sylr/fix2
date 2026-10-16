@@ -2,17 +2,17 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type MarketDataSnapshotFullRefresh struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataSnapshotFullRefresh(msg *fix2.Message) *MarketDataSnapshotFullRefresh {
+func WrapMarketDataSnapshotFullRefresh(msg *fix.Message) *MarketDataSnapshotFullRefresh {
 	return &MarketDataSnapshotFullRefresh{msg: msg}
 }
 
-var marketDataSnapshotFullRefresh_specs = []*fix2.GroupSpec{marketDataSnapshotFullRefresh_NoMDEntries_spec}
+var marketDataSnapshotFullRefresh_specs = []*fix.GroupSpec{marketDataSnapshotFullRefresh_NoMDEntries_spec}
 
 func (m *MarketDataSnapshotFullRefresh) MDReqID() (string, bool) {
 	v := m.msg.Get(TagMDReqID)
@@ -51,7 +51,7 @@ func (m *MarketDataSnapshotFullRefresh) StrikePrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *MarketDataSnapshotFullRefresh) MDSecurityTradingStatus() (string, bool) {
@@ -67,12 +67,12 @@ func (m *MarketDataSnapshotFullRefresh) NoMDEntries() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // marketDataSnapshotFullRefresh_unknown reports whether MarketDataSnapshotFullRefresh does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func marketDataSnapshotFullRefresh_unknown(tag int) bool {
 	switch tag {
 	case
@@ -94,7 +94,7 @@ func marketDataSnapshotFullRefresh_unknown(tag int) bool {
 	return true
 }
 
-var marketDataSnapshotFullRefresh_NoMDEntries_spec = &fix2.GroupSpec{
+var marketDataSnapshotFullRefresh_NoMDEntries_spec = &fix.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDEntryType,
 	Tags:    []int{TagMDEntryType, TagMDEntryID, TagMDEntryPx, TagMDEntrySize},
@@ -107,7 +107,7 @@ func (m *MarketDataSnapshotFullRefresh) NoMDEntriesEntries() []NoMDEntriesEntry 
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataSnapshotFullRefresh_specs, func(g fix2.Group) NoMDEntriesEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, marketDataSnapshotFullRefresh_specs, func(g fix.Group) NoMDEntriesEntry {
 		return NoMDEntriesEntry{
 			grp:  g,
 			spec: spec,
@@ -122,13 +122,13 @@ type marketDataSnapshotFullRefresh_groups struct {
 // MarketDataSnapshotFullRefreshBuilder builds a MarketDataSnapshotFullRefresh message. A copy shares its fields and
 // groups with the original.
 type MarketDataSnapshotFullRefreshBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *marketDataSnapshotFullRefresh_groups
 }
 
 func BuildMarketDataSnapshotFullRefresh(beginString string) *MarketDataSnapshotFullRefreshBuilder {
 	b := &MarketDataSnapshotFullRefreshBuilder{
-		Builder: fix2.NewBuilder(beginString, "W"),
+		Builder: fix.NewBuilder(beginString, "W"),
 		groups:  &marketDataSnapshotFullRefresh_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -187,9 +187,9 @@ func (b *marketDataSnapshotFullRefresh_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *marketDataSnapshotFullRefresh_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *marketDataSnapshotFullRefresh_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noMDEntriesEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMDEntries, len(b.noMDEntriesEntries))
+		dst = fix.AppendCount(dst, TagNoMDEntries, len(b.noMDEntriesEntries))
 		for _, entry := range b.noMDEntriesEntries {
 			dst = entry.appendTo(dst, marketDataSnapshotFullRefresh_NoMDEntries_layout)
 		}

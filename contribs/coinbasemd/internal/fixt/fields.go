@@ -247,7 +247,7 @@ var standardTrailer = []int{TagSignatureLength, TagSignature}
 
 // envelopeUnknown reports whether no message defines tag, header and trailer
 // included: the entries of their groups, which every message carries, then
-// keep it (see fix2.GroupSpec).
+// keep it (see fix.GroupSpec).
 func envelopeUnknown(tag int) bool {
 	switch tag {
 	case

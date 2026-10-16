@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/fix/session/store"
 )
 
 // BenchmarkAppend stores 200-byte messages, synced every batch of size

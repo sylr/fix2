@@ -3,14 +3,14 @@
 package fixt
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"strconv"
 	"time"
 )
 
 type NoHopsEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoHopsEntry) HopCompID() (string, bool) {
@@ -26,7 +26,7 @@ func (e *NoHopsEntry) HopSendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (e *NoHopsEntry) HopRefIDBytes() ([]byte, bool) {
@@ -38,31 +38,31 @@ func (e *NoHopsEntry) HopRefID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 type NoHopsEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoHopsEntry() *NoHopsEntryBuilder {
 	return &NoHopsEntryBuilder{}
 }
 func (e *NoHopsEntryBuilder) SetHopCompID(v string) *NoHopsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagHopCompID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagHopCompID, []byte(v))
 	return e
 }
 func (e *NoHopsEntryBuilder) SetHopSendingTime(v time.Time) *NoHopsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagHopSendingTime, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
+	e.fields = fix.SetField(e.fields, TagHopSendingTime, []byte(v.UTC().Format(fix.TimeFormatTimestamp)))
 	return e
 }
-func (e *NoHopsEntryBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoHopsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagHopSendingTime, []byte(v.UTC().Format(f)))
+func (e *NoHopsEntryBuilder) SetHopSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *NoHopsEntryBuilder {
+	e.fields = fix.SetField(e.fields, TagHopSendingTime, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoHopsEntryBuilder) SetHopRefID(v int) *NoHopsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagHopRefID, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagHopRefID, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 
@@ -70,11 +70,11 @@ func (e *NoHopsEntryBuilder) SetHopRefID(v int) *NoHopsEntryBuilder {
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoHopsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoHopsEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

@@ -3,19 +3,19 @@
 package fixt
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Heartbeat struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapHeartbeat(msg *fix2.Message) *Heartbeat {
+func WrapHeartbeat(msg *fix.Message) *Heartbeat {
 	return &Heartbeat{msg: msg}
 }
 
-var heartbeat_specs = []*fix2.GroupSpec{heartbeat_NoHops_spec}
+var heartbeat_specs = []*fix.GroupSpec{heartbeat_NoHops_spec}
 
 func (m *Heartbeat) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -42,7 +42,7 @@ func (m *Heartbeat) SecureDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) SecureData() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *Heartbeat) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) SenderSubID() (string, bool) {
@@ -118,7 +118,7 @@ func (m *Heartbeat) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Heartbeat) OrigSendingTimeBytes() ([]byte, bool) {
@@ -130,7 +130,7 @@ func (m *Heartbeat) OrigSendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Heartbeat) XmlDataLenBytes() ([]byte, bool) {
@@ -142,7 +142,7 @@ func (m *Heartbeat) XmlDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) XmlData() ([]byte, bool) {
@@ -162,7 +162,7 @@ func (m *Heartbeat) LastMsgSeqNumProcessed() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) NoHopsBytes() ([]byte, bool) {
@@ -174,7 +174,7 @@ func (m *Heartbeat) NoHops() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) ApplVerID() (ApplVerID, bool) {
@@ -198,7 +198,7 @@ func (m *Heartbeat) SignatureLength() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Heartbeat) Signature() ([]byte, bool) {
@@ -206,7 +206,7 @@ func (m *Heartbeat) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
-var heartbeat_NoHops_spec = &fix2.GroupSpec{
+var heartbeat_NoHops_spec = &fix.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
@@ -219,7 +219,7 @@ func (m *Heartbeat) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, heartbeat_specs, func(g fix2.Group) NoHopsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, heartbeat_specs, func(g fix.Group) NoHopsEntry {
 		return NoHopsEntry{
 			grp:  g,
 			spec: spec,
@@ -234,13 +234,13 @@ type heartbeat_groups struct {
 // HeartbeatBuilder builds a Heartbeat message. A copy shares its fields and
 // groups with the original.
 type HeartbeatBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *heartbeat_groups
 }
 
 func BuildHeartbeat(beginString string) *HeartbeatBuilder {
 	b := &HeartbeatBuilder{
-		Builder: fix2.NewBuilder(beginString, "0"),
+		Builder: fix.NewBuilder(beginString, "0"),
 		groups:  &heartbeat_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
@@ -315,18 +315,18 @@ func (b *HeartbeatBuilder) SetPossResend(v bool) *HeartbeatBuilder {
 	return b
 }
 func (b *HeartbeatBuilder) SetSendingTime(v time.Time) *HeartbeatBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *HeartbeatBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *HeartbeatBuilder {
+func (b *HeartbeatBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *HeartbeatBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *HeartbeatBuilder) SetOrigSendingTime(v time.Time) *HeartbeatBuilder {
-	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *HeartbeatBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *HeartbeatBuilder {
+func (b *HeartbeatBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *HeartbeatBuilder {
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -377,9 +377,9 @@ func (b *heartbeat_groups) reset() {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *heartbeat_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *heartbeat_groups) appendHeaderTo(dst []fix.Field) []fix.Field {
 	if len(b.noHopsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		dst = fix.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst, heartbeat_NoHops_layout)
 		}

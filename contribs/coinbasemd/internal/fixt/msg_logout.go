@@ -3,19 +3,19 @@
 package fixt
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Logout struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapLogout(msg *fix2.Message) *Logout {
+func WrapLogout(msg *fix.Message) *Logout {
 	return &Logout{msg: msg}
 }
 
-var logout_specs = []*fix2.GroupSpec{logout_NoHops_spec}
+var logout_specs = []*fix.GroupSpec{logout_NoHops_spec}
 
 func (m *Logout) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -42,7 +42,7 @@ func (m *Logout) SecureDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) SecureData() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *Logout) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) SenderSubID() (string, bool) {
@@ -118,7 +118,7 @@ func (m *Logout) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Logout) OrigSendingTimeBytes() ([]byte, bool) {
@@ -130,7 +130,7 @@ func (m *Logout) OrigSendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Logout) XmlDataLenBytes() ([]byte, bool) {
@@ -142,7 +142,7 @@ func (m *Logout) XmlDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) XmlData() ([]byte, bool) {
@@ -162,7 +162,7 @@ func (m *Logout) LastMsgSeqNumProcessed() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) NoHopsBytes() ([]byte, bool) {
@@ -174,7 +174,7 @@ func (m *Logout) NoHops() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) ApplVerID() (ApplVerID, bool) {
@@ -198,7 +198,7 @@ func (m *Logout) EncodedTextLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) EncodedText() ([]byte, bool) {
@@ -214,7 +214,7 @@ func (m *Logout) SignatureLength() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logout) Signature() ([]byte, bool) {
@@ -222,7 +222,7 @@ func (m *Logout) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
-var logout_NoHops_spec = &fix2.GroupSpec{
+var logout_NoHops_spec = &fix.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
@@ -235,7 +235,7 @@ func (m *Logout) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, logout_specs, func(g fix2.Group) NoHopsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, logout_specs, func(g fix.Group) NoHopsEntry {
 		return NoHopsEntry{
 			grp:  g,
 			spec: spec,
@@ -250,13 +250,13 @@ type logout_groups struct {
 // LogoutBuilder builds a Logout message. A copy shares its fields and
 // groups with the original.
 type LogoutBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *logout_groups
 }
 
 func BuildLogout(beginString string) *LogoutBuilder {
 	b := &LogoutBuilder{
-		Builder: fix2.NewBuilder(beginString, "5"),
+		Builder: fix.NewBuilder(beginString, "5"),
 		groups:  &logout_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
@@ -331,18 +331,18 @@ func (b *LogoutBuilder) SetPossResend(v bool) *LogoutBuilder {
 	return b
 }
 func (b *LogoutBuilder) SetSendingTime(v time.Time) *LogoutBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LogoutBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogoutBuilder {
+func (b *LogoutBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LogoutBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *LogoutBuilder) SetOrigSendingTime(v time.Time) *LogoutBuilder {
-	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LogoutBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogoutBuilder {
+func (b *LogoutBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LogoutBuilder {
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -399,9 +399,9 @@ func (b *logout_groups) reset() {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *logout_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *logout_groups) appendHeaderTo(dst []fix.Field) []fix.Field {
 	if len(b.noHopsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		dst = fix.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst, logout_NoHops_layout)
 		}

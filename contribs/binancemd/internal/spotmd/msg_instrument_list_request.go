@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type InstrumentListRequest struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapInstrumentListRequest(msg *fix2.Message) *InstrumentListRequest {
+func WrapInstrumentListRequest(msg *fix.Message) *InstrumentListRequest {
 	return &InstrumentListRequest{msg: msg}
 }
 func (m *InstrumentListRequest) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *InstrumentListRequest) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *InstrumentListRequest) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *InstrumentListRequest) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *InstrumentListRequest) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *InstrumentListRequest) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *InstrumentListRequest) InstrumentReqID() (string, bool) {
@@ -74,11 +74,11 @@ func (m *InstrumentListRequest) Symbol() (string, bool) {
 // InstrumentListRequestBuilder builds a InstrumentListRequest message. A copy shares its fields and
 // groups with the original.
 type InstrumentListRequestBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildInstrumentListRequest(beginString string) *InstrumentListRequestBuilder {
-	b := &InstrumentListRequestBuilder{Builder: fix2.NewBuilder(beginString, "x")}
+	b := &InstrumentListRequestBuilder{Builder: fix.NewBuilder(beginString, "x")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -95,10 +95,10 @@ func (b *InstrumentListRequestBuilder) SetMsgSeqNum(v int) *InstrumentListReques
 	return b
 }
 func (b *InstrumentListRequestBuilder) SetSendingTime(v time.Time) *InstrumentListRequestBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *InstrumentListRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *InstrumentListRequestBuilder {
+func (b *InstrumentListRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *InstrumentListRequestBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

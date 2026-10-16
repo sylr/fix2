@@ -3,19 +3,19 @@
 package fixt
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type TestRequest struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapTestRequest(msg *fix2.Message) *TestRequest {
+func WrapTestRequest(msg *fix.Message) *TestRequest {
 	return &TestRequest{msg: msg}
 }
 
-var testRequest_specs = []*fix2.GroupSpec{testRequest_NoHops_spec}
+var testRequest_specs = []*fix.GroupSpec{testRequest_NoHops_spec}
 
 func (m *TestRequest) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -42,7 +42,7 @@ func (m *TestRequest) SecureDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) SecureData() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *TestRequest) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) SenderSubID() (string, bool) {
@@ -118,7 +118,7 @@ func (m *TestRequest) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *TestRequest) OrigSendingTimeBytes() ([]byte, bool) {
@@ -130,7 +130,7 @@ func (m *TestRequest) OrigSendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *TestRequest) XmlDataLenBytes() ([]byte, bool) {
@@ -142,7 +142,7 @@ func (m *TestRequest) XmlDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) XmlData() ([]byte, bool) {
@@ -162,7 +162,7 @@ func (m *TestRequest) LastMsgSeqNumProcessed() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) NoHopsBytes() ([]byte, bool) {
@@ -174,7 +174,7 @@ func (m *TestRequest) NoHops() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) ApplVerID() (ApplVerID, bool) {
@@ -198,7 +198,7 @@ func (m *TestRequest) SignatureLength() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *TestRequest) Signature() ([]byte, bool) {
@@ -206,7 +206,7 @@ func (m *TestRequest) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
-var testRequest_NoHops_spec = &fix2.GroupSpec{
+var testRequest_NoHops_spec = &fix.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
@@ -219,7 +219,7 @@ func (m *TestRequest) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, testRequest_specs, func(g fix2.Group) NoHopsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, testRequest_specs, func(g fix.Group) NoHopsEntry {
 		return NoHopsEntry{
 			grp:  g,
 			spec: spec,
@@ -234,13 +234,13 @@ type testRequest_groups struct {
 // TestRequestBuilder builds a TestRequest message. A copy shares its fields and
 // groups with the original.
 type TestRequestBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *testRequest_groups
 }
 
 func BuildTestRequest(beginString string) *TestRequestBuilder {
 	b := &TestRequestBuilder{
-		Builder: fix2.NewBuilder(beginString, "1"),
+		Builder: fix.NewBuilder(beginString, "1"),
 		groups:  &testRequest_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
@@ -315,18 +315,18 @@ func (b *TestRequestBuilder) SetPossResend(v bool) *TestRequestBuilder {
 	return b
 }
 func (b *TestRequestBuilder) SetSendingTime(v time.Time) *TestRequestBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *TestRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *TestRequestBuilder {
+func (b *TestRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *TestRequestBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *TestRequestBuilder) SetOrigSendingTime(v time.Time) *TestRequestBuilder {
-	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *TestRequestBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *TestRequestBuilder {
+func (b *TestRequestBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *TestRequestBuilder {
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -377,9 +377,9 @@ func (b *testRequest_groups) reset() {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *testRequest_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *testRequest_groups) appendHeaderTo(dst []fix.Field) []fix.Field {
 	if len(b.noHopsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		dst = fix.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst, testRequest_NoHops_layout)
 		}

@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/session"
-	"github.com/sylr/fix2/session/transport"
-	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/transport"
+	"github.com/sylr/fix2/transport/mem"
 )
 
 const (
@@ -91,7 +91,7 @@ func TestRun_Failure(t *testing.T) {
 type fakeCoinbase struct {
 	t    *testing.T
 	conn transport.Conn
-	msgs chan *fix2.Message
+	msgs chan *fix.Message
 	seq  int
 }
 
@@ -103,16 +103,16 @@ func acceptCoinbase(t *testing.T, l *mem.Listener) *fakeCoinbase {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeCoinbase{t: t, conn: conn, msgs: make(chan *fix2.Message, 100), seq: 1}
+	f := &fakeCoinbase{t: t, conn: conn, msgs: make(chan *fix.Message, 100), seq: 1}
 	go func() {
 		defer close(f.msgs)
-		fr := fix2.NewFramer(conn, fix2.FramerOptions{})
+		fr := fix.NewFramer(conn, fix.FramerOptions{})
 		for {
 			frame, err := fr.Next()
 			if err != nil {
 				return
 			}
-			m, err := fix2.Parse(bytes.Clone(frame))
+			m, err := fix.Parse(bytes.Clone(frame))
 			if err != nil {
 				t.Errorf("client sent an invalid message: %v", err)
 				return
@@ -124,7 +124,7 @@ func acceptCoinbase(t *testing.T, l *mem.Listener) *fakeCoinbase {
 }
 
 // expect returns the client's next message, of msgType.
-func (f *fakeCoinbase) expect(msgType string) *fix2.Message {
+func (f *fakeCoinbase) expect(msgType string) *fix.Message {
 	f.t.Helper()
 	for {
 		select {
@@ -171,9 +171,9 @@ func (f *fakeCoinbase) logon() {
 // send sends a message of msgType with fields after the header.
 func (f *fakeCoinbase) send(msgType string, fields ...string) {
 	f.t.Helper()
-	b := fix2.NewBuilder("FIXT.1.1", msgType).
+	b := fix.NewBuilder("FIXT.1.1", msgType).
 		SetString(49, "Coinbase").SetString(56, testKey).SetInt(34, f.seq).
-		SetString(52, string(fix2.AppendUTCTimestamp(nil, time.Now(), fix2.Milliseconds)))
+		SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds)))
 	f.seq++
 	for i := 0; i+1 < len(fields); i += 2 {
 		tag, _ := strconv.Atoi(fields[i])

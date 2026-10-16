@@ -2,11 +2,11 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type NoEventsEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoEventsEntry) EventType() (EventType, bool) {
@@ -19,18 +19,18 @@ func (e *NoEventsEntry) EventTime() (string, bool) {
 }
 
 type NoEventsEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoEventsEntry() *NoEventsEntryBuilder {
 	return &NoEventsEntryBuilder{}
 }
 func (e *NoEventsEntryBuilder) SetEventType(v EventType) *NoEventsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEventType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagEventType, []byte(string(v)))
 	return e
 }
 func (e *NoEventsEntryBuilder) SetEventTime(v string) *NoEventsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEventTime, []byte(v))
+	e.fields = fix.SetField(e.fields, TagEventTime, []byte(v))
 	return e
 }
 
@@ -38,11 +38,11 @@ func (e *NoEventsEntryBuilder) SetEventTime(v string) *NoEventsEntryBuilder {
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoEventsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoEventsEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

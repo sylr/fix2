@@ -3,13 +3,13 @@
 package md
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"strconv"
 )
 
 type NoRelatedSymEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 // get returns the value of the entry's field with the given tag, outside its
@@ -57,7 +57,7 @@ func (e *NoRelatedSymEntry) StrikePrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) ContractMultiplierBytes() ([]byte, bool) {
@@ -69,7 +69,7 @@ func (e *NoRelatedSymEntry) ContractMultiplier() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) UnderlyingSymbol() (string, bool) {
@@ -97,7 +97,7 @@ func (e *NoRelatedSymEntry) NoUnderlyings() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoRelatedSymEntry) SettlPriceBytes() ([]byte, bool) {
@@ -109,7 +109,7 @@ func (e *NoRelatedSymEntry) SettlPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) SettlPriceType() (SettlPriceType, bool) {
@@ -125,7 +125,7 @@ func (e *NoRelatedSymEntry) PriorSettlPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) SecuritySubType() (SecuritySubType, bool) {
@@ -149,7 +149,7 @@ func (e *NoRelatedSymEntry) MaxTradeVol() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MaxPriceVariationBytes() ([]byte, bool) {
@@ -161,7 +161,7 @@ func (e *NoRelatedSymEntry) MaxPriceVariation() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) UnitOfMeasureQtyBytes() ([]byte, bool) {
@@ -173,7 +173,7 @@ func (e *NoRelatedSymEntry) UnitOfMeasureQty() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) LowLimitPriceBytes() ([]byte, bool) {
@@ -185,7 +185,7 @@ func (e *NoRelatedSymEntry) LowLimitPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) HighLimitPriceBytes() ([]byte, bool) {
@@ -197,7 +197,7 @@ func (e *NoRelatedSymEntry) HighLimitPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MDSecurityTradingStatus() (string, bool) {
@@ -213,7 +213,7 @@ func (e *NoRelatedSymEntry) ClearedVolume() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) OpenInterestQtyBytes() ([]byte, bool) {
@@ -225,7 +225,7 @@ func (e *NoRelatedSymEntry) OpenInterestQty() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) TradingReferenceDate() (string, bool) {
@@ -245,7 +245,7 @@ func (e *NoRelatedSymEntry) LargeTickThreshold() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) LargeTickBytes() ([]byte, bool) {
@@ -257,7 +257,7 @@ func (e *NoRelatedSymEntry) LargeTick() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MinSizeIncrement() (string, bool) {
@@ -273,7 +273,7 @@ func (e *NoRelatedSymEntry) NoEvents() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoRelatedSymEntry) NoEventsEntries() []NoEventsEntry {
@@ -281,7 +281,7 @@ func (e *NoRelatedSymEntry) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoEventsEntry {
+	return fix.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix.Group) NoEventsEntry {
 		return NoEventsEntry{
 			grp:  g,
 			spec: spec,
@@ -297,7 +297,7 @@ func (e *NoRelatedSymEntry) NoLegs() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoRelatedSymEntry) NoLegsEntries() []NoLegsEntry {
@@ -305,7 +305,7 @@ func (e *NoRelatedSymEntry) NoLegsEntries() []NoLegsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix2.Group) NoLegsEntry {
+	return fix.EntriesOf(e.grp.Fields(), spec, e.spec.Nested, func(g fix.Group) NoLegsEntry {
 		return NoLegsEntry{
 			grp:  g,
 			spec: spec,
@@ -314,7 +314,7 @@ func (e *NoRelatedSymEntry) NoLegsEntries() []NoLegsEntry {
 }
 
 type NoRelatedSymEntryBuilder struct {
-	fields          []fix2.Field
+	fields          []fix.Field
 	noEventsEntries []*NoEventsEntryBuilder
 	noLegsEntries   []*NoLegsEntryBuilder
 }
@@ -323,135 +323,135 @@ func NewNoRelatedSymEntry() *NoRelatedSymEntryBuilder {
 	return &NoRelatedSymEntryBuilder{}
 }
 func (e *NoRelatedSymEntryBuilder) SetSymbol(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSymbol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagSymbol, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetCurrency(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagCurrency, []byte(v))
+	e.fields = fix.SetField(e.fields, TagCurrency, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetSecurityDesc(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSecurityDesc, []byte(v))
+	e.fields = fix.SetField(e.fields, TagSecurityDesc, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetSettlCurrency(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSettlCurrency, []byte(v))
+	e.fields = fix.SetField(e.fields, TagSettlCurrency, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetSecurityType(v SecurityType) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSecurityType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagSecurityType, []byte(string(v)))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMaturityMonthYear(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMaturityMonthYear, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMaturityMonthYear, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetPutOrCall(v PutOrCall) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagPutOrCall, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagPutOrCall, []byte(string(v)))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetStrikePrice(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagStrikePrice, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagStrikePrice, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetContractMultiplier(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagContractMultiplier, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagContractMultiplier, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetUnderlyingSymbol(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingSymbol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagUnderlyingSymbol, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetCFICode(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagCFICode, []byte(v))
+	e.fields = fix.SetField(e.fields, TagCFICode, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetUnderlyingProduct(v UnderlyingProduct) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnderlyingProduct, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagUnderlyingProduct, []byte(string(v)))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMinTradeVol(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMinTradeVol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMinTradeVol, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetNoUnderlyings(v int) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagNoUnderlyings, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagNoUnderlyings, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetSettlPrice(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSettlPrice, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagSettlPrice, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetSettlPriceType(v SettlPriceType) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSettlPriceType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagSettlPriceType, []byte(string(v)))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetPriorSettlPrice(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagPriorSettlPrice, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagPriorSettlPrice, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetSecuritySubType(v SecuritySubType) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSecuritySubType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagSecuritySubType, []byte(string(v)))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMinPriceIncrement(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMinPriceIncrement, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMinPriceIncrement, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetUnitOfMeasure(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnitOfMeasure, []byte(v))
+	e.fields = fix.SetField(e.fields, TagUnitOfMeasure, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMaxTradeVol(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMaxTradeVol, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMaxTradeVol, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMaxPriceVariation(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMaxPriceVariation, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMaxPriceVariation, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetUnitOfMeasureQty(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagUnitOfMeasureQty, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagUnitOfMeasureQty, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetLowLimitPrice(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLowLimitPrice, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagLowLimitPrice, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetHighLimitPrice(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagHighLimitPrice, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagHighLimitPrice, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMDSecurityTradingStatus(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDSecurityTradingStatus, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMDSecurityTradingStatus, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetClearedVolume(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagClearedVolume, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagClearedVolume, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetOpenInterestQty(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagOpenInterestQty, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagOpenInterestQty, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetTradingReferenceDate(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTradingReferenceDate, []byte(v))
+	e.fields = fix.SetField(e.fields, TagTradingReferenceDate, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetAsset(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagAsset, []byte(v))
+	e.fields = fix.SetField(e.fields, TagAsset, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetLargeTickThreshold(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLargeTickThreshold, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagLargeTickThreshold, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetLargeTick(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLargeTick, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagLargeTick, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMinSizeIncrement(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMinSizeIncrement, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMinSizeIncrement, []byte(v))
 	return e
 }
 
@@ -473,25 +473,25 @@ func (e *NoRelatedSymEntryBuilder) AddNoLegsEntry(ne *NoLegsEntryBuilder) *NoRel
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoRelatedSymEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoRelatedSymEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		case TagNoEvents:
 			if len(e.noEventsEntries) > 0 || tag == l.tags[0] {
-				dst = fix2.AppendCount(dst, TagNoEvents, len(e.noEventsEntries))
+				dst = fix.AppendCount(dst, TagNoEvents, len(e.noEventsEntries))
 				for _, entry := range e.noEventsEntries {
 					dst = entry.appendTo(dst, l.nested[TagNoEvents])
 				}
 			}
 		case TagNoLegs:
 			if len(e.noLegsEntries) > 0 || tag == l.tags[0] {
-				dst = fix2.AppendCount(dst, TagNoLegs, len(e.noLegsEntries))
+				dst = fix.AppendCount(dst, TagNoLegs, len(e.noLegsEntries))
 				for _, entry := range e.noLegsEntries {
 					dst = entry.appendTo(dst, l.nested[TagNoLegs])
 				}
 			}
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

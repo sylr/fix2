@@ -3,7 +3,7 @@
 package md
 
 import (
-	"github.com/sylr/fix2/dictionary"
+	"github.com/sylr/fix2/fix/dictionary"
 	"sync"
 )
 

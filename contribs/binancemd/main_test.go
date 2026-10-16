@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/session"
-	"github.com/sylr/fix2/session/transport"
-	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/transport"
+	"github.com/sylr/fix2/transport/mem"
 )
 
 // docKey is the example private key of Binance's FIX API documentation.
@@ -137,7 +137,7 @@ type fakeBinance struct {
 	t    *testing.T
 	pub  ed25519.PublicKey
 	conn transport.Conn
-	msgs chan *fix2.Message
+	msgs chan *fix.Message
 	seq  int
 	cid  string // the client's SenderCompID
 }
@@ -150,16 +150,16 @@ func acceptBinance(t *testing.T, l *mem.Listener, pub ed25519.PublicKey) *fakeBi
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeBinance{t: t, pub: pub, conn: conn, msgs: make(chan *fix2.Message, 100), seq: 1}
+	f := &fakeBinance{t: t, pub: pub, conn: conn, msgs: make(chan *fix.Message, 100), seq: 1}
 	go func() {
 		defer close(f.msgs)
-		fr := fix2.NewFramer(conn, fix2.FramerOptions{})
+		fr := fix.NewFramer(conn, fix.FramerOptions{})
 		for {
 			frame, err := fr.Next()
 			if err != nil {
 				return
 			}
-			m, err := fix2.Parse(bytes.Clone(frame))
+			m, err := fix.Parse(bytes.Clone(frame))
 			if err != nil {
 				t.Errorf("client sent an invalid message: %v", err)
 				return
@@ -171,7 +171,7 @@ func acceptBinance(t *testing.T, l *mem.Listener, pub ed25519.PublicKey) *fakeBi
 }
 
 // expect returns the client's next message, of msgType.
-func (f *fakeBinance) expect(msgType string) *fix2.Message {
+func (f *fakeBinance) expect(msgType string) *fix.Message {
 	f.t.Helper()
 	for {
 		select {
@@ -220,9 +220,9 @@ func (f *fakeBinance) send(msgType string, fields ...string) {
 
 // trySend is send to a client that may have hung up already.
 func (f *fakeBinance) trySend(msgType string, fields ...string) error {
-	b := fix2.NewBuilder("FIX.4.4", msgType).
+	b := fix.NewBuilder("FIX.4.4", msgType).
 		SetString(49, "SPOT").SetString(56, f.cid).SetInt(34, f.seq).
-		SetString(52, string(fix2.AppendUTCTimestamp(nil, time.Now(), fix2.Microseconds)))
+		SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Microseconds)))
 	f.seq++
 	for i := 0; i+1 < len(fields); i += 2 {
 		tag, _ := strconv.Atoi(fields[i])

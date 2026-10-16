@@ -2,13 +2,13 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type MarketDataRequestReject struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataRequestReject(msg *fix2.Message) *MarketDataRequestReject {
+func WrapMarketDataRequestReject(msg *fix.Message) *MarketDataRequestReject {
 	return &MarketDataRequestReject{msg: msg}
 }
 func (m *MarketDataRequestReject) MDReqID() (string, bool) {
@@ -27,11 +27,11 @@ func (m *MarketDataRequestReject) Text() (string, bool) {
 // MarketDataRequestRejectBuilder builds a MarketDataRequestReject message. A copy shares its fields and
 // groups with the original.
 type MarketDataRequestRejectBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildMarketDataRequestReject(beginString string) *MarketDataRequestRejectBuilder {
-	b := &MarketDataRequestRejectBuilder{Builder: fix2.NewBuilder(beginString, "Y")}
+	b := &MarketDataRequestRejectBuilder{Builder: fix.NewBuilder(beginString, "Y")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }

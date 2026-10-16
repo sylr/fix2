@@ -3,19 +3,19 @@
 package fixt
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Reject struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapReject(msg *fix2.Message) *Reject {
+func WrapReject(msg *fix.Message) *Reject {
 	return &Reject{msg: msg}
 }
 
-var reject_specs = []*fix2.GroupSpec{reject_NoHops_spec}
+var reject_specs = []*fix.GroupSpec{reject_NoHops_spec}
 
 func (m *Reject) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -42,7 +42,7 @@ func (m *Reject) SecureDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) SecureData() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *Reject) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) SenderSubID() (string, bool) {
@@ -118,7 +118,7 @@ func (m *Reject) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Reject) OrigSendingTimeBytes() ([]byte, bool) {
@@ -130,7 +130,7 @@ func (m *Reject) OrigSendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Reject) XmlDataLenBytes() ([]byte, bool) {
@@ -142,7 +142,7 @@ func (m *Reject) XmlDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) XmlData() ([]byte, bool) {
@@ -162,7 +162,7 @@ func (m *Reject) LastMsgSeqNumProcessed() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) NoHopsBytes() ([]byte, bool) {
@@ -174,7 +174,7 @@ func (m *Reject) NoHops() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) ApplVerID() (ApplVerID, bool) {
@@ -194,7 +194,7 @@ func (m *Reject) RefSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) RefTagIDBytes() ([]byte, bool) {
@@ -206,7 +206,7 @@ func (m *Reject) RefTagID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) RefMsgType() (string, bool) {
@@ -230,7 +230,7 @@ func (m *Reject) EncodedTextLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) EncodedText() ([]byte, bool) {
@@ -246,7 +246,7 @@ func (m *Reject) SignatureLength() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Reject) Signature() ([]byte, bool) {
@@ -254,7 +254,7 @@ func (m *Reject) Signature() ([]byte, bool) {
 	return v, v != nil
 }
 
-var reject_NoHops_spec = &fix2.GroupSpec{
+var reject_NoHops_spec = &fix.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
@@ -267,7 +267,7 @@ func (m *Reject) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, reject_specs, func(g fix2.Group) NoHopsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, reject_specs, func(g fix.Group) NoHopsEntry {
 		return NoHopsEntry{
 			grp:  g,
 			spec: spec,
@@ -282,13 +282,13 @@ type reject_groups struct {
 // RejectBuilder builds a Reject message. A copy shares its fields and
 // groups with the original.
 type RejectBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *reject_groups
 }
 
 func BuildReject(beginString string) *RejectBuilder {
 	b := &RejectBuilder{
-		Builder: fix2.NewBuilder(beginString, "3"),
+		Builder: fix.NewBuilder(beginString, "3"),
 		groups:  &reject_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
@@ -363,18 +363,18 @@ func (b *RejectBuilder) SetPossResend(v bool) *RejectBuilder {
 	return b
 }
 func (b *RejectBuilder) SetSendingTime(v time.Time) *RejectBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *RejectBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *RejectBuilder {
+func (b *RejectBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *RejectBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *RejectBuilder) SetOrigSendingTime(v time.Time) *RejectBuilder {
-	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *RejectBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *RejectBuilder {
+func (b *RejectBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *RejectBuilder {
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -447,9 +447,9 @@ func (b *reject_groups) reset() {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *reject_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *reject_groups) appendHeaderTo(dst []fix.Field) []fix.Field {
 	if len(b.noHopsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		dst = fix.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst, reject_NoHops_layout)
 		}

@@ -2,13 +2,13 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type BusinessMessageReject struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapBusinessMessageReject(msg *fix2.Message) *BusinessMessageReject {
+func WrapBusinessMessageReject(msg *fix.Message) *BusinessMessageReject {
 	return &BusinessMessageReject{msg: msg}
 }
 func (m *BusinessMessageReject) RefSeqNumBytes() ([]byte, bool) {
@@ -20,7 +20,7 @@ func (m *BusinessMessageReject) RefSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *BusinessMessageReject) RefMsgType() (string, bool) {
@@ -43,11 +43,11 @@ func (m *BusinessMessageReject) Text() (string, bool) {
 // BusinessMessageRejectBuilder builds a BusinessMessageReject message. A copy shares its fields and
 // groups with the original.
 type BusinessMessageRejectBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildBusinessMessageReject(beginString string) *BusinessMessageRejectBuilder {
-	b := &BusinessMessageRejectBuilder{Builder: fix2.NewBuilder(beginString, "j")}
+	b := &BusinessMessageRejectBuilder{Builder: fix.NewBuilder(beginString, "j")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }

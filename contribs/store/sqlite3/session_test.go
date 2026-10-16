@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/contribs/store/sqlite3"
-	"github.com/sylr/fix2/session"
-	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/transport/mem"
 )
 
 type broker struct {
@@ -19,7 +19,7 @@ type broker struct {
 	orders chan string
 }
 
-func (b *broker) FromApp(_ context.Context, _ *session.Session, m *fix2.Message, in session.Inbound) error {
+func (b *broker) FromApp(_ context.Context, _ *session.Session, m *fix.Message, in session.Inbound) error {
 	b.orders <- fmt.Sprintf("order %s, seq %d", m.Get(11), in.Seq)
 	return nil
 }
@@ -65,7 +65,7 @@ func TestSessionRestart(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 		}
-		receipt, err := client.Send(ctx, fix2.NewBuilder(session.FIX44, "D").
+		receipt, err := client.Send(ctx, fix.NewBuilder(session.FIX44, "D").
 			SetString(11, order).
 			SetString(55, "AAPL").
 			SetString(54, "1"))

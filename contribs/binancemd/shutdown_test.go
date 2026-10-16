@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sylr/fix2/session/transport/mem"
+	"github.com/sylr/fix2/transport/mem"
 )
 
 // blockedWriter blocks every Write until release is closed.

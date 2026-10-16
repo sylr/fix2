@@ -3,13 +3,14 @@
 What a deployment has to size, configure and watch: memory,
 authentication, transport security, what the logs hold, audit trails, the
 SQLite store, and a disk that stops answering. Defaults are those of
-`session.Config` when a field is left at zero.
+`session.Config` (`github.com/sylr/fix2/fix/session`) when a field is left at
+zero.
 
 ## Memory
 
 Every buffer a session keeps is bounded, in messages and in bytes. The
 bounds below are per session; a process holding many sessions needs the sum.
-A message received is at most `fix2.MaxBodyLength`, 1 MiB; a message sent
+A message received is at most `fix.MaxBodyLength`, 1 MiB; a message sent
 is as large as the application makes it.
 
 | Buffer | Settings (default) | Worst case per session | When it fills |

@@ -2,11 +2,11 @@
 
 package fixt
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type NoMsgTypesEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoMsgTypesEntry) RefMsgType() (string, bool) {
@@ -27,26 +27,26 @@ func (e *NoMsgTypesEntry) RefCstmApplVerID() (string, bool) {
 }
 
 type NoMsgTypesEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoMsgTypesEntry() *NoMsgTypesEntryBuilder {
 	return &NoMsgTypesEntryBuilder{}
 }
 func (e *NoMsgTypesEntryBuilder) SetRefMsgType(v string) *NoMsgTypesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagRefMsgType, []byte(v))
+	e.fields = fix.SetField(e.fields, TagRefMsgType, []byte(v))
 	return e
 }
 func (e *NoMsgTypesEntryBuilder) SetMsgDirection(v MsgDirection) *NoMsgTypesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMsgDirection, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagMsgDirection, []byte(string(v)))
 	return e
 }
 func (e *NoMsgTypesEntryBuilder) SetRefApplVerID(v string) *NoMsgTypesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagRefApplVerID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagRefApplVerID, []byte(v))
 	return e
 }
 func (e *NoMsgTypesEntryBuilder) SetRefCstmApplVerID(v string) *NoMsgTypesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagRefCstmApplVerID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagRefCstmApplVerID, []byte(v))
 	return e
 }
 
@@ -54,11 +54,11 @@ func (e *NoMsgTypesEntryBuilder) SetRefCstmApplVerID(v string) *NoMsgTypesEntryB
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoMsgTypesEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

@@ -3,19 +3,19 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type InstrumentList struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapInstrumentList(msg *fix2.Message) *InstrumentList {
+func WrapInstrumentList(msg *fix.Message) *InstrumentList {
 	return &InstrumentList{msg: msg}
 }
 
-var instrumentList_specs = []*fix2.GroupSpec{instrumentList_NoRelatedSym_spec}
+var instrumentList_specs = []*fix.GroupSpec{instrumentList_NoRelatedSym_spec}
 
 func (m *InstrumentList) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -34,7 +34,7 @@ func (m *InstrumentList) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *InstrumentList) SendingTimeBytes() ([]byte, bool) {
@@ -46,7 +46,7 @@ func (m *InstrumentList) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *InstrumentList) RecvWindowBytes() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *InstrumentList) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *InstrumentList) InstrumentReqID() (string, bool) {
@@ -74,12 +74,12 @@ func (m *InstrumentList) NoRelatedSym() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // instrumentList_unknown reports whether InstrumentList does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func instrumentList_unknown(tag int) bool {
 	switch tag {
 	case
@@ -94,7 +94,7 @@ func instrumentList_unknown(tag int) bool {
 	return true
 }
 
-var instrumentList_NoRelatedSym_spec = &fix2.GroupSpec{
+var instrumentList_NoRelatedSym_spec = &fix.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
 	Tags:    []int{TagSymbol, TagCurrency, TagMinTradeVol, TagMaxTradeVol, TagMinQtyIncrement, TagMarketMinTradeVol, TagMarketMaxTradeVol, TagMarketMinQtyIncrement, TagStartPriceRange, TagEndPriceRange, TagMinPriceIncrement},
@@ -107,7 +107,7 @@ func (m *InstrumentList) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, instrumentList_specs, func(g fix2.Group) NoRelatedSymEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, instrumentList_specs, func(g fix.Group) NoRelatedSymEntry {
 		return NoRelatedSymEntry{
 			grp:  g,
 			spec: spec,
@@ -122,13 +122,13 @@ type instrumentList_groups struct {
 // InstrumentListBuilder builds a InstrumentList message. A copy shares its fields and
 // groups with the original.
 type InstrumentListBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *instrumentList_groups
 }
 
 func BuildInstrumentList(beginString string) *InstrumentListBuilder {
 	b := &InstrumentListBuilder{
-		Builder: fix2.NewBuilder(beginString, "y"),
+		Builder: fix.NewBuilder(beginString, "y"),
 		groups:  &instrumentList_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -149,10 +149,10 @@ func (b *InstrumentListBuilder) SetMsgSeqNum(v int) *InstrumentListBuilder {
 	return b
 }
 func (b *InstrumentListBuilder) SetSendingTime(v time.Time) *InstrumentListBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *InstrumentListBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *InstrumentListBuilder {
+func (b *InstrumentListBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *InstrumentListBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -179,9 +179,9 @@ func (b *instrumentList_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *instrumentList_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *instrumentList_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noRelatedSymEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
+		dst = fix.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
 		for _, entry := range b.noRelatedSymEntries {
 			dst = entry.appendTo(dst, instrumentList_NoRelatedSym_layout)
 		}

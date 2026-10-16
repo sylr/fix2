@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type MarketDataRequestReject struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataRequestReject(msg *fix2.Message) *MarketDataRequestReject {
+func WrapMarketDataRequestReject(msg *fix.Message) *MarketDataRequestReject {
 	return &MarketDataRequestReject{msg: msg}
 }
 func (m *MarketDataRequestReject) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *MarketDataRequestReject) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequestReject) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *MarketDataRequestReject) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *MarketDataRequestReject) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *MarketDataRequestReject) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *MarketDataRequestReject) MDReqID() (string, bool) {
@@ -75,7 +75,7 @@ func (m *MarketDataRequestReject) ErrorCode() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequestReject) Text() (string, bool) {
@@ -86,11 +86,11 @@ func (m *MarketDataRequestReject) Text() (string, bool) {
 // MarketDataRequestRejectBuilder builds a MarketDataRequestReject message. A copy shares its fields and
 // groups with the original.
 type MarketDataRequestRejectBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildMarketDataRequestReject(beginString string) *MarketDataRequestRejectBuilder {
-	b := &MarketDataRequestRejectBuilder{Builder: fix2.NewBuilder(beginString, "Y")}
+	b := &MarketDataRequestRejectBuilder{Builder: fix.NewBuilder(beginString, "Y")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -107,10 +107,10 @@ func (b *MarketDataRequestRejectBuilder) SetMsgSeqNum(v int) *MarketDataRequestR
 	return b
 }
 func (b *MarketDataRequestRejectBuilder) SetSendingTime(v time.Time) *MarketDataRequestRejectBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *MarketDataRequestRejectBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *MarketDataRequestRejectBuilder {
+func (b *MarketDataRequestRejectBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *MarketDataRequestRejectBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

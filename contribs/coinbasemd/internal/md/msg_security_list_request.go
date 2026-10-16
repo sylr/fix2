@@ -2,13 +2,13 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type SecurityListRequest struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapSecurityListRequest(msg *fix2.Message) *SecurityListRequest {
+func WrapSecurityListRequest(msg *fix.Message) *SecurityListRequest {
 	return &SecurityListRequest{msg: msg}
 }
 func (m *SecurityListRequest) SecurityReqID() (string, bool) {
@@ -23,11 +23,11 @@ func (m *SecurityListRequest) SecurityListRequestType() (SecurityListRequestType
 // SecurityListRequestBuilder builds a SecurityListRequest message. A copy shares its fields and
 // groups with the original.
 type SecurityListRequestBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildSecurityListRequest(beginString string) *SecurityListRequestBuilder {
-	b := &SecurityListRequestBuilder{Builder: fix2.NewBuilder(beginString, "x")}
+	b := &SecurityListRequestBuilder{Builder: fix.NewBuilder(beginString, "x")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }

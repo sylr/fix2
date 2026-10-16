@@ -3,19 +3,19 @@
 package fixt
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Logon struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapLogon(msg *fix2.Message) *Logon {
+func WrapLogon(msg *fix.Message) *Logon {
 	return &Logon{msg: msg}
 }
 
-var logon_specs = []*fix2.GroupSpec{logon_NoHops_spec, logon_NoMsgTypes_spec}
+var logon_specs = []*fix.GroupSpec{logon_NoHops_spec, logon_NoMsgTypes_spec}
 
 func (m *Logon) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -42,7 +42,7 @@ func (m *Logon) SecureDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) SecureData() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *Logon) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) SenderSubID() (string, bool) {
@@ -118,7 +118,7 @@ func (m *Logon) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Logon) OrigSendingTimeBytes() ([]byte, bool) {
@@ -130,7 +130,7 @@ func (m *Logon) OrigSendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Logon) XmlDataLenBytes() ([]byte, bool) {
@@ -142,7 +142,7 @@ func (m *Logon) XmlDataLen() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) XmlData() ([]byte, bool) {
@@ -162,7 +162,7 @@ func (m *Logon) LastMsgSeqNumProcessed() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) NoHopsBytes() ([]byte, bool) {
@@ -174,7 +174,7 @@ func (m *Logon) NoHops() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) ApplVerID() (ApplVerID, bool) {
@@ -198,7 +198,7 @@ func (m *Logon) HeartBtInt() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) RawData() (string, bool) {
@@ -222,7 +222,7 @@ func (m *Logon) NextExpectedMsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) MaxMessageSizeBytes() ([]byte, bool) {
@@ -234,7 +234,7 @@ func (m *Logon) MaxMessageSize() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) TestMessageIndicatorBytes() ([]byte, bool) {
@@ -266,7 +266,7 @@ func (m *Logon) NoMsgTypes() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) SignatureLengthBytes() ([]byte, bool) {
@@ -278,7 +278,7 @@ func (m *Logon) SignatureLength() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) Signature() ([]byte, bool) {
@@ -287,7 +287,7 @@ func (m *Logon) Signature() ([]byte, bool) {
 }
 
 // logon_unknown reports whether Logon does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func logon_unknown(tag int) bool {
 	switch tag {
 	case
@@ -309,7 +309,7 @@ func logon_unknown(tag int) bool {
 	return true
 }
 
-var logon_NoHops_spec = &fix2.GroupSpec{
+var logon_NoHops_spec = &fix.GroupSpec{
 	Counter: TagNoHops,
 	Delim:   TagHopCompID,
 	Tags:    []int{TagHopCompID, TagHopSendingTime, TagHopRefID},
@@ -322,7 +322,7 @@ func (m *Logon) NoHopsEntries() []NoHopsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, logon_specs, func(g fix2.Group) NoHopsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, logon_specs, func(g fix.Group) NoHopsEntry {
 		return NoHopsEntry{
 			grp:  g,
 			spec: spec,
@@ -330,7 +330,7 @@ func (m *Logon) NoHopsEntries() []NoHopsEntry {
 	})
 }
 
-var logon_NoMsgTypes_spec = &fix2.GroupSpec{
+var logon_NoMsgTypes_spec = &fix.GroupSpec{
 	Counter: TagNoMsgTypes,
 	Delim:   TagRefMsgType,
 	Tags:    []int{TagRefMsgType, TagMsgDirection, TagRefApplVerID, TagRefCstmApplVerID},
@@ -343,7 +343,7 @@ func (m *Logon) NoMsgTypesEntries() []NoMsgTypesEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, logon_specs, func(g fix2.Group) NoMsgTypesEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, logon_specs, func(g fix.Group) NoMsgTypesEntry {
 		return NoMsgTypesEntry{
 			grp:  g,
 			spec: spec,
@@ -359,13 +359,13 @@ type logon_groups struct {
 // LogonBuilder builds a Logon message. A copy shares its fields and
 // groups with the original.
 type LogonBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *logon_groups
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
 	b := &LogonBuilder{
-		Builder: fix2.NewBuilder(beginString, "A"),
+		Builder: fix.NewBuilder(beginString, "A"),
 		groups:  &logon_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, b.groups.appendHeaderTo)
@@ -440,18 +440,18 @@ func (b *LogonBuilder) SetPossResend(v bool) *LogonBuilder {
 	return b
 }
 func (b *LogonBuilder) SetSendingTime(v time.Time) *LogonBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LogonBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogonBuilder {
+func (b *LogonBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LogonBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
 func (b *LogonBuilder) SetOrigSendingTime(v time.Time) *LogonBuilder {
-	b.SetString(TagOrigSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagOrigSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LogonBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogonBuilder {
+func (b *LogonBuilder) SetOrigSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LogonBuilder {
 	b.SetString(TagOrigSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -547,9 +547,9 @@ func (b *logon_groups) reset() {
 }
 
 // appendHeaderTo appends the standard header's repeating groups to dst.
-func (b *logon_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
+func (b *logon_groups) appendHeaderTo(dst []fix.Field) []fix.Field {
 	if len(b.noHopsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
+		dst = fix.AppendCount(dst, TagNoHops, len(b.noHopsEntries))
 		for _, entry := range b.noHopsEntries {
 			dst = entry.appendTo(dst, logon_NoHops_layout)
 		}
@@ -558,9 +558,9 @@ func (b *logon_groups) appendHeaderTo(dst []fix2.Field) []fix2.Field {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *logon_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *logon_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noMsgTypesEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypesEntries))
+		dst = fix.AppendCount(dst, TagNoMsgTypes, len(b.noMsgTypesEntries))
 		for _, entry := range b.noMsgTypesEntries {
 			dst = entry.appendTo(dst, logon_NoMsgTypes_layout)
 		}

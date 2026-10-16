@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type News struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapNews(msg *fix2.Message) *News {
+func WrapNews(msg *fix.Message) *News {
 	return &News{msg: msg}
 }
 func (m *News) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *News) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *News) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *News) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *News) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *News) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *News) Headline() (string, bool) {
@@ -66,11 +66,11 @@ func (m *News) Headline() (string, bool) {
 // NewsBuilder builds a News message. A copy shares its fields and
 // groups with the original.
 type NewsBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildNews(beginString string) *NewsBuilder {
-	b := &NewsBuilder{Builder: fix2.NewBuilder(beginString, "B")}
+	b := &NewsBuilder{Builder: fix.NewBuilder(beginString, "B")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -87,10 +87,10 @@ func (b *NewsBuilder) SetMsgSeqNum(v int) *NewsBuilder {
 	return b
 }
 func (b *NewsBuilder) SetSendingTime(v time.Time) *NewsBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *NewsBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *NewsBuilder {
+func (b *NewsBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *NewsBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

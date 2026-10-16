@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type Logon struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapLogon(msg *fix2.Message) *Logon {
+func WrapLogon(msg *fix.Message) *Logon {
 	return &Logon{msg: msg}
 }
 func (m *Logon) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *Logon) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *Logon) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *Logon) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *Logon) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *Logon) EncryptMethod() (EncryptMethod, bool) {
@@ -71,7 +71,7 @@ func (m *Logon) HeartBtInt() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) RawDataLengthBytes() ([]byte, bool) {
@@ -83,7 +83,7 @@ func (m *Logon) RawDataLength() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) RawData() ([]byte, bool) {
@@ -115,7 +115,7 @@ func (m *Logon) SBESchemaID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *Logon) SBESchemaVersionBytes() ([]byte, bool) {
@@ -127,18 +127,18 @@ func (m *Logon) SBESchemaVersion() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // LogonBuilder builds a Logon message. A copy shares its fields and
 // groups with the original.
 type LogonBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildLogon(beginString string) *LogonBuilder {
-	b := &LogonBuilder{Builder: fix2.NewBuilder(beginString, "A")}
+	b := &LogonBuilder{Builder: fix.NewBuilder(beginString, "A")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -155,10 +155,10 @@ func (b *LogonBuilder) SetMsgSeqNum(v int) *LogonBuilder {
 	return b
 }
 func (b *LogonBuilder) SetSendingTime(v time.Time) *LogonBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LogonBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LogonBuilder {
+func (b *LogonBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LogonBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

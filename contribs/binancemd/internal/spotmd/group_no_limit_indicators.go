@@ -3,13 +3,13 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"strconv"
 )
 
 type NoLimitIndicatorsEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoLimitIndicatorsEntry) LimitType() (LimitType, bool) {
@@ -25,7 +25,7 @@ func (e *NoLimitIndicatorsEntry) LimitCount() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoLimitIndicatorsEntry) LimitMaxBytes() ([]byte, bool) {
@@ -37,7 +37,7 @@ func (e *NoLimitIndicatorsEntry) LimitMax() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoLimitIndicatorsEntry) LimitResetIntervalBytes() ([]byte, bool) {
@@ -49,7 +49,7 @@ func (e *NoLimitIndicatorsEntry) LimitResetInterval() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (e *NoLimitIndicatorsEntry) LimitResetIntervalResolution() (LimitResetIntervalResolution, bool) {
@@ -58,30 +58,30 @@ func (e *NoLimitIndicatorsEntry) LimitResetIntervalResolution() (LimitResetInter
 }
 
 type NoLimitIndicatorsEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoLimitIndicatorsEntry() *NoLimitIndicatorsEntryBuilder {
 	return &NoLimitIndicatorsEntryBuilder{}
 }
 func (e *NoLimitIndicatorsEntryBuilder) SetLimitType(v LimitType) *NoLimitIndicatorsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLimitType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagLimitType, []byte(string(v)))
 	return e
 }
 func (e *NoLimitIndicatorsEntryBuilder) SetLimitCount(v int) *NoLimitIndicatorsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLimitCount, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagLimitCount, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLimitIndicatorsEntryBuilder) SetLimitMax(v int) *NoLimitIndicatorsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLimitMax, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagLimitMax, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLimitIndicatorsEntryBuilder) SetLimitResetInterval(v int) *NoLimitIndicatorsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLimitResetInterval, strconv.AppendInt(nil, int64(v), 10))
+	e.fields = fix.SetField(e.fields, TagLimitResetInterval, strconv.AppendInt(nil, int64(v), 10))
 	return e
 }
 func (e *NoLimitIndicatorsEntryBuilder) SetLimitResetIntervalResolution(v LimitResetIntervalResolution) *NoLimitIndicatorsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLimitResetIntervalResolution, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagLimitResetIntervalResolution, []byte(string(v)))
 	return e
 }
 
@@ -89,11 +89,11 @@ func (e *NoLimitIndicatorsEntryBuilder) SetLimitResetIntervalResolution(v LimitR
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoLimitIndicatorsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoLimitIndicatorsEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

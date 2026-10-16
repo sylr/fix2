@@ -3,19 +3,19 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type LimitResponse struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapLimitResponse(msg *fix2.Message) *LimitResponse {
+func WrapLimitResponse(msg *fix.Message) *LimitResponse {
 	return &LimitResponse{msg: msg}
 }
 
-var limitResponse_specs = []*fix2.GroupSpec{limitResponse_NoLimitIndicators_spec}
+var limitResponse_specs = []*fix.GroupSpec{limitResponse_NoLimitIndicators_spec}
 
 func (m *LimitResponse) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -34,7 +34,7 @@ func (m *LimitResponse) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *LimitResponse) SendingTimeBytes() ([]byte, bool) {
@@ -46,7 +46,7 @@ func (m *LimitResponse) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *LimitResponse) RecvWindowBytes() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *LimitResponse) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *LimitResponse) ReqID() (string, bool) {
@@ -74,12 +74,12 @@ func (m *LimitResponse) NoLimitIndicators() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // limitResponse_unknown reports whether LimitResponse does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func limitResponse_unknown(tag int) bool {
 	switch tag {
 	case
@@ -92,7 +92,7 @@ func limitResponse_unknown(tag int) bool {
 	return true
 }
 
-var limitResponse_NoLimitIndicators_spec = &fix2.GroupSpec{
+var limitResponse_NoLimitIndicators_spec = &fix.GroupSpec{
 	Counter: TagNoLimitIndicators,
 	Delim:   TagLimitType,
 	Tags:    []int{TagLimitType, TagLimitCount, TagLimitMax, TagLimitResetInterval, TagLimitResetIntervalResolution},
@@ -105,7 +105,7 @@ func (m *LimitResponse) NoLimitIndicatorsEntries() []NoLimitIndicatorsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, limitResponse_specs, func(g fix2.Group) NoLimitIndicatorsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, limitResponse_specs, func(g fix.Group) NoLimitIndicatorsEntry {
 		return NoLimitIndicatorsEntry{
 			grp:  g,
 			spec: spec,
@@ -120,13 +120,13 @@ type limitResponse_groups struct {
 // LimitResponseBuilder builds a LimitResponse message. A copy shares its fields and
 // groups with the original.
 type LimitResponseBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *limitResponse_groups
 }
 
 func BuildLimitResponse(beginString string) *LimitResponseBuilder {
 	b := &LimitResponseBuilder{
-		Builder: fix2.NewBuilder(beginString, "XLR"),
+		Builder: fix.NewBuilder(beginString, "XLR"),
 		groups:  &limitResponse_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -147,10 +147,10 @@ func (b *LimitResponseBuilder) SetMsgSeqNum(v int) *LimitResponseBuilder {
 	return b
 }
 func (b *LimitResponseBuilder) SetSendingTime(v time.Time) *LimitResponseBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LimitResponseBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LimitResponseBuilder {
+func (b *LimitResponseBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LimitResponseBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -177,9 +177,9 @@ func (b *limitResponse_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *limitResponse_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *limitResponse_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noLimitIndicatorsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoLimitIndicators, len(b.noLimitIndicatorsEntries))
+		dst = fix.AppendCount(dst, TagNoLimitIndicators, len(b.noLimitIndicatorsEntries))
 		for _, entry := range b.noLimitIndicatorsEntries {
 			dst = entry.appendTo(dst, limitResponse_NoLimitIndicators_layout)
 		}

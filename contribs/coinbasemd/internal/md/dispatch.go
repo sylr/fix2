@@ -4,7 +4,7 @@ package md
 
 import (
 	"fmt"
-	"github.com/sylr/fix2"
+	"github.com/sylr/fix2/fix"
 )
 
 // Handler receives the messages of this package, typed, from Dispatch: embed
@@ -22,7 +22,7 @@ type Handler interface {
 }
 
 // UnimplementedHandler reports every message type unsupported (see
-// fix2.ErrUnsupportedMessageType).
+// fix.ErrUnsupportedMessageType).
 type UnimplementedHandler struct{}
 
 func (UnimplementedHandler) OnMarketDataRequest(*MarketDataRequest) error {
@@ -54,9 +54,9 @@ func (UnimplementedHandler) OnSecurityList(*SecurityList) error {
 }
 
 // Dispatch calls the method of h for m's MsgType. A type this package does not
-// define is unsupported (see fix2.ErrUnsupportedMessageType); sessions answer
+// define is unsupported (see fix.ErrUnsupportedMessageType); sessions answer
 // it with a BusinessMessageReject.
-func Dispatch(m *fix2.Message, h Handler) error {
+func Dispatch(m *fix.Message, h Handler) error {
 	switch string(m.MsgType()) {
 	case "V":
 		return h.OnMarketDataRequest(WrapMarketDataRequest(m))
@@ -80,5 +80,5 @@ func Dispatch(m *fix2.Message, h Handler) error {
 	return unsupported(string(m.MsgType()))
 }
 func unsupported(msgType string) error {
-	return fmt.Errorf("%w: %s", fix2.ErrUnsupportedMessageType, msgType)
+	return fmt.Errorf("%w: %s", fix.ErrUnsupportedMessageType, msgType)
 }

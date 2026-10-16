@@ -2,11 +2,11 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type NoLegsEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoLegsEntry) LegSymbol() (string, bool) {
@@ -35,34 +35,34 @@ func (e *NoLegsEntry) LegSide() (LegSide, bool) {
 }
 
 type NoLegsEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoLegsEntry() *NoLegsEntryBuilder {
 	return &NoLegsEntryBuilder{}
 }
 func (e *NoLegsEntryBuilder) SetLegSymbol(v string) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegSymbol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagLegSymbol, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCurrency(v string) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegCurrency, []byte(v))
+	e.fields = fix.SetField(e.fields, TagLegCurrency, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegCFICode(v string) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegCFICode, []byte(v))
+	e.fields = fix.SetField(e.fields, TagLegCFICode, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityType(v LegSecurityType) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegSecurityType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagLegSecurityType, []byte(string(v)))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSecurityDesc(v string) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegSecurityDesc, []byte(v))
+	e.fields = fix.SetField(e.fields, TagLegSecurityDesc, []byte(v))
 	return e
 }
 func (e *NoLegsEntryBuilder) SetLegSide(v LegSide) *NoLegsEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagLegSide, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagLegSide, []byte(string(v)))
 	return e
 }
 
@@ -70,11 +70,11 @@ func (e *NoLegsEntryBuilder) SetLegSide(v LegSide) *NoLegsEntryBuilder {
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoLegsEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoLegsEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

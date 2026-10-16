@@ -2,17 +2,17 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type SecurityDefinition struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapSecurityDefinition(msg *fix2.Message) *SecurityDefinition {
+func WrapSecurityDefinition(msg *fix.Message) *SecurityDefinition {
 	return &SecurityDefinition{msg: msg}
 }
 
-var securityDefinition_specs = []*fix2.GroupSpec{securityDefinition_NoEvents_spec, securityDefinition_NoLegs_spec}
+var securityDefinition_specs = []*fix.GroupSpec{securityDefinition_NoEvents_spec, securityDefinition_NoLegs_spec}
 
 func (m *SecurityDefinition) SecurityUpdateAction() (SecurityUpdateAction, bool) {
 	v := m.msg.Get(TagSecurityUpdateAction)
@@ -55,7 +55,7 @@ func (m *SecurityDefinition) StrikePrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) Asset() (string, bool) {
@@ -95,7 +95,7 @@ func (m *SecurityDefinition) MaxTradeVol() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) MinPriceIncrement() (string, bool) {
@@ -115,7 +115,7 @@ func (m *SecurityDefinition) LargeTickThreshold() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) LargeTickBytes() ([]byte, bool) {
@@ -127,7 +127,7 @@ func (m *SecurityDefinition) LargeTick() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) NoEventsBytes() ([]byte, bool) {
@@ -139,7 +139,7 @@ func (m *SecurityDefinition) NoEvents() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *SecurityDefinition) ContractMultiplierBytes() ([]byte, bool) {
@@ -151,7 +151,7 @@ func (m *SecurityDefinition) ContractMultiplier() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) UnitOfMeasure() (string, bool) {
@@ -167,7 +167,7 @@ func (m *SecurityDefinition) UnitOfMeasureQty() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) HighLimitPriceBytes() ([]byte, bool) {
@@ -179,7 +179,7 @@ func (m *SecurityDefinition) HighLimitPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) LowLimitPriceBytes() ([]byte, bool) {
@@ -191,7 +191,7 @@ func (m *SecurityDefinition) LowLimitPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) MaxPriceVariationBytes() ([]byte, bool) {
@@ -203,7 +203,7 @@ func (m *SecurityDefinition) MaxPriceVariation() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) PriorSettlPriceBytes() ([]byte, bool) {
@@ -215,7 +215,7 @@ func (m *SecurityDefinition) PriorSettlPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) SettlPriceBytes() ([]byte, bool) {
@@ -227,7 +227,7 @@ func (m *SecurityDefinition) SettlPrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) SettlPriceType() (SettlPriceType, bool) {
@@ -243,7 +243,7 @@ func (m *SecurityDefinition) NoUnderlyings() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *SecurityDefinition) UnderlyingSymbol() (string, bool) {
@@ -263,7 +263,7 @@ func (m *SecurityDefinition) OpenInterestQty() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) ClearedVolumeBytes() ([]byte, bool) {
@@ -275,7 +275,7 @@ func (m *SecurityDefinition) ClearedVolume() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *SecurityDefinition) NoLegsBytes() ([]byte, bool) {
@@ -287,12 +287,12 @@ func (m *SecurityDefinition) NoLegs() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // securityDefinition_unknown reports whether SecurityDefinition does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func securityDefinition_unknown(tag int) bool {
 	switch tag {
 	case
@@ -322,7 +322,7 @@ func securityDefinition_unknown(tag int) bool {
 	return true
 }
 
-var securityDefinition_NoEvents_spec = &fix2.GroupSpec{
+var securityDefinition_NoEvents_spec = &fix.GroupSpec{
 	Counter: TagNoEvents,
 	Delim:   TagEventType,
 	Tags:    []int{TagEventType, TagEventTime},
@@ -335,7 +335,7 @@ func (m *SecurityDefinition) NoEventsEntries() []NoEventsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, securityDefinition_specs, func(g fix2.Group) NoEventsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, securityDefinition_specs, func(g fix.Group) NoEventsEntry {
 		return NoEventsEntry{
 			grp:  g,
 			spec: spec,
@@ -343,7 +343,7 @@ func (m *SecurityDefinition) NoEventsEntries() []NoEventsEntry {
 	})
 }
 
-var securityDefinition_NoLegs_spec = &fix2.GroupSpec{
+var securityDefinition_NoLegs_spec = &fix.GroupSpec{
 	Counter: TagNoLegs,
 	Delim:   TagLegSymbol,
 	Tags:    []int{TagLegSymbol, TagLegSecurityDesc, TagLegSecurityType, TagLegSide, TagLegCFICode, TagLegCurrency},
@@ -356,7 +356,7 @@ func (m *SecurityDefinition) NoLegsEntries() []NoLegsEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, securityDefinition_specs, func(g fix2.Group) NoLegsEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, securityDefinition_specs, func(g fix.Group) NoLegsEntry {
 		return NoLegsEntry{
 			grp:  g,
 			spec: spec,
@@ -372,13 +372,13 @@ type securityDefinition_groups struct {
 // SecurityDefinitionBuilder builds a SecurityDefinition message. A copy shares its fields and
 // groups with the original.
 type SecurityDefinitionBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *securityDefinition_groups
 }
 
 func BuildSecurityDefinition(beginString string) *SecurityDefinitionBuilder {
 	b := &SecurityDefinitionBuilder{
-		Builder: fix2.NewBuilder(beginString, "d"),
+		Builder: fix.NewBuilder(beginString, "d"),
 		groups:  &securityDefinition_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -550,15 +550,15 @@ func (b *securityDefinition_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *securityDefinition_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *securityDefinition_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noEventsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoEvents, len(b.noEventsEntries))
+		dst = fix.AppendCount(dst, TagNoEvents, len(b.noEventsEntries))
 		for _, entry := range b.noEventsEntries {
 			dst = entry.appendTo(dst, securityDefinition_NoEvents_layout)
 		}
 	}
 	if len(b.noLegsEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoLegs, len(b.noLegsEntries))
+		dst = fix.AppendCount(dst, TagNoLegs, len(b.noLegsEntries))
 		for _, entry := range b.noLegsEntries {
 			dst = entry.appendTo(dst, securityDefinition_NoLegs_layout)
 		}

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/sylr/fix2/contribs/store/sqlite3"
-	"github.com/sylr/fix2/session/store"
-	"github.com/sylr/fix2/session/store/storetest"
+	"github.com/sylr/fix2/fix/session/store"
+	"github.com/sylr/fix2/fix/session/store/storetest"
 )
 
 func TestConformance(t *testing.T) {

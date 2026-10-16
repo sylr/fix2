@@ -2,17 +2,17 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type SecurityList struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapSecurityList(msg *fix2.Message) *SecurityList {
+func WrapSecurityList(msg *fix.Message) *SecurityList {
 	return &SecurityList{msg: msg}
 }
 
-var securityList_specs = []*fix2.GroupSpec{securityList_NoRelatedSym_spec}
+var securityList_specs = []*fix.GroupSpec{securityList_NoRelatedSym_spec}
 
 func (m *SecurityList) SecurityReqID() (string, bool) {
 	v := m.msg.Get(TagSecurityReqID)
@@ -35,7 +35,7 @@ func (m *SecurityList) TotNoRelatedSym() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *SecurityList) LastFragment() (LastFragment, bool) {
@@ -51,12 +51,12 @@ func (m *SecurityList) NoRelatedSym() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // securityList_unknown reports whether SecurityList does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func securityList_unknown(tag int) bool {
 	switch tag {
 	case
@@ -87,15 +87,15 @@ func securityList_unknown(tag int) bool {
 	return true
 }
 
-var securityList_NoRelatedSym_spec = &fix2.GroupSpec{
+var securityList_NoRelatedSym_spec = &fix.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
-	Nested: []*fix2.GroupSpec{&fix2.GroupSpec{
+	Nested: []*fix.GroupSpec{&fix.GroupSpec{
 		Counter: TagNoEvents,
 		Delim:   TagEventType,
 		Tags:    []int{TagEventType, TagEventTime},
 		Unknown: securityList_unknown,
-	}, &fix2.GroupSpec{
+	}, &fix.GroupSpec{
 		Counter: TagNoLegs,
 		Delim:   TagLegSymbol,
 		Tags:    []int{TagLegSymbol, TagLegSecurityDesc, TagLegSecurityType, TagLegSide, TagLegCFICode, TagLegCurrency},
@@ -117,7 +117,7 @@ func (m *SecurityList) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, securityList_specs, func(g fix2.Group) NoRelatedSymEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, securityList_specs, func(g fix.Group) NoRelatedSymEntry {
 		return NoRelatedSymEntry{
 			grp:  g,
 			spec: spec,
@@ -132,13 +132,13 @@ type securityList_groups struct {
 // SecurityListBuilder builds a SecurityList message. A copy shares its fields and
 // groups with the original.
 type SecurityListBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *securityList_groups
 }
 
 func BuildSecurityList(beginString string) *SecurityListBuilder {
 	b := &SecurityListBuilder{
-		Builder: fix2.NewBuilder(beginString, "y"),
+		Builder: fix.NewBuilder(beginString, "y"),
 		groups:  &securityList_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -181,9 +181,9 @@ func (b *securityList_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *securityList_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *securityList_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noRelatedSymEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
+		dst = fix.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
 		for _, entry := range b.noRelatedSymEntries {
 			dst = entry.appendTo(dst, securityList_NoRelatedSym_layout)
 		}

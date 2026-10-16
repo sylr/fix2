@@ -3,19 +3,19 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type MarketDataRequest struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataRequest(msg *fix2.Message) *MarketDataRequest {
+func WrapMarketDataRequest(msg *fix.Message) *MarketDataRequest {
 	return &MarketDataRequest{msg: msg}
 }
 
-var marketDataRequest_specs = []*fix2.GroupSpec{marketDataRequest_NoRelatedSym_spec, marketDataRequest_NoMDEntryTypes_spec}
+var marketDataRequest_specs = []*fix.GroupSpec{marketDataRequest_NoRelatedSym_spec, marketDataRequest_NoMDEntryTypes_spec}
 
 func (m *MarketDataRequest) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -34,7 +34,7 @@ func (m *MarketDataRequest) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequest) SendingTimeBytes() ([]byte, bool) {
@@ -46,7 +46,7 @@ func (m *MarketDataRequest) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *MarketDataRequest) RecvWindowBytes() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *MarketDataRequest) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *MarketDataRequest) MDReqID() (string, bool) {
@@ -78,7 +78,7 @@ func (m *MarketDataRequest) MarketDepth() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequest) NoRelatedSymBytes() ([]byte, bool) {
@@ -90,7 +90,7 @@ func (m *MarketDataRequest) NoRelatedSym() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequest) NoMDEntryTypesBytes() ([]byte, bool) {
@@ -102,7 +102,7 @@ func (m *MarketDataRequest) NoMDEntryTypes() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequest) AggregatedBook() (AggregatedBook, bool) {
@@ -111,7 +111,7 @@ func (m *MarketDataRequest) AggregatedBook() (AggregatedBook, bool) {
 }
 
 // marketDataRequest_unknown reports whether MarketDataRequest does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func marketDataRequest_unknown(tag int) bool {
 	switch tag {
 	case
@@ -125,7 +125,7 @@ func marketDataRequest_unknown(tag int) bool {
 	return true
 }
 
-var marketDataRequest_NoRelatedSym_spec = &fix2.GroupSpec{
+var marketDataRequest_NoRelatedSym_spec = &fix.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
 	Tags:    []int{TagSymbol},
@@ -138,7 +138,7 @@ func (m *MarketDataRequest) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix2.Group) NoRelatedSymEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix.Group) NoRelatedSymEntry {
 		return NoRelatedSymEntry{
 			grp:  g,
 			spec: spec,
@@ -146,7 +146,7 @@ func (m *MarketDataRequest) NoRelatedSymEntries() []NoRelatedSymEntry {
 	})
 }
 
-var marketDataRequest_NoMDEntryTypes_spec = &fix2.GroupSpec{
+var marketDataRequest_NoMDEntryTypes_spec = &fix.GroupSpec{
 	Counter: TagNoMDEntryTypes,
 	Delim:   TagMDEntryType,
 	Tags:    []int{TagMDEntryType},
@@ -159,7 +159,7 @@ func (m *MarketDataRequest) NoMDEntryTypesEntries() []NoMDEntryTypesEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix2.Group) NoMDEntryTypesEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix.Group) NoMDEntryTypesEntry {
 		return NoMDEntryTypesEntry{
 			grp:  g,
 			spec: spec,
@@ -175,13 +175,13 @@ type marketDataRequest_groups struct {
 // MarketDataRequestBuilder builds a MarketDataRequest message. A copy shares its fields and
 // groups with the original.
 type MarketDataRequestBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *marketDataRequest_groups
 }
 
 func BuildMarketDataRequest(beginString string) *MarketDataRequestBuilder {
 	b := &MarketDataRequestBuilder{
-		Builder: fix2.NewBuilder(beginString, "V"),
+		Builder: fix.NewBuilder(beginString, "V"),
 		groups:  &marketDataRequest_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -202,10 +202,10 @@ func (b *MarketDataRequestBuilder) SetMsgSeqNum(v int) *MarketDataRequestBuilder
 	return b
 }
 func (b *MarketDataRequestBuilder) SetSendingTime(v time.Time) *MarketDataRequestBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *MarketDataRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *MarketDataRequestBuilder {
+func (b *MarketDataRequestBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *MarketDataRequestBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -253,15 +253,15 @@ func (b *marketDataRequest_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *marketDataRequest_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *marketDataRequest_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noRelatedSymEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
+		dst = fix.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
 		for _, entry := range b.noRelatedSymEntries {
 			dst = entry.appendTo(dst, marketDataRequest_NoRelatedSym_layout)
 		}
 	}
 	if len(b.noMDEntryTypesEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMDEntryTypes, len(b.noMDEntryTypesEntries))
+		dst = fix.AppendCount(dst, TagNoMDEntryTypes, len(b.noMDEntryTypesEntries))
 		for _, entry := range b.noMDEntryTypesEntries {
 			dst = entry.appendTo(dst, marketDataRequest_NoMDEntryTypes_layout)
 		}

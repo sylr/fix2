@@ -46,7 +46,7 @@ import (
 
 	sqlite "github.com/mattn/go-sqlite3"
 
-	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/fix/session/store"
 )
 
 // schemaVersion is the version of the tables this package writes, kept in

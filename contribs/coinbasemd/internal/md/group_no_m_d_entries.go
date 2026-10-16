@@ -3,13 +3,13 @@
 package md
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type NoMDEntriesEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoMDEntriesEntry) MDEntryType() (MDEntryType, bool) {
@@ -45,7 +45,7 @@ func (e *NoMDEntriesEntry) TransactTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (e *NoMDEntriesEntry) RptSeq() (string, bool) {
@@ -69,7 +69,7 @@ func (e *NoMDEntriesEntry) StrikePrice() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoMDEntriesEntry) MDEntryPx() (string, bool) {
@@ -110,94 +110,94 @@ func (e *NoMDEntriesEntry) Funds() (string, bool) {
 }
 
 type NoMDEntriesEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoMDEntriesEntry() *NoMDEntriesEntryBuilder {
 	return &NoMDEntriesEntryBuilder{}
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntryType(v MDEntryType) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntryType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagMDEntryType, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetClOrdID(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagClOrdID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagClOrdID, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetOrderID(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagOrderID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagOrderID, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetOrdType(v OrdType) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagOrdType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagOrdType, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetSymbol(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSymbol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagSymbol, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetText(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagText, []byte(v))
+	e.fields = fix.SetField(e.fields, TagText, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetTransactTime(v time.Time) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(fix2.TimeFormatTimestamp)))
+	e.fields = fix.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(fix.TimeFormatTimestamp)))
 	return e
 }
-func (e *NoMDEntriesEntryBuilder) SetTransactTimeWithFormat(v time.Time, f fix2.TimeFormat) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(f)))
+func (e *NoMDEntriesEntryBuilder) SetTransactTimeWithFormat(v time.Time, f fix.TimeFormat) *NoMDEntriesEntryBuilder {
+	e.fields = fix.SetField(e.fields, TagTransactTime, []byte(v.UTC().Format(f)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetRptSeq(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagRptSeq, []byte(v))
+	e.fields = fix.SetField(e.fields, TagRptSeq, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetSecurityType(v SecurityType) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSecurityType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagSecurityType, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetPutOrCall(v PutOrCall) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagPutOrCall, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagPutOrCall, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetStrikePrice(v float64) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagStrikePrice, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagStrikePrice, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntryPx(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntryPx, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMDEntryPx, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntrySize(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntrySize, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMDEntrySize, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDEntryID(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDEntryID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMDEntryID, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDUpdateAction(v MDUpdateAction) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDUpdateAction, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagMDUpdateAction, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetSecuritySubType(v SecuritySubType) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSecuritySubType, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagSecuritySubType, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetTradeID(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagTradeID, []byte(v))
+	e.fields = fix.SetField(e.fields, TagTradeID, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetMDSecurityTradingStatus(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMDSecurityTradingStatus, []byte(v))
+	e.fields = fix.SetField(e.fields, TagMDSecurityTradingStatus, []byte(v))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetAggressorSide(v AggressorSide) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagAggressorSide, []byte(string(v)))
+	e.fields = fix.SetField(e.fields, TagAggressorSide, []byte(string(v)))
 	return e
 }
 func (e *NoMDEntriesEntryBuilder) SetFunds(v string) *NoMDEntriesEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagFunds, []byte(v))
+	e.fields = fix.SetField(e.fields, TagFunds, []byte(v))
 	return e
 }
 
@@ -205,11 +205,11 @@ func (e *NoMDEntriesEntryBuilder) SetFunds(v string) *NoMDEntriesEntryBuilder {
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoMDEntriesEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoMDEntriesEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst

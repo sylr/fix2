@@ -3,19 +3,19 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type MarketDataSnapshot struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataSnapshot(msg *fix2.Message) *MarketDataSnapshot {
+func WrapMarketDataSnapshot(msg *fix.Message) *MarketDataSnapshot {
 	return &MarketDataSnapshot{msg: msg}
 }
 
-var marketDataSnapshot_specs = []*fix2.GroupSpec{marketDataSnapshot_NoMDEntries_spec}
+var marketDataSnapshot_specs = []*fix.GroupSpec{marketDataSnapshot_NoMDEntries_spec}
 
 func (m *MarketDataSnapshot) SenderCompID() (string, bool) {
 	v := m.msg.Get(TagSenderCompID)
@@ -34,7 +34,7 @@ func (m *MarketDataSnapshot) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataSnapshot) SendingTimeBytes() ([]byte, bool) {
@@ -46,7 +46,7 @@ func (m *MarketDataSnapshot) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *MarketDataSnapshot) RecvWindowBytes() ([]byte, bool) {
@@ -58,7 +58,7 @@ func (m *MarketDataSnapshot) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *MarketDataSnapshot) MDReqID() (string, bool) {
@@ -78,7 +78,7 @@ func (m *MarketDataSnapshot) LastBookUpdateID() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataSnapshot) NoMDEntriesBytes() ([]byte, bool) {
@@ -90,12 +90,12 @@ func (m *MarketDataSnapshot) NoMDEntries() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // marketDataSnapshot_unknown reports whether MarketDataSnapshot does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func marketDataSnapshot_unknown(tag int) bool {
 	switch tag {
 	case
@@ -108,7 +108,7 @@ func marketDataSnapshot_unknown(tag int) bool {
 	return true
 }
 
-var marketDataSnapshot_NoMDEntries_spec = &fix2.GroupSpec{
+var marketDataSnapshot_NoMDEntries_spec = &fix.GroupSpec{
 	Counter: TagNoMDEntries,
 	Delim:   TagMDEntryType,
 	Tags:    []int{TagMDEntryType, TagMDEntryPx, TagMDEntrySize},
@@ -121,7 +121,7 @@ func (m *MarketDataSnapshot) NoMDEntriesEntries() []NoMDEntriesEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataSnapshot_specs, func(g fix2.Group) NoMDEntriesEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, marketDataSnapshot_specs, func(g fix.Group) NoMDEntriesEntry {
 		return NoMDEntriesEntry{
 			grp:  g,
 			spec: spec,
@@ -136,13 +136,13 @@ type marketDataSnapshot_groups struct {
 // MarketDataSnapshotBuilder builds a MarketDataSnapshot message. A copy shares its fields and
 // groups with the original.
 type MarketDataSnapshotBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *marketDataSnapshot_groups
 }
 
 func BuildMarketDataSnapshot(beginString string) *MarketDataSnapshotBuilder {
 	b := &MarketDataSnapshotBuilder{
-		Builder: fix2.NewBuilder(beginString, "W"),
+		Builder: fix.NewBuilder(beginString, "W"),
 		groups:  &marketDataSnapshot_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -163,10 +163,10 @@ func (b *MarketDataSnapshotBuilder) SetMsgSeqNum(v int) *MarketDataSnapshotBuild
 	return b
 }
 func (b *MarketDataSnapshotBuilder) SetSendingTime(v time.Time) *MarketDataSnapshotBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *MarketDataSnapshotBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *MarketDataSnapshotBuilder {
+func (b *MarketDataSnapshotBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *MarketDataSnapshotBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }
@@ -201,9 +201,9 @@ func (b *marketDataSnapshot_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *marketDataSnapshot_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *marketDataSnapshot_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noMDEntriesEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoMDEntries, len(b.noMDEntriesEntries))
+		dst = fix.AppendCount(dst, TagNoMDEntries, len(b.noMDEntriesEntries))
 		for _, entry := range b.noMDEntriesEntries {
 			dst = entry.appendTo(dst, marketDataSnapshot_NoMDEntries_layout)
 		}

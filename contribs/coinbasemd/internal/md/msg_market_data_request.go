@@ -2,17 +2,17 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type MarketDataRequest struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapMarketDataRequest(msg *fix2.Message) *MarketDataRequest {
+func WrapMarketDataRequest(msg *fix.Message) *MarketDataRequest {
 	return &MarketDataRequest{msg: msg}
 }
 
-var marketDataRequest_specs = []*fix2.GroupSpec{marketDataRequest_NoRelatedSym_spec}
+var marketDataRequest_specs = []*fix.GroupSpec{marketDataRequest_NoRelatedSym_spec}
 
 func (m *MarketDataRequest) MDReqID() (string, bool) {
 	v := m.msg.Get(TagMDReqID)
@@ -31,7 +31,7 @@ func (m *MarketDataRequest) MarketDepth() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *MarketDataRequest) NoRelatedSymBytes() ([]byte, bool) {
@@ -43,12 +43,12 @@ func (m *MarketDataRequest) NoRelatedSym() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 
 // marketDataRequest_unknown reports whether MarketDataRequest does not define tag, its header and
-// trailer included, which a group entry then keeps (see fix2.GroupSpec).
+// trailer included, which a group entry then keeps (see fix.GroupSpec).
 func marketDataRequest_unknown(tag int) bool {
 	switch tag {
 	case
@@ -68,7 +68,7 @@ func marketDataRequest_unknown(tag int) bool {
 	return true
 }
 
-var marketDataRequest_NoRelatedSym_spec = &fix2.GroupSpec{
+var marketDataRequest_NoRelatedSym_spec = &fix.GroupSpec{
 	Counter: TagNoRelatedSym,
 	Delim:   TagSymbol,
 	Tags:    []int{TagSymbol},
@@ -81,7 +81,7 @@ func (m *MarketDataRequest) NoRelatedSymEntries() []NoRelatedSymEntry {
 	if spec == nil {
 		return nil
 	}
-	return fix2.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix2.Group) NoRelatedSymEntry {
+	return fix.EntriesOf(m.msg.Fields(), spec, marketDataRequest_specs, func(g fix.Group) NoRelatedSymEntry {
 		return NoRelatedSymEntry{
 			grp:  g,
 			spec: spec,
@@ -96,13 +96,13 @@ type marketDataRequest_groups struct {
 // MarketDataRequestBuilder builds a MarketDataRequest message. A copy shares its fields and
 // groups with the original.
 type MarketDataRequestBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 	groups *marketDataRequest_groups
 }
 
 func BuildMarketDataRequest(beginString string) *MarketDataRequestBuilder {
 	b := &MarketDataRequestBuilder{
-		Builder: fix2.NewBuilder(beginString, "V"),
+		Builder: fix.NewBuilder(beginString, "V"),
 		groups:  &marketDataRequest_groups{},
 	}
 	b.SetSections(standardHeader, standardTrailer, nil)
@@ -137,9 +137,9 @@ func (b *marketDataRequest_groups) reset() {
 }
 
 // appendTo appends the message's other repeating groups to dst.
-func (b *marketDataRequest_groups) appendTo(dst []fix2.Field) []fix2.Field {
+func (b *marketDataRequest_groups) appendTo(dst []fix.Field) []fix.Field {
 	if len(b.noRelatedSymEntries) > 0 {
-		dst = fix2.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
+		dst = fix.AppendCount(dst, TagNoRelatedSym, len(b.noRelatedSymEntries))
 		for _, entry := range b.noRelatedSymEntries {
 			dst = entry.appendTo(dst, marketDataRequest_NoRelatedSym_layout)
 		}

@@ -7,25 +7,29 @@
 A FIX protocol library for Go: a zero-copy parser, validating dictionaries,
 typed code generation and a session engine.
 
-- **Parsing**: `Parse` and `ParseInto` read messages without copying their
+The FIX tagvalue encoding and its session layer (FIX 4.x, FIXT 1.1) live
+under `fix/`; what other protocols can share, such as `transport`, lives at
+the root.
+
+- **Parsing** (`fix`): `Parse` and `ParseInto` read messages without copying their
   values (SIMD checksums with `GOEXPERIMENT=simd`); `Framer` reads them off a
   stream, resynchronising after garbage; `Profile` holds the DATA fields of a
   dictionary.
-- **Building**: `Builder` encodes messages into reusable buffers without
+- **Building** (`fix`): `Builder` encodes messages into reusable buffers without
   allocating; `RewriteForResend` turns a stored message into its
   retransmission.
-- **Dictionaries** (`dictionary`, `dictionary/xmldict`): validation against
+- **Dictionaries** (`fix/dictionary`, `fix/dictionary/xmldict`): validation against
   QuickFIX XML dictionaries, the FIX Orchestra repositories the FIX Trading
   Community publishes (FIX Latest, FIX 4.2, FIX 4.4 and the FIXT session
   layer, from
   [FIXTradingCommunity/orchestrations](https://github.com/FIXTradingCommunity/orchestrations)),
   or generated ones, with the SessionRejectReason of each error; `Compose`
   for FIXT 1.1 application messages.
-- **Code generation** (`cmd/fixgen`): typed readers, builders and the
+- **Code generation** (`fix/cmd/fixgen`): typed readers, builders and the
   dictionary as Go code, from a QuickFIX dictionary or an Orchestra
   repository; `-dispatch` adds a typed handler interface, `-bytes` getters
   of raw values (exact decimal prices, for one).
-- **Sessions** (`session`): initiators and acceptors for FIX 4.0 to 4.4 and
+- **Sessions** (`fix/session`): initiators and acceptors for FIX 4.0 to 4.4 and
   FIXT 1.1, configured in Go:
   - many sessions per process and per listener, each with its own
     dictionaries, store and handler;
@@ -39,10 +43,10 @@ typed code generation and a session engine.
     acknowledged (LastMsgSeqNumProcessed, NextExpectedMsgSeqNum,
     ResendRequest) beyond the last few and a minimum age, and any written
     beyond a bound;
-  - schedules (`session/schedule`) with boundaries fired on time;
-  - stores (`session/store`: in memory, and SQLite in
+  - schedules (`fix/session/schedule`) with boundaries fired on time;
+  - stores (`fix/session/store`: in memory, and SQLite in
     `contribs/store/sqlite3`), transports
-    (`session/transport`: TCP, TLS, in-memory), logging through `log/slog`
+    (`transport`: TCP, TLS, in-memory), logging through `log/slog`
     (zerolog and zap through their slog handlers) and a redacting message
     observer;
   - Reject and Logout texts that start with the specification's wording and
@@ -103,7 +107,7 @@ FIX certificates, which carry no Certificate Transparency timestamps.
 
 ### store/sqlite3
 
-A `session/store` keeping sessions in a SQLite database file, through
+A `fix/session/store` keeping sessions in a SQLite database file, through
 [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) (cgo): a session
 resumes its sequence numbers, and can resend its messages, after the
 process restarts. One file holds any number of sessions, each under a key
@@ -122,11 +126,11 @@ takes a `*sql.DB` the application opened itself.
 
 `make test` runs the module's tests and `make test-contribs` the contribs';
 `RACE=1` adds the race detector, `CODECOV=1` writes `coverage.txt`. The
-end-to-end suite, `tests/e2e`, logs an initiator on to an acceptor in FIX
+end-to-end suite, `fix/tests/e2e`, logs an initiator on to an acceptor in FIX
 4.4 and in FIX 5.0 SP2, over TCP and in memory, with limited dictionaries
 both sessions validate against: the initiator sends NewOrderSingle
 messages, the acceptor acknowledges and fills each with ExecutionReport
-messages (`go test ./tests/e2e/`). `tests/quickfix-go` replays the
+messages (`go test ./fix/tests/e2e/`). `fix/tests/quickfix-go` replays the
 behavioural issues reported to QuickFIX/Go, one file per issue. `make
 fuzz` runs every fuzz target, the contribs' too, for `FUZZTIME` each (30s by
 default); a failing input lands in its package's `testdata/fuzz`. CI runs
@@ -140,7 +144,7 @@ The session engine passes the 505 session acceptance test scripts of
 QuickFIX (FIX 4.0 to 5.0 SP2, NextExpectedMsgSeqNum, LastMsgSeqNumProcessed,
 ResendRequest chunking). Run them with a quickfix-go checkout:
 
-    FIX2_QUICKFIX_TESTS=/path/to/quickfix-go/_test go test -run TestConformance ./session/
+    FIX2_QUICKFIX_TESTS=/path/to/quickfix-go/_test go test -run TestConformance ./fix/session/
 
 ## Performance
 
@@ -148,10 +152,10 @@ On an Apple M4: parsing a 24-field message into a reused `Message` takes
 280 ns and no allocation; validating it 85 ns; sending an order between an
 initiator and an acceptor in memory, 730 ns and one allocation.
 
-`tests/benchmarks` compares fix2 with other engines, QuickFIX/Go,
+`fix/tests/benchmarks` compares fix2 with other engines, QuickFIX/Go,
 QuickFIX/J and QuickFIX C++, on orders and their acknowledgements over TCP, each end in a
 process of its own, either engine on either end, their toolchains pinned
-by a Nix flake: `cd tests/benchmarks && nix develop -c make bench`.
+by a Nix flake: `cd fix/tests/benchmarks && nix develop -c make bench`.
 
 ## Operating
 

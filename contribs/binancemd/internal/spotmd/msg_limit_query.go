@@ -3,15 +3,15 @@
 package spotmd
 
 import (
-	fix2 "github.com/sylr/fix2"
+	fix "github.com/sylr/fix2/fix"
 	"time"
 )
 
 type LimitQuery struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapLimitQuery(msg *fix2.Message) *LimitQuery {
+func WrapLimitQuery(msg *fix.Message) *LimitQuery {
 	return &LimitQuery{msg: msg}
 }
 func (m *LimitQuery) SenderCompID() (string, bool) {
@@ -31,7 +31,7 @@ func (m *LimitQuery) MsgSeqNum() (int, bool, error) {
 	if v == nil {
 		return 0, false, nil
 	}
-	n, err := fix2.ParseInt(v)
+	n, err := fix.ParseInt(v)
 	return n, true, err
 }
 func (m *LimitQuery) SendingTimeBytes() ([]byte, bool) {
@@ -43,7 +43,7 @@ func (m *LimitQuery) SendingTime() (time.Time, bool, error) {
 	if v == nil {
 		return time.Time{}, false, nil
 	}
-	t, err := fix2.ParseUTCTimestamp(v)
+	t, err := fix.ParseUTCTimestamp(v)
 	return t, true, err
 }
 func (m *LimitQuery) RecvWindowBytes() ([]byte, bool) {
@@ -55,7 +55,7 @@ func (m *LimitQuery) RecvWindow() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (m *LimitQuery) ReqID() (string, bool) {
@@ -66,11 +66,11 @@ func (m *LimitQuery) ReqID() (string, bool) {
 // LimitQueryBuilder builds a LimitQuery message. A copy shares its fields and
 // groups with the original.
 type LimitQueryBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildLimitQuery(beginString string) *LimitQueryBuilder {
-	b := &LimitQueryBuilder{Builder: fix2.NewBuilder(beginString, "XLQ")}
+	b := &LimitQueryBuilder{Builder: fix.NewBuilder(beginString, "XLQ")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }
@@ -87,10 +87,10 @@ func (b *LimitQueryBuilder) SetMsgSeqNum(v int) *LimitQueryBuilder {
 	return b
 }
 func (b *LimitQueryBuilder) SetSendingTime(v time.Time) *LimitQueryBuilder {
-	b.SetString(TagSendingTime, v.UTC().Format(fix2.TimeFormatTimestamp))
+	b.SetString(TagSendingTime, v.UTC().Format(fix.TimeFormatTimestamp))
 	return b
 }
-func (b *LimitQueryBuilder) SetSendingTimeWithFormat(v time.Time, f fix2.TimeFormat) *LimitQueryBuilder {
+func (b *LimitQueryBuilder) SetSendingTimeWithFormat(v time.Time, f fix.TimeFormat) *LimitQueryBuilder {
 	b.SetString(TagSendingTime, v.UTC().Format(f))
 	return b
 }

@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	fix2 "github.com/sylr/fix2"
 	"github.com/sylr/fix2/contribs/coinbasemd/internal/fixt"
 	"github.com/sylr/fix2/contribs/coinbasemd/internal/md"
-	"github.com/sylr/fix2/dictionary"
-	"github.com/sylr/fix2/session"
-	"github.com/sylr/fix2/session/transport"
-	"github.com/sylr/fix2/session/transport/tcp"
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/dictionary"
+	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/transport"
+	"github.com/sylr/fix2/transport/tcp"
 )
 
 // kind is what a command asks for.
@@ -255,7 +255,7 @@ type client struct {
 var _ session.LogonSigner = (*client)(nil)
 
 // ToAdmin adds the API key and passphrase to the Logon.
-func (c *client) ToAdmin(_ context.Context, _ *session.Session, msgType string, b *fix2.Builder) error {
+func (c *client) ToAdmin(_ context.Context, _ *session.Session, msgType string, b *fix.Builder) error {
 	if msgType == "A" {
 		c.mu.Lock()
 		c.connected = false
@@ -266,7 +266,7 @@ func (c *client) ToAdmin(_ context.Context, _ *session.Session, msgType string, 
 }
 
 // SignLogon signs the Logon with the API secret.
-func (c *client) SignLogon(_ context.Context, _ *session.Session, h session.LogonHeader, b *fix2.Builder) error {
+func (c *client) SignLogon(_ context.Context, _ *session.Session, h session.LogonHeader, b *fix.Builder) error {
 	b.SetData(tagRawDataLength, fixt.TagRawData, signature(c.secret, c.passphrase, h))
 	return nil
 }
@@ -355,7 +355,7 @@ func (c *client) subscribeLocked(ctx context.Context, s *session.Session, symbol
 }
 
 // FromAdmin follows Logons, and reports Rejects and Logouts.
-func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix2.Message, _ session.Inbound) {
+func (c *client) FromAdmin(ctx context.Context, _ *session.Session, m *fix.Message, _ session.Inbound) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch string(m.MsgType()) {
@@ -415,11 +415,11 @@ func (c *client) refusedLocked(ctx context.Context, err error) {
 // FromApp writes what it receives: it renders the events with the lock
 // held, and hands them to the output without, so that a blocked output
 // stalls FromApp alone, never FromAdmin.
-func (c *client) FromApp(ctx context.Context, s *session.Session, m *fix2.Message, in session.Inbound) error {
+func (c *client) FromApp(ctx context.Context, s *session.Session, m *fix.Message, in session.Inbound) error {
 	c.mu.Lock()
 	err := md.Dispatch(m, &dispatcher{c: c, ctx: ctx, s: s, received: in.Received.UTC()})
 	c.mu.Unlock()
-	if errors.Is(err, fix2.ErrUnsupportedMessageType) {
+	if errors.Is(err, fix.ErrUnsupportedMessageType) {
 		// Never rejected: Coinbase would not care.
 		c.log.LogAttrs(ctx, slog.LevelDebug, "message ignored", slog.String("msg_type", string(m.MsgType())))
 	}

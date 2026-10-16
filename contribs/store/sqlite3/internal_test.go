@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/fix/session/store"
 )
 
 func open(t *testing.T) (*Store, store.State) {

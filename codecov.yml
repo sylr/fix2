@@ -12,7 +12,7 @@ ignore:
   # The contribs, binancemd and coinbasemd: tools, not the library.
   - "contribs"
   # Packages fixgen generates for tests.
-  - "tests"
+  - "fix/tests"
   # Test helpers.
-  - "internal/dicttest"
-  - "session/store/storetest"
+  - "fix/internal/dicttest"
+  - "fix/session/store/storetest"

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	fix2 "github.com/sylr/fix2"
-	"github.com/sylr/fix2/session"
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session"
 )
 
 // fuzzSymbols are the symbols the fuzzed commands ask for.
@@ -78,8 +78,8 @@ func feed(c *client, input string) {
 	}
 	input = strings.NewReplacer("$ID2", ids["$ID2"], "$ID", ids["$ID"]).Replace(input)
 	for line := range strings.SplitSeq(input, "\n") {
-		var m fix2.Message
-		if err := fix2.ParseInto(&m, fuzzFrame(line), nil); err != nil {
+		var m fix.Message
+		if err := fix.ParseInto(&m, fuzzFrame(line), nil); err != nil {
 			continue
 		}
 		in := session.Inbound{Received: time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)}

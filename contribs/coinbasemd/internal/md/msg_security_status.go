@@ -2,13 +2,13 @@
 
 package md
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type SecurityStatus struct {
-	msg *fix2.Message
+	msg *fix.Message
 }
 
-func WrapSecurityStatus(msg *fix2.Message) *SecurityStatus {
+func WrapSecurityStatus(msg *fix.Message) *SecurityStatus {
 	return &SecurityStatus{msg: msg}
 }
 func (m *SecurityStatus) MDReqID() (string, bool) {
@@ -39,11 +39,11 @@ func (m *SecurityStatus) MinSizeIncrement() (string, bool) {
 // SecurityStatusBuilder builds a SecurityStatus message. A copy shares its fields and
 // groups with the original.
 type SecurityStatusBuilder struct {
-	*fix2.Builder
+	*fix.Builder
 }
 
 func BuildSecurityStatus(beginString string) *SecurityStatusBuilder {
-	b := &SecurityStatusBuilder{Builder: fix2.NewBuilder(beginString, "f")}
+	b := &SecurityStatusBuilder{Builder: fix.NewBuilder(beginString, "f")}
 	b.SetSections(standardHeader, standardTrailer, nil)
 	return b
 }

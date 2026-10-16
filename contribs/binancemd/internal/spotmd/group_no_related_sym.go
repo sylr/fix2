@@ -2,11 +2,11 @@
 
 package spotmd
 
-import fix2 "github.com/sylr/fix2"
+import fix "github.com/sylr/fix2/fix"
 
 type NoRelatedSymEntry struct {
-	grp  fix2.Group
-	spec *fix2.GroupSpec
+	grp  fix.Group
+	spec *fix.GroupSpec
 }
 
 func (e *NoRelatedSymEntry) Symbol() (string, bool) {
@@ -26,7 +26,7 @@ func (e *NoRelatedSymEntry) MinTradeVol() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MinPriceIncrementBytes() ([]byte, bool) {
@@ -38,7 +38,7 @@ func (e *NoRelatedSymEntry) MinPriceIncrement() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MaxTradeVolBytes() ([]byte, bool) {
@@ -50,7 +50,7 @@ func (e *NoRelatedSymEntry) MaxTradeVol() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) StartPriceRangeBytes() ([]byte, bool) {
@@ -62,7 +62,7 @@ func (e *NoRelatedSymEntry) StartPriceRange() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) EndPriceRangeBytes() ([]byte, bool) {
@@ -74,7 +74,7 @@ func (e *NoRelatedSymEntry) EndPriceRange() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MinQtyIncrementBytes() ([]byte, bool) {
@@ -86,7 +86,7 @@ func (e *NoRelatedSymEntry) MinQtyIncrement() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MarketMinTradeVolBytes() ([]byte, bool) {
@@ -98,7 +98,7 @@ func (e *NoRelatedSymEntry) MarketMinTradeVol() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MarketMaxTradeVolBytes() ([]byte, bool) {
@@ -110,7 +110,7 @@ func (e *NoRelatedSymEntry) MarketMaxTradeVol() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 func (e *NoRelatedSymEntry) MarketMinQtyIncrementBytes() ([]byte, bool) {
@@ -122,59 +122,59 @@ func (e *NoRelatedSymEntry) MarketMinQtyIncrement() (float64, bool, error) {
 	if v == nil {
 		return 0.0, false, nil
 	}
-	f, err := fix2.ParseFloat(v)
+	f, err := fix.ParseFloat(v)
 	return f, true, err
 }
 
 type NoRelatedSymEntryBuilder struct {
-	fields []fix2.Field
+	fields []fix.Field
 }
 
 func NewNoRelatedSymEntry() *NoRelatedSymEntryBuilder {
 	return &NoRelatedSymEntryBuilder{}
 }
 func (e *NoRelatedSymEntryBuilder) SetSymbol(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagSymbol, []byte(v))
+	e.fields = fix.SetField(e.fields, TagSymbol, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetCurrency(v string) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagCurrency, []byte(v))
+	e.fields = fix.SetField(e.fields, TagCurrency, []byte(v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMinTradeVol(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMinTradeVol, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMinTradeVol, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMinPriceIncrement(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMinPriceIncrement, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMinPriceIncrement, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMaxTradeVol(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMaxTradeVol, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMaxTradeVol, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetStartPriceRange(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagStartPriceRange, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagStartPriceRange, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetEndPriceRange(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagEndPriceRange, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagEndPriceRange, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMinQtyIncrement(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMinQtyIncrement, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMinQtyIncrement, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMarketMinTradeVol(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMarketMinTradeVol, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMarketMinTradeVol, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMarketMaxTradeVol(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMarketMaxTradeVol, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMarketMaxTradeVol, fix.AppendFloat(nil, v))
 	return e
 }
 func (e *NoRelatedSymEntryBuilder) SetMarketMinQtyIncrement(v float64) *NoRelatedSymEntryBuilder {
-	e.fields = fix2.SetField(e.fields, TagMarketMinQtyIncrement, fix2.AppendFloat(nil, v))
+	e.fields = fix.SetField(e.fields, TagMarketMinQtyIncrement, fix.AppendFloat(nil, v))
 	return e
 }
 
@@ -182,11 +182,11 @@ func (e *NoRelatedSymEntryBuilder) SetMarketMinQtyIncrement(v float64) *NoRelate
 // layout in the message being built. Fields and nested groups l does not list
 // are not written: that message's readers could not find them, nor the entries
 // after them.
-func (e *NoRelatedSymEntryBuilder) appendTo(dst []fix2.Field, l *groupLayout) []fix2.Field {
+func (e *NoRelatedSymEntryBuilder) appendTo(dst []fix.Field, l *groupLayout) []fix.Field {
 	for _, tag := range l.tags {
 		switch tag {
 		default:
-			dst = fix2.AppendField(dst, e.fields, tag)
+			dst = fix.AppendField(dst, e.fields, tag)
 		}
 	}
 	return dst
