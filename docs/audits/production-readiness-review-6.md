@@ -23,6 +23,8 @@ The [fifth report](production-readiness-review-5.md), including its review adden
 
 ### A6-01 — P3: direct peer Logout releases later-numbered buffered orders
 
+**Fixed in:** [`2544dc3`](https://github.com/sylr/fix2/commit/2544dc3f744862ac56d0dfde08e5acba207a2eeb).
+
 **Confidence: high for the observed inconsistency; independently reproduced and cross-reviewed.**
 
 **Sources:** [direct Logout advances before closure](../../session/protocol.go#L1209), [nested drain behavior](../../session/protocol.go#L781), [phase-sensitive drain](../../session/protocol.go#L790).
@@ -54,6 +56,8 @@ A second pass reran both diagnostics in an isolated archive at the audited revis
 The finding was then confirmed in the source, and this pass agrees with P3.
 
 ### A6-01 widened: the answer to our own Logout has the same gap
+
+**Fixed in:** [`2544dc3`](https://github.com/sylr/fix2/commit/2544dc3f744862ac56d0dfde08e5acba207a2eeb).
 
 The drain in [`advanceLocked`](../../session/protocol.go#L792) stops only when the phase changes. Answering our own Logout does not change the phase: [the answer branch](../../session/protocol.go#L1183) is already in `phaseLogoutSent`, and it calls `advanceLocked` and then `closeAfterFlushLocked`, which sets `closing` but leaves the phase as it was.
 
