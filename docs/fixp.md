@@ -518,7 +518,7 @@ lost or garbled. The evidence is from the corrected harness.
 | M3 | `fix2gen sbe` ([docs/sbe.md](sbe.md)): header layouts, offsets and padding, constants, null values, groups, variable-length data, schema versions, rejection of what it does not support; tested against Real Logic's encoder on a richer schema | yes |
 | M4 | `fixp/internal/codec`, generated; classification by encoding, schema and template; fuzzing | yes |
 | M5 | `fixp/session`, both roles: negotiation, establishment, keepalive, termination, Unsequenced and None flows, limits, credential-free logs, persisted session state | yes; sequenced flows run while nothing is missed: a gap, retransmission and finalization terminate the connection as not supported yet, until M6 and M7 |
-| M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step | |
+| M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step | yes; restarts tested with a store losing what was not synced, failing each write in turn, its failed write lost or made |
 | M7 | Finalization, retention, observers | |
 | M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide | |
 | M9 | Benchmarks: codecs, then sessions | |

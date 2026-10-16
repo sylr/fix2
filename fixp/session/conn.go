@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -49,8 +50,18 @@ type conn struct {
 	// application message, 0 if it does not know it (no Sequence yet).
 	outNext uint64
 	// The reader's: the sequence number of the peer's next application
-	// message, 0 if not known yet.
+	// message, 0 if not known yet, and the recovery of what it missed.
 	inNext uint64
+	rec    recovery
+
+	// retransmitting is the job answering the peer's RetransmitRequest, 0
+	// if none: it asks one at a time (§4.6.4). Each job clears only its
+	// own: an earlier one ending late leaves the next in place.
+	retransmitting atomic.Uint64
+	jobs           atomic.Uint64
+	// answers counts the answers to the peer's requests queued and not
+	// yet written: a peer asking faster than it reads is cut off.
+	answers atomic.Int64
 
 	// Decoding buffers of the reader.
 	seq  codec.Sequence
@@ -108,6 +119,11 @@ func (c *conn) isClosing() bool {
 // answer (§7.3.1): Terminate UnspecifiedError, ahead of what is queued,
 // then the connection closes.
 func (c *conn) fail(reason string, err error) {
+	c.failCode(fixp.TerminationUnspecifiedError, reason, err)
+}
+
+// failCode is fail with another termination code.
+func (c *conn) failCode(code fixp.TerminationCode, reason string, err error) {
 	s := c.s
 	c.mu.Lock()
 	if c.ours != nil && c.urgent != nil || c.peers != nil {
@@ -115,8 +131,8 @@ func (c *conn) fail(reason string, err error) {
 		return
 	}
 	r := truncate(reason, s.cfg.MaxReasonLength)
-	c.ours = &fixp.TerminatedError{Code: fixp.TerminationUnspecifiedError, Reason: string(r), Err: err}
-	c.urgent = terminateFrame(s.ID(), fixp.TerminationUnspecifiedError, r)
+	c.ours = &fixp.TerminatedError{Code: code, Reason: string(r), Err: err}
+	c.urgent = terminateFrame(s.ID(), code, r)
 	c.mu.Unlock()
 	s.logWarn("terminating", "reason", reason, "err", err)
 	notify(c.wake)
@@ -174,6 +190,12 @@ func (c *conn) result() error {
 		return c.cause
 	}
 	return errors.New("fixp/session: connection closed")
+}
+
+func (c *conn) hasUrgent() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.urgent != nil
 }
 
 func (c *conn) takeUrgent() []byte {
@@ -255,12 +277,30 @@ func (c *conn) writeLoop() {
 // would number it otherwise.
 func (c *conn) writeEntry(e entry) error {
 	s := c.s
-	if e.kind != entryApp {
+	if e.answer {
+		defer c.answers.Add(-1)
+	}
+	switch e.kind {
+	case entryRetransmit:
+		return c.retransmit(e.job)
+	case entryEndsNumbering:
+		// A session message but Sequence and Retransmission ends the
+		// numbering (§3.5.4): the next application message follows a
+		// Sequence.
+		c.outNext = 0
+		return c.write(e.frame)
+	case entrySession, entryTerminate:
 		return c.write(e.frame)
 	}
 	if e.seq != 0 {
 		if err := s.syncTo(e.seq); err != nil {
 			return err
+		}
+		// Out of the queue, written or not: from now on only a
+		// retransmission sends it, which must not find it beyond what
+		// was sent (the write may fail, the connection ending).
+		if e.seq > s.written.Load() {
+			s.written.Store(e.seq) // the writer's alone
 		}
 		if c.outNext != e.seq {
 			if err := c.write(sequenceFrame(e.seq)); err != nil {
@@ -351,21 +391,28 @@ func (c *conn) readLoop() {
 			return
 		}
 		s.stats.BytesReceived.Add(uint64(sofh.HeaderLen + len(msg)))
-		err = c.handle(enc, msg, time.Now())
-		var pe *protocolError
-		var he *handlerError
-		switch {
-		case err == nil:
-			continue
-		case errors.Is(err, errStop), errors.Is(err, errHalted):
-		case errors.As(err, &pe):
-			c.fail(pe.reason, err)
-		case errors.As(err, &he):
-			c.fail("application error", err)
-		default:
-			c.fail("unspecified error", err)
+		if err := c.handle(enc, msg, time.Now()); err != nil {
+			c.failOn(err)
+			return
 		}
-		return
+	}
+}
+
+// failOn ends the connection on an error of the reader's.
+func (c *conn) failOn(err error) {
+	var pe *protocolError
+	var he *handlerError
+	var te *terminateError
+	switch {
+	case errors.Is(err, errStop), errors.Is(err, errHalted):
+	case errors.As(err, &te):
+		c.failCode(te.code, te.reason, nil)
+	case errors.As(err, &pe):
+		c.fail(pe.reason, err)
+	case errors.As(err, &he):
+		c.fail("application error", err)
+	default:
+		c.fail("unspecified error", err)
 	}
 }
 
@@ -415,8 +462,14 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		}
 		c.answer(fixp.TerminationCode(c.term.Code), printable(c.term.Reason, c.s.cfg.MaxReasonLength))
 		return errStop
-	case codec.RetransmitRequestTemplateID, codec.RetransmissionTemplateID, codec.RestransmitRejectTemplateID:
-		return c.onRetransmission(h)
+	case codec.RetransmitRequestTemplateID:
+		c.inNext = 0 // a session message ending the peer's numbering (§3.5.4)
+		return c.onRetransmitRequest(h, body)
+	case codec.RetransmissionTemplateID:
+		return c.onRetransmission(h, body)
+	case codec.RestransmitRejectTemplateID:
+		c.inNext = 0
+		return c.onRetransmitReject(h, body)
 	case codec.FinishedSendingTemplateID, codec.FinishedReceivingTemplateID:
 		return c.onFinish(h)
 	}
@@ -430,11 +483,20 @@ func (c *conn) onSequence(next uint64) error {
 	if !in.Sequenced() {
 		return protocolf("Sequence on an %s flow", in)
 	}
-	expected := s.inbound + 1
+	if c.rec.batch {
+		return protocolf("Sequence before the end of a Retransmission")
+	}
+	// Expected: the next of the real-time numbering, or past everything
+	// known once it ended.
+	expected := c.inNext
+	if expected == 0 {
+		expected = c.highestKnown() + 1
+	}
 	switch {
 	case next < expected:
 		return protocolf("Sequence %d below the next sequence number expected, %d", next, expected)
 	case next > expected:
+		c.inNext = next
 		return c.gap(expected, next)
 	}
 	c.inNext = next
@@ -453,29 +515,33 @@ func (c *conn) onApplication(h codec.MessageHeader, msg, body []byte, received t
 	if !in.Sequenced() {
 		return c.deliver(h, msg, body, inb)
 	}
+	if c.rec.batch {
+		inb.Seq, inb.Retransmission = c.rec.batchNext, true
+		c.rec.batchNext++
+		return c.onRecoverable(h, msg, body, inb)
+	}
 	if c.inNext == 0 {
 		return protocolf("application message before a Sequence")
 	}
 	inb.Seq = c.inNext
 	c.inNext++
+	if in == fixp.Recoverable {
+		return c.onRecoverable(h, msg, body, inb)
+	}
 	if inb.Seq <= s.inbound {
 		return nil // a duplicate (§4.8)
 	}
-	if in == fixp.Idempotent {
-		// Admitted, durably, before the handler sees it: at most once.
-		if err := s.setInbound(inb.Seq, true); err != nil {
-			return errHalted
+	if inb.Seq > s.inbound+1 {
+		// Numbered past what was admitted: the numbers between are a gap.
+		if err := c.notApplied(s.inbound+1, inb.Seq-1); err != nil {
+			return err
 		}
 	}
-	if err := c.deliver(h, msg, body, inb); err != nil {
-		return err
+	// Admitted, durably, before the handler sees it: at most once.
+	if err := s.setInbound(inb.Seq, true); err != nil {
+		return errHalted
 	}
-	if in == fixp.Recoverable {
-		if err := s.setInbound(inb.Seq, false); err != nil {
-			return errHalted
-		}
-	}
-	return nil
+	return c.deliver(h, msg, body, inb)
 }
 
 // deliver hands an application message to the handler.
@@ -489,6 +555,10 @@ func (c *conn) deliver(h codec.MessageHeader, msg, body []byte, in Inbound) erro
 		}
 		err = s.handler.OnApplied(s.cbCtx, s, c.ap.FromSeqNo, c.ap.Count, in)
 	case h.SchemaId == codec.SchemaID && h.TemplateId == codec.NotAppliedTemplateID:
+		// What an Idempotent flow's receiver reports (§4.8.2): of ours.
+		if out, _ := s.Flows(); out != fixp.Idempotent {
+			return protocolf("NotApplied of our %s flow", out)
+		}
 		if err := c.nap.DecodeBody(h, body); err != nil {
 			return protocolf("NotApplied: %v", err)
 		}
@@ -511,32 +581,31 @@ func (c *conn) checkNextSeqNo(next uint64) error {
 		return nil
 	}
 	expected := s.inbound + 1
-	switch {
-	case next < expected:
+	if next < expected {
 		return protocolf("NextSeqNo %d below the next sequence number expected, %d: the peer lost messages it sent", next, expected)
-	case next > expected:
-		return c.gap(expected, next)
+	}
+	if next > expected {
+		// Handled once established: what it sends, and the handler,
+		// come after OnEstablished.
+		c.rec.pendingFrom, c.rec.pendingTo = expected, next-1
 	}
 	c.inNext = next
 	return nil
 }
 
-// errUnsupported is what M5 answers to what M6 and M7 implement.
+// startRecovery handles the gap the establishment found, if any.
+func (c *conn) startRecovery() error {
+	if c.rec.pendingFrom == 0 {
+		return nil
+	}
+	from, to := c.rec.pendingFrom, c.rec.pendingTo
+	c.rec.pendingFrom, c.rec.pendingTo = 0, 0
+	return c.gap(from, to+1)
+}
+
+// errUnsupported is what M5 answers to what M7 implements.
 func errUnsupported(what string) error {
 	return protocolf("%s is not supported yet", what)
-}
-
-// gap handles the peer's messages from to next-1, never received. (M6)
-func (c *conn) gap(from, next uint64) error {
-	return errUnsupported(fmt.Sprintf("recovering messages %d to %d", from, next-1))
-}
-
-// onRetransmission handles the retransmission messages. (M6)
-func (c *conn) onRetransmission(h codec.MessageHeader) error {
-	if out, _ := c.s.Flows(); h.TemplateId == codec.RetransmitRequestTemplateID && out != fixp.Recoverable {
-		return protocolf("RetransmitRequest on an %s flow", out)
-	}
-	return errUnsupported("retransmission")
 }
 
 // onFinish handles finalization. (M7)

@@ -16,13 +16,23 @@ const (
 	// entryTerminate is our graceful Terminate: the writer writes nothing
 	// after it.
 	entryTerminate
+	// entryEndsNumbering is a session message ending our numbering, such
+	// as a RetransmitRequest (§3.5.4).
+	entryEndsNumbering
+	// entryRetransmit is a batch to retransmit, read from the store when
+	// its turn comes.
+	entryRetransmit
 )
 
 type entry struct {
 	frame []byte
 	kind  entryKind
-	seq   uint64 // an application message's on a sequenced flow, else 0
-	conn  *conn  // a session message's connection
+	seq   uint64        // an application message's on a sequenced flow, else 0
+	conn  *conn         // a session message's connection
+	job   retransmitJob // an entryRetransmit's
+	// answer marks an answer to a request of the peer's, counted in its
+	// connection's answers until written.
+	answer bool
 }
 
 // queue holds the frames a session's writer is to write, in order.
@@ -40,12 +50,13 @@ type queue struct {
 	next uint64
 	// signal wakes the writer: entries were added.
 	signal chan struct{}
-	// room wakes a Send waiting for room: entries were removed.
+	// room is closed, and replaced, when application messages leave the
+	// queue: every Send waiting for room wakes and looks again.
 	room chan struct{}
 }
 
 func newQueue() *queue {
-	return &queue{signal: make(chan struct{}, 1), room: make(chan struct{}, 1), next: 1}
+	return &queue{signal: make(chan struct{}, 1), room: make(chan struct{}), next: 1}
 }
 
 func notify(ch chan struct{}) {
@@ -55,16 +66,25 @@ func notify(ch chan struct{}) {
 	}
 }
 
-// hasRoom reports whether an application message of n bytes fits. One
-// longer than maxBytes never does: Send refuses it first.
-func (q *queue) hasRoom(n, maxMsgs, maxBytes int) bool {
+// hasRoom reports whether an application message of n bytes fits, and if
+// not returns the channel closed once room may have been made: taken with
+// the answer, no wakeup is missed. One longer than maxBytes never fits:
+// Send refuses it first.
+func (q *queue) hasRoom(n, maxMsgs, maxBytes int) (bool, <-chan struct{}) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	return q.msgs < maxMsgs && q.bytes+n <= maxBytes
+	return q.msgs < maxMsgs && q.bytes+n <= maxBytes, q.room
+}
+
+// pending returns the application messages queued.
+func (q *queue) pending() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.msgs
 }
 
 // pushApp queues an application message. seq is its sequence number on a
-// sequenced flow, 0 otherwise: it then takes the next one.
+// sequenced flow, 0 otherwise.
 func (q *queue) pushApp(frame []byte, seq uint64) {
 	q.mu.Lock()
 	q.entries = append(q.entries, entry{frame: frame, kind: entryApp, seq: seq})
@@ -85,6 +105,23 @@ func (q *queue) pushSession(c *conn, frame []byte, kind entryKind) {
 	notify(q.signal)
 }
 
+// pushRetransmit queues a retransmission for connection c, an answer.
+func (q *queue) pushRetransmit(c *conn, j retransmitJob) {
+	q.mu.Lock()
+	q.entries = append(q.entries, entry{kind: entryRetransmit, conn: c, job: j, answer: true})
+	q.mu.Unlock()
+	notify(q.signal)
+}
+
+// pushAnswer queues a session message answering a request of the peer's on
+// connection c; it ends our numbering.
+func (q *queue) pushAnswer(c *conn, frame []byte) {
+	q.mu.Lock()
+	q.entries = append(q.entries, entry{frame: frame, kind: entryEndsNumbering, conn: c, answer: true})
+	q.mu.Unlock()
+	notify(q.signal)
+}
+
 // pop removes and returns the first entry c may write: an application
 // message, or a session message of c's. Session messages of other
 // connections are dropped on the way.
@@ -101,7 +138,8 @@ func (q *queue) pop(c *conn) (entry, bool) {
 		if e.kind == entryApp {
 			q.msgs--
 			q.bytes -= len(e.frame)
-			notify(q.room)
+			close(q.room)
+			q.room = make(chan struct{})
 		}
 		q.compact()
 		return e, true

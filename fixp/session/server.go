@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -303,7 +304,7 @@ func (srv *Server) accept(ctx context.Context, l transport.Listener) {
 	for {
 		t, err := l.Accept(ctx)
 		if err != nil {
-			if ctx.Err() != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				return
 			}
 			srv.logWarn("accepting", "addr", l.Addr().String(), "err", err)

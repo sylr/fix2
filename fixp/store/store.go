@@ -120,11 +120,13 @@ type Store interface {
 }
 
 // Session is the persisted state of one session, opened by one engine at a
-// time, its methods called by one goroutine at a time. Each write is
-// atomic: it happens whole or not at all, a crash included. Writes may be
-// buffered: Sync makes every write before it durable, and the engine syncs
-// before writing to the connection what depends on them (docs/fixp.md,
-// Persistence).
+// time. Its methods are safe for concurrent use: the engine calls them from
+// its reader, its writer and its senders, a Range answering the peer while
+// messages are appended. Each call is atomic: a write happens whole or not
+// at all, a crash included, and a Sync covers every write that returned
+// before it began. Writes may be buffered: Sync makes them durable, and the
+// engine syncs before writing to the connection what depends on them
+// (docs/fixp.md, Persistence).
 type Session interface {
 	// State returns the state as last written.
 	State() State
@@ -144,7 +146,9 @@ type Session interface {
 	// fails with ErrEvicted, before calling fn, if any of them is no longer
 	// kept, and with ErrSequence if end is not below NextOutbound. It reads
 	// a snapshot: an Evict meanwhile does not change what it reports. It
-	// stops at fn's first error, and returns it.
+	// stops at fn's first error, and returns it. fn runs outside the locks
+	// writes take: the engine writes to the network from it, and an Append
+	// must not wait for that.
 	Range(ctx context.Context, begin, end uint64, fn func(seq uint64, msg []byte) error) error
 	// Evict drops the messages below seq.
 	Evict(ctx context.Context, seq uint64) error

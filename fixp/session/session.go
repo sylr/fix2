@@ -73,9 +73,12 @@ type Stats struct {
 	Establishments   atomic.Uint64 // connections it was established on
 	MessagesSent     atomic.Uint64 // application messages written
 	MessagesReceived atomic.Uint64 // application messages read
-	HeartbeatsSent   atomic.Uint64
-	BytesSent        atomic.Uint64 // frames written, headers included
-	BytesReceived    atomic.Uint64 // frames read, headers included
+	// MessagesRetransmitted counts the messages written again, at the
+	// peer's request.
+	MessagesRetransmitted atomic.Uint64
+	HeartbeatsSent        atomic.Uint64
+	BytesSent             atomic.Uint64 // frames written, headers included
+	BytesReceived         atomic.Uint64 // frames read, headers included
 }
 
 // callbackKey marks a context passed to a Handler callback.
@@ -93,14 +96,21 @@ type Session struct {
 	log     *slog.Logger
 	cbCtx   context.Context
 	q       *queue
-	sendSem chan struct{} // serializes Sends
 	stats   Stats
+	// assign, a semaphore, serializes the assignment, storing and
+	// queueing of the messages sent: held for a store call, never while
+	// waiting for room, so that the reader may send NotApplied while a Send
+	// waits.
+	assign chan struct{}
 
 	done     chan struct{}
 	doneOnce sync.Once
 	// synced is the highest sequence number assigned when the store was
 	// last synced: every message up to it is durable.
 	synced atomic.Uint64
+	// written is the highest sequence number written on a connection, or
+	// stored before the process started: what the peer may ask for again.
+	written atomic.Uint64
 
 	mu      sync.Mutex
 	id      fixp.SessionID
@@ -123,8 +133,8 @@ func newSession(cfg Config, role store.Role) *Session {
 		handler: cfg.Handler,
 		log:     cfg.Logger,
 		q:       newQueue(),
-		sendSem: make(chan struct{}, 1),
 		done:    make(chan struct{}),
+		assign:  make(chan struct{}, 1),
 	}
 	s.cbCtx = context.WithValue(context.Background(), callbackKey{}, s)
 	return s
@@ -147,6 +157,8 @@ func (s *Session) adopt(st store.Session) {
 	s.inbound = state.Inbound
 	s.q.setNext(state.NextOutbound)
 	s.synced.Store(state.NextOutbound - 1)
+	// Stored before the process started: written, or to be retransmitted.
+	s.written.Store(state.NextOutbound - 1)
 }
 
 func (s *Session) logAttrs(args []any) []any {
@@ -276,23 +288,8 @@ func checkApplication(msg []byte) error {
 // send queues frame f of an application message.
 func (s *Session) send(ctx context.Context, f []byte) (uint64, error) {
 	cb := inCallback(ctx)
-	if cb {
-		select {
-		case s.sendSem <- struct{}{}:
-		default:
-			return 0, ErrQueueFull
-		}
-	} else {
-		select {
-		case s.sendSem <- struct{}{}:
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		}
-	}
-	defer func() { <-s.sendSem }()
-
 	s.mu.Lock()
-	state, out, st := s.state, s.out, s.st
+	state, out := s.state, s.out
 	s.mu.Unlock()
 	switch {
 	case state == StateStopped || state == StateFinalized:
@@ -304,17 +301,68 @@ func (s *Session) send(ctx context.Context, f []byte) (uint64, error) {
 	case len(f) > s.cfg.MaxPendingBytes:
 		return 0, fmt.Errorf("%w: a frame of %d bytes, MaxPendingBytes %d", ErrTooLarge, len(f), s.cfg.MaxPendingBytes)
 	}
-	for !s.q.hasRoom(len(f), s.cfg.MaxPendingMessages, s.cfg.MaxPendingBytes) {
+	for {
+		// The assignment is taken as the queue's room is: a callback
+		// never waits for it, another Send waits as long as its ctx.
+		if cb {
+			select {
+			case s.assign <- struct{}{}:
+			default:
+				return 0, ErrQueueFull
+			}
+		} else {
+			select {
+			case s.assign <- struct{}{}:
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			case <-s.done:
+				return 0, ErrStopped
+			}
+		}
+		ok, room := s.q.hasRoom(len(f), s.cfg.MaxPendingMessages, s.cfg.MaxPendingBytes)
+		if ok {
+			seq, err := s.enqueue(f)
+			<-s.assign
+			return seq, err
+		}
+		<-s.assign
 		if cb {
 			return 0, ErrQueueFull
 		}
 		select {
-		case <-s.q.room:
+		case <-room:
 		case <-ctx.Done():
 			return 0, ctx.Err()
 		case <-s.done:
 			return 0, ErrStopped
 		}
+	}
+}
+
+// errInternalFull is a message of the session's own accord that the queue
+// cannot take: the peer makes it send more than it writes.
+var errInternalFull = errors.New("fixp/session: send queue full of the session's own messages")
+
+// sendInternal queues a message the session sends of its own accord
+// (NotApplied), beyond the queue's bounds, which a Send may hold, up to
+// twice them: past, the peer is making it send faster than it writes.
+func (s *Session) sendInternal(f []byte) (uint64, error) {
+	s.assign <- struct{}{}
+	defer func() { <-s.assign }()
+	if s.q.pending() >= 2*s.cfg.MaxPendingMessages {
+		return 0, errInternalFull
+	}
+	return s.enqueue(f)
+}
+
+// enqueue assigns f its sequence number, stores it, and queues it, under
+// s.assign.
+func (s *Session) enqueue(f []byte) (uint64, error) {
+	s.mu.Lock()
+	state, out, st := s.state, s.out, s.st
+	s.mu.Unlock()
+	if state == StateStopped || state == StateFinalized {
+		return 0, ErrStopped
 	}
 	var seq uint64
 	if out.Sequenced() {
@@ -474,7 +522,11 @@ func (s *Session) run(ctx context.Context, c *conn, reason string) {
 	s.logInfo("established", "remote", c.t.RemoteAddr().String())
 	s.handler.OnEstablished(s.cbCtx, s)
 	go c.writeLoop()
-	c.readLoop()
+	if err := c.startRecovery(); err != nil {
+		c.failOn(err)
+	} else {
+		c.readLoop()
+	}
 	c.waitWriter()
 	c.close(nil)
 	err := c.result()

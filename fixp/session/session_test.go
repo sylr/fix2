@@ -87,7 +87,9 @@ func TestSequenced(t *testing.T) {
 	if st := sst.State(); st.NextOutbound != 4 || st.Inbound != 3 || st.EstablishedAt.IsZero() || st.Owner != "alice" {
 		t.Errorf("server store %+v", st)
 	}
-	if st := cst.State(); st.NextOutbound != 4 || st.Inbound != 3 {
+	// Recorded once the handler returned, after the event it sent.
+	eventually(t, func() bool { return cst.State().Inbound == 3 })
+	if st := cst.State(); st.NextOutbound != 4 {
 		t.Errorf("client store %+v", st)
 	}
 	var stored []string

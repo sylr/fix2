@@ -53,8 +53,10 @@ type recorder struct {
 	events chan event
 	// onMessage, if set, answers OnMessage.
 	onMessage func(ctx context.Context, s *Session, msg []byte, in Inbound) error
-	mu        sync.Mutex
-	sessions  []*Session
+	// onLost, if set, answers OnLost.
+	onLost   func(from, count uint64) error
+	mu       sync.Mutex
+	sessions []*Session
 }
 
 func newRecorder() *recorder { return &recorder{events: make(chan event, 1024)} }
@@ -81,6 +83,17 @@ func (r *recorder) OnMessage(ctx context.Context, s *Session, msg []byte, in Inb
 func (r *recorder) OnApplied(_ context.Context, _ *Session, from uint64, count uint32, in Inbound) error {
 	r.events <- event{kind: "applied", seq: from, body: fmt.Sprint(count)}
 	return nil
+}
+
+func (r *recorder) OnGap(_ context.Context, _ *Session, from, count uint64) {
+	r.events <- event{kind: "gap", seq: from, body: fmt.Sprint(count)}
+}
+
+func (r *recorder) OnLost(_ context.Context, _ *Session, from, count uint64) error {
+	if r.onLost != nil {
+		return r.onLost(from, count)
+	}
+	return errLost
 }
 
 func (r *recorder) OnFinalized(context.Context, *Session) {
@@ -116,6 +129,18 @@ func (r *recorder) quiet(t testing.TB, d time.Duration) {
 	case e := <-r.events:
 		t.Fatalf("unexpected event %v", e)
 	case <-time.After(d):
+	}
+}
+
+// eventually waits for cond, failing the test after a while.
+func eventually(t testing.TB, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not met in time")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 

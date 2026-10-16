@@ -354,4 +354,38 @@ func testConcurrent(t *testing.T, s store.Store) {
 		})
 	}
 	wg.Wait()
+
+	// One session from several goroutines, as the engine calls it.
+	ss, err := s.Create(ctx, meta(store.Server))
+	must(t, err)
+	var mu sync.Mutex // orders the Appends, which must be in sequence
+	next := uint64(1)
+	for g := range 4 {
+		wg.Go(func() {
+			for i := range 50 {
+				var err error
+				switch g {
+				case 0:
+					mu.Lock()
+					err = ss.Append(ctx, next, fmt.Appendf(nil, "msg-%d", next))
+					next++
+					mu.Unlock()
+				case 1:
+					err = ss.SetInbound(ctx, uint64(i))
+				case 2:
+					err = ss.Sync(ctx)
+				case 3:
+					if n := ss.State().NextOutbound; n > 1 {
+						err = ss.Range(ctx, 1, n-1, func(uint64, []byte) error { return nil })
+					}
+				}
+				if err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	expectRange(t, ss, 1, 50)
 }
