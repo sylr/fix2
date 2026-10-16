@@ -1111,6 +1111,12 @@ func (s *Session) businessRejectLocked(m *fix2.Message, reason int, refID, text 
 		s.rejectLocked(m, dictionary.ReasonOther, noTag, text)
 		return
 	}
+	if s.c.closing {
+		// As rejectLocked.
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a message after our Logout",
+			s.msgTypeAttr(m), s.seqAttr(m), slog.Int("business_reject_reason", reason))
+		return
+	}
 	text = withhold(m, noTag, text, "value withheld")
 	s.stats.RejectsSent.Add(1)
 	b := adminBody(nil)

@@ -119,7 +119,13 @@ func (s *Session) logonBody(reset bool, next uint64) adminBody {
 
 // onLogonLocked handles a Logon: the counterparty's, or its answer to ours.
 func (s *Session) onLogonLocked(c *conn, m *fix2.Message, in Inbound, now time.Time) {
-	switch s.phase {
+	phase := s.phase
+	if c.closing {
+		// Our last Logout queued, a stalled handler's leaving the phase
+		// established: a reset would drop it, and its answer go after it.
+		phase = phaseLogoutSent
+	}
+	switch phase {
 	case phaseLogoutSent:
 		// Logging out, FIX lets us send nothing but what a ResendRequest
 		// asks for: neither a Logon answering it nor a sequence reset.

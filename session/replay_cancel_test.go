@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -425,4 +426,49 @@ func TestReplayCancelledInOnResend(t *testing.T) {
 	p.send("A", 0, "98", "0", "108", "30")
 	w.h.wait(t, func() bool { return w.h.logons == 2 })
 	w.checkRetired(t, 0, 0)
+}
+
+// A Logon with ResetSeqNumFlag received once a stalled handler's Logout is
+// queued, the phase still established, is ignored as while logging out: a
+// reset would drop that Logout and the replay holding it back, and escape
+// the close deadline.
+func TestStallLogoutIgnoresResetLogon(t *testing.T) {
+	st := newWaitingRangeStore(1)
+	h := &stuck{recorder: newRecorder(), release: make(chan struct{})}
+	l := mem.Listen("acceptor")
+	s, _ := startInitiator(t, l, func(c *session.Config) {
+		c.Store, c.Handler, c.DeliveryQueue = st, h, 1
+		c.MaxDeliveryStall, c.LogoutTimeout = 50*time.Millisecond, 300*time.Millisecond
+	})
+	release := sync.OnceFunc(func() { close(h.release) })
+	t.Cleanup(release)
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 0, "98", "0", "108", "30")
+	h.wait(t, func() bool { return h.logons == 1 })
+	if _, err := s.Send(context.Background(), order("O1")); err != nil {
+		t.Fatal(err)
+	}
+	p.expect("D")
+	st.wait.Store(true)
+	p.send("2", 0, "7", "1", "16", "0")
+	st.waitRange(t)
+	for i := range 5 {
+		p.send("D", 0, "11", strconv.Itoa(i))
+	}
+	waitFor(t, func() bool { return s.State() == session.StateStalled })
+	// The reader, room made, reads the reset.
+	release()
+	p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+	p.expectSilentEnd()
+	if s.State() == session.StateResettingSeqs {
+		t.Error("reset accepted after our Logout")
+	}
+	state, err := st.Open(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Generation != 1 {
+		t.Errorf("store generation %d, want 1: reset after our Logout", state.Generation)
+	}
 }

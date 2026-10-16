@@ -7,12 +7,14 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	fix2 "github.com/sylr/fix2"
+	"github.com/sylr/fix2/dictionary/xmldict"
 	"github.com/sylr/fix2/session"
 	"github.com/sylr/fix2/session/store/memstore"
 	"github.com/sylr/fix2/session/transport"
@@ -570,5 +572,44 @@ func TestLogoutAnswerAfterReplayAskedBefore(t *testing.T) {
 	p.expectSilentEnd()
 	if n := s.NextSenderSeqNum(); n != 4 {
 		t.Errorf("NextSenderSeqNum = %d, want 4", n)
+	}
+}
+
+// A BusinessMessageReject not sent after our Logout is not counted either.
+func TestLogoutAnswerIsLastBusinessReject(t *testing.T) {
+	st := &syncGate{Store: memstore.New(), entered: make(chan struct{}, 1), release: make(chan struct{})}
+	l := mem.Listen("acceptor")
+	// D a MsgType without a message: the reader rejects it with a
+	// BusinessMessageReject.
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4" servicepack="0">
+<header><field name="BeginString" required="Y"/><field name="BodyLength" required="Y"/><field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/><field name="TargetCompID" required="Y"/><field name="MsgSeqNum" required="Y"/><field name="SendingTime" required="Y"/></header>
+<trailer><field name="CheckSum" required="Y"/></trailer>
+<messages><message name="Logon" msgtype="A" msgcat="admin"><field name="EncryptMethod" required="Y"/><field name="HeartBtInt" required="Y"/></message><message name="Logout" msgtype="5" msgcat="admin"/></messages>
+<fields><field number="8" name="BeginString" type="STRING"/><field number="9" name="BodyLength" type="LENGTH"/><field number="10" name="CheckSum" type="STRING"/><field number="34" name="MsgSeqNum" type="SEQNUM"/><field number="35" name="MsgType" type="STRING"><value enum="A" description="Logon"/><value enum="5" description="Logout"/><value enum="D" description="NewOrderSingle"/></field><field number="49" name="SenderCompID" type="STRING"/><field number="52" name="SendingTime" type="UTCTIMESTAMP"/><field number="56" name="TargetCompID" type="STRING"/><field number="98" name="EncryptMethod" type="INT"/><field number="108" name="HeartBtInt" type="INT"/></fields></fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, rec := startInitiator(t, l, func(c *session.Config) { c.Store, c.Dictionaries.Session = st, d })
+	release := sync.OnceFunc(func() { close(st.release) })
+	t.Cleanup(release)
+	p := acceptPeer(t, l)
+	p.expect("A")
+	p.send("A", 0, "98", "0", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	st.block.Store(true)
+	p.send("5", 0)
+	select {
+	case <-st.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("our Logout not written")
+	}
+	p.send("D", 0)
+	waitFor(t, func() bool { return s.NextTargetSeqNum() == 4 })
+	st.block.Store(false)
+	release()
+	p.expect("5", "34", "2")
+	p.expectSilentEnd()
+	if n := s.Stats().RejectsSent.Load(); n != 0 {
+		t.Errorf("RejectsSent = %d, want 0: nothing sent after our Logout", n)
 	}
 }
