@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Builds and runs the Silverflash spike server: server.sh build | server.sh run PORT MILLIS
+set -euo pipefail
+F=/tmp/claude-501/fixp
+CP="$F/silverflash/silverflash-core/target/silverflash-core-1.1.2-SNAPSHOT.jar:$(cat $F/cp5.txt):$F/spike/classes"
+export JAVA_TOOL_OPTIONS="-Djava.io.tmpdir=$F/jtmp"
+case "$1" in
+build) nix shell nixpkgs#jdk21 -c javac -cp "$CP" -d "$F/spike/classes" "$F/spike/SpikeServer.java" ;;
+run) exec nix shell nixpkgs#jdk21 -c java --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
+	--add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED \
+	--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-exports java.base/jdk.internal.misc=ALL-UNNAMED \
+	-cp "$CP" SpikeServer "$2" "$3" "$4" ;;
+esac

@@ -1,0 +1,33 @@
+Error setting thread affinity; java.lang.UnsatisfiedLinkError: Error looking up function 'sched_setaffinity': dlsym(0x3642cf430, sched_setaffinity): symbol not foundError setting thread affinity; java.lang.UnsatisfiedLinkError: Error looking up function 'sched_setaffinity': dlsym(0x3642cf430, sched_setaffinity): symbol not foundlistening on localhost/127.0.0.1:7752
+server session opened
+Authenticated session ID=b24a6173-4bc5-4172-b3a3-78baa29c062a credentials=spike
+Oct 16, 2026 9:40:27 PM com.lmax.disruptor.FatalExceptionHandler handleEventException
+SEVERE: Exception processing: 4 BufferEvent [topic=/b24a6173-4bc5-4172-b3a3-78baa29c062a/SERVER_ESTABLISHED, payload=java.nio.DirectByteBuffer[pos=0 lim=45 cap=2048]]
+java.lang.ClassCastException: class io.fixprotocol.silverflash.fixp.flow.RecoverableFlowSender cannot be cast to class io.fixprotocol.silverflash.fixp.flow.FlowSender (io.fixprotocol.silverflash.fixp.flow.RecoverableFlowSender and io.fixprotocol.silverflash.fixp.flow.FlowSender are in unnamed module of loader 'app')
+	at io.fixprotocol.silverflash.fixp.FixpSession.setOutboundStream(FixpSession.java:810)
+	at io.fixprotocol.silverflash.fixp.FixpSession.access$100(FixpSession.java:80)
+	at io.fixprotocol.silverflash.fixp.FixpSession$1.accept(FixpSession.java:331)
+	at io.fixprotocol.silverflash.fixp.FixpSession$1.accept(FixpSession.java:326)
+	at io.fixprotocol.silverflash.reactor.ByteBufferDispatcher.dispatch(ByteBufferDispatcher.java:35)
+	at io.fixprotocol.silverflash.reactor.ByteBufferDispatcher.dispatch(ByteBufferDispatcher.java:30)
+	at io.fixprotocol.silverflash.reactor.EventReactor.handleEvent(EventReactor.java:245)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:129)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+
+Exception in thread "SES-1" java.lang.RuntimeException: java.lang.ClassCastException: class io.fixprotocol.silverflash.fixp.flow.RecoverableFlowSender cannot be cast to class io.fixprotocol.silverflash.fixp.flow.FlowSender (io.fixprotocol.silverflash.fixp.flow.RecoverableFlowSender and io.fixprotocol.silverflash.fixp.flow.FlowSender are in unnamed module of loader 'app')
+	at com.lmax.disruptor.FatalExceptionHandler.handleEventException(FatalExceptionHandler.java:45)
+	at com.lmax.disruptor.dsl.ExceptionHandlerWrapper.handleEventException(ExceptionHandlerWrapper.java:18)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:148)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+Caused by: java.lang.ClassCastException: class io.fixprotocol.silverflash.fixp.flow.RecoverableFlowSender cannot be cast to class io.fixprotocol.silverflash.fixp.flow.FlowSender (io.fixprotocol.silverflash.fixp.flow.RecoverableFlowSender and io.fixprotocol.silverflash.fixp.flow.FlowSender are in unnamed module of loader 'app')
+	at io.fixprotocol.silverflash.fixp.FixpSession.setOutboundStream(FixpSession.java:810)
+	at io.fixprotocol.silverflash.fixp.FixpSession.access$100(FixpSession.java:80)
+	at io.fixprotocol.silverflash.fixp.FixpSession$1.accept(FixpSession.java:331)
+	at io.fixprotocol.silverflash.fixp.FixpSession$1.accept(FixpSession.java:326)
+	at io.fixprotocol.silverflash.reactor.ByteBufferDispatcher.dispatch(ByteBufferDispatcher.java:35)
+	at io.fixprotocol.silverflash.reactor.ByteBufferDispatcher.dispatch(ByteBufferDispatcher.java:30)
+	at io.fixprotocol.silverflash.reactor.EventReactor.handleEvent(EventReactor.java:245)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:129)
+	... 2 more

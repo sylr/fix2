@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Runs the three spike cases against fresh Silverflash servers, logging both sides.
+set -uo pipefail
+F=/tmp/claude-501/fixp/spike
+OUT=$F/out
+rm -rf "$OUT"; mkdir -p "$OUT"
+run() { # name port flow sofh-mode
+  bash $F/server.sh run "$2" 15000 "$3" > "$OUT/$1.server.log" 2>&1 &
+  for i in $(seq 1 60); do grep -q listening "$OUT/$1.server.log" 2>/dev/null && break; sleep 0.5; done
+  if [ "$4" = silverflash ]; then
+    SILVERFLASH_SOFH=1 $F/client/client 127.0.0.1:"$2" "$OUT/$1.wire.log" > "$OUT/$1.client.log" 2>&1
+  else
+    $F/client/client 127.0.0.1:"$2" "$OUT/$1.wire.log" > "$OUT/$1.client.log" 2>&1
+  fi
+  echo "exit=$?" >> "$OUT/$1.client.log"
+  wait
+}
+run 1-standard-sofh 7751 Recoverable standard
+run 2-recoverable-server 7752 Recoverable silverflash
+run 3-idempotent-server 7753 Idempotent silverflash

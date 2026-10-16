@@ -1,0 +1,370 @@
+// Command client is fix2's throwaway FIXP interoperability spike: a client
+// hand-encoding the session messages of the pinned FIXP schema (id 2748,
+// SBE 1.0 little-endian, SOFH framing), run against a Silverflash server.
+package main
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"time"
+)
+
+const (
+	sofhSBE   = 0xEB50
+	schemaID  = 2748
+	appSchema = 33
+	appTmpl   = 22
+	nullU64   = ^uint64(0)
+)
+
+const (
+	tNegotiate           = 1
+	tNegotiationResponse = 2
+	tNegotiationReject   = 3
+	tEstablish           = 5
+	tEstablishmentAck    = 6
+	tEstablishmentReject = 7
+	tSequence            = 8
+	tUnsequencedHB       = 10
+	tRetransmitRequest   = 11
+	tRetransmission      = 12
+	tRetransmitReject    = 13
+	tTerminate           = 14
+	tNotApplied          = 18
+)
+
+var names = map[uint16]string{
+	1: "Negotiate", 2: "NegotiationResponse", 3: "NegotiationReject", 4: "Topic",
+	5: "Establish", 6: "EstablishmentAck", 7: "EstablishmentReject", 8: "Sequence",
+	9: "Context", 10: "UnsequencedHeartbeat", 11: "RetransmitRequest", 12: "Retransmission",
+	13: "RetransmitReject", 14: "Terminate", 15: "FinishedSending", 16: "FinishedReceiving",
+	17: "Applied", 18: "NotApplied", 19: "MessageTemplate",
+}
+
+var le = binary.LittleEndian
+
+// silverflashSOFH frames as Silverflash does: Message_Length without the
+// 6-byte header, unlike SOFH 1.0, which counts it.
+var silverflashSOFH = os.Getenv("SILVERFLASH_SOFH") != ""
+
+type conn struct {
+	c   net.Conn
+	log *os.File
+}
+
+// frame wraps an SBE message (header included) in a SOFH header.
+func frame(sbe []byte) []byte {
+	f := make([]byte, 6, 6+len(sbe))
+	n := 6 + len(sbe)
+	if silverflashSOFH {
+		n -= 6
+	}
+	binary.BigEndian.PutUint32(f, uint32(n))
+	binary.BigEndian.PutUint16(f[4:], sofhSBE)
+	return append(f, sbe...)
+}
+
+func header(block, tmpl, schema uint16) []byte {
+	h := make([]byte, 8)
+	le.PutUint16(h, block)
+	le.PutUint16(h[2:], tmpl)
+	le.PutUint16(h[4:], schema)
+	le.PutUint16(h[6:], 0)
+	return h
+}
+
+func data(b []byte) []byte {
+	d := make([]byte, 2, 2+len(b))
+	le.PutUint16(d, uint16(len(b)))
+	return append(d, b...)
+}
+
+func (c *conn) send(what string, sbe []byte) {
+	f := frame(sbe)
+	fmt.Fprintf(c.log, "> %-22s %s\n", what, hex.EncodeToString(f))
+	fmt.Printf("> %s\n", what)
+	if _, err := c.c.Write(f); err != nil {
+		fail("write %s: %v", what, err)
+	}
+}
+
+type msg struct {
+	schema, tmpl, block uint16
+	body                []byte // after the SBE header
+}
+
+func (c *conn) recv(timeout time.Duration) (msg, error) {
+	c.c.SetReadDeadline(time.Now().Add(timeout))
+	h := make([]byte, 6)
+	if _, err := io.ReadFull(c.c, h); err != nil {
+		return msg{}, err
+	}
+	n := binary.BigEndian.Uint32(h)
+	if silverflashSOFH {
+		n += 6
+	}
+	enc := binary.BigEndian.Uint16(h[4:])
+	if enc != sofhSBE || n < 14 || n > 1<<20 {
+		return msg{}, fmt.Errorf("bad SOFH header %x", h)
+	}
+	p := make([]byte, n-6)
+	if _, err := io.ReadFull(c.c, p); err != nil {
+		return msg{}, err
+	}
+	m := msg{block: le.Uint16(p), tmpl: le.Uint16(p[2:]), schema: le.Uint16(p[4:]), body: p[8:]}
+	name := fmt.Sprintf("app(%d/%d)", m.schema, m.tmpl)
+	if m.schema == schemaID {
+		name = names[m.tmpl]
+	}
+	fmt.Fprintf(c.log, "< %-22s %s%s\n", name, hex.EncodeToString(h), hex.EncodeToString(p))
+	return m, nil
+}
+
+func (m msg) String() string {
+	b := m.body
+	if m.schema != schemaID {
+		return fmt.Sprintf("app schema=%d template=%d body=%q", m.schema, m.tmpl, b[:m.block])
+	}
+	s := names[m.tmpl]
+	switch m.tmpl {
+	case tNegotiationResponse:
+		return fmt.Sprintf("%s session=%x reqTS=%d serverFlow=%d", s, b[:16], le.Uint64(b[16:]), b[24])
+	case tNegotiationReject, tEstablishmentReject:
+		return fmt.Sprintf("%s session=%x reqTS=%d code=%d reason=%q", s, b[:16], le.Uint64(b[16:]), b[24], varData(b[m.block:]))
+	case tEstablishmentAck:
+		next := le.Uint64(b[28:])
+		ns := fmt.Sprint(next)
+		if next == nullU64 {
+			ns = "null"
+		}
+		return fmt.Sprintf("%s session=%x reqTS=%d keepalive=%d nextSeqNo=%s", s, b[:16], le.Uint64(b[16:]), le.Uint32(b[24:]), ns)
+	case tSequence:
+		return fmt.Sprintf("%s nextSeqNo=%d", s, le.Uint64(b))
+	case tRetransmission:
+		return fmt.Sprintf("%s reqTS=%d nextSeqNo=%d count=%d", s, le.Uint64(b[16:]), le.Uint64(b[24:]), le.Uint32(b[32:]))
+	case tRetransmitReject:
+		return fmt.Sprintf("%s reqTS=%d code=%d reason=%q", s, le.Uint64(b[16:]), b[24], varData(b[m.block:]))
+	case tTerminate:
+		return fmt.Sprintf("%s code=%d reason=%q", s, b[16], varData(b[m.block:]))
+	case tNotApplied:
+		return fmt.Sprintf("%s from=%d count=%d", s, le.Uint64(b), le.Uint32(b[8:]))
+	}
+	return fmt.Sprintf("%s block=%d body=%x", s, m.block, b)
+}
+
+func varData(b []byte) string {
+	if len(b) < 2 {
+		return ""
+	}
+	n := int(le.Uint16(b))
+	if 2+n > len(b) {
+		return "<truncated>"
+	}
+	return string(b[2 : 2+n])
+}
+
+func fail(format string, args ...any) {
+	fmt.Printf("FAIL: "+format+"\n", args...)
+	os.Exit(1)
+}
+
+func uuid4() []byte {
+	u := make([]byte, 16)
+	rand.Read(u)
+	u[6] = u[6]&0x0f | 0x40
+	u[8] = u[8]&0x3f | 0x80
+	return u
+}
+
+func now() uint64 { return uint64(time.Now().UnixNano()) }
+
+var creds = []byte("spike\x00token")
+
+// next is the client flow's next sequence number, for heartbeats.
+var next uint64 = 1
+
+func negotiate(c *conn, id []byte, flow byte) uint64 {
+	ts := now()
+	b := header(25, tNegotiate, schemaID)
+	b = append(b, id...)
+	b = le.AppendUint64(b, ts)
+	b = append(b, flow)
+	c.send("Negotiate", append(b, data(creds)...))
+	return ts
+}
+
+func establish(c *conn, id []byte, keepalive uint32, next uint64) uint64 {
+	ts := now()
+	b := header(36, tEstablish, schemaID)
+	b = append(b, id...)
+	b = le.AppendUint64(b, ts)
+	b = le.AppendUint32(b, keepalive)
+	b = le.AppendUint64(b, next)
+	c.send(fmt.Sprintf("Establish next=%d", next), append(b, data(creds)...))
+	return ts
+}
+
+func sequence(c *conn, n uint64) {
+	next = n
+	c.send(fmt.Sprintf("Sequence %d", n), le.AppendUint64(header(8, tSequence, schemaID), n))
+}
+
+func app(c *conn, body string) {
+	next++
+	c.send("app "+body, append(header(uint16(len(body)), appTmpl, appSchema), body...))
+}
+
+func terminate(c *conn, id []byte, code byte) {
+	b := header(17, tTerminate, schemaID)
+	b = append(b, id...)
+	b = append(b, code)
+	c.send(fmt.Sprintf("Terminate code=%d", code), append(b, data(nil)...))
+}
+
+func retransmitRequest(c *conn, id []byte, from uint64, count uint32) uint64 {
+	ts := now()
+	b := header(36, tRetransmitRequest, schemaID)
+	b = append(b, id...)
+	b = le.AppendUint64(b, ts)
+	b = le.AppendUint64(b, from)
+	b = le.AppendUint32(b, count)
+	c.send(fmt.Sprintf("RetransmitRequest from=%d count=%d", from, count), b)
+	return ts
+}
+
+// drain prints what arrives for d, and returns it, sending a Sequence
+// heartbeat every 500 ms, half the keepalive interval the client gives.
+func drain(c *conn, d time.Duration) []msg {
+	var got []msg
+	deadline := time.Now().Add(d)
+	beat := time.Now().Add(500 * time.Millisecond)
+	for {
+		left := time.Until(deadline)
+		if left <= 0 {
+			return got
+		}
+		if time.Now().After(beat) {
+			sequence(c, next)
+			beat = time.Now().Add(500 * time.Millisecond)
+		}
+		if w := time.Until(beat); w < left {
+			left = w
+		}
+		m, err := c.recv(left)
+		if err != nil {
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				continue
+			}
+			fmt.Printf("  recv: %v\n", err)
+			return got
+		}
+		fmt.Printf("< %v\n", m)
+		got = append(got, m)
+	}
+}
+
+// expect reads until a session message of one of tmpls arrives.
+func expect(c *conn, d time.Duration, tmpls ...uint16) msg {
+	deadline := time.Now().Add(d)
+	for {
+		m, err := c.recv(time.Until(deadline))
+		if err != nil {
+			fail("waiting for %v: %v", tmpls, err)
+		}
+		fmt.Printf("< %v\n", m)
+		if m.schema == schemaID {
+			for _, t := range tmpls {
+				if m.tmpl == t {
+					return m
+				}
+			}
+		}
+	}
+}
+
+func dial(addr string, log *os.File) *conn {
+	nc, err := net.Dial("tcp", addr)
+	if err != nil {
+		fail("dial: %v", err)
+	}
+	nc.(*net.TCPConn).SetNoDelay(true)
+	return &conn{c: nc, log: log}
+}
+
+func main() {
+	addr, logPath := os.Args[1], os.Args[2]
+	log, err := os.Create(logPath)
+	if err != nil {
+		fail("%v", err)
+	}
+	defer log.Close()
+	id := uuid4()
+	fmt.Printf("session %x\n", id)
+
+	fmt.Println("== 1. negotiate, establish (client Idempotent)")
+	c := dial(addr, log)
+	ts := negotiate(c, id, 1)
+	r := expect(c, 3*time.Second, tNegotiationResponse, tNegotiationReject)
+	if r.tmpl != tNegotiationResponse || !bytes.Equal(r.body[:16], id) || le.Uint64(r.body[16:]) != ts {
+		fail("negotiation: %v", r)
+	}
+	serverFlow := r.body[24]
+	ts = establish(c, id, 1000, 1)
+	r = expect(c, 3*time.Second, tEstablishmentAck, tEstablishmentReject)
+	if r.tmpl != tEstablishmentAck || le.Uint64(r.body[16:]) != ts {
+		fail("establishment: %v", r)
+	}
+
+	fmt.Println("== 2. three application messages, seq 1-3")
+	sequence(c, 1)
+	for i := 1; i <= 3; i++ {
+		app(c, fmt.Sprintf("order %d", i))
+	}
+	drain(c, 1500*time.Millisecond)
+
+	fmt.Println("== 2b. idle 3.5 s: the server's heartbeats (keepalive 1000 ms)")
+	drain(c, 3500*time.Millisecond)
+
+	fmt.Println("== 3. gap: Sequence 10 (4-9 never sent), one message")
+	sequence(c, 10)
+	app(c, "order 10")
+	drain(c, 1500*time.Millisecond)
+
+	fmt.Println("== 4. graceful Terminate")
+	terminate(c, id, 0)
+	expect(c, 3*time.Second, tTerminate)
+	c.c.Close()
+
+	fmt.Println("== 5. reconnect, re-establish the same session")
+	c = dial(addr, log)
+	ts = establish(c, id, 1000, 11)
+	r = expect(c, 3*time.Second, tEstablishmentAck, tEstablishmentReject)
+	if r.tmpl != tEstablishmentAck {
+		fail("re-establishment: %v", r)
+	}
+	sequence(c, 11)
+	app(c, "order 11")
+	drain(c, 1500*time.Millisecond)
+
+	if serverFlow == 0 {
+		fmt.Println("== 6. retransmission of the server's first two messages")
+		retransmitRequest(c, id, 1, 2)
+		drain(c, 2*time.Second)
+	} else {
+		fmt.Println("== 6. skipped: the server flow is not Recoverable")
+	}
+
+	fmt.Println("== 7. graceful Terminate")
+	terminate(c, id, 0)
+	expect(c, 3*time.Second, tTerminate)
+	c.c.Close()
+	fmt.Println("DONE")
+}

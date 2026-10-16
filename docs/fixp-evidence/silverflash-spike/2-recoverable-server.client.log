@@ -1,0 +1,7 @@
+session b24a61734bc54172b3a378baa29c062a
+== 1. negotiate, establish (client Idempotent)
+> Negotiate
+< NegotiationResponse session=b24a61734bc54172b3a378baa29c062a reqTS=1792179627195095000 serverFlow=0
+> Establish next=1
+FAIL: waiting for [6 7]: read tcp 127.0.0.1:55151->127.0.0.1:7752: i/o timeout
+exit=1

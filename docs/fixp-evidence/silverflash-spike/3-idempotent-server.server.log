@@ -1,0 +1,34 @@
+Error setting thread affinity; java.lang.UnsatisfiedLinkError: Error looking up function 'sched_setaffinity': dlsym(0x3642cf430, sched_setaffinity): symbol not foundError setting thread affinity; java.lang.UnsatisfiedLinkError: Error looking up function 'sched_setaffinity': dlsym(0x3642cf430, sched_setaffinity): symbol not foundlistening on localhost/127.0.0.1:7753
+server session opened
+Authenticated session ID=7ebd6dbd-ee34-4972-adcf-9bab3ed05ec1 credentials=spike
+server received seq=1 15 bytes: 07001600210000006f726465722031
+server sent reply, seq=2
+server received seq=2 15 bytes: 07001600210000006f726465722032
+server sent reply, seq=3
+server received seq=3 15 bytes: 07001600210000006f726465722033
+server sent reply, seq=4
+server received seq=10 16 bytes: 08001600210000006f72646572203130
+server sent reply, seq=6
+server session opened
+Oct 16, 2026 9:40:49 PM com.lmax.disruptor.FatalExceptionHandler handleEventException
+SEVERE: Exception processing: 21 BufferEvent [topic=null, payload=java.nio.DirectByteBuffer[pos=6 lim=2048 cap=2048]]
+java.lang.NullPointerException: Cannot invoke "Object.hashCode()" because "key" is null
+	at java.base/java.util.concurrent.ConcurrentHashMap.get(ConcurrentHashMap.java:936)
+	at io.fixprotocol.silverflash.reactor.EventReactor.getSubscriber(EventReactor.java:234)
+	at io.fixprotocol.silverflash.reactor.EventReactor.handleEvent(EventReactor.java:239)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:129)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+
+Exception in thread "SES-1" java.lang.RuntimeException: java.lang.NullPointerException: Cannot invoke "Object.hashCode()" because "key" is null
+	at com.lmax.disruptor.FatalExceptionHandler.handleEventException(FatalExceptionHandler.java:45)
+	at com.lmax.disruptor.dsl.ExceptionHandlerWrapper.handleEventException(ExceptionHandlerWrapper.java:18)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:148)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+Caused by: java.lang.NullPointerException: Cannot invoke "Object.hashCode()" because "key" is null
+	at java.base/java.util.concurrent.ConcurrentHashMap.get(ConcurrentHashMap.java:936)
+	at io.fixprotocol.silverflash.reactor.EventReactor.getSubscriber(EventReactor.java:234)
+	at io.fixprotocol.silverflash.reactor.EventReactor.handleEvent(EventReactor.java:239)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:129)
+	... 2 more

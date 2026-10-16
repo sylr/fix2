@@ -1,0 +1,38 @@
+session 7ebd6dbdee344972adcf9bab3ed05ec1
+== 1. negotiate, establish (client Idempotent)
+> Negotiate
+< NegotiationResponse session=7ebd6dbdee344972adcf9bab3ed05ec1 reqTS=1792179642477248000 serverFlow=1
+> Establish next=1
+< EstablishmentAck session=7ebd6dbdee344972adcf9bab3ed05ec1 reqTS=1792179642497333000 keepalive=1000 nextSeqNo=null
+== 2. three application messages, seq 1-3
+> Sequence 1
+> app order 1
+> app order 2
+> app order 3
+< Sequence nextSeqNo=1
+< app schema=33 template=22 body="ack 1"
+< app schema=33 template=22 body="ack 2"
+< app schema=33 template=22 body="ack 3"
+> Sequence 4
+> Sequence 4
+== 2b. idle 3.5 s: the server's heartbeats (keepalive 1000 ms)
+> Sequence 4
+> Sequence 4
+> Sequence 4
+> Sequence 4
+> Sequence 4
+> Sequence 4
+== 3. gap: Sequence 10 (4-9 never sent), one message
+> Sequence 10
+> app order 10
+< NotApplied from=4 count=6
+< app schema=33 template=22 body="ack 10"
+> Sequence 11
+> Sequence 11
+== 4. graceful Terminate
+> Terminate code=0
+< Terminate code=0 reason=""
+== 5. reconnect, re-establish the same session
+> Establish next=11
+FAIL: waiting for [6 7]: read tcp 127.0.0.1:55195->127.0.0.1:7753: i/o timeout
+exit=1

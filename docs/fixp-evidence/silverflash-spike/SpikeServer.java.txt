@@ -1,0 +1,114 @@
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.UUID;
+import java.util.function.Function;
+
+import org.agrona.MutableDirectBuffer;
+import org.agrona.concurrent.UnsafeBuffer;
+
+import io.fixprotocol.silverflash.MessageConsumer;
+import io.fixprotocol.silverflash.Session;
+import io.fixprotocol.silverflash.auth.SimpleDirectory;
+import io.fixprotocol.silverflash.buffer.SingleBufferSupplier;
+import io.fixprotocol.silverflash.fixp.Engine;
+import io.fixprotocol.silverflash.fixp.FixpSession;
+import io.fixprotocol.silverflash.fixp.auth.SimpleAuthenticator;
+import io.fixprotocol.silverflash.fixp.messages.FlowType;
+import io.fixprotocol.silverflash.fixp.messages.MessageHeaderEncoder;
+import io.fixprotocol.silverflash.fixp.store.InMemoryMessageStore;
+import io.fixprotocol.silverflash.frame.sofh.SofhFrameEncoder;
+import io.fixprotocol.silverflash.frame.sofh.SofhFrameSpliterator;
+import io.fixprotocol.silverflash.transport.TcpAcceptor;
+import io.fixprotocol.silverflash.transport.Transport;
+
+/**
+ * Throwaway FIXP server for fix2's interoperability spike: SOFH framing,
+ * Recoverable server flow, answering each application message with one of
+ * its own. Not part of fix2.
+ */
+public class SpikeServer {
+  static final int SCHEMA_ID = 33, TEMPLATE_ID = 22, VERSION = 0;
+
+  public static void main(String[] args) throws Exception {
+    int port = Integer.parseInt(args[0]);
+    long runMillis = Long.parseLong(args[1]);
+    SimpleDirectory directory = new SimpleDirectory();
+    directory.add("spike");
+    Engine engine = Engine.builder()
+        .withAuthenticator(new SimpleAuthenticator().withDirectory(directory)).build();
+    engine.open();
+
+    Function<Transport, FixpSession> acceptor = transport -> {
+      try {
+        MessageConsumer<UUID> consumer = new MessageConsumer<UUID>() {
+          final SofhFrameEncoder frame = new SofhFrameEncoder();
+          final MessageHeaderEncoder header = new MessageHeaderEncoder();
+          final MutableDirectBuffer mutable = new UnsafeBuffer(new byte[0]);
+
+          @Override
+          public void accept(ByteBuffer msg, Session<UUID> session, long seqNo) {
+            byte[] body = new byte[msg.remaining()];
+            msg.get(body);
+            System.out.printf("server received seq=%d %d bytes: %s%n", seqNo, body.length, hex(body));
+            byte[] reply = ("ack " + seqNo).getBytes();
+            ByteBuffer out = ByteBuffer.allocate(256).order(ByteOrder.nativeOrder());
+            mutable.wrap(out);
+            frame.wrap(out, 0).encodeFrameHeader();
+            int offset = frame.getHeaderLength();
+            header.wrap(mutable, offset).blockLength(reply.length).templateId(TEMPLATE_ID)
+                .schemaId(SCHEMA_ID).version(VERSION);
+            offset += MessageHeaderEncoder.ENCODED_LENGTH;
+            out.position(offset);
+            out.put(reply);
+            frame.setMessageLength(reply.length + MessageHeaderEncoder.ENCODED_LENGTH);
+            frame.encodeFrameTrailer();
+            // Silverflash flips the buffer it is given: leave the position
+            // at the end of the message.
+            out.position((int) frame.getEncodedLength());
+            try {
+              long sent = session.send(out);
+              System.out.printf("server sent reply, seq=%d%n", sent);
+            } catch (Exception e) {
+              e.printStackTrace();
+            }
+          }
+        };
+        FixpSession session = FixpSession.builder()
+            .withReactor(engine.getReactor())
+            .withTransport(transport)
+            .withBufferSupplier(new SingleBufferSupplier(
+                ByteBuffer.allocate(16 * 1024).order(ByteOrder.nativeOrder())))
+            .withMessageConsumer(consumer)
+            .withMessageFramer(new SofhFrameSpliterator())
+            .withMessageFrameEncoder(new SofhFrameEncoder())
+            .withMessageStore(new InMemoryMessageStore())
+            .withOutboundFlow(FlowType.valueOf(args[2]))
+            .withOutboundKeepaliveInterval(1000)
+            .asServer().build();
+        session.open();
+        System.out.println("server session opened");
+        return session;
+      } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+      }
+    };
+
+    InetSocketAddress address = new InetSocketAddress(InetAddress.getLoopbackAddress(), port);
+    try (TcpAcceptor tcp = new TcpAcceptor(engine.getIOReactor().getSelector(), address, acceptor)) {
+      tcp.open().get();
+      System.out.println("listening on " + address);
+      Thread.sleep(runMillis);
+    }
+    engine.close();
+    System.exit(0);
+  }
+
+  static String hex(byte[] b) {
+    StringBuilder s = new StringBuilder();
+    for (byte x : b) s.append(String.format("%02x", x));
+    return s.toString();
+  }
+}
