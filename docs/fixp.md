@@ -157,7 +157,19 @@ NegotiationResponse, with its own flow, or NegotiationReject.
 - A client ignores a response whose session ID or request timestamp is
   not its request's (§7.1.7.5), and one that does not come within its
   negotiation timeout (§7.1.7.6); it then negotiates again, under a new
-  session ID.
+  session ID. It records the session only once negotiated: until then,
+  `Send` fails, its messages belonging to no settled session.
+- A server retires a session negotiated and never established within a
+  configured timeout: a client whose NegotiationResponse was lost
+  negotiates again under a new ID, and the first must not hold a session
+  slot. It retires any session on demand too. A retired session is
+  finalized, its flows as they were, its ID refused like a finalized one's.
+- A server authenticates the owner of a session at Negotiate and stores
+  it; an Establish authenticated as another owner is rejected with
+  `Credentials`: a session ID alone gives no one its session.
+- The server's Credentials in NegotiationResponse, by which it could
+  authenticate itself (§4.2.2), are not supported: the server sends none,
+  the client ignores any. TLS authenticates a server.
 
 ### Establishment
 
@@ -340,26 +352,38 @@ An application needing exactly-once effects records the sequence numbers
 it applied in its own transactions. A later increment may let it take
 over the engine's checkpoint.
 
+A handler failing a message terminates the connection: on a Recoverable
+flow the message is not recorded as delivered, and is asked for again on
+the next establishment; on an Idempotent one it was admitted, and is not.
+
 `Send` assigns the next sequence number, and the message belongs to the
 flow from then on: cancelling its context does not withdraw it. On a
 Recoverable flow, `Send` returns once the message is stored; on an
 Idempotent one, once the next sequence number is. On an Unsequenced flow
-it assigns none, on a None flow it fails.
+it assigns none, on a None flow it fails. A store failing halts the
+session; the store, opened again, tells what was stored.
 
 ## Persistence
 
 A session's store holds:
 
-- its metadata: role, session ID, flows, keepalive intervals, whether it
-  is negotiated, and for each direction whether its flow is finishing
-  (FinishedSending sent or received, with its `LastSeqNo`) or finished
-  (FinishedReceiving sent or received);
+- its metadata, recorded once negotiated: role, session ID, flows, the
+  owner on a server, when it was negotiated and first established; and for
+  each direction whether its flow is finishing (FinishedSending sent or
+  received, with its `LastSeqNo`) or finished (FinishedReceiving sent or
+  received), and whether the session was finalized or retired. Keepalive
+  intervals belong to a connection, and are not stored;
 - outbound: the next sequence number to assign; on a Recoverable flow, the
   messages, with a retention bound;
-- inbound, on a Recoverable flow: the highest sequence number received
-  without a gap below it, and the last one delivered to the handler;
+- inbound, on a Recoverable flow: the resolved frontier, every sequence
+  number up to it delivered to the handler, which returned, or skipped
+  with its consent; recovery resumes after it, what was received beyond it
+  being kept in memory only;
 - inbound, on an Idempotent flow: the highest sequence number admitted,
   which moves past gaps once NotApplied reports them.
+
+Each write is atomic, a crash included: a message stored with the next
+sequence number, the flows' finalization.
 
 Every change is durable before what depends on it:
 
@@ -368,7 +392,7 @@ Every change is durable before what depends on it:
 | Next outbound sequence number | any message using it is written: an Idempotent receiver silently drops a number reused after a crash |
 | A Recoverable message stored | it is written |
 | An Idempotent message admitted | the handler sees it |
-| A Recoverable message delivered | nothing: recorded after the handler returns |
+| A Recoverable message delivered, or skipped | nothing: recorded after the handler returns |
 | A flow finishing or finished | the message announcing it is written |
 
 A server also remembers the session IDs it negotiated, finalized ones
