@@ -2,10 +2,10 @@
 
 What fix2's FIX Performance Session Layer engine speaks, how it is split
 into packages, what it guarantees and stores, and how it reads the places
-where the standard contradicts itself. Nothing described here is
-implemented yet: this document is the first step of
-[issue #3](https://github.com/sylr/fix2/issues/3), and the implementation
-follows it.
+where the standard contradicts itself, for
+[issue #3](https://github.com/sylr/fix2/issues/3). The implementation
+follows it, in the [increments](#increments) at the end, of which the
+table says which are done.
 
 The standard is [FIXP 1.0](https://www.fixtrading.org/wp-content/uploads/download-manager-files/FIX_Performance_Session_Layer_V1.0.pdf)
 (FIX Technical Standard, April 2021). Section numbers below (§) are its own.
@@ -482,15 +482,15 @@ lost or garbled. The evidence is from the corrected harness.
 
 ## Increments
 
-| # | Content |
-|---|---|
-| M0 | This document, the pinned schema, a feasibility spike against Silverflash |
-| M1 | `sofh`: bounded reader, fixtures, fuzzing |
-| M2 | `fix/cmd/fixgen` becomes `cmd/fix2gen tagvalue`, with the same flags, diagnostics and output |
-| M3 | `fix2gen sbe`: header layouts, offsets and padding, constants, null values, decimals, groups, variable-length data, schema versions, rejection of what it does not support; tested against an independent encoder on the FIXP schema and a richer one |
-| M4 | `fixp/internal/codec`, generated; classification by encoding, schema and template; fuzzing |
-| M5 | `fixp/session`, both roles: negotiation, establishment, keepalive, termination, Unsequenced and None flows, limits, credential-free logs, persisted session state |
-| M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step |
-| M7 | Finalization, retention, observers |
-| M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide |
-| M9 | Benchmarks: codecs, then sessions |
+| # | Content | Done |
+|---|---|---|
+| M0 | This document, the pinned schema, a feasibility spike against Silverflash | yes |
+| M1 | `sofh`: bounded reader, fixtures, fuzzing | yes |
+| M2 | `fix/cmd/fixgen` becomes `cmd/fix2gen tagvalue`, with the same flags, diagnostics and output | |
+| M3 | `fix2gen sbe`: header layouts, offsets and padding, constants, null values, decimals, groups, variable-length data, schema versions, rejection of what it does not support; tested against an independent encoder on the FIXP schema and a richer one | |
+| M4 | `fixp/internal/codec`, generated; classification by encoding, schema and template; fuzzing | |
+| M5 | `fixp/session`, both roles: negotiation, establishment, keepalive, termination, Unsequenced and None flows, limits, credential-free logs, persisted session state | |
+| M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step | |
+| M7 | Finalization, retention, observers | |
+| M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide | |
+| M9 | Benchmarks: codecs, then sessions | |
