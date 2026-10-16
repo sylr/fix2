@@ -139,9 +139,10 @@ otherwise the application's to check.
   pinned), for a richer schema with nested groups, data in groups,
   optionals of every kind, constants, sets, references, offsets, padding
   and counters, in both byte orders: decoded to the values its program
-  set, and the same values encoded to the same bytes. The FIXP schema's,
-  and the FIXP frames of the Silverflash spike without its SOFH length and
-  padding, check its generated codec (M4).
+  set, and the same values encoded to the same bytes. The FIXP schema's
+  every message checks `fixp/internal/codec` likewise, and so do the
+  frames of the Silverflash spike, their SOFH length corrected and their
+  padding ignored.
 - Matrices beyond round trips: every null and boundary value, every older
   and newer version of the richer schema, truncation at every byte.
 - A schema whose header, dimensions and data lengths are 64 and 32 bits
