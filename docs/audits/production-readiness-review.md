@@ -29,6 +29,8 @@ The store findings F01–F03 share durability and error-handling concerns and sh
 
 ### F01 Buffered stores are not synchronized before transmission
 
+**Fixed in:** [`97c3129`](https://github.com/sylr/fix2/commit/97c31298944a8f668049e6be881a71caed2006a6) (sync before sending), [`17f269d`](https://github.com/sylr/fix2/commit/17f269d81cce08c661fd9ef4d9abf41556bc5658) (a cancelled Sync halts on a store that moved on).
+
 **Priority:** high. Applies to stores whose `Append` buffers writes until `Sync`.
 
 **Sources:** [session/session.go:326](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/session.go#L326), [session/conn.go:323](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/conn.go#L323), [session/store/store.go:92](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/store/store.go#L92).
@@ -48,6 +50,8 @@ The store contract permits `Append` to buffer writes until `Sync`, but the engin
 
 ### F02 Inbound persistence failures leave the session running
 
+**Fixed in:** [`97c3129`](https://github.com/sylr/fix2/commit/97c31298944a8f668049e6be881a71caed2006a6) (a failed record disconnects), [`17f269d`](https://github.com/sylr/fix2/commit/17f269d81cce08c661fd9ef4d9abf41556bc5658) (queued deliveries stop), [`a01bf77`](https://github.com/sylr/fix2/commit/a01bf77a90a81884cb291da301ade071261b48b0) (held, never dropped).
+
 **Priority:** high. Applies when the processed receive prefix cannot be persisted.
 
 **Source:** [session/delivery.go:340](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/delivery.go#L340).
@@ -65,6 +69,8 @@ Failures from `SetNextTarget`, including `ErrUnknownOutcome`, are logged while p
 - Tests establish the normal batching behavior and prevent unbounded divergence between processed and persisted prefixes.
 
 ### F03 Reset failures are ignored by their callers
+
+**Fixed in:** [`97c3129`](https://github.com/sylr/fix2/commit/97c31298944a8f668049e6be881a71caed2006a6).
 
 **Priority:** high. Applies to reset failure and state reload failure.
 
@@ -85,6 +91,8 @@ A failed reset disconnects the connection, but Logon processing continues and pu
 
 ### F04 Active reset Logons bypass normal validation
 
+**Fixed in:** [`e5ea15b`](https://github.com/sylr/fix2/commit/e5ea15b6891e3be0e564d73ec0f8296c4497c634), [`17f269d`](https://github.com/sylr/fix2/commit/17f269d81cce08c661fd9ef4d9abf41556bc5658) (EncryptMethod required), [`a01bf77`](https://github.com/sylr/fix2/commit/a01bf77a90a81884cb291da301ade071261b48b0) (EncryptMethod rule per Logon).
+
 **Priority:** high. Applies to reset Logons on established connections.
 
 **Source:** [session/logon.go:118](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/logon.go#L118).
@@ -102,6 +110,8 @@ On an established connection, `141=Y` enters the reset path before checking Comp
 - Valid active resets continue to work across supported versions and compatibility modes.
 
 ### F05 FIXT application profiles are selected after body parsing
+
+**Fixed in:** [`e5ea15b`](https://github.com/sylr/fix2/commit/e5ea15b6891e3be0e564d73ec0f8296c4497c634), [`17f269d`](https://github.com/sylr/fix2/commit/17f269d81cce08c661fd9ef4d9abf41556bc5658) (ApplVerID from the header without dictionaries).
 
 **Priority:** high for integrations using application dictionaries with differing DATA pairs.
 
@@ -122,6 +132,8 @@ The engine parses the entire message using its default application profile befor
 
 ### F06 Malformed message logs expose credentials
 
+**Fixed in:** [`9b5be1f`](https://github.com/sylr/fix2/commit/9b5be1f54b92703475de582ec0e2498b4641098c), [`17f269d`](https://github.com/sylr/fix2/commit/17f269d81cce08c661fd9ef4d9abf41556bc5658) (values withheld where errors are built), [`a01bf77`](https://github.com/sylr/fix2/commit/a01bf77a90a81884cb291da301ade071261b48b0) (no wire numbers in errors), [`f551679`](https://github.com/sylr/fix2/commit/f551679d605d2614fdf7c18fb9d407264fa6ff3a) (received numbers and acceptor refusals), [`b766b7b`](https://github.com/sylr/fix2/commit/b766b7b161b109c55056c2ea5c9cf9665b2aa634) (refusal attributes as handlers print them).
+
 **Priority:** high when session logging is enabled.
 
 **Source:** [session/protocol.go:155](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/protocol.go#L155).
@@ -139,6 +151,8 @@ Parse failures log the first 256 raw bytes at WARN, bypassing the redacting obse
 - Diagnostics retain useful error classification and counts without exposing credentials.
 
 ### F07 Blocked output causes unsafe contrib shutdown
+
+**Fixed in:** [`eca7e79`](https://github.com/sylr/fix2/commit/eca7e79f49053c5e4f93666a49d368b09caf333a), [`87d1be5`](https://github.com/sylr/fix2/commit/87d1be5023d0a8307c9d51a7c2799f72c706c0b4) (stop on a failed output write), [`4384988`](https://github.com/sylr/fix2/commit/4384988f58c97942c2eabc291de71b770f90932d) (a failed write told once).
 
 **Priority:** high for unattended market-data pipelines.
 
@@ -161,6 +175,8 @@ Application callbacks hold the client mutex while writing and flushing output. I
 
 ### F08 Held messages are dropped by a reset past their sequence numbers
 
+**Fixed in:** [`bca5279`](https://github.com/sylr/fix2/commit/bca5279fb63c8e9fbaf158475acfa918c209e626), [`2735d20`](https://github.com/sylr/fix2/commit/2735d20690d04dc03fe22b19b1f83c576810ab0f) (loss reported before the record).
+
 **Source:** [session/protocol.go:906](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/protocol.go#L906).
 
 Enabling `TestIssue407_HeldMessagesDeliveredAfterResetPastThem` fails. A snapshot and update already received and held during gap recovery never reach `FromApp` after the peer resets past them. `OnRecoveryLoss` reports the loss.
@@ -168,6 +184,8 @@ Enabling `TestIssue407_HeldMessagesDeliveredAfterResetPastThem` fails. A snapsho
 This is a disclosed compatibility limitation. Decide and enforce the intended delivery behavior, or require explicit resnapshot or reconciliation by the application. Acceptance requires a test of the selected behavior and a defined application response to recovery loss.
 
 ### F09 ResetOnLogon does not always announce the reset
+
+**Fixed in:** [`ac80a45`](https://github.com/sylr/fix2/commit/ac80a452ade44d53c518e83ca6c8d3385f020bff), [`17f269d`](https://github.com/sylr/fix2/commit/17f269d81cce08c661fd9ef4d9abf41556bc5658) (announced to a counterparty that moved on).
 
 **Source:** [session/logon.go:228](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/session/logon.go#L228).
 
@@ -179,6 +197,8 @@ F08 and F09 are skipped by default and disclosed in the README. A green default 
 
 ### F10 Group validation misidentifies a following top-level field
 
+**Fixed in:** [`aa175f1`](https://github.com/sylr/fix2/commit/aa175f1287c3f368adb5a533e85e525a347661cc), [`3fb9fb9`](https://github.com/sylr/fix2/commit/3fb9fb949b85d0c66dbdd7e1f2f3b511d151ea06) (nested group delimiters).
+
 **Source:** [dictionary/checks.go:269](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/dictionary/checks.go#L269).
 
 When a field after a group shares the group delimiter tag, the validator counts past the declared group count and rejects a valid message. In the reproduction, `NoG=1` was followed by one entry and then a top-level delimiter value `TOP`. `CheckAll` reported two entries, while `GroupsOf` returned one entry and `GetTopLevel` recovered `TOP`.
@@ -187,6 +207,8 @@ Align validation boundaries with the count-aware reader. Acceptance requires agr
 
 ### F11 Malformed frame recovery repeatedly rescans input
 
+**Fixed in:** [`cbe2299`](https://github.com/sylr/fix2/commit/cbe2299184fed6c8faea623e96afcd5a9a89f740), [`fd7dd77`](https://github.com/sylr/fix2/commit/fd7dd77a8233e914fbbdb1426615829f8d40f2d1) (grow rather than copy).
+
 **Source:** [framer.go:285](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/framer.go#L285).
 
 `skipToCheckSum` searches buffered input repeatedly as new bytes arrive. With one-byte reads, a malformed frame at 40 KB took approximately **10 ms**, while 320 KB took approximately **540 ms**. The measured growth is quadratic. Existing message-size and connection limits bound exposure; this is not a claim of unbounded allocation or unrestricted pre-authentication denial of service.
@@ -194,6 +216,8 @@ Align validation boundaries with the count-aware reader. Acceptance requires agr
 Maintain a search cursor and scan only newly received bytes. Acceptance requires bounded work as input grows, correct handling of a checksum marker split across reads, and preservation of resynchronization behavior. Use a meaningful complexity check or benchmark rather than a fragile machine-specific timing threshold.
 
 ### F12 Generated DATA setters can omit their required LENGTH field
+
+**Fixed in:** [`bf927df`](https://github.com/sylr/fix2/commit/bf927df7dbf798c36fbcd3b870a237848a6b5627), [`9917ed0`](https://github.com/sylr/fix2/commit/9917ed002ad919687d46fa9e93547d8f367843dd) (LENGTH names as FIX gives them).
 
 **Source:** [cmd/fixgen/generate.go:873](https://github.com/sylr/fix2/blob/f85603b7be0613eec3d57ac8b161d49f55b58aac/cmd/fixgen/generate.go#L873).
 

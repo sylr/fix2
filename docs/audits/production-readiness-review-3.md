@@ -27,6 +27,8 @@ The previous reports remain preserved: [first audit](production-readiness-review
 
 ### T01 — P2: malformed-tag rejection bypasses CompID and timestamp enforcement
 
+**Fixed in:** [`87fad5a`](https://github.com/sylr/fix2/commit/87fad5a6c5ce0388f204b5210b4fb6a5abe90672).
+
 **Confidence:** high; independently reproduced with the race detector.
 
 **Sources:** [malformed-input fast path](../../session/protocol.go#L45), [invalidTagLocked](../../session/protocol.go#L149), [normal header policy](../../session/protocol.go#L370). Line references concern the audited revision.
@@ -54,6 +56,8 @@ stale SendingTime:  State=logged on NextTarget=4
 **Evidence:** [reproduction source](audit-evidence/production-readiness-3/session_malformed_header_test.go.txt), [independent race execution](audit-evidence/production-readiness-3/session-repro.log). Both assertions fail as expected on the audited revision.
 
 ### T02 — P2, conditional: strict group validation scales with configured schema width
+
+**Fixed in:** [`ae7afca`](https://github.com/sylr/fix2/commit/ae7afcaafe396cf7b0b9cac63257365a2eab6a21).
 
 **Confidence:** high for the cost behavior; production significance depends on the configured dictionaries.
 
@@ -85,6 +89,8 @@ A second pass checked T01 and T02 against the source at the audited revision, th
 
 ### T01 widened: the malformed-tag path skips every header and sequence check
 
+**Fixed in:** [`87fad5a`](https://github.com/sylr/fix2/commit/87fad5a6c5ce0388f204b5210b4fb6a5abe90672).
+
 `invalidTagLocked` checks only that MsgSeqNum is the one expected, then sends a reason-0 Reject and counts the message. Besides CompID and SendingTime, it skips:
 
 1. **MsgSeqNum too low, without PossDup:** the frame is dropped silently. The well-formed path logs out with `MsgSeqNum too low, expecting 2 but received 1`.
@@ -102,6 +108,8 @@ A second pass checked T01 and T02 against the source at the audited revision, th
 **Evidence:** [sequence reproduction](audit-evidence/production-readiness-3/session_malformed_sequence_test.go.txt) and [its race run](audit-evidence/production-readiness-3/session-sequence-repro.log). Its tests pass while logging that the session stays logged on (`state=logged on next=3`); the well-formed control logs out.
 
 ### T02 widened: three costs scale with schema width
+
+**Fixed in:** [`ae7afca`](https://github.com/sylr/fix2/commit/ae7afcaafe396cf7b0b9cac63257365a2eab6a21).
 
 1. **Linear position lookup.** `position` scans `spec.Tags`, although the root package already indexes groups of 16 or more tags and nested groups, so that ["a crafted dictionary cannot make a wide group cost quadratic time"](../../group.go#L100). [`rulesOf`](../../dictionary/validate.go#L397) already builds a position map; `groupRules` can keep it.
 2. **Full bitset clearing per entry.** `clear(e.seen)` costs width ÷ 64 words per entry. The reader [clears only the words it set](../../group.go#L213); validation should do the same. Indexing alone does not meet T02's acceptance criterion.

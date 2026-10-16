@@ -27,6 +27,8 @@ All three findings are **P2 / medium**, with high confidence from source inspect
 
 ### R01 Structural store errors do not consistently halt the session
 
+**Fixed in:** [`1e60670`](https://github.com/sylr/fix2/commit/1e60670c41560190a7d4b3e26f35ea740fcba537).
+
 **Sources:** [manual target update](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/lifecycle.go#L404), [retention truncation](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/retention.go#L172), [replay read failure](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/replay.go#L207), [store error contract](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/store/store.go#L85).
 
 The store contract says structural errors such as `ErrGenerationGone`, `ErrSeqMismatch`, `ErrBackwards`, and `ErrClosed` halt a session until reconciliation. Three paths do not enforce that contract:
@@ -54,6 +56,8 @@ Each reproduction holds the session's generation unchanged. These failures there
 
 ### R02 Failed GapFill transmission incorrectly marks receipts skipped
 
+**Fixed in:** [`1e60670`](https://github.com/sylr/fix2/commit/1e60670c41560190a7d4b3e26f35ea740fcba537).
+
 **Sources:** [replay construction/write accounting](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/replay.go#L99), [receipt updates before write-error handling](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/replay.go#L225), [terminal skipped receipt](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/session/receipt.go#L131).
 
 Replay records every constructed GapFill in `gaps`, then applies those ranges to receipt tracking before inspecting `writeErr`. Consequently, a GapFill that was never written still produces terminal `ErrSkipped` for the affected receipt.
@@ -76,6 +80,8 @@ session: message gap-filled before the counterparty acknowledged it
 - Receipt state and beyond-retention loss notifications agree on which GapFill frames were written.
 
 ### R03 SQLite schema version collides with unrelated application metadata
+
+**Fixed in:** [`5abfb19`](https://github.com/sylr/fix2/commit/5abfb19c904aa1ff0586c22d6e845fbf19b38b62).
 
 **Sources:** [shared-database contract](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/contribs/store/sqlite3/sqlite3.go#L5), [schema version read/rejection](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/contribs/store/sqlite3/sqlite3.go#L195), [schema version overwrite](https://github.com/sylr/fix2/blob/4ced074dcaf057274578c23a3e8d0d93d740bf33/contribs/store/sqlite3/sqlite3.go#L206).
 

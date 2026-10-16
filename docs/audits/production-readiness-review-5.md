@@ -23,6 +23,8 @@ This is a risk review with emphasis on recovery and completion boundaries, not a
 
 ### A5-01 — P2: final Logout has no deadline while replay waits for storage
 
+**Fixed in:** [`f809ef6`](https://github.com/sylr/fix2/commit/f809ef6e5581358c39fd4cf40fd1cbd242f9bf44), [`2e0f715`](https://github.com/sylr/fix2/commit/2e0f715cc0048af43eb13e37eee1b903eef81e1c) (a reset Logon ignored while closing).
+
 **Confidence: high; independently reproduced with the real SQLite store under the race detector and cross-reviewed.**
 
 **Sources:** [Logout enters final closure](../../session/protocol.go#L1181), [peer-initiated response](../../session/protocol.go#L1200), [closing state](../../session/conn.go#L340), [timer skips closing connections](../../session/conn.go#L564), [held outbound queue](../../session/session.go#L550), [replay read](../../session/replay.go#L138).
@@ -41,6 +43,8 @@ The forced-close control proves that the store honors cancellation. No handler o
 
 ### A5-02 — P3: reader responses can follow the final Logout
 
+**Fixed in:** [`f809ef6`](https://github.com/sylr/fix2/commit/f809ef6e5581358c39fd4cf40fd1cbd242f9bf44), [`2e0f715`](https://github.com/sylr/fix2/commit/2e0f715cc0048af43eb13e37eee1b903eef81e1c) (an unsent BusinessMessageReject not counted).
+
 **Confidence: high; three race executions plus an independent rerun and passing control.**
 
 **Sources:** [TestRequest response](../../session/protocol.go#L952), [queue admission](../../session/session.go#L532), [writer closes after pending output](../../session/conn.go#L371).
@@ -57,6 +61,8 @@ Final closure suppresses timer traffic and acknowledgement probes, but incoming 
 
 ### A5-03 — P3: a canceled Accept can leave the TCP listener unusable
 
+**Fixed in:** [`0859a4f`](https://github.com/sylr/fix2/commit/0859a4f211fbc3b8dbb8f32acd3e8af8407f0682).
+
 **Confidence: high; three race executions and an independent reproduction.**
 
 **Source:** [cancellation callback and deadline cleanup](../../session/transport/tcp/tcp.go#L123).
@@ -72,6 +78,8 @@ Final closure suppresses timer traffic and acknowledgement probes, but incoming 
 **Evidence:** [regression](audit-evidence/production-readiness-5/transport/accept-cancel-reuse_test.go.txt), [three race runs](audit-evidence/production-readiness-5/transport/accept-cancel-reuse.log), [independent run](audit-evidence/production-readiness-5/session/tcp-accept-crossreview.log).
 
 ### A5-04 — P3: an implicit group DATA partner has no generated setter
+
+**Fixed in:** [`34d54f6`](https://github.com/sylr/fix2/commit/34d54f6003b4d6ccf749c153c0e25e7567571fef).
 
 **Confidence: high; a strict-valid wire control, generated-reader control, explicit-DATA control and independent reproduction establish the gap.**
 
@@ -93,6 +101,8 @@ A second pass reran all four reproductions in an isolated archive at the audited
 
 ### A5-01: what changed in `0da2580`, and how far it reaches
 
+**Fixed in:** [`f809ef6`](https://github.com/sylr/fix2/commit/f809ef6e5581358c39fd4cf40fd1cbd242f9bf44), [`2e0f715`](https://github.com/sylr/fix2/commit/2e0f715cc0048af43eb13e37eee1b903eef81e1c) (a reset Logon ignored while closing).
+
 - **The crossing case is a regression.** Before `0da2580`, the deadline our own `Logout` armed still applied once the counterparty's Logout arrived. [`!c.closing`](../../session/conn.go#L567) now skips it. The peer-initiated case never had a working bound: the zero deadline disconnected before the answer was written, which was the bug `0da2580` fixed.
 - **The commit had flagged half of this.** Its `Not-tested` trailer names a store Sync that ignores its context. A replay read behind which the final Logout is held is the case it missed.
 - **Shutdown through `Run` is bounded.** [`shutdown`](../../session/acceptor.go#L327) stops each session with a `LogoutTimeout + 1s` context. The exposure is a direct `Stop` or `Logout` call with an unbounded context.
@@ -101,6 +111,8 @@ A second pass reran all four reproductions in an isolated archive at the audited
 The finite budget should be its own deadline, armed in `closeAfterFlushLocked`. Reusing `logoutDeadline` would bring back the "no Logout reply" message for a connection that awaits no reply. On expiry, `disconnectLocked` cancels `c.ctx`, which already ends `Range`, as the forced-close control shows.
 
 ### A5-02 widened: no reader path checks the final boundary
+
+**Fixed in:** [`f809ef6`](https://github.com/sylr/fix2/commit/f809ef6e5581358c39fd4cf40fd1cbd242f9bf44).
 
 `c.closing` appears nowhere in `protocol.go` or `replay.go`, so the TestRequest is only one trigger. Every message the reader produces can follow the final Logout:
 
@@ -117,9 +129,13 @@ The gate must apply only to `c.closing`. While our Logout awaits its answer, the
 
 ### A5-03: confirmed
 
+**Fixed in:** [`0859a4f`](https://github.com/sylr/fix2/commit/0859a4f211fbc3b8dbb8f32acd3e8af8407f0682).
+
 `context.AfterFunc`'s stop function returns false both when the callback is running and when it is only scheduled, and Accept does not wait for either. A channel the callback closes, waited on when `stop()` returns false, before the deadline is cleared, is enough. `Acceptor.acceptLoop` passes `Run`'s context and returns on cancellation, so the default acceptor does not reuse a listener after a canceled Accept, as the audit says.
 
 ### A5-04: the read side already handles this
+
+**Fixed in:** [`34d54f6`](https://github.com/sylr/fix2/commit/34d54f6003b4d6ccf749c153c0e25e7567571fef).
 
 [`specLiteral`](../../cmd/fixgen/generate.go#L1153) adds the implicit DATA partner when a group declares only its LENGTH ("even when the group declares only one of them"). The entry-builder setter loop at [generate.go#L706](../../cmd/fixgen/generate.go#L706) should follow the same rule: when it skips a LENGTH field whose DATA partner is not declared in the group, it should emit that partner's setter.
 

@@ -23,6 +23,8 @@ This is a fresh risk review with emphasis on failure paths, not a claim to have 
 
 ### A4-01 — P2: gap recovery rejects messages that were valid when received
 
+**Fixed in:** [`289cbc1`](https://github.com/sylr/fix2/commit/289cbc19cb1694839c079fe22605b4537ee3a56d), [`cc8d2ba`](https://github.com/sylr/fix2/commit/cc8d2ba2bdc840fc88ac1243ae268c256098e9ff) (drain stopped before the last advance too).
+
 **Confidence: high; reproduced repeatedly with the race detector and independently cross-reviewed.**
 
 **Sources:** [stash replay timestamp](../../session/protocol.go#L874), [regular header checks](../../session/protocol.go#L897), [counting a fatal header rejection](../../session/protocol.go#L485), [Inbound.Received contract](../../session/handler.go#L19).
@@ -43,6 +45,8 @@ A related boundary needs coverage in the same area: `advanceLocked` and `resetPa
 
 ### A4-02 — P2: disconnected replay reads cannot be canceled
 
+**Fixed in:** [`7dcccf2`](https://github.com/sylr/fix2/commit/7dcccf2762dc7179b4bacefebcca90efc50f1a07), [`cc8d2ba`](https://github.com/sylr/fix2/commit/cc8d2ba2bdc840fc88ac1243ae268c256098e9ff) (no chunk flushed once the connection ended).
+
 **Confidence: high; independently reproduced with the real SQLite store and race detector.**
 
 **Sources:** [replay Range context](../../session/replay.go#L131), [SQLite pool acquisition](../../contribs/store/sqlite3/sqlite3.go#L757), [connection waits for writer](../../session/conn.go#L262), [initiator waits for connections](../../session/initiator.go#L240).
@@ -59,6 +63,8 @@ Replay calls `Store.Range(context.Background(), ...)`. Disconnect cancels the co
 
 ### A4-03 — P2: a completed Written receipt becomes unknown after reset
 
+**Fixed in:** [`2f27fed`](https://github.com/sylr/fix2/commit/2f27fedcc4790792529b474f07e435e0e8ff9805), [`cc8d2ba`](https://github.com/sylr/fix2/commit/cc8d2ba2bdc840fc88ac1243ae268c256098e9ff) (ended rejections in maps of their size).
+
 **Confidence: high; reproduced with the race detector and independently cross-reviewed.**
 
 **Sources:** [public monotonic Wait guarantee](../../session/receipt.go#L60), [old-generation lookup](../../session/receipt.go#L129), [generation-history preservation](../../session/receipt.go#L353).
@@ -74,6 +80,8 @@ Replay calls `Store.Range(context.Background(), ...)`. Disconnect cancels the co
 **Evidence:** [regression and acknowledged control](audit-evidence/production-readiness-4/session/written-receipt-reset_test.go.txt), [race output](audit-evidence/production-readiness-4/session/written-receipt-reset.log), [independent rerun](audit-evidence/production-readiness-4/session/independent-reproductions.log). The written-only assertion fails; the acknowledged control passes.
 
 ### A4-04 — P3, conditional P2: profile fallback amplifies custom-dictionary allocation
+
+**Fixed in:** [`8d7381c`](https://github.com/sylr/fix2/commit/8d7381c91cca65b179c0fb2e344b7b60a0d6cb62).
 
 **Confidence: high for the allocation mechanism; exposure depends on dictionary provenance.**
 
@@ -95,9 +103,13 @@ A second pass reran every reproduction at the audited revision, confirmed each f
 
 ### A4-01: the drain-after-Logout boundary is its own fix
 
+**Fixed in:** [`289cbc1`](https://github.com/sylr/fix2/commit/289cbc19cb1694839c079fe22605b4537ee3a56d), [`cc8d2ba`](https://github.com/sylr/fix2/commit/cc8d2ba2bdc840fc88ac1243ae268c256098e9ff) (drain stopped before the last advance too).
+
 Keeping the arrival time removes the trigger the reproductions use, but not the boundary itself. Any header failure that starts a Logout while held messages drain still lets `advanceLocked` and `resetPastLocked` deliver the messages held after it (`MUST-STAY-BUFFERED` is delivered while logging out). Both loops must stop once the session leaves the established phase. The same drain also hands the drain time to `onSequenceResetLocked`, `onLogoutLocked` and `onResendRequestLocked`. Keeping the arrival time with the held frame covers them, and the regressions should include a held SequenceReset.
 
 ### A4-03 widened: a reset loses every settled answer, not only Written
+
+**Fixed in:** [`2f27fed`](https://github.com/sylr/fix2/commit/2f27fedcc4790792529b474f07e435e0e8ff9805), [`cc8d2ba`](https://github.com/sylr/fix2/commit/cc8d2ba2bdc840fc88ac1243ae268c256098e9ff) (ended rejections in maps of their size).
 
 `newGeneration` keeps only acknowledged records, so a reset also loses:
 
@@ -107,6 +119,8 @@ Keeping the arrival time removes the trigger the reproductions use, but not the 
 A daily sequence reset with any message written but not yet acknowledged is enough to trigger the Written case. The correction should keep each level's evidence (Written, Skipped, the rejection) across generations, within the existing tracking bounds.
 
 ### A4-02: store Open at session creation
+
+**Fixed in:** [`7dcccf2`](https://github.com/sylr/fix2/commit/7dcccf2762dc7179b4bacefebcca90efc50f1a07).
 
 [`store.Open(context.Background())`](../../session/session.go#L225) runs when a session is created, outside the write watchdog. With an exhausted SQLite pool, `Initiator.Add` hangs as replay does, and it takes no context. Severity LOW: it happens at configuration time, not on a live session.
 
