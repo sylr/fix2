@@ -1,0 +1,16 @@
+=== RUN   TestAudit6SharedNestedImplicitData
+=== RUN   TestAudit6SharedNestedImplicitData/all-implicit
+=== RUN   TestAudit6SharedNestedImplicitData/one-explicit-definition
+--- PASS: TestAudit6SharedNestedImplicitData (0.94s)
+    --- PASS: TestAudit6SharedNestedImplicitData/all-implicit (0.47s)
+    --- PASS: TestAudit6SharedNestedImplicitData/one-explicit-definition (0.48s)
+=== RUN   TestGenerateScopedGroupReads
+--- PASS: TestGenerateScopedGroupReads (0.48s)
+=== RUN   TestGeneratePerMessageGroupLayouts
+--- PASS: TestGeneratePerMessageGroupLayouts (0.45s)
+=== RUN   TestGenerateLengthWithoutData
+--- PASS: TestGenerateLengthWithoutData (0.42s)
+=== RUN   TestGenerateImplicitGroupLength
+--- PASS: TestGenerateImplicitGroupLength (0.43s)
+PASS
+ok  	github.com/sylr/fix2/cmd/fixgen	3.053s

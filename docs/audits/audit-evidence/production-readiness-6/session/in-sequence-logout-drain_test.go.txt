@@ -1,0 +1,48 @@
+package session_test
+
+import (
+	"github.com/sylr/fix2/session"
+	"testing"
+)
+
+// A Logout received in sequence must stop the same buffered-message drain
+// that a previously held Logout stops. The normal gap-fill control should
+// still deliver the order.
+func TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder(t *testing.T) {
+	for _, name := range []string{"heartbeat control", "in-sequence Logout", "held Logout control"} {
+		logout := name != "heartbeat control"
+		t.Run(name, func(t *testing.T) {
+			s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+			if name == "held Logout control" {
+				p.write(from(session.FIX44, 3), "5")
+				p.expect("2", "7", "2", "16", "0")
+				p.write(from(session.FIX44, 4), "D", "11", "AFTER-LOGOUT")
+				p.write(from(session.FIX44, 2), "0")
+			} else {
+				p.write(from(session.FIX44, 3), "D", "11", "AFTER-LOGOUT")
+				p.expect("2", "7", "2", "16", "0")
+				if logout {
+					p.write(from(session.FIX44, 2), "5")
+				} else {
+					p.write(from(session.FIX44, 2), "0")
+				}
+			}
+			if logout {
+				p.expect("5")
+				rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			} else {
+				rec.wait(t, func() bool { return len(rec.apps) == 1 })
+			}
+			rec.mu.Lock()
+			apps := append([]string(nil), rec.apps...)
+			rec.mu.Unlock()
+			t.Logf("state=%v next target=%d applications=%v", s.State(), s.NextTargetSeqNum(), apps)
+			if logout && len(apps) != 0 {
+				t.Fatalf("Logout released later buffered order: %v", apps)
+			}
+			if !logout && (len(apps) != 1 || apps[0] != "AFTER-LOGOUT") {
+				t.Fatalf("gap fill failed to release normal order: %v", apps)
+			}
+		})
+	}
+}

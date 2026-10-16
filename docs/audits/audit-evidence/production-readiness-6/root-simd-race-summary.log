@@ -1,0 +1,23 @@
+{"package": "github.com/sylr/fix2/internal/dicttest", "action": "skip", "elapsed_seconds": 0.001}
+{"package": "github.com/sylr/fix2", "action": "pass", "elapsed_seconds": 2.502}
+{"package": "github.com/sylr/fix2/session/store", "action": "skip", "elapsed_seconds": 0}
+{"package": "github.com/sylr/fix2/session/store/storetest", "action": "skip", "elapsed_seconds": 0}
+{"package": "github.com/sylr/fix2/session/transport", "action": "skip", "elapsed_seconds": 0}
+{"package": "github.com/sylr/fix2/session/transport/mem", "action": "skip", "elapsed_seconds": 0}
+{"package": "github.com/sylr/fix2/internal/hrtimer", "action": "pass", "elapsed_seconds": 1.5150000000000001}
+{"package": "github.com/sylr/fix2/session/schedule", "action": "pass", "elapsed_seconds": 1.349}
+{"package": "github.com/sylr/fix2/tests/dicts/fix44", "action": "pass", "elapsed_seconds": 1.353}
+{"package": "github.com/sylr/fix2/session/store/memstore", "action": "pass", "elapsed_seconds": 1.442}
+{"package": "github.com/sylr/fix2/tests/dicts/fix40", "action": "pass", "elapsed_seconds": 1.487}
+{"package": "github.com/sylr/fix2/tests/dicts/fix50sp2", "action": "pass", "elapsed_seconds": 1.6440000000000001}
+{"package": "github.com/sylr/fix2/session/transport/tcp", "action": "pass", "elapsed_seconds": 1.827}
+{"package": "github.com/sylr/fix2/tests/dicts/fixt11", "action": "pass", "elapsed_seconds": 1.459}
+{"package": "github.com/sylr/fix2/tests/dicts/fixlatest", "action": "pass", "elapsed_seconds": 1.604}
+{"package": "github.com/sylr/fix2/tests/e2e", "action": "pass", "elapsed_seconds": 1.581}
+{"package": "github.com/sylr/fix2/tests/quickfix-go", "action": "pass", "elapsed_seconds": 5.875}
+{"package": "github.com/sylr/fix2/dictionary", "action": "pass", "elapsed_seconds": 10.21}
+{"package": "github.com/sylr/fix2/cmd/fixgen", "action": "pass", "elapsed_seconds": 23.87}
+{"package": "github.com/sylr/fix2/dictionary/xmldict", "action": "pass", "elapsed_seconds": 57.704}
+{"package": "github.com/sylr/fix2/session", "action": "pass", "elapsed_seconds": 125.211}
+test events: {"pass": 2974, "skip": 3}
+skips: ["TestWideSpecDoesNotAllocate", "TestRewriteForResend_DoesNotAllocate", "TestConformance"]

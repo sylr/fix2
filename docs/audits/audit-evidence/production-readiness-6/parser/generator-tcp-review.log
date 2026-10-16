@@ -1,0 +1,36 @@
+Read-only generator/TCP correctness review
+Revision: 7a6734b70c468a797d01cfaf0366c86c5f9fbe81
+Comparison: 0da2580..7a6734b
+Toolchain: go1.27.2 darwin/arm64
+Archive: /private/tmp/fix2-production-readiness-6-generator
+Cache: /private/tmp/fix2-production-readiness-4-gocache
+
+Source reviewed:
+cmd/fixgen/generate.go lines 671-685 and 713-729: implicit DATA getter/setter additions.
+Setter nil safety is guarded by isDataLength (1699-1702), which requires a defined partner.
+Membership guards suppress duplicate methods when any merged definition explicitly lists DATA.
+Scoped getters retain GetTopLevel for entries with nested groups.
+session/transport/tcp/tcp.go lines 120-145: callback completion barrier before deadline restoration, accepted-connection cleanup and return; Accept mutex remains held until cleanup finishes.
+
+Archive setup, from repository root:
+mkdir -p /private/tmp/fix2-production-readiness-6-generator
+git archive 7a6734b70c468a797d01cfaf0366c86c5f9fbe81 | tar -x -C /private/tmp/fix2-production-readiness-6-generator
+cp docs/audits/audit-evidence/production-readiness-5/parser/length-only-group_test.go.txt /private/tmp/fix2-production-readiness-6-generator/cmd/fixgen/audit5_group_test.go
+cp docs/audits/audit-evidence/production-readiness-5/transport/accept-cancel-reuse_test.go.txt /private/tmp/fix2-production-readiness-6-generator/session/transport/tcp/audit5_accept_test.go
+cp docs/audits/audit-evidence/production-readiness-6/parser/shared-nested-implicit-data_test.go.txt /private/tmp/fix2-production-readiness-6-generator/cmd/fixgen/audit6_implicit_test.go
+
+Commands, from archive:
+GOCACHE=/private/tmp/fix2-production-readiness-4-gocache go test -count=1 -run '^(TestAudit5|TestGenerateLengthOnlyGroup)' -v ./cmd/fixgen
+Result: PASS. Original A5-04 implicit and explicit controls, and permanent getter/setter/strict-validation round trip. Log: generator-original.log.
+
+GOCACHE=/private/tmp/fix2-production-readiness-4-gocache go test -count=1 -run '^(TestAudit6|TestGenerateLengthWithoutData|TestGenerateImplicitGroupLength|TestGenerateScopedGroupReads|TestGeneratePerMessageGroupLayouts)' -v ./cmd/fixgen
+Result: PASS. Log: generator-shared-nested.log.
+Custom matrix: all definitions omit DATA versus one explicit merged definition; two-entry shared outer builders in different message layouts; nested and top-level reuse of same child entry; binary DATA with embedded SOH and apparent field text; pair adjacency and computed lengths; overwrite/ownership copy; scoped outer/inner getters with same LENGTH/DATA tags; missing parent values remain absent; zero-value entry getters.
+The first custom-harness execution used []*NoItemsEntry where generated API returns []NoItemsEntry; corrected the evidence source before final execution. No production defect was involved.
+
+GOCACHE=/private/tmp/fix2-production-readiness-4-gocache go test -race -count=3 -run '^(TestAudit5|TestAccept)' -v ./session/transport/tcp
+Result: PASS with loopback binding explicitly permitted. Original A5-03 reproduction and native deadline, canceled pending connection and concurrent-cancellation reuse tests all run three times. Log: tcp-cancel-permitted.log.
+Initial sandbox-only execution could not bind loopback; original repro failed setup and native tests skipped. This is not a passing verification and is preserved separately in tcp-cancel-original.log.
+
+Outcome: A5-03 and A5-04 resolved for the audited original cases and contextual controls. No new functional finding confirmed in these two changed source files. No production source or existing tests edited.
+Boundary: generated-package subprocesses use the existing helper's plain go test; the transport execution uses -race. Broader suites, external conformance, static analysis, platform/load/durability coverage belong to the leader review, not this bounded slice.

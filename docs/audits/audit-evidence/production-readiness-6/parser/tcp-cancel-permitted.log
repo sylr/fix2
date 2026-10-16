@@ -1,0 +1,26 @@
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+--- PASS: TestAudit5CanceledAcceptDoesNotPoisonListener (0.15s)
+=== RUN   TestAcceptContext
+--- PASS: TestAcceptContext (0.05s)
+=== RUN   TestAcceptCanceledReuse
+--- PASS: TestAcceptCanceledReuse (0.02s)
+=== RUN   TestAcceptConcurrentCancelReuse
+--- PASS: TestAcceptConcurrentCancelReuse (0.15s)
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+--- PASS: TestAudit5CanceledAcceptDoesNotPoisonListener (0.15s)
+=== RUN   TestAcceptContext
+--- PASS: TestAcceptContext (0.05s)
+=== RUN   TestAcceptCanceledReuse
+--- PASS: TestAcceptCanceledReuse (0.03s)
+=== RUN   TestAcceptConcurrentCancelReuse
+--- PASS: TestAcceptConcurrentCancelReuse (0.16s)
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+--- PASS: TestAudit5CanceledAcceptDoesNotPoisonListener (0.19s)
+=== RUN   TestAcceptContext
+--- PASS: TestAcceptContext (0.05s)
+=== RUN   TestAcceptCanceledReuse
+--- PASS: TestAcceptCanceledReuse (0.03s)
+=== RUN   TestAcceptConcurrentCancelReuse
+--- PASS: TestAcceptConcurrentCancelReuse (0.16s)
+PASS
+ok  	github.com/sylr/fix2/session/transport/tcp	2.330s

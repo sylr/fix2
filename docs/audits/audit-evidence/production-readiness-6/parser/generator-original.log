@@ -1,0 +1,14 @@
+=== RUN   TestAudit5LengthOnlyGroup
+=== RUN   TestAudit5LengthOnlyGroup/declared-data-control
+=== RUN   TestAudit5LengthOnlyGroup/implicit-data
+--- PASS: TestAudit5LengthOnlyGroup (0.91s)
+    --- PASS: TestAudit5LengthOnlyGroup/declared-data-control (0.48s)
+    --- PASS: TestAudit5LengthOnlyGroup/implicit-data (0.43s)
+=== RUN   TestGenerateLengthOnlyGroup
+=== RUN   TestGenerateLengthOnlyGroup/declared-data-control
+=== RUN   TestGenerateLengthOnlyGroup/implicit-data
+--- PASS: TestGenerateLengthOnlyGroup (0.89s)
+    --- PASS: TestGenerateLengthOnlyGroup/declared-data-control (0.45s)
+    --- PASS: TestGenerateLengthOnlyGroup/implicit-data (0.44s)
+PASS
+ok  	github.com/sylr/fix2/cmd/fixgen	2.166s

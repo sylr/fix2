@@ -1,0 +1,13 @@
+=== RUN   TestAudit6CloseDeadlinePreservesRetention
+=== RUN   TestAudit6CloseDeadlinePreservesRetention/before_first_message
+    audit6_retention_close_test.go:67: retained all three originals; replay writes=0; retention floor held at 1, then advanced to 5 after ack
+=== RUN   TestAudit6CloseDeadlinePreservesRetention/after_first_complete_chunk
+    audit6_retention_close_test.go:67: retained all three originals; replay writes=2; retention floor held at 1, then advanced to 5 after ack
+=== RUN   TestAudit6CloseDeadlinePreservesRetention/success_races_cancellation_with_buffered_tail
+    audit6_retention_close_test.go:67: retained all three originals; replay writes=2; retention floor held at 1, then advanced to 5 after ack
+--- PASS: TestAudit6CloseDeadlinePreservesRetention (0.13s)
+    --- PASS: TestAudit6CloseDeadlinePreservesRetention/before_first_message (0.04s)
+    --- PASS: TestAudit6CloseDeadlinePreservesRetention/after_first_complete_chunk (0.04s)
+    --- PASS: TestAudit6CloseDeadlinePreservesRetention/success_races_cancellation_with_buffered_tail (0.04s)
+PASS
+ok  	github.com/sylr/fix2/session	1.576s

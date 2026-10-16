@@ -1,0 +1,108 @@
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+// The same entry type has message-specific field order and is also reused at
+// two nesting levels. All definitions omit DATA in the first case; one of the
+// merged definitions explicitly lists it in the second case.
+func TestAudit6SharedNestedImplicitData(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+<header><field name="MsgType" required="Y"/></header><trailer/>
+<messages>
+ <message name="A" msgtype="U1">
+  <group name="NoItems" required="N">
+   <field name="P" required="N"/>
+   <group name="NoSub" required="N"><field name="Q" required="N"/><field name="RawDataLength" required="N"/></group>
+   <field name="RawDataLength" required="N"/>
+  </group>
+ </message>
+ <message name="B" msgtype="U2">
+  <group name="NoItems" required="N">
+   <field name="P" required="N"/><field name="RawDataLength" required="N"/>DATAREF<field name="Q" required="N"/>
+   <group name="NoSub" required="N"><field name="Q" required="N"/><field name="RawDataLength" required="N"/>DATAREF</group>
+  </group>
+ </message>
+ <message name="C" msgtype="U3"><group name="NoSub" required="N"><field name="Q" required="N"/><field name="RawDataLength" required="N"/></group></message>
+</messages>
+<fields>
+ <field number="35" name="MsgType" type="STRING"/>
+ <field number="95" name="RawDataLength" type="LENGTH"/>
+ <field number="96" name="RawData" type="DATA"/>
+ <field number="100" name="P" type="STRING"/>
+ <field number="101" name="Q" type="STRING"/>
+ <field number="500" name="NoItems" type="NUMINGROUP"/>
+ <field number="501" name="NoSub" type="NUMINGROUP"/>
+</fields></fix>`
+	for _, mixed := range []bool{false, true} {
+		name, ref := "all-implicit", ""
+		if mixed {
+			name, ref = "one-explicit-definition", `<field name="RawData" required="N"/>`
+		}
+		t.Run(name, func(t *testing.T) {
+			runGenerated(t, strings.ReplaceAll(xml, "DATAREF", ref), "nestedimplicit", `package nestedimplicit
+import (
+ "bytes"
+ "testing"
+ fix2 "github.com/sylr/fix2"
+ "github.com/sylr/fix2/dictionary"
+)
+
+func parseStrict(t *testing.T, raw []byte) *fix2.Message {
+ t.Helper()
+ var m fix2.Message
+ if err := fix2.ParseInto(&m, raw, Dictionary().Profile()); err != nil { t.Fatal(err) }
+ if err := Dictionary().ValidateWith(&m, dictionary.CheckAll); err != nil { t.Fatalf("strict validation: %v; raw=%q", err, raw) }
+ return &m
+}
+
+func checkEntries(t *testing.T, entries []NoItemsEntry, hasQ bool) {
+ t.Helper()
+ if len(entries) != 2 { t.Fatalf("entries=%d", len(entries)) }
+ for i, e := range entries {
+  want := []string{"outer\x01a", "outer\x01b"}[i]
+  if got, ok := e.RawData(); !ok || string(got) != want { t.Errorf("outer %d DATA=%q,%v want %q", i, got, ok, want) }
+  if got, ok, err := e.RawDataLength(); !ok || err != nil || got != len(want) { t.Errorf("outer LENGTH=%d,%v,%v", got, ok, err) }
+  if got, ok := e.Q(); ok != hasQ || (hasQ && got != "parent-q") { t.Errorf("outer Q=%q,%v",got,ok) }
+  children := e.NoSubEntries()
+  if len(children) != 1 { t.Fatalf("nested=%d",len(children)) }
+  if got, ok := children[0].RawData(); !ok || string(got) != "inner\x0196=decoy" { t.Errorf("nested DATA=%q,%v",got,ok) }
+  if got, ok, err := children[0].RawDataLength(); !ok || err != nil || got != len("inner\x0196=decoy") { t.Errorf("nested LENGTH=%d,%v,%v",got,ok,err) }
+ }
+}
+
+func item(payload string) *NoItemsEntryBuilder {
+ v := []byte(payload)
+ e := NewNoItemsEntry().SetP("p").SetQ("parent-q").SetRawData([]byte("stale")).SetRawData(v).
+  AddNoSubEntry(NewNoSubEntry().SetQ("child-q").SetRawData([]byte("inner\x0196=decoy")))
+ v[0] = '!'
+ return e
+}
+
+func TestSharedAndNestedRoundTrip(t *testing.T) {
+ a := BuildA("FIX.4.4").AddNoItemsEntry(item("outer\x01a")).AddNoItemsEntry(item("outer\x01b")).Build()
+ if !bytes.Contains(a, []byte("\x01500=2\x01100=p\x01501=1\x01101=child-q\x0195=14\x0196=inner\x0196=decoy\x0195=7\x0196=outer\x01a\x01")) { t.Errorf("A order=%q", a) }
+ checkEntries(t, WrapA(parseStrict(t,a)).NoItemsEntries(), false)
+ b := BuildB("FIX.4.4").AddNoItemsEntry(item("outer\x01a")).AddNoItemsEntry(item("outer\x01b")).Build()
+ if !bytes.Contains(b, []byte("\x01500=2\x01100=p\x0195=7\x0196=outer\x01a\x01101=parent-q\x01501=1")) { t.Errorf("B order=%q", b) }
+ checkEntries(t, WrapB(parseStrict(t,b)).NoItemsEntries(), true)
+ c := BuildC("FIX.4.4").AddNoSubEntry(NewNoSubEntry().SetQ("top").SetRawData([]byte("direct\x01data"))).Build()
+ entries := WrapC(parseStrict(t,c)).NoSubEntries()
+ if len(entries) != 1 { t.Fatalf("direct entries=%d",len(entries)) }
+ if got, ok := entries[0].RawData(); !ok || string(got) != "direct\x01data" { t.Errorf("direct DATA=%q,%v",got,ok) }
+ // A parent with no DATA must not borrow its nested entry's DATA or LENGTH.
+ missing := BuildA("FIX.4.4").AddNoItemsEntry(NewNoItemsEntry().SetP("p").AddNoSubEntry(NewNoSubEntry().SetQ("q").SetRawData([]byte("nested-only")))).Build()
+ outer := WrapA(parseStrict(t,missing)).NoItemsEntries()
+ if len(outer)!=1 {t.Fatalf("missing entries=%d",len(outer))}
+ if got,ok := outer[0].RawData(); ok {t.Errorf("absent outer DATA=%q,true",got)}
+ if got,ok,err := outer[0].RawDataLength(); ok || err!=nil {t.Errorf("absent outer LENGTH=%d,%v,%v",got,ok,err)}
+ var zero NoItemsEntry
+ if _,ok := zero.RawData(); ok {t.Error("zero entry has DATA")}
+ if _,ok,err := zero.RawDataLength(); ok || err!=nil {t.Error("zero entry has LENGTH")}
+}
+`)
+		})
+	}
+}

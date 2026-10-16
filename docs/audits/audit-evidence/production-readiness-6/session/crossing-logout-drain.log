@@ -1,0 +1,24 @@
+=== RUN   TestAudit6CrossingLogout
+=== RUN   TestAudit6CrossingLogout/direct_answer
+    audit6_crossing_test.go:32: next target=4 applications=[AFTER-LOGOUT]
+    audit6_crossing_test.go:34: Logout answer released later buffered order: [AFTER-LOGOUT]
+=== RUN   TestAudit6CrossingLogout/held_answer
+    audit6_crossing_test.go:19: connection ended (EOF), expected MsgType 2
+--- FAIL: TestAudit6CrossingLogout (0.00s)
+    --- FAIL: TestAudit6CrossingLogout/direct_answer (0.00s)
+    --- FAIL: TestAudit6CrossingLogout/held_answer (0.00s)
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control
+    audit6_logout_test.go:39: state=logged on next target=4 applications=[AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout
+    audit6_logout_test.go:39: state=disconnected next target=4 applications=[AFTER-LOGOUT]
+    audit6_logout_test.go:41: Logout released later buffered order: [AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control
+    audit6_logout_test.go:39: state=disconnected next target=4 applications=[]
+--- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder (0.20s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control (0.20s)
+    --- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout (0.00s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/session	0.521s
+FAIL

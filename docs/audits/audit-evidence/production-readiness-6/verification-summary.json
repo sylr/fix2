@@ -1,0 +1,413 @@
+{
+  "revision": "7a6734b70c468a797d01cfaf0366c86c5f9fbe81",
+  "date": "2026-10-16",
+  "environment": {
+    "go": "go1.27.2",
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "tests": {
+    "root-race": {
+      "exit_code": 0,
+      "test_events": {
+        "pass": 2974,
+        "skip": 3
+      },
+      "package_outcomes": [
+        {
+          "package": "github.com/sylr/fix2/internal/dicttest",
+          "action": "pass",
+          "elapsed_seconds": 0.375
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store",
+          "action": "pass",
+          "elapsed_seconds": 0.317
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/storetest",
+          "action": "pass",
+          "elapsed_seconds": 0.321
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/hrtimer",
+          "action": "pass",
+          "elapsed_seconds": 1.482
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport",
+          "action": "pass",
+          "elapsed_seconds": 0.224
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/mem",
+          "action": "pass",
+          "elapsed_seconds": 0.228
+        },
+        {
+          "package": "github.com/sylr/fix2/session/schedule",
+          "action": "pass",
+          "elapsed_seconds": 1.318
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/memstore",
+          "action": "pass",
+          "elapsed_seconds": 1.335
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix44",
+          "action": "pass",
+          "elapsed_seconds": 1.308
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix40",
+          "action": "pass",
+          "elapsed_seconds": 1.395
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/tcp",
+          "action": "pass",
+          "elapsed_seconds": 1.686
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixlatest",
+          "action": "pass",
+          "elapsed_seconds": 1.431
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix50sp2",
+          "action": "pass",
+          "elapsed_seconds": 1.585
+        },
+        {
+          "package": "github.com/sylr/fix2",
+          "action": "pass",
+          "elapsed_seconds": 6.024
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixt11",
+          "action": "pass",
+          "elapsed_seconds": 1.3780000000000001
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/e2e",
+          "action": "pass",
+          "elapsed_seconds": 1.461
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/quickfix-go",
+          "action": "pass",
+          "elapsed_seconds": 5.4719999999999995
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary",
+          "action": "pass",
+          "elapsed_seconds": 10.229
+        },
+        {
+          "package": "github.com/sylr/fix2/cmd/fixgen",
+          "action": "pass",
+          "elapsed_seconds": 19.161
+        },
+        {
+          "package": "github.com/sylr/fix2/session",
+          "action": "pass",
+          "elapsed_seconds": 125.867
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary/xmldict",
+          "action": "pass",
+          "elapsed_seconds": 140.647
+        }
+      ],
+      "skipped_tests": [
+        "TestWideSpecDoesNotAllocate",
+        "TestRewriteForResend_DoesNotAllocate",
+        "TestConformance"
+      ],
+      "coverage_output": [
+        "github.com/sylr/fix2/internal/dicttest\t\tcoverage: 0.0% of statements",
+        "coverage: 96.6% of statements",
+        "github.com/sylr/fix2/session/store/storetest\t\tcoverage: 0.0% of statements",
+        "github.com/sylr/fix2/session/store\t\tcoverage: 0.0% of statements",
+        "coverage: 85.9% of statements",
+        "coverage: 91.9% of statements",
+        "ok  \tgithub.com/sylr/fix2/internal/hrtimer\t1.481s\tcoverage: 96.6% of statements",
+        "github.com/sylr/fix2/session/transport\t\tcoverage: 0.0% of statements",
+        "github.com/sylr/fix2/session/transport/mem\t\tcoverage: 0.0% of statements",
+        "coverage: 2.2% of statements",
+        "coverage: 63.0% of statements",
+        "coverage: 93.9% of statements",
+        "ok  \tgithub.com/sylr/fix2/session/schedule\t1.318s\tcoverage: 85.9% of statements",
+        "ok  \tgithub.com/sylr/fix2/session/store/memstore\t1.334s\tcoverage: 91.9% of statements",
+        "coverage: 2.9% of statements",
+        "ok  \tgithub.com/sylr/fix2/tests/dicts/fix44\t1.308s\tcoverage: 2.2% of statements",
+        "coverage: 59.5% of statements",
+        "ok  \tgithub.com/sylr/fix2/tests/dicts/fix40\t1.394s\tcoverage: 63.0% of statements",
+        "coverage: 98.6% of statements",
+        "ok  \tgithub.com/sylr/fix2/session/transport/tcp\t1.685s\tcoverage: 93.9% of statements",
+        "coverage: 60.5% of statements",
+        "coverage: [no statements]",
+        "ok  \tgithub.com/sylr/fix2/tests/dicts/fixlatest\t1.431s\tcoverage: 2.9% of statements",
+        "ok  \tgithub.com/sylr/fix2/tests/dicts/fix50sp2\t1.585s\tcoverage: 59.5% of statements",
+        "ok  \tgithub.com/sylr/fix2\t6.023s\tcoverage: 98.6% of statements",
+        "ok  \tgithub.com/sylr/fix2/tests/dicts/fixt11\t1.377s\tcoverage: 60.5% of statements",
+        "ok  \tgithub.com/sylr/fix2/tests/e2e\t1.460s\tcoverage: [no statements]",
+        "coverage: [no statements]",
+        "ok  \tgithub.com/sylr/fix2/tests/quickfix-go\t5.471s\tcoverage: [no statements]",
+        "coverage: 97.9% of statements",
+        "ok  \tgithub.com/sylr/fix2/dictionary\t10.228s\tcoverage: 97.9% of statements",
+        "coverage: 95.0% of statements",
+        "ok  \tgithub.com/sylr/fix2/cmd/fixgen\t19.161s\tcoverage: 95.0% of statements",
+        "coverage: 93.6% of statements",
+        "ok  \tgithub.com/sylr/fix2/session\t125.866s\tcoverage: 93.6% of statements",
+        "coverage: 99.1% of statements",
+        "ok  \tgithub.com/sylr/fix2/dictionary/xmldict\t140.647s\tcoverage: 99.1% of statements"
+      ]
+    },
+    "root-simd-race": {
+      "exit_code": 0,
+      "test_events": {
+        "pass": 2974,
+        "skip": 3
+      },
+      "package_outcomes": [
+        {
+          "package": "github.com/sylr/fix2/internal/dicttest",
+          "action": "skip",
+          "elapsed_seconds": 0.001
+        },
+        {
+          "package": "github.com/sylr/fix2",
+          "action": "pass",
+          "elapsed_seconds": 2.502
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/storetest",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/mem",
+          "action": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/hrtimer",
+          "action": "pass",
+          "elapsed_seconds": 1.5150000000000001
+        },
+        {
+          "package": "github.com/sylr/fix2/session/schedule",
+          "action": "pass",
+          "elapsed_seconds": 1.349
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix44",
+          "action": "pass",
+          "elapsed_seconds": 1.353
+        },
+        {
+          "package": "github.com/sylr/fix2/session/store/memstore",
+          "action": "pass",
+          "elapsed_seconds": 1.442
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix40",
+          "action": "pass",
+          "elapsed_seconds": 1.487
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fix50sp2",
+          "action": "pass",
+          "elapsed_seconds": 1.6440000000000001
+        },
+        {
+          "package": "github.com/sylr/fix2/session/transport/tcp",
+          "action": "pass",
+          "elapsed_seconds": 1.827
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixt11",
+          "action": "pass",
+          "elapsed_seconds": 1.459
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/dicts/fixlatest",
+          "action": "pass",
+          "elapsed_seconds": 1.604
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/e2e",
+          "action": "pass",
+          "elapsed_seconds": 1.581
+        },
+        {
+          "package": "github.com/sylr/fix2/tests/quickfix-go",
+          "action": "pass",
+          "elapsed_seconds": 5.875
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary",
+          "action": "pass",
+          "elapsed_seconds": 10.21
+        },
+        {
+          "package": "github.com/sylr/fix2/cmd/fixgen",
+          "action": "pass",
+          "elapsed_seconds": 23.87
+        },
+        {
+          "package": "github.com/sylr/fix2/dictionary/xmldict",
+          "action": "pass",
+          "elapsed_seconds": 57.704
+        },
+        {
+          "package": "github.com/sylr/fix2/session",
+          "action": "pass",
+          "elapsed_seconds": 125.211
+        }
+      ],
+      "skipped_tests": [
+        "TestWideSpecDoesNotAllocate",
+        "TestRewriteForResend_DoesNotAllocate",
+        "TestConformance"
+      ],
+      "coverage_output": []
+    },
+    "conformance": {
+      "exit_code": 0,
+      "test_events": {
+        "pass": 506
+      },
+      "package_outcomes": [
+        {
+          "package": "github.com/sylr/fix2/session",
+          "action": "pass",
+          "elapsed_seconds": 125.606
+        }
+      ],
+      "skipped_tests": [],
+      "coverage_output": []
+    }
+  },
+  "vulnerability_scans": {
+    "root": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": [],
+      "stderr": ""
+    },
+    "binance": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": [],
+      "stderr": ""
+    },
+    "coinbase": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": [],
+      "stderr": ""
+    },
+    "sqlite": {
+      "exit_code": 0,
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-08T22:31:09Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "findings": [],
+      "stderr": ""
+    }
+  },
+  "static_analysis": {
+    "vet": "root and three contribs passed",
+    "staticcheck_runner": "golangci-lint v2.14.0, built with go1.27.1",
+    "root_exit_code": 1,
+    "root_issues": 16,
+    "categories": {
+      "QF": 9,
+      "ST": 2,
+      "SA4000_fixture_singleton_tests": 5
+    },
+    "contrib_exit_codes": {
+      "binance": 0,
+      "coinbase": 0,
+      "sqlite": 0
+    }
+  },
+  "commands": {
+    "root-race": "GOCACHE=... go test -race -count=1 -json -coverprofile=... ./... (loopback permitted)",
+    "root-simd-race": "GOEXPERIMENT=simd GOCACHE=... go test -race -count=1 -json ./... (loopback permitted)",
+    "contrib-race": "make test-contribs GO_TEST_FLAGS='-race -count=1'",
+    "vet": "make vet",
+    "conformance": "FIX2_QUICKFIX_TESTS=/Users/sylvain/git/quickfix-go/_test go test -race -count=1 -json -parallel=4 -run '^TestConformance$' ./session",
+    "vulnerability": "govulncheck -json ./... in root and each contrib",
+    "staticcheck": "golangci-lint-v2.14.0 run --no-config --enable-only staticcheck --allow-parallel-runners --timeout 3m --max-issues-per-linter 0 --max-same-issues 0 ./... in root and each contrib",
+    "fuzz": "go test -run ^$ -fuzz <target> -fuzztime 15s -parallel 4 <package> in isolated archive"
+  },
+  "additional_checks": {
+    "session_regression": {
+      "command": "go test -race -count=1 -run '^TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder$' -v ./session",
+      "exit_code": 1,
+      "result": "direct peer Logout assertion fails as expected; heartbeat and held-Logout controls pass"
+    },
+    "retention_diagnostic": {
+      "command": "go test -race -count=1 -run '^TestAudit6CloseDeadlinePreservesRetention$' -v ./session",
+      "exit_code": 0,
+      "result": "all three cancellation/accounting scenarios pass"
+    },
+    "generator_data_matrix": {
+      "result": "original and shared/nested DATA generated subprocess tests pass",
+      "race": false
+    },
+    "tcp_remediation": {
+      "result": "original and three current Accept cancellation/reuse cases pass three race executions with loopback permitted",
+      "race": true,
+      "skips_in_successful_run": 0
+    }
+  }
+}

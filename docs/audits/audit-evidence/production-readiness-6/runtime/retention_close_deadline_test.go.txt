@@ -1,0 +1,137 @@
+package session
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sylr/fix2/session/store"
+	"github.com/sylr/fix2/session/store/memstore"
+)
+
+// Gate only a replay read. It obeys cancellation; returnNil models a read
+// completing successfully at the same moment its context is canceled.
+type audit6ReadGate struct {
+	*memstore.Store
+	at        uint64
+	returnNil bool
+	entered   chan struct{}
+}
+
+func (g *audit6ReadGate) Range(ctx context.Context, gen, begin, end uint64, fn func(uint64, []byte, store.Hole) error) error {
+	wait := func() error {
+		close(g.entered)
+		<-ctx.Done()
+		if g.returnNil {
+			return nil
+		}
+		return ctx.Err()
+	}
+	err := g.Store.Range(ctx, gen, begin, end, func(seq uint64, raw []byte, hole store.Hole) error {
+		if seq == g.at {
+			return wait()
+		}
+		return fn(seq, raw, hole)
+	})
+	if err == nil && g.at > end {
+		return wait()
+	}
+	return err
+}
+
+// A final-close deadline must retain the requested messages that it did
+// not resend, including when Range returns nil after cancellation or when
+// earlier replay chunks were already written. Fully written frames keep
+// their Written evidence; no untransmitted replay chunk is counted.
+func TestAudit6CloseDeadlinePreservesRetention(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		at        uint64
+		returnNil bool
+		resent    uint64
+	}{
+		{"before first message", 1, false, 0},
+		{"after first complete chunk", 3, false, 2},
+		{"success races cancellation with buffered tail", 4, true, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gate := &audit6ReadGate{Store: memstore.New(), at: tc.at, returnNil: tc.returnNil, entered: make(chan struct{})}
+			s, c, _ := replaySession(t, func(cfg *Config) {
+				cfg.Store = gate
+				cfg.Retention = Retention{Interval: time.Hour, Max: 1}
+				cfg.LogoutTimeout = 40 * time.Millisecond
+				cfg.Handler = BaseHandler{}
+			})
+			var receipts []Receipt
+			for range 3 {
+				receipts = append(receipts, sendWritten(t, s, "ORDER", strings.Repeat("x", 40000)))
+			}
+			s.mu.Lock()
+			s.startReplayLocked(c, 1, 3, false)
+			s.mu.Unlock()
+			select {
+			case <-gate.entered:
+			case <-time.After(time.Second):
+				t.Fatal("Range did not reach gate")
+			}
+			s.mu.Lock()
+			s.sendLogoutLocked(c, "peer logs out")
+			s.phase = phaseLogoutSent
+			s.closeAfterFlushLocked(c, &LogoutError{ByCounterparty: true, Text: "peer logs out"})
+			s.mu.Unlock()
+			select {
+			case <-c.finished:
+			case <-time.After(time.Second):
+				t.Fatal("close deadline failed to cancel/join replay")
+			}
+			s.mu.Lock()
+			if s.ret.unsentLo != 1 || s.ret.unsentHi < 3 {
+				t.Errorf("retention lost replay hold: %d..%d", s.ret.unsentLo, s.ret.unsentHi)
+			}
+			s.evictLocked(time.Now())
+			floor := s.ret.floor
+			s.mu.Unlock()
+			if floor != 1 {
+				t.Errorf("evicted unfinished replay: floor=%d", floor)
+			}
+			if got := s.stats.Resent.Load(); got != tc.resent {
+				t.Errorf("Resent=%d, want only completed chunk=%d", got, tc.resent)
+			}
+			var messages int
+			err := gate.Store.Range(context.Background(), 1, 1, 3, func(_ uint64, _ []byte, hole store.Hole) error {
+				if hole != store.HoleNone {
+					t.Errorf("uncompleted resend evicted: %v", hole)
+				}
+				messages++
+				return nil
+			})
+			if err != nil || messages != 3 {
+				t.Errorf("retained messages=%d err=%v", messages, err)
+			}
+			for _, r := range receipts {
+				if err := r.Wait(context.Background(), Written); err != nil {
+					t.Errorf("prior complete write lost: %v", err)
+				}
+				if errors.Is(r.Err(), ErrSkipped) {
+					t.Error("canceled replay marked original receipt skipped")
+				}
+			}
+			// Control: once a real acknowledgement covers the protected range,
+			// eviction can advance; the test does not just disable retention.
+			s.mu.Lock()
+			s.ackForTest(s.st.NextSender-1, tagLastMsgSeqNumProcessed)
+			s.evictLocked(time.Now())
+			after := s.ret.floor
+			s.mu.Unlock()
+			if after <= floor {
+				t.Errorf("acknowledged control did not evict: %d -> %d", floor, after)
+			}
+			if err := s.Err(); err != nil {
+				t.Errorf("healthy canceled read halted session: %v", err)
+			}
+			t.Logf("retained all three originals; replay writes=%d; retention floor held at %d, then advanced to %d after ack", tc.resent, floor, after)
+		})
+	}
+}

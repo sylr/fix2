@@ -1,0 +1,39 @@
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control
+    audit6_logout_drain_test.go:39: state=logged on next target=4 applications=[AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout
+    audit6_logout_drain_test.go:39: state=disconnected next target=4 applications=[AFTER-LOGOUT]
+    audit6_logout_drain_test.go:41: Logout released later buffered order: [AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control
+    audit6_logout_drain_test.go:39: state=disconnected next target=4 applications=[]
+--- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder (0.20s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control (0.20s)
+    --- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout (0.00s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control (0.00s)
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control
+    audit6_logout_drain_test.go:39: state=logged on next target=4 applications=[AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout
+    audit6_logout_drain_test.go:39: state=disconnected next target=4 applications=[AFTER-LOGOUT]
+    audit6_logout_drain_test.go:41: Logout released later buffered order: [AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control
+    audit6_logout_drain_test.go:39: state=disconnected next target=4 applications=[]
+--- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder (0.21s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control (0.20s)
+    --- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout (0.00s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control (0.00s)
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control
+    audit6_logout_drain_test.go:39: state=logged on next target=4 applications=[AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout
+    audit6_logout_drain_test.go:39: state=disconnected next target=4 applications=[AFTER-LOGOUT]
+    audit6_logout_drain_test.go:41: Logout released later buffered order: [AFTER-LOGOUT]
+=== RUN   TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control
+    audit6_logout_drain_test.go:39: state=disconnected next target=4 applications=[]
+--- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder (0.20s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/heartbeat_control (0.20s)
+    --- FAIL: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/in-sequence_Logout (0.00s)
+    --- PASS: TestAudit6InSequenceLogoutDoesNotReleaseLaterHeldOrder/held_Logout_control (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/session	1.045s
+FAIL

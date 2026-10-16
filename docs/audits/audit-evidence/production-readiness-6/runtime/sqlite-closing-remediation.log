@@ -1,0 +1,38 @@
+=== RUN   TestReplayWaitingForPoolReconnects
+--- PASS: TestReplayWaitingForPoolReconnects (0.02s)
+=== RUN   TestReplayWaitingForPoolStops
+--- PASS: TestReplayWaitingForPoolStops (0.11s)
+=== RUN   TestLogoutWhileReplayWaitsForPool
+=== RUN   TestLogoutWhileReplayWaitsForPool/counterparty's_Logout
+=== RUN   TestLogoutWhileReplayWaitsForPool/crossing_Logouts
+--- PASS: TestLogoutWhileReplayWaitsForPool (0.21s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/counterparty's_Logout (0.11s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/crossing_Logouts (0.11s)
+=== RUN   TestOpenWaitingForPool
+--- PASS: TestOpenWaitingForPool (0.05s)
+=== RUN   TestReplayWaitingForPoolReconnects
+--- PASS: TestReplayWaitingForPoolReconnects (0.02s)
+=== RUN   TestReplayWaitingForPoolStops
+--- PASS: TestReplayWaitingForPoolStops (0.11s)
+=== RUN   TestLogoutWhileReplayWaitsForPool
+=== RUN   TestLogoutWhileReplayWaitsForPool/counterparty's_Logout
+=== RUN   TestLogoutWhileReplayWaitsForPool/crossing_Logouts
+--- PASS: TestLogoutWhileReplayWaitsForPool (0.21s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/counterparty's_Logout (0.11s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/crossing_Logouts (0.11s)
+=== RUN   TestOpenWaitingForPool
+--- PASS: TestOpenWaitingForPool (0.05s)
+=== RUN   TestReplayWaitingForPoolReconnects
+--- PASS: TestReplayWaitingForPoolReconnects (0.02s)
+=== RUN   TestReplayWaitingForPoolStops
+--- PASS: TestReplayWaitingForPoolStops (0.11s)
+=== RUN   TestLogoutWhileReplayWaitsForPool
+=== RUN   TestLogoutWhileReplayWaitsForPool/counterparty's_Logout
+=== RUN   TestLogoutWhileReplayWaitsForPool/crossing_Logouts
+--- PASS: TestLogoutWhileReplayWaitsForPool (0.22s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/counterparty's_Logout (0.11s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/crossing_Logouts (0.11s)
+=== RUN   TestOpenWaitingForPool
+--- PASS: TestOpenWaitingForPool (0.05s)
+PASS
+ok  	github.com/sylr/fix2/contribs/store/sqlite3	2.674s

@@ -1,0 +1,39 @@
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+    audit5_accept_test.go:19: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- FAIL: TestAudit5CanceledAcceptDoesNotPoisonListener (0.00s)
+=== RUN   TestAcceptContext
+    tcp_test.go:122: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptContext (0.00s)
+=== RUN   TestAcceptCanceledReuse
+    tcp_test.go:165: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptCanceledReuse (0.00s)
+=== RUN   TestAcceptConcurrentCancelReuse
+    tcp_test.go:186: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptConcurrentCancelReuse (0.00s)
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+    audit5_accept_test.go:19: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- FAIL: TestAudit5CanceledAcceptDoesNotPoisonListener (0.00s)
+=== RUN   TestAcceptContext
+    tcp_test.go:122: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptContext (0.00s)
+=== RUN   TestAcceptCanceledReuse
+    tcp_test.go:165: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptCanceledReuse (0.00s)
+=== RUN   TestAcceptConcurrentCancelReuse
+    tcp_test.go:186: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptConcurrentCancelReuse (0.00s)
+=== RUN   TestAudit5CanceledAcceptDoesNotPoisonListener
+    audit5_accept_test.go:19: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- FAIL: TestAudit5CanceledAcceptDoesNotPoisonListener (0.00s)
+=== RUN   TestAcceptContext
+    tcp_test.go:122: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptContext (0.00s)
+=== RUN   TestAcceptCanceledReuse
+    tcp_test.go:165: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptCanceledReuse (0.00s)
+=== RUN   TestAcceptConcurrentCancelReuse
+    tcp_test.go:186: cannot listen in this environment: tcp: listen 127.0.0.1:0: listen tcp 127.0.0.1:0: bind: operation not permitted
+--- SKIP: TestAcceptConcurrentCancelReuse (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/session/transport/tcp	0.352s
+FAIL

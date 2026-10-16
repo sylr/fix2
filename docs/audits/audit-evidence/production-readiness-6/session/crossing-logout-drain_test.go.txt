@@ -1,0 +1,38 @@
+package session_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/sylr/fix2/session"
+)
+
+func TestAudit6CrossingLogout(t *testing.T) {
+	for _, held := range []bool{false, true} {
+		t.Run(map[bool]string{false: "direct answer", true: "held answer"}[held], func(t *testing.T) {
+			s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+			done := make(chan error, 1)
+			go func() { done <- s.Logout(context.Background(), "bye") }()
+			p.expect("5")
+			if held {
+				p.write(from(session.FIX44, 3), "5")
+				p.expect("2", "7", "2", "16", "0")
+				p.write(from(session.FIX44, 4), "D", "11", "AFTER-LOGOUT")
+				p.write(from(session.FIX44, 2), "0")
+			} else {
+				p.write(from(session.FIX44, 3), "D", "11", "AFTER-LOGOUT")
+				p.expect("2", "7", "2", "16", "0")
+				p.write(from(session.FIX44, 2), "5")
+			}
+			<-done
+			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			rec.mu.Lock()
+			apps := append([]string(nil), rec.apps...)
+			rec.mu.Unlock()
+			t.Logf("next target=%d applications=%v", s.NextTargetSeqNum(), apps)
+			if len(apps) != 0 {
+				t.Errorf("Logout answer released later buffered order: %v", apps)
+			}
+		})
+	}
+}
