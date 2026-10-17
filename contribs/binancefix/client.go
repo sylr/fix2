@@ -61,13 +61,38 @@ func (e *PeerLogoutError) Error() string {
 	return fmt.Sprintf("binancefix: logged out by Binance: %q", e.Text)
 }
 
-// LogonRefusedError is Binance's refusal of our Logon, by Reject or Logout.
+// ErrMissingRequired tells of a session message the client acts on whose
+// required field is null, the null value of its integer or enum, which
+// SBE forbids a producer to send (§4.4.2), or empty, a string the schema
+// does not make optional (Binance's optional strings are those whose
+// emptiness means null): a LogonAck's HeartBtInt,
+// SbeSchemaIdVersionDeprecated or UUID, a TestRequest's TestReqID, a
+// News's Headline. The codecs decode such values as they are; the client
+// refuses them.
+var ErrMissingRequired = errors.New("binancefix: required field null or empty")
+
+// ErrInvalidLogonAck tells of a LogonAck the client refuses: a required
+// field missing (ErrMissingRequired too), a HeartBtInt out of Binance's
+// bounds, an SbeSchemaIdVersionDeprecated neither true nor false.
+var ErrInvalidLogonAck = errors.New("binancefix: invalid LogonAck")
+
+// LogonRefusedError is Binance's refusal of our Logon, by Reject or Logout,
+// or the client's refusal of Binance's LogonAck (Err).
 type LogonRefusedError struct {
 	Text      string
 	ErrorCode Optional[int32]
+	// Err, if set, is why the client refused the LogonAck: an
+	// ErrInvalidLogonAck. The session is not established; the Logon is
+	// retried as one Binance refused.
+	Err error
 }
 
+func (e *LogonRefusedError) Unwrap() error { return e.Err }
+
 func (e *LogonRefusedError) Error() string {
+	if e.Err != nil {
+		return "binancefix: Logon failed: " + e.Err.Error()
+	}
 	if e.ErrorCode.Valid {
 		return fmt.Sprintf("binancefix: Logon refused: %q (error code %d)", e.Text, e.ErrorCode.Value)
 	}

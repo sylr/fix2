@@ -37,6 +37,13 @@ state, err := r.Wait(ctx) // Answered, StatusUnknown, NeverWritten or PossiblyTr
 - logs on with a Logon whose seqNum (1, with ResetSeqNumFlag: Binance
   resets every Logon) and sendingTime are set once, then signed with
   Ed25519 (`Username` the API key, `RawData` the signature);
+- refuses a LogonAck with a required field null or empty (HeartBtInt,
+  SbeSchemaIdVersionDeprecated, UUID), a HeartBtInt outside 5 to 60
+  seconds, or a deprecation flag neither true nor false: the Logon fails
+  as a refused one (`ErrInvalidLogonAck`); logged on, ends the connection
+  on a TestRequest without TestReqID (`ErrMissingRequired`), while a News
+  without Headline, a notice, is told of, its countdown unknown. The codecs
+  decode such values as they are;
 - numbers session messages and requests in one series, from 2, rolling
   over to 0 after 4,294,967,295, and stamps each sendingTime when writing;
 - ends on a gap or a repeat in Binance's numbers, after our Logout:
@@ -120,3 +127,17 @@ Binance over in-memory connections: Logon and signature, heartbeats and
 TestRequests, gaps, Logouts both ways, Reject and News, receipts at every
 phase of a connection, framing, a stalled Handler, Send from the Handler,
 sequence number rollover, reconnection pacing. Nothing reaches the network.
+
+Conformance: frames split in two reads at every byte boundary, and many in
+one read; malformed frames (encodingType, lengths short, long or beyond
+`MaxFrameLength`, a message short of its header, another schema) and
+streams ending in a frame; a Handler blocked for several HeartBtInts,
+heartbeats and TestRequest answers going on; a write failing at every
+byte of a request's frame; the connection lost at each phase of a request;
+Binance's documented Logon read through the client's framing and codecs.
+A fake Binance answers with messages Real Logic's SBE codecs encoded
+(`testdata/reallogic`, a copy of fix2's
+`internal/gen/sbe/testdata/reallogic`, which tells how they are made):
+the client hands them to the Handler with Real Logic's values, matches
+its receipts by them, and its requests, of the same values, are Real
+Logic's bytes.

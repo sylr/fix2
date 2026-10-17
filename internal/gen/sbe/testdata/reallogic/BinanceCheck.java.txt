@@ -1,0 +1,567 @@
+import org.agrona.concurrent.UnsafeBuffer;
+
+import fix_sbe.*;
+
+/**
+ * Encodes, with Real Logic's codecs of Binance's Spot FIX SBE schema
+ * (spot-fixsbe-1_1.xml), a message set with fixed values, and prints them
+ * one per line, name then hexadecimal: the fixtures of fix2's generated
+ * codecs of the schema (internal/gen/sbe/binance,
+ * contribs/binancefix/internal/fixsbe). Every field is set, null ones to
+ * the null value Real Logic's codecs give: they fill nothing on their own.
+ *
+ * With the argument "sofh", every message is printed framed: Binance's
+ * Simple Open Framing Header, both its fields little-endian (the frame's
+ * length, header included, then the encodingType 0xEB50), then the
+ * message. Real Logic generates no codec of the schema's sofh composite,
+ * which no message names: the header is written here.
+ *
+ * Every message's header is the one wrapAndApplyHeader writes (blockLength,
+ * templateId, schemaId 1, version 1), then seqNum 4,000,000,000 + i and
+ * sendingTime TS + 1,001 * i, i the message's index from 0.
+ */
+public class BinanceCheck {
+    static final long TS = 1_719_479_845_223_000L; // 2024-06-27 09:17:25.223 UTC, in microseconds
+    static final long ORDER_ID = 1_234_567_890_123L;
+    static final String SIGNATURE = "4MHXelVVcpkdwuLbl6n73HQUXUf1dse2PCgT1DYqW9w8AVZ1RACFGM+5UdlGPrQHrgtS3CvsRURC1oj73j8gCA==";
+    static final String API_KEY = "sBRXrJx2DsOraMXOaUovEhgVRcjOvCtQwnWj8VxkOh1xqboS02SPGfKi2h8spZJb";
+
+    static final UnsafeBuffer buf = new UnsafeBuffer(new byte[1 << 16]);
+    static final MessageHeaderEncoder h = new MessageHeaderEncoder();
+    static boolean sofh;
+    static int index;
+
+    public static void main(String[] args) {
+        sofh = args.length > 0 && args[0].equals("sofh");
+
+        // -- session --------------------------------------------------------
+
+        LogonEncoder lo = new LogonEncoder();
+        lo.wrapAndApplyHeader(buf, 0, h).encryptMethod((short) 0).heartBtInt(30).resetSeqNumFlag(BoolEnum.True)
+            .messageHandling(MessageHandling.Sequential).responseMode(ResponseMode.OnlyAcks)
+            .executionReportType(ExecutionReportType.Mini).dropCopyFlag(BoolEnum.False).recvWindow(5_000_000)
+            .senderCompId("EXAMPLE").targetCompId("SPOT").rawData(SIGNATURE).username(API_KEY);
+        print("Logon", lo.encodedLength());
+        lo.wrapAndApplyHeader(buf, 0, h).encryptMethod(LogonEncoder.encryptMethodNullValue()).heartBtInt(5)
+            .resetSeqNumFlag(BoolEnum.NULL_VAL).messageHandling(MessageHandling.NULL_VAL).responseMode(ResponseMode.NULL_VAL)
+            .executionReportType(ExecutionReportType.NULL_VAL).dropCopyFlag(BoolEnum.NULL_VAL)
+            .recvWindow(LogonEncoder.recvWindowNullValue())
+            .senderCompId("S").targetCompId("SPOT").rawData("").username("k");
+        print("LogonNulls", lo.encodedLength());
+
+        LogonAckEncoder la = new LogonAckEncoder();
+        la.wrapAndApplyHeader(buf, 0, h).encryptMethod((short) 0).heartBtInt(30)
+            .sbeSchemaIdVersionDeprecated(BoolEnum.True).uUID("4392a152-0e2c-4b9b-a6a3-0f1c2d3e4f50");
+        print("LogonAck", la.encodedLength());
+        la.wrapAndApplyHeader(buf, 0, h).encryptMethod(LogonAckEncoder.encryptMethodNullValue()).heartBtInt(60)
+            .sbeSchemaIdVersionDeprecated(BoolEnum.False).uUID("u");
+        print("LogonAckNulls", la.encodedLength());
+
+        HeartbeatEncoder hb = new HeartbeatEncoder();
+        hb.wrapAndApplyHeader(buf, 0, h).testReqID("");
+        print("Heartbeat", hb.encodedLength());
+        hb.wrapAndApplyHeader(buf, 0, h).testReqID("tr-1");
+        print("HeartbeatTestReqID", hb.encodedLength());
+
+        TestRequestEncoder tr = new TestRequestEncoder();
+        tr.wrapAndApplyHeader(buf, 0, h).testReqID("tr-1");
+        print("TestRequest", tr.encodedLength());
+        // The longest a varString8 holds: its uint8 length's maxValue, 254
+        // (255 is uint8's null), which Real Logic enforces.
+        tr.wrapAndApplyHeader(buf, 0, h).testReqID(repeat("0123456789abcdef", 254));
+        print("TestRequestLong", tr.encodedLength());
+
+        RejectEncoder rj = new RejectEncoder();
+        rj.wrapAndApplyHeader(buf, 0, h).refSeqNum(7).refTagID(44).sessionRejectReason(SessionRejectReason.ValueIsIncorrect)
+            .errorCode(-1102).refMsgType("D")
+            .text("Mandatory parameter 'price' was not sent, was empty/null, or malformed.");
+        print("Reject", rj.encodedLength());
+        rj.wrapAndApplyHeader(buf, 0, h).refSeqNum(RejectEncoder.refSeqNumNullValue()).refTagID(RejectEncoder.refTagIDNullValue())
+            .sessionRejectReason(SessionRejectReason.NULL_VAL).errorCode(RejectEncoder.errorCodeNullValue()).refMsgType("").text("");
+        print("RejectNulls", rj.encodedLength());
+
+        LogoutEncoder out = new LogoutEncoder();
+        out.wrapAndApplyHeader(buf, 0, h).text("Logout acknowledgment.");
+        print("Logout", out.encodedLength());
+        out.wrapAndApplyHeader(buf, 0, h).text("");
+        print("LogoutEmpty", out.encodedLength());
+
+        NewsEncoder nw = new NewsEncoder();
+        nw.wrapAndApplyHeader(buf, 0, h).headline("You'll be disconnected in 30 seconds. Please reconnect.");
+        print("News", nw.encodedLength());
+        nw.wrapAndApplyHeader(buf, 0, h).headline(repeat("maintenance ", 300));
+        print("NewsLong", nw.encodedLength());
+
+        // -- order entry ----------------------------------------------------
+
+        NewOrderSingleEncoder nos = new NewOrderSingleEncoder();
+        nos.wrapAndApplyHeader(buf, 0, h).priceExponent((byte) -2).qtyExponent((byte) -8).orderQty(150_000_000L)
+            .ordType(OrdType.Limit).execInst(ExecInst.ParticipateDontInitiate).price(6_543_210L)
+            .triggerType(TriggerType.PriceMovement).triggerAction(TriggerAction.Activate).triggerPrice(6_500_000L)
+            .triggerPriceType(TriggerPriceType.LastTrade).triggerPriceDirection(TriggerPriceDirection.Up)
+            .triggerTrailingDeltaBips(250).pegOffsetValue((short) 3).pegPriceType(PegPriceType.PrimaryPeg)
+            .pegMoveType(PegMoveType.Fixed).pegOffsetType(PegOffsetType.PriceTier).side(Side.Buy)
+            .timeInForce(TimeInForce.GoodTillCancel).maxFloor(50_000_000L).cashOrderQty(10_000_000L)
+            .targetStrategy(1_000_001).strategyID(-42).selfTradePreventionMode(SelfTradePreventionMode.ExpireTaker)
+            .sOR(BoolEnum.True).clOrdID("nos-1").symbol("BTCUSDT");
+        print("NewOrderSingle", nos.encodedLength());
+        nos.wrapAndApplyHeader(buf, 0, h).priceExponent((byte) 0).qtyExponent((byte) -3)
+            .orderQty(NewOrderSingleEncoder.orderQtyNullValue()).ordType(OrdType.Market).execInst(ExecInst.NULL_VAL)
+            .price(NewOrderSingleEncoder.priceNullValue()).triggerType(TriggerType.NULL_VAL).triggerAction(TriggerAction.NULL_VAL)
+            .triggerPrice(NewOrderSingleEncoder.triggerPriceNullValue()).triggerPriceType(TriggerPriceType.NULL_VAL)
+            .triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(NewOrderSingleEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue(NewOrderSingleEncoder.pegOffsetValueNullValue()).pegPriceType(PegPriceType.NULL_VAL)
+            .pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL).side(Side.Sell)
+            .timeInForce(TimeInForce.NULL_VAL).maxFloor(NewOrderSingleEncoder.maxFloorNullValue())
+            .cashOrderQty(NewOrderSingleEncoder.cashOrderQtyNullValue()).targetStrategy(NewOrderSingleEncoder.targetStrategyNullValue())
+            .strategyID(NewOrderSingleEncoder.strategyIDNullValue()).selfTradePreventionMode(SelfTradePreventionMode.NULL_VAL)
+            .sOR(BoolEnum.NULL_VAL).clOrdID("nos-2").symbol("ETHBTC");
+        print("NewOrderSingleNulls", nos.encodedLength());
+
+        OrderCancelRequestEncoder ocr = new OrderCancelRequestEncoder();
+        ocr.wrapAndApplyHeader(buf, 0, h).orderID(ORDER_ID).listID(OrderCancelRequestEncoder.listIDNullValue())
+            .cancelRestrictions(CancelRestrictions.OnlyNew).clOrdID("ocr-1").origClOrdID("nos-1").origClListID("")
+            .symbol("BTCUSDT");
+        print("OrderCancelRequest", ocr.encodedLength());
+        ocr.wrapAndApplyHeader(buf, 0, h).orderID(OrderCancelRequestEncoder.orderIDNullValue()).listID(77)
+            .cancelRestrictions(CancelRestrictions.NULL_VAL).clOrdID("ocr-2").origClOrdID("").origClListID("nol-1")
+            .symbol("BTCUSDT");
+        print("OrderCancelRequestList", ocr.encodedLength());
+
+        OrderCancelRequestAndNewOrderSingleEncoder xcn = new OrderCancelRequestAndNewOrderSingleEncoder();
+        xcn.wrapAndApplyHeader(buf, 0, h).orderCancelRequestAndNewOrderSingleMode(OrderCancelRequestAndNewOrderSingleMode.AllowFailure)
+            .orderRateLimitExceededMode(OrderRateLimitExceededMode.CancelOnly).orderID(ORDER_ID)
+            .cancelRestrictions(CancelRestrictions.OnlyPartiallyFilled).priceExponent((byte) -2).qtyExponent((byte) -8)
+            .orderQty(200_000_000L).ordType(OrdType.Limit).execInst(ExecInst.NULL_VAL).price(6_543_100L)
+            .triggerType(TriggerType.NULL_VAL).triggerAction(TriggerAction.NULL_VAL)
+            .triggerPrice(OrderCancelRequestAndNewOrderSingleEncoder.triggerPriceNullValue())
+            .triggerPriceType(TriggerPriceType.NULL_VAL).triggerPriceDirection(TriggerPriceDirection.Down)
+            .triggerTrailingDeltaBips(OrderCancelRequestAndNewOrderSingleEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue(OrderCancelRequestAndNewOrderSingleEncoder.pegOffsetValueNullValue())
+            .pegPriceType(PegPriceType.NULL_VAL).pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL)
+            .side(Side.Buy).timeInForce(TimeInForce.ImmediateOrCancel)
+            .maxFloor(OrderCancelRequestAndNewOrderSingleEncoder.maxFloorNullValue())
+            .cashOrderQty(OrderCancelRequestAndNewOrderSingleEncoder.cashOrderQtyNullValue())
+            .targetStrategy(OrderCancelRequestAndNewOrderSingleEncoder.targetStrategyNullValue()).strategyID(7)
+            .selfTradePreventionMode(SelfTradePreventionMode.NULL_VAL)
+            .cancelClOrdID("xcn-c").origClOrdID("nos-1").clOrdID("xcn-n").symbol("BTCUSDT");
+        print("OrderCancelRequestAndNewOrderSingle", xcn.encodedLength());
+        // The optionals the one before leaves null set, and those it sets
+        // null.
+        xcn.wrapAndApplyHeader(buf, 0, h).orderCancelRequestAndNewOrderSingleMode(OrderCancelRequestAndNewOrderSingleMode.StopOnFailure)
+            .orderRateLimitExceededMode(OrderRateLimitExceededMode.NULL_VAL)
+            .orderID(OrderCancelRequestAndNewOrderSingleEncoder.orderIDNullValue())
+            .cancelRestrictions(CancelRestrictions.NULL_VAL).priceExponent((byte) -1).qtyExponent((byte) -6)
+            .orderQty(OrderCancelRequestAndNewOrderSingleEncoder.orderQtyNullValue()).ordType(OrdType.StopLimit)
+            .execInst(ExecInst.ParticipateDontInitiate).price(OrderCancelRequestAndNewOrderSingleEncoder.priceNullValue())
+            .triggerType(TriggerType.PriceMovement).triggerAction(TriggerAction.Activate).triggerPrice(6_400_000L)
+            .triggerPriceType(TriggerPriceType.LastTrade).triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(100).pegOffsetValue((short) 5).pegPriceType(PegPriceType.MarketPeg)
+            .pegMoveType(PegMoveType.Fixed).pegOffsetType(PegOffsetType.PriceTier).side(Side.Sell)
+            .timeInForce(TimeInForce.NULL_VAL).maxFloor(1_000L).cashOrderQty(2_000L).targetStrategy(1_000_002)
+            .strategyID(OrderCancelRequestAndNewOrderSingleEncoder.strategyIDNullValue())
+            .selfTradePreventionMode(SelfTradePreventionMode.ExpireBoth)
+            .cancelClOrdID("").origClOrdID("").clOrdID("xcn-n2").symbol("ETHBTC");
+        print("OrderCancelRequestAndNewOrderSingleNulls", xcn.encodedLength());
+
+        OrderAmendKeepPriorityRequestEncoder amd = new OrderAmendKeepPriorityRequestEncoder();
+        amd.wrapAndApplyHeader(buf, 0, h).orderID(ORDER_ID).qtyExponent((byte) -8).orderQty(100_000_000L)
+            .clOrdID("amd-1").origClOrdID("nos-1").symbol("BTCUSDT");
+        print("OrderAmendKeepPriorityRequest", amd.encodedLength());
+        amd.wrapAndApplyHeader(buf, 0, h).orderID(OrderAmendKeepPriorityRequestEncoder.orderIDNullValue()).qtyExponent((byte) 0)
+            .orderQty(1L).clOrdID("amd-2").origClOrdID("").symbol("ETHBTC");
+        print("OrderAmendKeepPriorityRequestNulls", amd.encodedLength());
+
+        OrderMassCancelRequestEncoder omc = new OrderMassCancelRequestEncoder();
+        omc.wrapAndApplyHeader(buf, 0, h).massCancelRequestType(MassCancelRequestType.CancelSymbolOrders)
+            .symbol("BTCUSDT").clOrdID("omc-1");
+        print("OrderMassCancelRequest", omc.encodedLength());
+
+        LimitQueryEncoder lq = new LimitQueryEncoder();
+        lq.wrapAndApplyHeader(buf, 0, h).reqID("lq-1");
+        print("LimitQuery", lq.encodedLength());
+
+        // A one-triggers-the-other list of three orders: the working one
+        // with no triggering instruction, the pending ones with one and two.
+        NewOrderListEncoder nol = new NewOrderListEncoder();
+        nol.wrapAndApplyHeader(buf, 0, h).contingencyType(ContingencyType.OneTriggersTheOther).oPO(BoolEnum.True);
+        NewOrderListEncoder.OrdersEncoder no = nol.ordersCount(3);
+        no.next().priceExponent((byte) -2).qtyExponent((byte) -8).orderQty(100_000_000L).ordType(OrdType.Limit)
+            .execInst(ExecInst.NULL_VAL).price(6_543_210L).triggerType(TriggerType.NULL_VAL).triggerAction(TriggerAction.NULL_VAL)
+            .triggerPrice(NewOrderListEncoder.OrdersEncoder.triggerPriceNullValue()).triggerPriceType(TriggerPriceType.NULL_VAL)
+            .triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(NewOrderListEncoder.OrdersEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue(NewOrderListEncoder.OrdersEncoder.pegOffsetValueNullValue()).pegPriceType(PegPriceType.NULL_VAL)
+            .pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL).side(Side.Buy)
+            .timeInForce(TimeInForce.GoodTillCancel).maxFloor(NewOrderListEncoder.OrdersEncoder.maxFloorNullValue())
+            .cashOrderQty(NewOrderListEncoder.OrdersEncoder.cashOrderQtyNullValue())
+            .targetStrategy(NewOrderListEncoder.OrdersEncoder.targetStrategyNullValue())
+            .strategyID(NewOrderListEncoder.OrdersEncoder.strategyIDNullValue())
+            .selfTradePreventionMode(SelfTradePreventionMode.ExpireMaker);
+        no.listTriggeringInstructionsCount(0);
+        no.clOrdID("nol-a").symbol("BTCUSDT");
+        no.next().priceExponent((byte) -2).qtyExponent((byte) -8).orderQty(100_000_000L).ordType(OrdType.Limit)
+            .execInst(ExecInst.ParticipateDontInitiate).price(7_000_000L).triggerType(TriggerType.NULL_VAL)
+            .triggerAction(TriggerAction.NULL_VAL).triggerPrice(NewOrderListEncoder.OrdersEncoder.triggerPriceNullValue())
+            .triggerPriceType(TriggerPriceType.NULL_VAL).triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(NewOrderListEncoder.OrdersEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue(NewOrderListEncoder.OrdersEncoder.pegOffsetValueNullValue()).pegPriceType(PegPriceType.NULL_VAL)
+            .pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL).side(Side.Sell)
+            .timeInForce(TimeInForce.GoodTillCancel).maxFloor(NewOrderListEncoder.OrdersEncoder.maxFloorNullValue())
+            .cashOrderQty(NewOrderListEncoder.OrdersEncoder.cashOrderQtyNullValue())
+            .targetStrategy(NewOrderListEncoder.OrdersEncoder.targetStrategyNullValue()).strategyID(3)
+            .selfTradePreventionMode(SelfTradePreventionMode.NULL_VAL);
+        no.listTriggeringInstructionsCount(1).next().listTriggerType(ListTriggerType.Activated)
+            .listTriggerTriggerIndex((short) 0).listTriggerAction(ListTriggerAction.Release);
+        no.clOrdID("nol-b").symbol("BTCUSDT");
+        no.next().priceExponent((byte) -2).qtyExponent((byte) -8).orderQty(100_000_000L).ordType(OrdType.StopLimit)
+            .execInst(ExecInst.NULL_VAL).price(6_000_000L).triggerType(TriggerType.PriceMovement)
+            .triggerAction(TriggerAction.Activate).triggerPrice(6_100_000L).triggerPriceType(TriggerPriceType.LastTrade)
+            .triggerPriceDirection(TriggerPriceDirection.Down).triggerTrailingDeltaBips(0)
+            .pegOffsetValue(NewOrderListEncoder.OrdersEncoder.pegOffsetValueNullValue()).pegPriceType(PegPriceType.NULL_VAL)
+            .pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL).side(Side.Sell)
+            .timeInForce(TimeInForce.FillOrKill).maxFloor(NewOrderListEncoder.OrdersEncoder.maxFloorNullValue())
+            .cashOrderQty(NewOrderListEncoder.OrdersEncoder.cashOrderQtyNullValue()).targetStrategy(-1)
+            .strategyID(NewOrderListEncoder.OrdersEncoder.strategyIDNullValue())
+            .selfTradePreventionMode(SelfTradePreventionMode.Decrement);
+        NewOrderListEncoder.OrdersEncoder.ListTriggeringInstructionsEncoder lti = no.listTriggeringInstructionsCount(2);
+        lti.next().listTriggerType(ListTriggerType.Filled).listTriggerTriggerIndex((short) 0).listTriggerAction(ListTriggerAction.Release);
+        lti.next().listTriggerType(ListTriggerType.PartiallyFilled).listTriggerTriggerIndex((short) 1)
+            .listTriggerAction(ListTriggerAction.Cancel);
+        no.clOrdID("nol-c").symbol("BTCUSDT");
+        nol.clListID("nol-1");
+        print("NewOrderList", nol.encodedLength());
+        // A one-cancels-the-other list, OPO null: a pegged order with the
+        // optionals the list before leaves null, and a market order with
+        // all null.
+        nol.wrapAndApplyHeader(buf, 0, h).contingencyType(ContingencyType.OneCancelsTheOther).oPO(BoolEnum.NULL_VAL);
+        no = nol.ordersCount(2);
+        no.next().priceExponent((byte) -2).qtyExponent((byte) -8).orderQty(NewOrderListEncoder.OrdersEncoder.orderQtyNullValue())
+            .ordType(OrdType.Pegged).execInst(ExecInst.NULL_VAL).price(NewOrderListEncoder.OrdersEncoder.priceNullValue())
+            .triggerType(TriggerType.NULL_VAL).triggerAction(TriggerAction.NULL_VAL)
+            .triggerPrice(NewOrderListEncoder.OrdersEncoder.triggerPriceNullValue()).triggerPriceType(TriggerPriceType.NULL_VAL)
+            .triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(NewOrderListEncoder.OrdersEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue((short) 2).pegPriceType(PegPriceType.PrimaryPeg).pegMoveType(PegMoveType.Fixed)
+            .pegOffsetType(PegOffsetType.PriceTier).side(Side.Buy).timeInForce(TimeInForce.NULL_VAL).maxFloor(30_000_000L)
+            .cashOrderQty(5_000_000L).targetStrategy(NewOrderListEncoder.OrdersEncoder.targetStrategyNullValue())
+            .strategyID(NewOrderListEncoder.OrdersEncoder.strategyIDNullValue())
+            .selfTradePreventionMode(SelfTradePreventionMode.NULL_VAL);
+        no.listTriggeringInstructionsCount(0);
+        no.clOrdID("oco-a").symbol("ETHBTC");
+        no.next().priceExponent((byte) 0).qtyExponent((byte) 0).orderQty(NewOrderListEncoder.OrdersEncoder.orderQtyNullValue())
+            .ordType(OrdType.Market).execInst(ExecInst.NULL_VAL).price(NewOrderListEncoder.OrdersEncoder.priceNullValue())
+            .triggerType(TriggerType.NULL_VAL).triggerAction(TriggerAction.NULL_VAL)
+            .triggerPrice(NewOrderListEncoder.OrdersEncoder.triggerPriceNullValue()).triggerPriceType(TriggerPriceType.NULL_VAL)
+            .triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(NewOrderListEncoder.OrdersEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue(NewOrderListEncoder.OrdersEncoder.pegOffsetValueNullValue()).pegPriceType(PegPriceType.NULL_VAL)
+            .pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL).side(Side.Sell)
+            .timeInForce(TimeInForce.NULL_VAL).maxFloor(NewOrderListEncoder.OrdersEncoder.maxFloorNullValue())
+            .cashOrderQty(NewOrderListEncoder.OrdersEncoder.cashOrderQtyNullValue())
+            .targetStrategy(NewOrderListEncoder.OrdersEncoder.targetStrategyNullValue())
+            .strategyID(NewOrderListEncoder.OrdersEncoder.strategyIDNullValue())
+            .selfTradePreventionMode(SelfTradePreventionMode.NULL_VAL);
+        no.listTriggeringInstructionsCount(0);
+        no.clOrdID("oco-b").symbol("ETHBTC");
+        nol.clListID("oco-1");
+        print("NewOrderListOCO", nol.encodedLength());
+
+        // -- order entry answers --------------------------------------------
+
+        ExecutionReportEncoder er = new ExecutionReportEncoder();
+        er.wrapAndApplyHeader(buf, 0, h).priceExponent((byte) -2).qtyExponent((byte) -8).execID(1001).orderID(ORDER_ID)
+            .orderQty(150_000_000L).ordType(OrdType.Limit).side(Side.Buy).execInst(ExecInst.ParticipateDontInitiate)
+            .price(6_543_210L).triggerType(TriggerType.PriceMovement).triggerAction(TriggerAction.Activate)
+            .triggerPrice(6_500_000L).triggerPriceType(TriggerPriceType.LastTrade)
+            .triggerPriceDirection(TriggerPriceDirection.Up).triggerTrailingDeltaBips(250).pegOffsetValue((short) 3)
+            .pegPriceType(PegPriceType.PrimaryPeg).pegMoveType(PegMoveType.Fixed).pegOffsetType(PegOffsetType.PriceTier)
+            .peggedPrice(6_543_000L).timeInForce(TimeInForce.GoodTillCancel).transactTime(TS + 1)
+            .orderCreationTime(TS).maxFloor(50_000_000L).listID(77).cashOrderQty(10_000_000L).targetStrategy(1_000_001)
+            .strategyID(-42).orderCapacity(OrderCapacity.Principal).selfTradePreventionMode(SelfTradePreventionMode.ExpireTaker)
+            .execType(ExecType.New).cumQty(0).leavesQty(150_000_000L).cumQuoteQty(0).aggressorIndicator(BoolEnum.False)
+            .tradeID(555).lastPx(6_543_200L).lastQty(0).ordStatus(OrdStatus.New).secondaryOrderID(ORDER_ID + 1)
+            .secondaryExternalAccountID(99).allocID(1).matchType(MatchType.AutoMatch).workingFloor(WorkingFloor.Exchange)
+            .workingIndicator(BoolEnum.True).workingTime(TS + 2).trailingTime(TS + 3).preventedMatchID(4)
+            .preventedExecutionPrice(6_543_000L).preventedExecutionQty(1_000L).tradeGroupID(5).counterOrderID(ORDER_ID + 2)
+            .preventedQty(2_000L).lastPreventedQty(1_000L).sOR(BoolEnum.True).ordRejReason(OrdRejReason.Other)
+            .errorCode(-1013).expiryReason(ExpiryReason.ExecutionRulePriceRangeExceeded);
+        ExecutionReportEncoder.MiscFeesEncoder fees = er.miscFeesCount(2);
+        fees.next().exponent((byte) -8).miscFeeAmt(150_000L).miscFeeType(MiscFeeType.ExchangeFees).miscFeeCurr("BTC");
+        fees.next().exponent((byte) 2).miscFeeAmt(-98L).miscFeeType(MiscFeeType.ExchangeFees).miscFeeCurr("USDT");
+        er.clOrdID("nos-1").origClOrdID("orig-1").symbol("BTCUSDT").secondarySymbol("BTCUSDC").counterSymbol("ETHUSDT")
+            .errorText("Filter failure: PRICE_FILTER");
+        print("ExecutionReport", er.encodedLength());
+        er.wrapAndApplyHeader(buf, 0, h).priceExponent((byte) 0).qtyExponent((byte) 0)
+            .execID(ExecutionReportEncoder.execIDNullValue()).orderID(ExecutionReportEncoder.orderIDNullValue())
+            .orderQty(ExecutionReportEncoder.orderQtyNullValue()).ordType(OrdType.Market).side(Side.Sell)
+            .execInst(ExecInst.NULL_VAL).price(ExecutionReportEncoder.priceNullValue()).triggerType(TriggerType.NULL_VAL)
+            .triggerAction(TriggerAction.NULL_VAL).triggerPrice(ExecutionReportEncoder.triggerPriceNullValue())
+            .triggerPriceType(TriggerPriceType.NULL_VAL).triggerPriceDirection(TriggerPriceDirection.NULL_VAL)
+            .triggerTrailingDeltaBips(ExecutionReportEncoder.triggerTrailingDeltaBipsNullValue())
+            .pegOffsetValue(ExecutionReportEncoder.pegOffsetValueNullValue()).pegPriceType(PegPriceType.NULL_VAL)
+            .pegMoveType(PegMoveType.NULL_VAL).pegOffsetType(PegOffsetType.NULL_VAL)
+            .peggedPrice(ExecutionReportEncoder.peggedPriceNullValue()).timeInForce(TimeInForce.NULL_VAL)
+            .transactTime(ExecutionReportEncoder.transactTimeNullValue())
+            .orderCreationTime(ExecutionReportEncoder.orderCreationTimeNullValue())
+            .maxFloor(ExecutionReportEncoder.maxFloorNullValue()).listID(ExecutionReportEncoder.listIDNullValue())
+            .cashOrderQty(ExecutionReportEncoder.cashOrderQtyNullValue())
+            .targetStrategy(ExecutionReportEncoder.targetStrategyNullValue())
+            .strategyID(ExecutionReportEncoder.strategyIDNullValue()).orderCapacity(OrderCapacity.NULL_VAL)
+            .selfTradePreventionMode(SelfTradePreventionMode.NULL_VAL).execType(ExecType.Canceled).cumQty(0)
+            .leavesQty(ExecutionReportEncoder.leavesQtyNullValue()).cumQuoteQty(ExecutionReportEncoder.cumQuoteQtyNullValue())
+            .aggressorIndicator(BoolEnum.NULL_VAL).tradeID(ExecutionReportEncoder.tradeIDNullValue())
+            .lastPx(ExecutionReportEncoder.lastPxNullValue()).lastQty(0).ordStatus(OrdStatus.Canceled)
+            .secondaryOrderID(ExecutionReportEncoder.secondaryOrderIDNullValue())
+            .secondaryExternalAccountID(ExecutionReportEncoder.secondaryExternalAccountIDNullValue())
+            .allocID(ExecutionReportEncoder.allocIDNullValue()).matchType(MatchType.NULL_VAL)
+            .workingFloor(WorkingFloor.NULL_VAL).workingIndicator(BoolEnum.NULL_VAL)
+            .workingTime(ExecutionReportEncoder.workingTimeNullValue()).trailingTime(ExecutionReportEncoder.trailingTimeNullValue())
+            .preventedMatchID(ExecutionReportEncoder.preventedMatchIDNullValue())
+            .preventedExecutionPrice(ExecutionReportEncoder.preventedExecutionPriceNullValue())
+            .preventedExecutionQty(ExecutionReportEncoder.preventedExecutionQtyNullValue())
+            .tradeGroupID(ExecutionReportEncoder.tradeGroupIDNullValue())
+            .counterOrderID(ExecutionReportEncoder.counterOrderIDNullValue())
+            .preventedQty(ExecutionReportEncoder.preventedQtyNullValue())
+            .lastPreventedQty(ExecutionReportEncoder.lastPreventedQtyNullValue()).sOR(BoolEnum.NULL_VAL)
+            .ordRejReason(OrdRejReason.NULL_VAL).errorCode(ExecutionReportEncoder.errorCodeNullValue())
+            .expiryReason(ExpiryReason.NULL_VAL);
+        er.miscFeesCount(0);
+        er.clOrdID("").origClOrdID("").symbol("ETHBTC").secondarySymbol("").counterSymbol("").errorText("");
+        print("ExecutionReportNulls", er.encodedLength());
+
+        ExecutionReportAckEncoder era = new ExecutionReportAckEncoder();
+        era.wrapAndApplyHeader(buf, 0, h).orderID(98_765).listID(ExecutionReportAckEncoder.listIDNullValue())
+            .transactTime(TS + 4).execType(ExecType.New).ordStatus(OrdStatus.New).ordRejReason(OrdRejReason.NULL_VAL)
+            .errorCode(ExecutionReportAckEncoder.errorCodeNullValue()).clOrdID("xcn-n").symbol("BTCUSDT").errorText("");
+        print("ExecutionReportAck", era.encodedLength());
+        era.wrapAndApplyHeader(buf, 0, h).orderID(ExecutionReportAckEncoder.orderIDNullValue()).listID(77)
+            .transactTime(ExecutionReportAckEncoder.transactTimeNullValue()).execType(ExecType.Rejected)
+            .ordStatus(OrdStatus.Rejected).ordRejReason(OrdRejReason.Other).errorCode(-2010).clOrdID("").symbol("BTCUSDT")
+            .errorText("Account has insufficient balance for requested action.");
+        print("ExecutionReportAckRejected", era.encodedLength());
+
+        OrderCancelRejectEncoder ocj = new OrderCancelRejectEncoder();
+        ocj.wrapAndApplyHeader(buf, 0, h).orderID(OrderCancelRejectEncoder.orderIDNullValue()).listID(77)
+            .cancelRestrictions(CancelRestrictions.NULL_VAL).cxlRejResponseTo(CxlRejResponseTo.OrderCancelRequest)
+            .errorCode(-2011).clOrdID("ocr-1").origClOrdID("nos-1").origClListID("").symbol("BTCUSDT")
+            .errorText("Unknown order sent.");
+        print("OrderCancelReject", ocj.encodedLength());
+        ocj.wrapAndApplyHeader(buf, 0, h).orderID(ORDER_ID).listID(OrderCancelRejectEncoder.listIDNullValue())
+            .cancelRestrictions(CancelRestrictions.OnlyNew).cxlRejResponseTo(CxlRejResponseTo.NonRepresentable)
+            .errorCode(-2026).clOrdID("ocr-2").origClOrdID("").origClListID("nol-1").symbol("BTCUSDT")
+            .errorText("Order was canceled or expired.");
+        print("OrderCancelRejectList", ocj.encodedLength());
+
+        OrderAmendRejectEncoder oaj = new OrderAmendRejectEncoder();
+        oaj.wrapAndApplyHeader(buf, 0, h).orderID(ORDER_ID).qtyExponent((byte) -8).orderQty(100_000_000L).errorCode(-2038)
+            .clOrdID("amd-1").origClOrdID("").symbol("BTCUSDT").errorText("Order amend (quantity increase) is not supported.");
+        print("OrderAmendReject", oaj.encodedLength());
+        oaj.wrapAndApplyHeader(buf, 0, h).orderID(OrderAmendRejectEncoder.orderIDNullValue()).qtyExponent((byte) 0).orderQty(1L)
+            .errorCode(-2013).clOrdID("amd-2").origClOrdID("nos-2").symbol("ETHBTC").errorText("Order does not exist.");
+        print("OrderAmendRejectNulls", oaj.encodedLength());
+
+        ListStatusEncoder ls = new ListStatusEncoder();
+        ls.wrapAndApplyHeader(buf, 0, h).listID(77).contingencyType(ContingencyType.OneTriggersTheOther)
+            .listStatusType(ListStatusType.ExecStarted).listOrderStatus(ListOrderStatus.Executing)
+            .listRejectReason(ListRejectReason.NULL_VAL).transactTime(TS + 5);
+        ListStatusEncoder.OrdersEncoder lso = ls.ordersCount(3);
+        lso.next().orderID(11).ordRejReason(OrdRejReason.NULL_VAL).errorCode(ListStatusEncoder.OrdersEncoder.errorCodeNullValue());
+        lso.listTriggeringInstructionsCount(0);
+        lso.clOrdID("nol-a").symbol("BTCUSDT").errorText("");
+        lso.next().orderID(12).ordRejReason(OrdRejReason.NULL_VAL).errorCode(ListStatusEncoder.OrdersEncoder.errorCodeNullValue());
+        lso.listTriggeringInstructionsCount(1).next().listTriggerType(ListTriggerType.Activated)
+            .listTriggerTriggerIndex((short) 0).listTriggerAction(ListTriggerAction.Release);
+        lso.clOrdID("nol-b").symbol("BTCUSDT").errorText("");
+        lso.next().orderID(ListStatusEncoder.OrdersEncoder.orderIDNullValue()).ordRejReason(OrdRejReason.Other).errorCode(-2010);
+        ListStatusEncoder.OrdersEncoder.ListTriggeringInstructionsEncoder lsti = lso.listTriggeringInstructionsCount(2);
+        lsti.next().listTriggerType(ListTriggerType.Filled).listTriggerTriggerIndex((short) 0).listTriggerAction(ListTriggerAction.Release);
+        lsti.next().listTriggerType(ListTriggerType.PartiallyFilled).listTriggerTriggerIndex((short) 1)
+            .listTriggerAction(ListTriggerAction.Cancel);
+        lso.clOrdID("nol-c").symbol("BTCUSDT").errorText("Account has insufficient balance for requested action.");
+        ls.clListID("nol-1").origClListID("");
+        print("ListStatus", ls.encodedLength());
+        ls.wrapAndApplyHeader(buf, 0, h).listID(ListStatusEncoder.listIDNullValue()).contingencyType(ContingencyType.NULL_VAL)
+            .listStatusType(ListStatusType.AllDone).listOrderStatus(ListOrderStatus.AllDone)
+            .listRejectReason(ListRejectReason.Other).transactTime(ListStatusEncoder.transactTimeNullValue());
+        ls.ordersCount(0);
+        ls.clListID("").origClListID("nol-0");
+        print("ListStatusEmpty", ls.encodedLength());
+
+        OrderMassCancelReportEncoder mcr = new OrderMassCancelReportEncoder();
+        mcr.wrapAndApplyHeader(buf, 0, h).massCancelRequestType(MassCancelRequestType.CancelSymbolOrders)
+            .massCancelResponse(MassCancelResponse.CancelSymbolOrders).massCancelRejectReason(MassCancelRejectReason.NULL_VAL)
+            .totalAffectedOrders(3).errorCode(OrderMassCancelReportEncoder.errorCodeNullValue()).symbol("BTCUSDT")
+            .clOrdID("omc-1").errorText("");
+        print("OrderMassCancelReport", mcr.encodedLength());
+        mcr.wrapAndApplyHeader(buf, 0, h).massCancelRequestType(MassCancelRequestType.CancelSymbolOrders)
+            .massCancelResponse(MassCancelResponse.CancelRequestRejected).massCancelRejectReason(MassCancelRejectReason.Other)
+            .totalAffectedOrders(OrderMassCancelReportEncoder.totalAffectedOrdersNullValue()).errorCode(-2011)
+            .symbol("ETHBTC").clOrdID("omc-2").errorText("Unknown order sent.");
+        print("OrderMassCancelReportRejected", mcr.encodedLength());
+
+        LimitResponseEncoder lr = new LimitResponseEncoder();
+        lr.wrapAndApplyHeader(buf, 0, h);
+        LimitResponseEncoder.LimitIndicatorsEncoder li = lr.limitIndicatorsCount(3);
+        li.next().limitType(LimitType.OrderLimit).limitCount(2).limitMax(200).limitResetInterval(10)
+            .limitResetIntervalResolution(LimitResetIntervalResolution.Second);
+        li.next().limitType(LimitType.MessageLimit).limitCount(5).limitMax(10_000).limitResetInterval(1)
+            .limitResetIntervalResolution(LimitResetIntervalResolution.Day);
+        li.next().limitType(LimitType.SubscriptionLimit).limitCount(0).limitMax(-1L)
+            .limitResetInterval(LimitResponseEncoder.LimitIndicatorsEncoder.limitResetIntervalNullValue())
+            .limitResetIntervalResolution(LimitResetIntervalResolution.NULL_VAL);
+        lr.reqID("lq-1");
+        print("LimitResponse", lr.encodedLength());
+        lr.wrapAndApplyHeader(buf, 0, h);
+        lr.limitIndicatorsCount(0);
+        lr.reqID("lq-2");
+        print("LimitResponseEmpty", lr.encodedLength());
+
+        // -- market data ----------------------------------------------------
+
+        InstrumentListRequestEncoder ilr = new InstrumentListRequestEncoder();
+        ilr.wrapAndApplyHeader(buf, 0, h).instrumentListRequestType(InstrumentListRequestType.SingleInstrument)
+            .instrumentReqID("ilr-1").symbol("BTCUSDT");
+        print("InstrumentListRequest", ilr.encodedLength());
+        ilr.wrapAndApplyHeader(buf, 0, h).instrumentListRequestType(InstrumentListRequestType.AllInstruments)
+            .instrumentReqID("ilr-2").symbol("");
+        print("InstrumentListRequestAll", ilr.encodedLength());
+
+        InstrumentListEncoder il = new InstrumentListEncoder();
+        il.wrapAndApplyHeader(buf, 0, h);
+        InstrumentListEncoder.RelatedSymEncoder rs = il.relatedSymCount(2);
+        rs.next().priceExponent((byte) -2).qtyExponent((byte) -8).minTradeVol(1_000L).maxTradeVol(900_000_000_000L)
+            .minQtyIncrement(1_000L).marketMinTradeVol(0).marketMaxTradeVol(12_000_000_000L).marketMinQtyIncrement(1_000L)
+            .startPriceRange(1).endPriceRange(100_000_000_000L).minPriceIncrement(1).symbol("BTCUSDT").currency("BTC");
+        rs.next().priceExponent((byte) 3).qtyExponent((byte) 0)
+            .minTradeVol(InstrumentListEncoder.RelatedSymEncoder.minTradeVolNullValue())
+            .maxTradeVol(InstrumentListEncoder.RelatedSymEncoder.maxTradeVolNullValue())
+            .minQtyIncrement(InstrumentListEncoder.RelatedSymEncoder.minQtyIncrementNullValue())
+            .marketMinTradeVol(InstrumentListEncoder.RelatedSymEncoder.marketMinTradeVolNullValue())
+            .marketMaxTradeVol(InstrumentListEncoder.RelatedSymEncoder.marketMaxTradeVolNullValue())
+            .marketMinQtyIncrement(InstrumentListEncoder.RelatedSymEncoder.marketMinQtyIncrementNullValue())
+            .startPriceRange(InstrumentListEncoder.RelatedSymEncoder.startPriceRangeNullValue())
+            .endPriceRange(InstrumentListEncoder.RelatedSymEncoder.endPriceRangeNullValue())
+            .minPriceIncrement(InstrumentListEncoder.RelatedSymEncoder.minPriceIncrementNullValue())
+            .symbol("ETHBTC").currency("ETH");
+        il.instrumentReqID("ilr-1");
+        print("InstrumentList", il.encodedLength());
+
+        MarketDataRequestEncoder mdr = new MarketDataRequestEncoder();
+        mdr.wrapAndApplyHeader(buf, 0, h).subscriptionRequestType(SubscriptionRequestType.Subscribe).marketDepth(10)
+            .aggregatedBook(BoolEnum.True);
+        MarketDataRequestEncoder.RelatedSymEncoder mrs = mdr.relatedSymCount(2);
+        mrs.next().symbol("BTCUSDT");
+        mrs.next().symbol("ETHBTC");
+        MarketDataRequestEncoder.MDEntryTypesEncoder met = mdr.mDEntryTypesCount(2);
+        met.next().mDEntryType(MdEntryType.Bid);
+        met.next().mDEntryType(MdEntryType.Offer);
+        mdr.mDReqID("mdr-1");
+        print("MarketDataRequest", mdr.encodedLength());
+        mdr.wrapAndApplyHeader(buf, 0, h).subscriptionRequestType(SubscriptionRequestType.Unsubscribe)
+            .marketDepth(MarketDataRequestEncoder.marketDepthNullValue()).aggregatedBook(BoolEnum.NULL_VAL);
+        mdr.relatedSymCount(0);
+        mdr.mDEntryTypesCount(1).next().mDEntryType(MdEntryType.Trade);
+        mdr.mDReqID("mdr-1");
+        print("MarketDataRequestNulls", mdr.encodedLength());
+
+        MarketDataRequestRejectEncoder mdj = new MarketDataRequestRejectEncoder();
+        mdj.wrapAndApplyHeader(buf, 0, h).mDReqRejReason(MdReqRejReason.DuplicateMdReqID).errorCode(-1110)
+            .mDReqID("mdr-1").text("Duplicate MDReqID.");
+        print("MarketDataRequestReject", mdj.encodedLength());
+        mdj.wrapAndApplyHeader(buf, 0, h).mDReqRejReason(MdReqRejReason.NULL_VAL)
+            .errorCode(MarketDataRequestRejectEncoder.errorCodeNullValue()).mDReqID("mdr-2").text("");
+        print("MarketDataRequestRejectNulls", mdj.encodedLength());
+
+        MarketDataSnapshotEncoder mds = new MarketDataSnapshotEncoder();
+        mds.wrapAndApplyHeader(buf, 0, h).lastBookUpdateID(123_456_789L).priceExponent((byte) -2).qtyExponent((byte) -8);
+        MarketDataSnapshotEncoder.MDEntriesBidsEncoder sb = mds.mDEntriesBidsCount(3);
+        sb.next().mDEntryPx(6_543_210L).mDEntrySize(150_000_000L);
+        sb.next().mDEntryPx(6_543_200L).mDEntrySize(1L);
+        sb.next().mDEntryPx(6_543_100L).mDEntrySize(99_999_999_999L);
+        MarketDataSnapshotEncoder.MDEntriesAsksEncoder sa = mds.mDEntriesAsksCount(2);
+        sa.next().mDEntryPx(6_543_300L).mDEntrySize(2L);
+        sa.next().mDEntryPx(6_543_400L).mDEntrySize(3L);
+        mds.symbol("BTCUSDT");
+        print("MarketDataSnapshot", mds.encodedLength());
+        mds.wrapAndApplyHeader(buf, 0, h).lastBookUpdateID(MarketDataSnapshotEncoder.lastBookUpdateIDNullValue())
+            .priceExponent((byte) -6).qtyExponent((byte) -4);
+        mds.mDEntriesBidsCount(0);
+        mds.mDEntriesAsksCount(0);
+        mds.symbol("ETHBTC");
+        print("MarketDataSnapshotEmpty", mds.encodedLength());
+
+        MarketDataIncrementalTradeEncoder mit = new MarketDataIncrementalTradeEncoder();
+        mit.wrapAndApplyHeader(buf, 0, h).transactTime(TS + 6).priceExponent((byte) -2).qtyExponent((byte) -8);
+        MarketDataIncrementalTradeEncoder.MDEntriesEncoder te = mit.mDEntriesCount(3);
+        te.next().tradeID(1_000_001L).mDEntryPx(6_543_210L).mDEntrySize(1_000L).aggressorSide(Side.Buy);
+        te.next().tradeID(1_000_002L).mDEntryPx(6_543_200L).mDEntrySize(2_000L).aggressorSide(Side.Sell);
+        te.next().tradeID(1_000_003L).mDEntryPx(6_543_100L).mDEntrySize(3_000L).aggressorSide(Side.NULL_VAL);
+        mit.symbol("BTCUSDT");
+        print("MarketDataIncrementalTrade", mit.encodedLength());
+
+        MarketDataIncrementalBookTickerEncoder mbt = new MarketDataIncrementalBookTickerEncoder();
+        mbt.wrapAndApplyHeader(buf, 0, h).lastBookUpdateID(123_456_790L).priceExponent((byte) -2).qtyExponent((byte) -8);
+        mbt.mDEntriesBidsCount(1).next().mDEntryPx(6_543_210L).mDEntrySize(150_000_000L);
+        mbt.mDEntriesAsksCount(1).next().mDEntryPx(6_543_300L)
+            .mDEntrySize(MarketDataIncrementalBookTickerEncoder.MDEntriesAsksEncoder.mDEntrySizeNullValue());
+        mbt.symbol("BTCUSDT");
+        print("MarketDataIncrementalBookTicker", mbt.encodedLength());
+        mbt.wrapAndApplyHeader(buf, 0, h).lastBookUpdateID(123_456_791L).priceExponent((byte) -2).qtyExponent((byte) -8);
+        mbt.mDEntriesBidsCount(1).next().mDEntryPx(6_543_100L)
+            .mDEntrySize(MarketDataIncrementalBookTickerEncoder.MDEntriesBidsEncoder.mDEntrySizeNullValue());
+        mbt.mDEntriesAsksCount(1).next().mDEntryPx(6_543_400L).mDEntrySize(7L);
+        mbt.symbol("BTCUSDT");
+        print("MarketDataIncrementalBookTickerSides", mbt.encodedLength());
+
+        MarketDataIncrementalDepthEncoder mid = new MarketDataIncrementalDepthEncoder();
+        mid.wrapAndApplyHeader(buf, 0, h).firstBookUpdateID(123_456_791L).lastBookUpdateID(123_456_795L)
+            .priceExponent((byte) -2).qtyExponent((byte) -8);
+        MarketDataIncrementalDepthEncoder.MDEntriesBidsEncoder db = mid.mDEntriesBidsCount(2);
+        db.next().mDEntryPx(6_543_210L).mDEntrySize(0L);
+        db.next().mDEntryPx(6_543_000L)
+            .mDEntrySize(MarketDataIncrementalDepthEncoder.MDEntriesBidsEncoder.mDEntrySizeNullValue());
+        mid.mDEntriesAsksCount(0);
+        mid.symbol("BTCUSDT");
+        print("MarketDataIncrementalDepth", mid.encodedLength());
+        mid.wrapAndApplyHeader(buf, 0, h).firstBookUpdateID(123_456_796L).lastBookUpdateID(123_456_796L)
+            .priceExponent((byte) -2).qtyExponent((byte) -8);
+        mid.mDEntriesBidsCount(0);
+        MarketDataIncrementalDepthEncoder.MDEntriesAsksEncoder da = mid.mDEntriesAsksCount(2);
+        da.next().mDEntryPx(6_543_300L).mDEntrySize(4L);
+        da.next().mDEntryPx(6_543_500L)
+            .mDEntrySize(MarketDataIncrementalDepthEncoder.MDEntriesAsksEncoder.mDEntrySizeNullValue());
+        mid.symbol("BTCUSDT");
+        print("MarketDataIncrementalDepthAsks", mid.encodedLength());
+    }
+
+    static String repeat(String s, int length) {
+        StringBuilder b = new StringBuilder();
+        while (b.length() < length) {
+            b.append(s);
+        }
+        return b.substring(0, length);
+    }
+
+    /** Sets the header's seqNum and sendingTime, prints the message, and clears the buffer. */
+    static void print(String name, int bodyLength) {
+        h.wrap(buf, 0).seqNum(4_000_000_000L + index).sendingTime(TS + 1_001L * index);
+        index++;
+        int length = MessageHeaderEncoder.ENCODED_LENGTH + bodyLength;
+        StringBuilder b = new StringBuilder(name).append(' ');
+        if (sofh) {
+            UnsafeBuffer frame = new UnsafeBuffer(new byte[6]);
+            frame.putInt(0, 6 + length, java.nio.ByteOrder.LITTLE_ENDIAN);
+            frame.putShort(4, (short) 0xEB50, java.nio.ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < 6; i++) {
+                b.append(String.format("%02x", frame.getByte(i)));
+            }
+        }
+        for (int i = 0; i < length; i++) {
+            b.append(String.format("%02x", buf.getByte(i)));
+        }
+        System.out.println(b);
+        buf.setMemory(0, buf.capacity(), (byte) 0);
+    }
+}

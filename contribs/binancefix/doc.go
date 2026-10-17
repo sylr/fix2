@@ -18,6 +18,17 @@
 //     resets on every Logon), and sendingTime are set once and signed
 //     with Ed25519 as Binance documents, never stamped again (see
 //     signedSendingTime for the textual form of the time, an assumption);
+//   - refuses a LogonAck whose required fields are null (HeartBtInt's
+//     4,294,967,295, SbeSchemaIdVersionDeprecated's 255: SBE §4.4.2
+//     forbids a producer to send them) or empty (UUID), whose HeartBtInt
+//     is out of 5 to 60 seconds, or whose SbeSchemaIdVersionDeprecated is
+//     neither true nor false: the session is not established, the Logon
+//     failed as if refused (LogonRefusedError, ErrInvalidLogonAck), and is
+//     retried as such; logged on, it ends the connection after our Logout
+//     on a TestRequest without TestReqID, a required string (ProtocolError,
+//     ErrMissingRequired), while a News without Headline, a notice, is
+//     told of, its countdown unknown. The codecs themselves decode
+//     such values as they are;
 //   - numbers every message it writes, session messages and requests
 //     alike, from 2, rolling over from 4,294,967,295 to 0, and stamps its
 //     sendingTime as it writes it;

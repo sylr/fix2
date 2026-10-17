@@ -358,7 +358,17 @@ otherwise the application's to check.
   groups with data and nested groups, NewOrderList's and ListStatus's
   differing Orders and their dimensions on the wire, and a version 0
   ExecutionReport without its version 1 field. Decimal mantissas and
-  exponents are left raw, as the schema sends them.
+  exponents are left raw, as the schema sends them. 54 messages Real
+  Logic's SBE 1.33.0 encodes from the same schema
+  (`testdata/reallogic/binance.hex`, `BinanceCheck.java.txt`), every
+  template, each of the 193 optional fields (data and groups' members
+  included) set in one and null in another, which a test enumerating
+  them from the schema checks, groups empty and of several
+  entries, nested ones, data up to its bounds, decode to every value
+  Real Logic's program set, header included, and encode back to the same
+  bytes; a `varString8` holds 254 bytes, as Real Logic enforces too.
+  `contribs/binancefix`'s codecs, generated alike, encode them back to the
+  same bytes, and its client takes them from a fake Binance.
 - Fields and data whose name or id stands for another id, name or
   encoding refused, in one message or across messages, and accepted
   tolerated; the FIXP schema refused strictly. Headers with a signed,

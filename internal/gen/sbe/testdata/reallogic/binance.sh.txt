@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Runs in eclipse-temurin:21-jdk, /w mounted with sbe-all-1.33.0.jar,
+# spot-fixsbe-1_1.xml and BinanceCheck.java: generates Real Logic's Java
+# codecs of Binance's schema, compiles them with BinanceCheck, and writes
+# binance.hex and binance-sofh.hex.
+set -euo pipefail
+cd /w
+JAR=/w/sbe-all-1.33.0.jar
+OPENS="--add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-exports java.base/jdk.internal.misc=ALL-UNNAMED"
+rm -rf gen classes && mkdir -p gen classes
+java -Dsbe.output.dir=gen -Dsbe.target.language=Java -Dsbe.validation.stop.on.error=true -Dsbe.validation.warnings.fatal=false \
+  -jar "$JAR" spot-fixsbe-1_1.xml
+javac -cp "$JAR" -d classes $(find gen -name '*.java') BinanceCheck.java
+java $OPENS -cp "$JAR:classes" BinanceCheck > binance.hex
+java $OPENS -cp "$JAR:classes" BinanceCheck sofh > binance-sofh.hex
+wc -l binance.hex binance-sofh.hex

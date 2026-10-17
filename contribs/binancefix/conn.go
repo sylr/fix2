@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strconv"
 	"sync"
@@ -780,6 +781,9 @@ func (k *conn) handle(msg []byte, received time.Time) error {
 		if _, err := m.DecodeBody(h, body); err != nil {
 			return &ProtocolError{Err: fmt.Errorf("LogonAck: %w", err)}
 		}
+		if err := checkLogonAck(&m); err != nil {
+			return &LogonRefusedError{Text: err.Error(), Err: err}
+		}
 		return k.onLogon(&m)
 	case fixsbe.HeartbeatTemplateID:
 		var m fixsbe.Heartbeat
@@ -796,6 +800,10 @@ func (k *conn) handle(msg []byte, received time.Time) error {
 		var m fixsbe.TestRequest
 		if _, err := m.DecodeBody(h, body); err != nil {
 			return &ProtocolError{Err: fmt.Errorf("TestRequest: %w", err)}
+		}
+		if len(m.TestReqID) == 0 {
+			// Its answer could not be told from a Heartbeat.
+			return &ProtocolError{Err: fmt.Errorf("TestRequest: %w: TestReqID", ErrMissingRequired)}
 		}
 		return k.queueAdmin(&fixsbe.Heartbeat{TestReqID: bytes.Clone(m.TestReqID)}, adminAnswer, "")
 	case fixsbe.LogoutTemplateID:
@@ -829,6 +837,11 @@ func (k *conn) handle(msg []byte, received time.Time) error {
 		x := new(fixsbe.News)
 		if _, err = x.DecodeBody(h, body); err == nil {
 			headline := string(x.Headline)
+			if headline == "" {
+				// Required, but a notice: told of, empty, its countdown
+				// unknown, rather than ending the session.
+				k.c.log.LogAttrs(context.Background(), slog.LevelWarn, "Binance news without its required Headline", slog.Uint64("epoch", k.epoch))
+			}
 			k.c.log.LogAttrs(context.Background(), slog.LevelWarn, "Binance news", slog.Uint64("epoch", k.epoch), slog.String("headline", headline))
 			k.emit(event{msg: &NewsEvent{Inbound: in, Headline: headline, Remaining: remaining(headline)}})
 			return nil
@@ -916,6 +929,27 @@ func (k *conn) correlate(m any, refSeq Optional[uint32], a Answer) *Receipt {
 			delete(k.inflight, seq)
 		}
 		return r
+	}
+	return nil
+}
+
+// checkLogonAck returns why the client refuses LogonAck m, nil if it does
+// not: its required HeartBtInt null (uint32's null, 4,294,967,295) or out
+// of Binance's bounds, 5 to 60 seconds; its required
+// SbeSchemaIdVersionDeprecated null (255) or neither of its values; its
+// required UUID empty. Its EncryptMethod is optional.
+func checkLogonAck(m *fixsbe.LogonAck) error {
+	switch {
+	case m.HeartBtInt == math.MaxUint32:
+		return fmt.Errorf("%w: %w: HeartBtInt", ErrInvalidLogonAck, ErrMissingRequired)
+	case time.Duration(m.HeartBtInt)*time.Second < MinHeartBtInt || time.Duration(m.HeartBtInt)*time.Second > MaxHeartBtInt:
+		return fmt.Errorf("%w: HeartBtInt %d, not from %v to %v", ErrInvalidLogonAck, m.HeartBtInt, MinHeartBtInt, MaxHeartBtInt)
+	case m.SbeSchemaIdVersionDeprecated == 255:
+		return fmt.Errorf("%w: %w: SbeSchemaIdVersionDeprecated", ErrInvalidLogonAck, ErrMissingRequired)
+	case m.SbeSchemaIdVersionDeprecated != fixsbe.BoolEnumFalse && m.SbeSchemaIdVersionDeprecated != fixsbe.BoolEnumTrue:
+		return fmt.Errorf("%w: SbeSchemaIdVersionDeprecated %d", ErrInvalidLogonAck, m.SbeSchemaIdVersionDeprecated)
+	case len(m.UUID) == 0:
+		return fmt.Errorf("%w: %w: UUID", ErrInvalidLogonAck, ErrMissingRequired)
 	}
 	return nil
 }
