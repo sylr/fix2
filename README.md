@@ -110,6 +110,13 @@ maintenance:
     dist/binancemd book --levels 1000 --show 10 BTCUSDT
     dist/binancemd trades --api-key-file api-key --key-file ed25519-private.pem BTCUSDT
     dist/binancemd instruments --testnet BTCUSDT
+    dist/binancemd --sbe depth --testnet BTCUSDT  # FIX SBE (binancefix), port 9002
+
+With `--sbe` it uses Binance's FIX SBE API instead, through binancefix's
+market data sessions: the same commands and events, depth updates every
+20ms with their actions inferred from the book kept since the snapshot,
+and a reconnection, then new subscriptions, when a book loses updates (a
+stream is never subscribed twice on an SBE connection).
 
 ### binancefix
 

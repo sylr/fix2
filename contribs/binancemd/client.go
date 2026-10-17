@@ -82,6 +82,9 @@ func stream(ctx context.Context, o *options, cmd command, symbols []string, out 
 	if err != nil {
 		return err
 	}
+	if o.sbe {
+		return streamSBE(ctx, o, cmd, symbols, key, out, log)
+	}
 	return streamWith(ctx, o, cmd, symbols, key, out, log, &tcp.Dialer{
 		Addresses: []string{o.endpoint},
 		TLS:       &tls.Config{MinVersion: tls.VersionTLS12},

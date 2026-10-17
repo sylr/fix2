@@ -119,12 +119,14 @@ type Client struct {
 	log *slog.Logger
 	h   Handler
 
-	events  chan event
-	room    *eventBudget
-	stop    chan struct{}
-	stopped sync.Once
-	recon   chan uint64 // the epoch a Reconnect asked to leave
-	running atomic.Bool
+	events     chan event
+	room       *eventBudget
+	ending     chan struct{} // closed once Run connects no more
+	endingOnce sync.Once
+	stop       chan struct{}
+	stopped    sync.Once
+	recon      chan uint64 // the epoch a Reconnect asked to leave
+	running    atomic.Bool
 
 	mu    sync.Mutex
 	cur   *conn // the logged-on connection, nil if none
@@ -154,6 +156,7 @@ func New(cfg Config) (*Client, error) {
 		log:    cfg.Logger,
 		h:      cfg.Handler,
 		events: make(chan event, cfg.MaxEvents),
+		ending: make(chan struct{}),
 		room:   newEventBudget(cfg.MaxEventBytes),
 		stop:   make(chan struct{}),
 		recon:  make(chan uint64, 16),
@@ -168,7 +171,11 @@ func New(cfg Config) (*Client, error) {
 // done.
 func (c *Client) Stop() {
 	c.stopped.Do(func() { close(c.stop) })
+	c.closeEnding()
 }
+
+// closeEnding closes Ending, once.
+func (c *Client) closeEnding() { c.endingOnce.Do(func() { close(c.ending) }) }
 
 // Reconnect asks for connection epoch to be logged out and another opened
 // at once, as Binance asks in its maintenance News (NewsEvent.Epoch). It
@@ -180,6 +187,18 @@ func (c *Client) Reconnect(epoch uint64) {
 	default:
 	}
 }
+
+// Ending is closed once Run will make no other connection: when Stop is
+// called, when Run's context is done, when a connection ends with
+// reconnection disabled (as its end is known, before anything waits for
+// the Handler: the reader blocked on a full queue, its OnLogout), and
+// when Run's loop gives up (refused Logons, which queue nothing). The
+// connection may still be logging
+// out: its events, OnLogout last, still reach the Handler, and Run waits
+// for it to handle them. A Handler waiting on something of its own (a
+// blocked output) stops waiting once Ending is closed, or Run waits for
+// it. Ending stays open while Run reconnects.
+func (c *Client) Ending() <-chan struct{} { return c.ending }
 
 // Epoch returns the current connection's epoch, 0 before the first.
 func (c *Client) Epoch() uint64 {
@@ -297,6 +316,9 @@ func encode(m interface {
 // before returning, and returns once the Handler handled every event: nil
 // after Stop or once ctx is done, the error that ended it otherwise. Run is
 // called once.
+//
+// Run waits for the Handler: one waiting on something of its own, such as
+// a blocked output, stops waiting once Ending is closed.
 func (c *Client) Run(ctx context.Context) error {
 	if !c.running.CompareAndSwap(false, true) {
 		return ErrRunning
@@ -306,7 +328,10 @@ func (c *Client) Run(ctx context.Context) error {
 		defer close(done)
 		c.dispatch()
 	}()
+	stopEnding := context.AfterFunc(ctx, c.closeEnding)
 	err := c.loop(ctx)
+	stopEnding()
+	c.closeEnding()
 	close(c.events)
 	<-done
 	return err
@@ -315,7 +340,7 @@ func (c *Client) Run(ctx context.Context) error {
 // loop runs connections, one after the other.
 func (c *Client) loop(ctx context.Context) error {
 	p := newPacer(c.cfg.Reconnect)
-	refusals := 0
+	refusals, loggedOn := 0, false
 	for {
 		if wait := p.wait(time.Now()); wait > 0 {
 			c.log.LogAttrs(ctx, slog.LevelInfo, "waiting before connecting", slog.Duration("wait", wait))
@@ -340,7 +365,7 @@ func (c *Client) loop(ctx context.Context) error {
 		case res.stopped:
 			return nil
 		case res.loggedOn:
-			refusals = 0
+			refusals, loggedOn = 0, true
 			p.succeeded()
 			if !res.reconnect {
 				p.failed(now)
@@ -348,9 +373,14 @@ func (c *Client) loop(ctx context.Context) error {
 		case res.refused:
 			// A refusal may pass, the SenderCompID's cooldown or a
 			// connection limit, or not, bad credentials: retried, at
-			// most MaxRefusals in a row.
+			// most MaxRefusals in a row (MaxInitialRefusals before a
+			// first success).
 			refusals++
-			if refusals >= c.cfg.Reconnect.MaxRefusals {
+			limit := c.cfg.Reconnect.MaxRefusals
+			if !loggedOn && c.cfg.Reconnect.MaxInitialRefusals > 0 {
+				limit = c.cfg.Reconnect.MaxInitialRefusals
+			}
+			if refusals >= limit {
 				return res.err
 			}
 			p.failed(now)

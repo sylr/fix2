@@ -209,6 +209,16 @@ type Config struct {
 
 	// Logger logs the session's events, nothing if nil.
 	Logger *slog.Logger
+	// Trace, if set, is called with every message of the session, decoded
+	// (TraceMessage): ours once written, stamped, a write failing part way
+	// tracing what the connection took (the message it cut marked
+	// Partial), the Logon's credentials redacted; Binance's as they are
+	// read, before they are handled, those the Handler never sees
+	// included. It is called from the connection's goroutines,
+	// concurrently, an answer possibly traced before its request: it must
+	// be safe for concurrent use, and quick, its messages valid during the
+	// call only.
+	Trace func(TraceMessage)
 	// Handler receives the session's events and Binance's messages,
 	// BaseHandler if nil.
 	Handler Handler
@@ -232,6 +242,11 @@ type Reconnect struct {
 	// or not (bad credentials): each is retried after the backoff, and
 	// after twice HeartBtInt.
 	MaxRefusals int
+	// MaxInitialRefusals, if set, is how many Logons in a row Binance may
+	// refuse before one ever succeeded, MaxRefusals otherwise: 1 gives up
+	// at the first refusal, bad credentials being likelier than a
+	// cooldown before any connection.
+	MaxInitialRefusals int
 }
 
 var senderCompID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,8}$`)

@@ -9,7 +9,7 @@
 //
 //	trades SYMBOL...        trades, as they happen
 //	ticker SYMBOL...        best bid and offer, as they change
-//	depth SYMBOL...         order book snapshot, then its changes every 100ms
+//	depth SYMBOL...         order book snapshot, then its changes every 100ms (20ms with --sbe)
 //	book SYMBOL...          order book kept up to date, its best levels shown
 //	instruments [SYMBOL...] instruments' trading rules, all if none is given
 //	limits                  message and subscription limits of the connection
@@ -18,6 +18,35 @@
 // --api-key-file (a file holding it) or BINANCE_API_KEY is the key,
 // --key-file (or BINANCE_PRIVATE_KEY) the PEM file of its private key.
 // Market data needs the FIX_API or FIX_API_READ_ONLY permission.
+//
+// # FIX SBE
+//
+// --sbe uses Binance's FIX SBE API instead, through binancefix's market
+// data sessions: SBE messages over TLS on port 9002 of fix-md.binance.com
+// (fix-md.testnet.binance.vision with --testnet), the same key, the same
+// commands and the same events, written by the same output. Where SBE
+// differs from FIX:
+//
+//   - depth updates come every 20ms, not 100ms, and carry no update action:
+//     the depth command keeps a book from the snapshot and infers each, as
+//     Binance's rule says (a missing size deletes the level; a size changes
+//     it if the book has it, adds it if not). It shows the updates that
+//     follow the snapshot, not those it covers;
+//   - a book (depth or book command) whose updates have a gap, or whose
+//     snapshot has no LastBookUpdateID, cannot be subscribed again on its
+//     connection, binancefix's rule (an old subscription's data could not
+//     be told from a new one's): binancemd reconnects, and subscribes to
+//     every symbol again once logged on, each getting a new snapshot;
+//   - --validate, the FIX dictionary's check, does not apply: binancefix
+//     checks every SBE message before binancemd sees it, a malformed one
+//     ending the connection, which binancemd then opens again;
+//   - --trace logs every SBE message, decoded field by field, the Logon's
+//     API key and signature redacted.
+//
+// Still to check on the testnet (MD3): which streams get a snapshot on
+// activation (book streams do, as documented; trades are not expected
+// to), the form of an unsubscribe Binance takes, the 1000 streams per
+// connection, and the actions inferred side by side with the FIX path's.
 package main
 
 import (
@@ -34,6 +63,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/sylr/fix2/contribs/binancefix"
 )
 
 // Version is the version of binancemd, set when built by the Makefile.
@@ -57,6 +87,7 @@ type options struct {
 	validate   bool
 	verbose    bool
 	trace      bool
+	sbe        bool // FIX SBE, through binancefix
 	// Command flags.
 	levels int // depth and book: levels of the snapshot
 	show   int // book: levels shown
@@ -112,7 +143,13 @@ func newCommand(stdout, stderr io.Writer) *cobra.Command {
 The FIX API authenticates with an Ed25519 API key: --api-key,
 --api-key-file (a file holding it) or BINANCE_API_KEY is the key,
 --key-file (or BINANCE_PRIVATE_KEY) the PEM file of its private key.
-Market data needs the FIX_API or FIX_API_READ_ONLY permission.`,
+Market data needs the FIX_API or FIX_API_READ_ONLY permission.
+
+--sbe uses Binance's FIX SBE API instead (port 9002), with the same key,
+commands and output: depth updates every 20ms, their actions inferred from
+the book kept since the snapshot; a book that loses updates makes the
+command reconnect and subscribe again, a stream never being subscribed
+twice on an SBE connection.`,
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -130,13 +167,14 @@ Market data needs the FIX_API or FIX_API_READ_ONLY permission.`,
 	// Given at all, even empty: one or the other.
 	root.MarkFlagsMutuallyExclusive("api-key", "api-key-file")
 	pf.StringVar(&o.sender, "sender", "", "SenderCompID, 1 to 8 letters, digits, - or _ (default random)")
-	pf.StringVar(&o.endpoint, "endpoint", "", "FIX market data endpoint, host:port (default "+prodEndpoint+")")
-	pf.BoolVar(&o.testnet, "testnet", false, "use the Spot testnet, "+testnetEndpoint)
+	pf.StringVar(&o.endpoint, "endpoint", "", "market data endpoint, host:port (default "+prodEndpoint+", with --sbe "+binancefix.MarketDataEndpoint+")")
+	pf.BoolVar(&o.testnet, "testnet", false, "use the Spot testnet, "+testnetEndpoint+" ("+binancefix.TestnetMarketDataEndpoint+" with --sbe)")
 	pf.DurationVar(&o.heartbeat, "heartbeat", o.heartbeat, "heartbeat interval, 5s to 60s")
 	pf.BoolVar(&o.json, "json", false, "write JSON lines")
-	pf.BoolVar(&o.validate, "validate", false, "validate received messages against Binance's dictionary: invalid ones are rejected, not shown")
+	pf.BoolVar(&o.validate, "validate", false, "validate received messages against Binance's FIX dictionary: invalid ones are rejected, not shown (not with --sbe)")
 	pf.BoolVarP(&o.verbose, "verbose", "v", false, "log the session's events in detail")
-	pf.BoolVar(&o.trace, "trace", false, "log every FIX message, field by field, credentials redacted")
+	pf.BoolVar(&o.trace, "trace", false, "log every FIX (or SBE) message, field by field, credentials redacted")
+	pf.BoolVar(&o.sbe, "sbe", false, "use Binance's FIX SBE API (binancefix), port 9002, instead of FIX")
 
 	add := func(use, short string, k kind, args cobra.PositionalArgs) *cobra.Command {
 		c := &cobra.Command{
@@ -153,7 +191,7 @@ Market data needs the FIX_API or FIX_API_READ_ONLY permission.`,
 	symbols := cobra.MinimumNArgs(1)
 	add("trades SYMBOL...", "Trades, as they happen", kindTrades, symbols)
 	add("ticker SYMBOL...", "Best bid and offer, as they change", kindTicker, symbols)
-	depth := add("depth SYMBOL...", "Order book snapshot, then its changes every 100ms", kindDepth, symbols)
+	depth := add("depth SYMBOL...", "Order book snapshot, then its changes every 100ms (20ms with --sbe)", kindDepth, symbols)
 	depth.Flags().IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
 	book := add("book SYMBOL...", "Order book kept up to date, its best levels shown on every change", kindBook, symbols)
 	book.Flags().IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
@@ -205,12 +243,21 @@ func (o *options) check(cmd command, symbols []string) error {
 		o.keyFile = os.Getenv("BINANCE_PRIVATE_KEY")
 	}
 	if o.endpoint == "" {
-		o.endpoint = prodEndpoint
-		if o.testnet {
+		switch {
+		case o.sbe && o.testnet:
+			o.endpoint = binancefix.TestnetMarketDataEndpoint
+		case o.sbe:
+			o.endpoint = binancefix.MarketDataEndpoint
+		case o.testnet:
 			o.endpoint = testnetEndpoint
+		default:
+			o.endpoint = prodEndpoint
 		}
 	}
 	var errs []error
+	if o.sbe && o.validate {
+		errs = append(errs, errors.New("--validate checks FIX messages against Binance's FIX dictionary: not with --sbe, whose messages binancefix checks"))
+	}
 	if o.apiKey == "" && o.apiKeyFile == "" {
 		errs = append(errs, errors.New("no API key: set --api-key, --api-key-file or BINANCE_API_KEY"))
 	}

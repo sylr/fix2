@@ -188,6 +188,14 @@ func (k *conn) end(err error, logout bool) {
 		}
 		k.endErr, k.endLogout = err, logout
 		k.mu.Unlock()
+		if k.c.cfg.Reconnect.Disabled {
+			// The last connection: Run connects no more. Ending is
+			// closed before anything waits for the Handler, the reader
+			// blocked on a full queue, finish queueing OnLogout, so that
+			// a Handler waiting for it returns. Stop and Run's context
+			// close it as they come; refused Logons queue nothing.
+			k.c.closeEnding()
+		}
 		close(k.ended)
 	})
 }
@@ -252,6 +260,7 @@ func (k *conn) run(ctx context.Context) result {
 	}
 	k.tc.SetWriteDeadline(time.Now().Add(cfg.LogonTimeout))
 	n, err := k.tc.Write(frame)
+	k.traceWritten(frame, n)
 	res.logonWritten = n > 0
 	if err != nil {
 		k.tc.Close()
@@ -450,9 +459,12 @@ func (k *conn) finish(log *slog.Logger, err error) {
 	log.LogAttrs(context.Background(), slog.LevelInfo, "logged out", slog.Any("reason", err), slog.Bool("clean", ev.Clean),
 		slog.Int("never_written", len(never)), slog.Int("possibly_transmitted", len(possibly)), slog.Int("subscriptions", len(subs)))
 	// Its error may retain Binance's Logout text: charged, as a message
-	// is. Waiting for room cannot deadlock: the dispatcher frees it as the
-	// Handler returns, and the Handler waits for nothing of Run's. Run
-	// does not reconnect meanwhile, and Stop's effect waits too.
+	// is. The dispatcher frees room as the Handler returns. A Handler
+	// waiting on something of its own until Ending (a blocked output)
+	// returns once it is closed: already, when this end is the last (see
+	// end; Stop and Run's context close it as they come). Otherwise the
+	// wait is backpressure: Run does not reconnect meanwhile, and Stop or
+	// Run's context ends it.
 	size := 0
 	if err != nil {
 		size = len(err.Error())
@@ -650,6 +662,7 @@ func (k *conn) writeLoop() {
 
 			k.tc.SetWriteDeadline(now.Add(k.c.cfg.WriteTimeout))
 			n, err := k.tc.Write(buf)
+			k.traceWritten(buf, n)
 			k.lastSent.Store(int64(k.now()))
 			if k.rate != nil {
 				k.mu.Lock()
@@ -792,6 +805,7 @@ func (k *conn) readLoop() {
 			return
 		}
 		received := time.Now()
+		k.trace(false, false, msg)
 		k.lastRecv.Store(int64(k.now()))
 		if err := k.handle(msg, received); err != nil {
 			k.end(err, k.isLoggedOn())

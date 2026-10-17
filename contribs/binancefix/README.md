@@ -511,3 +511,9 @@ environment), the refusal of non-testnet endpoints before any dial,
 `--signature-time auto`'s attempts and cooldowns, the JSON output, the
 cleanup on interrupt and after a lost connection, and the pacing of
 requests. Only the opt-in tests above reach the testnet.
+
+The fake is exported, for the tests of programs built on binancefix,
+by [binancefixtest](binancefixtest) (internal packages cannot be imported
+from another module): binancemd's `--sbe` tests run against it, driving
+its market data endpoint with `Publish`, `Broadcast`, `News` and
+`Disconnect`. It is for tests only.

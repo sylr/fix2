@@ -98,6 +98,9 @@ type output interface {
 	// flush hands what was rendered, but tables, to the writing goroutine,
 	// waiting while its queue is full. It fails once writing did.
 	flush() error
+	// flushContext is flush, waiting until ctx is done at most: it then
+	// fails with errOutputBlocked, keeping what was rendered for end.
+	flushContext(ctx context.Context) error
 	// end renders everything and waits, until ctx is done, for it to be
 	// written: the command ends.
 	end(ctx context.Context) error
@@ -156,8 +159,8 @@ func (p *pipe) run() {
 }
 
 // send hands what was rendered to the writing goroutine, waiting until ctx
-// is done while its queue is full. Once writing failed, it drops it and
-// fails.
+// is done while its queue is full, and keeping it then. Once writing
+// failed, it drops it and fails.
 func (p *pipe) send(ctx context.Context) error {
 	p.start.Do(func() { go p.run() })
 	select {
@@ -177,11 +180,14 @@ func (p *pipe) send(ctx context.Context) error {
 	case <-p.failed:
 		return p.err
 	case <-ctx.Done():
+		p.buf.Write(b) // the buffer was empty: as it was
 		return errOutputBlocked
 	}
 }
 
 func (p *pipe) flush() error { return p.send(context.Background()) }
+
+func (p *pipe) flushContext(ctx context.Context) error { return p.send(ctx) }
 
 func (p *pipe) failure(ctx context.Context) error {
 	select {

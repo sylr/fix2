@@ -129,6 +129,9 @@ type Options struct {
 	SignatureTimes []binancefix.SignatureTime
 	// LogonAckSeq is the LogonAck's sequence number, 1 if 0.
 	LogonAckSeq uint32
+	// RefuseLogon, if set, refuses the Logons, the exchange's n-th from 1,
+	// it reports true for: a Reject of error -1022, as a bad signature.
+	RefuseLogon func(n int) bool
 	// Kind is the endpoint's: order entry, or market data, which refuses
 	// orders with a Reject, as order entry refuses market data requests.
 	Kind binancefix.Kind
@@ -159,6 +162,10 @@ type MarketData struct {
 	// RejectUnsubscribe answers an unsubscribe with a
 	// MarketDataRequestReject of its MDReqID, unsubscribing all the same.
 	RejectUnsubscribe bool
+	// Snapshot, if set, makes the snapshot a book stream gets on
+	// activation, of MarketDepth depth, in place of the exchange's
+	// synthetic book: none if it returns nil.
+	Snapshot func(st binancefix.Stream, depth int) *fixsbe.MarketDataSnapshot
 }
 
 // Request is a request the exchange received.
@@ -217,11 +224,11 @@ type Exchange struct {
 	// withheld are the TRADE reports DelaySellTrade withholds, by
 	// OrderID.
 	withheld map[int64]*fixsbe.ExecutionReport
-	// The market data endpoint's: its logged-on connections, its trades'
-	// and book updates' numbers.
-	mdConns  []*conn
-	tradeID  int64
-	updateID int64
+	// The logged-on connections; the market data endpoint's trades'
+	// numbers, and its books' last updates, by symbol.
+	conns     []*conn
+	tradeID   int64
+	updateIDs map[string]int64
 }
 
 // Net returns the base asset the market orders bought minus what they
@@ -260,7 +267,7 @@ func New(o Options) *Exchange {
 	if md.BookLevels == 0 {
 		md.BookLevels = binancefix.MaxMarketDepth
 	}
-	return &Exchange{o: o, nextID: 1000, updateID: 1_000_000}
+	return &Exchange{o: o, nextID: 1000, updateIDs: map[string]int64{}}
 }
 
 // Dial opens a connection to the exchange.
@@ -373,13 +380,14 @@ func (x *Exchange) serve(c transport.Conn) {
 	}
 	x.mu.Lock()
 	x.logons = append(x.logons, rec)
+	n := len(x.logons)
 	x.mu.Unlock()
 	switch {
 	case x.o.APIKey != "" && string(l.Username) != x.o.APIKey:
 		s.send(&fixsbe.Reject{RefSeqNum: fixsbe.Some[uint32](1), ErrorCode: fixsbe.Some[int32](-2015),
 			Text: []byte("Invalid API-key, IP, or permissions for action.")})
 		return
-	case !ok:
+	case !ok, x.o.RefuseLogon != nil && x.o.RefuseLogon(n):
 		s.send(&fixsbe.Reject{RefSeqNum: fixsbe.Some[uint32](1), ErrorCode: fixsbe.Some[int32](-1022),
 			SessionRejectReason: fixsbe.Some(fixsbe.SessionRejectReasonSignatureProblem),
 			Text:                []byte("Signature for this request is not valid.")})
@@ -389,14 +397,12 @@ func (x *Exchange) serve(c transport.Conn) {
 	x.mu.Lock()
 	s.send(&fixsbe.LogonAck{EncryptMethod: fixsbe.Some[uint8](0), HeartBtInt: l.HeartBtInt,
 		SbeSchemaIdVersionDeprecated: fixsbe.BoolEnumFalse, UUID: []byte("fake-" + s.sender)})
-	if x.o.Kind == binancefix.MarketData {
-		x.mdConns = append(x.mdConns, s)
-		defer func() {
-			x.mu.Lock()
-			x.mdConns = slices.DeleteFunc(x.mdConns, func(o *conn) bool { return o == s })
-			x.mu.Unlock()
-		}()
-	}
+	x.conns = append(x.conns, s)
+	defer func() {
+		x.mu.Lock()
+		x.conns = slices.DeleteFunc(x.conns, func(o *conn) bool { return o == s })
+		x.mu.Unlock()
+	}()
 	x.mu.Unlock()
 	for {
 		b, err := fr.Next()

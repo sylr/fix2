@@ -149,7 +149,13 @@
 // go on regardless. News (Binance's maintenance countdown) reaches OnNews:
 // Reconnect(e.Epoch) moves the session to another server with a clean
 // Logout. LogonEvent.SchemaDeprecated tells that Binance deprecated the
-// schema the codecs were generated from.
+// schema the codecs were generated from. Run returns once the Handler
+// handled every event: a Handler waiting on something of its own (a
+// blocked output) stops waiting once Client.Ending is closed, Run
+// connecting no more. Config.Trace sees every message, both ways, decoded
+// (TraceMessage), ours once written (Partial if cut by a failed write),
+// those the Handler never sees included, the Logon's API key and
+// signature Redacted, its body never shown.
 //
 // # Market data
 //

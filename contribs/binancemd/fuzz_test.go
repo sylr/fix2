@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sylr/fix2/contribs/binancefix"
+	"github.com/sylr/fix2/contribs/binancefix/binancefixtest"
 	"github.com/sylr/fix2/fix"
 	"github.com/sylr/fix2/fix/session"
 )
@@ -220,6 +223,142 @@ func FuzzBook(f *testing.F) {
 			if cmpDecimal(b.asks[i-1].Price, b.asks[i].Price) >= 0 {
 				t.Fatalf("asks not sorted: %v", b.asks)
 			}
+		}
+	})
+}
+
+// sbeFeed decodes a message of its template and hands it to an
+// sbeClient, past the subscription binancefix matched it to.
+type sbeFeed struct {
+	tid  uint16
+	feed func(c *sbeClient, h binancefix.MessageHeader, body []byte)
+}
+
+// feedOf returns the sbeFeed of messages M of template tid, handed to f.
+func feedOf[M any, P interface {
+	*M
+	DecodeBody(binancefix.MessageHeader, []byte) (int, error)
+}](tid uint16, f func(c *sbeClient, m P)) sbeFeed {
+	return sbeFeed{tid: tid, feed: func(c *sbeClient, h binancefix.MessageHeader, body []byte) {
+		m := P(new(M))
+		if _, err := m.DecodeBody(h, body); err == nil {
+			f(c, m)
+		}
+	}}
+}
+
+// fuzzReceived is the time the fuzzed messages are received at.
+var fuzzReceived = time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
+
+// sbeFeeds are the messages FuzzSBEClient feeds, by selector.
+var sbeFeeds = []sbeFeed{
+	feedOf(binancefix.MarketDataIncrementalTradeTemplateID, (*sbeClient).onTrade),
+	feedOf(binancefix.MarketDataSnapshotTemplateID, func(c *sbeClient, m *binancefix.MarketDataSnapshot) { c.onSnapshot(fuzzReceived, m) }),
+	feedOf(binancefix.MarketDataIncrementalBookTickerTemplateID, func(c *sbeClient, m *binancefix.MarketDataIncrementalBookTicker) {
+		c.onBookTicker(fuzzReceived, m)
+	}),
+	feedOf(binancefix.MarketDataIncrementalDepthTemplateID, func(c *sbeClient, m *binancefix.MarketDataIncrementalDepth) { c.onDepth(fuzzReceived, m) }),
+	feedOf(binancefix.MarketDataRequestRejectTemplateID, func(c *sbeClient, m *binancefix.MarketDataRequestReject) {
+		c.OnMarketDataRequestReject(binancefix.Inbound{}, m)
+	}),
+	feedOf(binancefix.InstrumentListTemplateID, func(c *sbeClient, m *binancefix.InstrumentList) { c.OnInstrumentList(binancefix.Inbound{}, m) }),
+	feedOf(binancefix.LimitResponseTemplateID, func(c *sbeClient, m *binancefix.LimitResponse) { c.OnLimitResponse(binancefix.Inbound{}, m) }),
+	feedOf(binancefix.RejectTemplateID, func(c *sbeClient, m *binancefix.Reject) { c.OnReject(binancefix.Inbound{}, m) }),
+	feedOf(binancefix.NewsTemplateID, func(c *sbeClient, m *binancefix.News) {
+		c.OnNews(binancefix.NewsEvent{Inbound: binancefix.Inbound{Epoch: 1}, Headline: string(m.Headline)})
+	}),
+}
+
+// sbeInput returns the fuzz input of msgs: each its selector, its body's
+// length (2 bytes, little-endian) and its body.
+func sbeInput(msgs ...binancefixtest.Message) []byte {
+	var in []byte
+	for _, m := range msgs {
+		b, err := m.AppendWithHeader(nil, binancefix.MessageHeader{})
+		if err != nil {
+			panic(err)
+		}
+		h, body, _ := splitHeader(b)
+		sel := slices.IndexFunc(sbeFeeds, func(f sbeFeed) bool { return f.tid == h.TemplateId })
+		in = append(in, byte(sel), byte(len(body)), byte(len(body)>>8))
+		in = append(in, body...)
+	}
+	return in
+}
+
+// splitHeader splits message b into its header and body.
+func splitHeader(b []byte) (binancefix.MessageHeader, []byte, error) {
+	var h binancefix.MessageHeader
+	if len(b) < 20 {
+		return h, nil, io.ErrUnexpectedEOF
+	}
+	le := func(i int) uint16 { return uint16(b[i]) | uint16(b[i+1])<<8 }
+	h.BlockLength, h.TemplateId, h.SchemaId, h.Version = le(0), le(2), le(4), le(6)
+	return h, b[20:], nil
+}
+
+// blockLengths are the root blocks of the templates fed.
+var blockLengths = map[uint16]uint16{
+	binancefix.MarketDataIncrementalTradeTemplateID:      binancefix.MarketDataIncrementalTradeBlockLength,
+	binancefix.MarketDataSnapshotTemplateID:              binancefix.MarketDataSnapshotBlockLength,
+	binancefix.MarketDataIncrementalBookTickerTemplateID: binancefix.MarketDataIncrementalBookTickerBlockLength,
+	binancefix.MarketDataIncrementalDepthTemplateID:      binancefix.MarketDataIncrementalDepthBlockLength,
+	binancefix.MarketDataRequestRejectTemplateID:         binancefix.MarketDataRequestRejectBlockLength,
+	binancefix.InstrumentListTemplateID:                  binancefix.InstrumentListBlockLength,
+	binancefix.LimitResponseTemplateID:                   binancefix.LimitResponseBlockLength,
+	binancefix.RejectTemplateID:                          binancefix.RejectBlockLength,
+	binancefix.NewsTemplateID:                            binancefix.NewsBlockLength,
+}
+
+// FuzzSBEClient feeds every command's SBE handlers messages as hostile as
+// the exchange could send them, past binancefix's checks: nulls, any
+// exponent, gaps, updates before snapshots. The client must not panic.
+func FuzzSBEClient(f *testing.F) {
+	trade := &binancefix.MarketDataIncrementalTrade{TransactTime: 1_760_000_000_000_000, PriceExponent: -2, QtyExponent: -8,
+		MDEntries: []binancefix.MDEntries{{TradeID: 7, MDEntryPx: 6543210, MDEntrySize: 1000, AggressorSide: binancefix.Some(binancefix.SideBuy)}},
+		Symbol:    []byte("BTCUSDT")}
+	ticker := &binancefix.MarketDataIncrementalBookTicker{LastBookUpdateID: 101, PriceExponent: -2, QtyExponent: -1,
+		MDEntriesBids: []binancefix.MarketDataIncrementalBookTickerMDEntriesBids{{MDEntryPx: 9910, MDEntrySize: binancefix.Some[int64](2)}},
+		MDEntriesAsks: []binancefix.MarketDataIncrementalBookTickerMDEntriesAsks{{MDEntryPx: 10000}},
+		Symbol:        []byte("BTCUSDT")}
+	list := &binancefix.InstrumentList{InstrumentReqID: []byte("Q"), RelatedSym: []binancefix.InstrumentListRelatedSym{
+		{PriceExponent: -2, QtyExponent: -8, MinTradeVol: binancefix.Some[int64](1000), Symbol: []byte("BTCUSDT"), Currency: []byte("BTC")}}}
+	limits := &binancefix.LimitResponse{ReqID: []byte("Q"), LimitIndicators: []binancefix.LimitIndicators{
+		{LimitType: binancefix.LimitTypeMessageLimit, LimitCount: 1, LimitMax: 2000, LimitResetInterval: binancefix.Some[uint32](60),
+			LimitResetIntervalResolution: binancefix.Some(binancefix.LimitResetIntervalResolutionSecond)},
+		{LimitType: '9', LimitCount: 1, LimitMax: 2}}}
+	all := sbeInput(sbeSnapshot, sbeUpdate, depthUpdate(105, 106, []int64{1, -1}, nil), trade, ticker, list, limits,
+		&binancefix.MarketDataRequestReject{MDReqID: []byte("S"), ErrorCode: binancefix.Some[int32](-1121), Text: []byte("Invalid symbol.")},
+		&binancefix.Reject{RefSeqNum: binancefix.Some[uint32](2), Text: []byte("no")},
+		&binancefix.News{Headline: []byte("Your connection will be disconnected in 10 seconds.")})
+	for k := range 6 {
+		for flags := range uint8(4) {
+			f.Add(uint8(k), flags, all)
+		}
+	}
+	// Extremes: exponents, nulls, an update ID going back.
+	f.Add(uint8(kindDepth), uint8(0), sbeInput(
+		&binancefix.MarketDataSnapshot{PriceExponent: 127, QtyExponent: -128, Symbol: []byte("BTCUSDT"),
+			MDEntriesBids: []binancefix.MarketDataSnapshotMDEntriesBids{{MDEntryPx: -1, MDEntrySize: -9223372036854775808}}},
+		&binancefix.MarketDataIncrementalDepth{FirstBookUpdateID: 9223372036854775807, LastBookUpdateID: -9223372036854775808, Symbol: []byte("BTCUSDT"),
+			MDEntriesAsks: []binancefix.MarketDataIncrementalDepthMDEntriesAsks{{MDEntryPx: 5}}}))
+	bc := testBinancefix(f)
+	f.Fuzz(func(t *testing.T, k, flags uint8, input []byte) {
+		c := newSBEClient(bc, kind(k%6), newOutput(io.Discard, flags&1 != 0, flags&2 != 0))
+		defer c.finish(nil)
+		c.queries["Q"] = false
+		c.subs["S"] = &sub{id: "S", symbol: "BTCUSDT"}
+		for len(input) >= 3 {
+			feed := sbeFeeds[int(input[0])%len(sbeFeeds)]
+			n := min(int(input[1])|int(input[2])<<8, len(input)-3)
+			body := input[3 : 3+n]
+			input = input[3+n:]
+			h := binancefix.MessageHeader{BlockLength: blockLengths[feed.tid], TemplateId: feed.tid, SchemaId: 1, Version: 1}
+			feed.feed(c, h, body)
+		}
+		_ = c.out.end(context.Background())
+		if c.quiet != nil {
+			c.quiet.Stop()
 		}
 	})
 }

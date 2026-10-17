@@ -98,11 +98,17 @@ func (s *conn) marketData(m *fixsbe.MarketDataRequest) {
 // snapshot sends the snapshot of book stream st, of depth levels per side
 // at most.
 func (s *conn) snapshot(st binancefix.Stream, depth int) {
+	if f := s.x.o.MarketData.Snapshot; f != nil {
+		if m := f(st, depth); m != nil {
+			s.send(m)
+		}
+		return
+	}
 	n := 1
 	if st.Kind == binancefix.StreamDepth {
 		n = min(depth, s.x.o.MarketData.BookLevels)
 	}
-	m := &fixsbe.MarketDataSnapshot{LastBookUpdateID: fixsbe.Some(s.x.updateID), PriceExponent: priceExponent,
+	m := &fixsbe.MarketDataSnapshot{LastBookUpdateID: fixsbe.Some(s.x.updateID(st.Symbol)), PriceExponent: priceExponent,
 		QtyExponent: qtyExponent, Symbol: []byte(st.Symbol)}
 	for i := range int64(n) {
 		m.MDEntriesBids = append(m.MDEntriesBids, fixsbe.MarketDataSnapshotMDEntriesBids{MDEntryPx: bidPx - i, MDEntrySize: 100_000_000 + i})
@@ -119,7 +125,7 @@ func (x *Exchange) Publish(symbol string) int {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	n := 0
-	for _, s := range x.mdConns {
+	for _, s := range x.conns {
 		for _, sub := range s.subs {
 			if sub.unsubscribed {
 				if sub.linger == 0 {
@@ -148,15 +154,15 @@ func (s *conn) publish(st binancefix.Stream) {
 			MDEntries: []fixsbe.MDEntries{{TradeID: x.tradeID, MDEntryPx: bidPx + 10, MDEntrySize: 1000, AggressorSide: fixsbe.Some(fixsbe.SideBuy)}},
 			Symbol:    []byte(st.Symbol)})
 	case binancefix.StreamBookTicker:
-		x.updateID++
-		s.send(&fixsbe.MarketDataIncrementalBookTicker{LastBookUpdateID: x.updateID, PriceExponent: priceExponent, QtyExponent: qtyExponent,
+		x.updateIDs[st.Symbol] = x.updateID(st.Symbol) + 1
+		s.send(&fixsbe.MarketDataIncrementalBookTicker{LastBookUpdateID: x.updateID(st.Symbol), PriceExponent: priceExponent, QtyExponent: qtyExponent,
 			MDEntriesBids: []fixsbe.MarketDataIncrementalBookTickerMDEntriesBids{{MDEntryPx: bidPx, MDEntrySize: fixsbe.Some[int64](150_000_000)}},
 			MDEntriesAsks: []fixsbe.MarketDataIncrementalBookTickerMDEntriesAsks{{MDEntryPx: askPx, MDEntrySize: fixsbe.Some[int64](2)}},
 			Symbol:        []byte(st.Symbol)})
 	case binancefix.StreamDepth:
-		first := x.updateID + 1
-		x.updateID += 3
-		s.send(&fixsbe.MarketDataIncrementalDepth{FirstBookUpdateID: first, LastBookUpdateID: x.updateID, PriceExponent: priceExponent,
+		first := x.updateID(st.Symbol) + 1
+		x.updateIDs[st.Symbol] = first + 2
+		s.send(&fixsbe.MarketDataIncrementalDepth{FirstBookUpdateID: first, LastBookUpdateID: first + 2, PriceExponent: priceExponent,
 			QtyExponent: qtyExponent,
 			MDEntriesBids: []fixsbe.MarketDataIncrementalDepthMDEntriesBids{
 				{MDEntryPx: bidPx, MDEntrySize: fixsbe.Some[int64](1)},
@@ -193,4 +199,54 @@ func (s *conn) instruments(seq uint32, m *fixsbe.InstrumentListRequest) {
 		}
 		s.send(l)
 	}
+}
+
+// updateID returns the last update of symbol's book. x's lock is held.
+func (x *Exchange) updateID(symbol string) int64 {
+	id, ok := x.updateIDs[symbol]
+	if !ok {
+		id = 1_000_000
+		x.updateIDs[symbol] = id
+	}
+	return id
+}
+
+// Message is a message the exchange sends: a codec's.
+type Message interface {
+	AppendWithHeader([]byte, fixsbe.MessageHeader) ([]byte, error)
+}
+
+// Broadcast sends m on every logged-on connection, as scripted, whatever
+// it subscribed to, and returns on how many.
+func (x *Exchange) Broadcast(m Message) int {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	for _, s := range x.conns {
+		s.send(m)
+	}
+	return len(x.conns)
+}
+
+// News sends a News of headline on every logged-on connection, as Binance
+// announces maintenance, and returns on how many.
+func (x *Exchange) News(headline string) int {
+	return x.Broadcast(&fixsbe.News{Headline: []byte(headline)})
+}
+
+// Disconnect closes every logged-on connection, without Logout, and
+// returns how many.
+func (x *Exchange) Disconnect() int {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	for _, s := range x.conns {
+		s.c.Close()
+	}
+	return len(x.conns)
+}
+
+// Connections returns how many connections are logged on.
+func (x *Exchange) Connections() int {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return len(x.conns)
 }

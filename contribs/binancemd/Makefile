@@ -10,10 +10,11 @@ CGO_ENABLED              ?= 0
 GOOS                     ?= $(GOENV_GOOS)
 GOARCH                   ?= $(GOENV_GOARCH)
 GOARM                    ?= $(GOENV_GOARM)
-# The binary builds against the fix2 of the repository (replace directive):
-# its sources count too.
+# The binary builds against the fix2 and the binancefix of the repository
+# (replace directives): their sources count too.
 GO_BUILD_SRC             := $(shell find . -name \*.go -type f) go.mod go.sum internal/spotmd/spot-fix-md.xml
 GO_BUILD_SRC             += $(shell find ../.. -path ../../contribs -prune -o -name \*.go -type f -print) ../../go.mod ../../go.sum
+GO_BUILD_SRC             += $(shell find ../binancefix -name \*.go -type f) ../binancefix/go.mod
 GO_BUILD_EXTLDFLAGS      ?=
 GO_BUILD_TAGS            ?=
 GO_BUILD_TARGET_DEPS     :=

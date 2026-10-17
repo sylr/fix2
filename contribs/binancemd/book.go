@@ -95,6 +95,19 @@ func (b *book) set(bid bool, price, qty string) {
 	}
 }
 
+// has reports whether the bids, or the asks, have a level at price.
+func (b *book) has(bid bool, price string) bool {
+	price = normDecimal(price)
+	side := b.asks
+	cmp := func(l level, p string) int { return cmpDecimal(l.Price, p) }
+	if bid {
+		side = b.bids
+		cmp = func(l level, p string) int { return cmpDecimal(p, l.Price) }
+	}
+	_, found := slices.BinarySearchFunc(side, price, cmp)
+	return found
+}
+
 // top returns the n best levels of each side.
 func (b *book) top(n int) (bids, asks []level) {
 	return b.bids[:min(n, len(b.bids))], b.asks[:min(n, len(b.asks))]

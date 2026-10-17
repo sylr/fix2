@@ -6,6 +6,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.10.2
 	github.com/sylr/fix2 v0.0.0
+	github.com/sylr/fix2/contribs/binancefix v0.0.0
 )
 
 require (
@@ -17,8 +18,11 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 )
 
-// fix2 is developed alongside: this module builds against the copy in the
-// repository.
-replace github.com/sylr/fix2 => ../..
+// fix2 and binancefix (the FIX SBE client of --sbe) are developed
+// alongside: this module builds against the copies in the repository.
+replace (
+	github.com/sylr/fix2 => ../..
+	github.com/sylr/fix2/contribs/binancefix => ../binancefix
+)
 
 tool github.com/sylr/fix2/cmd/fix2gen
