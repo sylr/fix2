@@ -20,7 +20,7 @@ type Order struct {
 	Fees []Fees
 	// (id 20)
 	Text []byte
-	// (id 21, since version 2)
+	// (id 27, since version 2)
 	Memo []byte
 }
 

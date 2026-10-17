@@ -284,4 +284,7 @@ type Schema struct {
 	Header   *Type
 	Types    []*Type // the types of <types>, in schema order
 	Messages []*Message
+	// Tolerated are the departures from SBE 1.0 the schema was loaded
+	// with, which the generated package's doc comment names.
+	Tolerated LoadOptions
 }

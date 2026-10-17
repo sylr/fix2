@@ -384,7 +384,7 @@ func (m *Order) DecodeBody(h MessageHeader, body []byte) (int, error) {
 type Legs struct {
 	// (id 21)
 	Leg uint16
-	// (id 22)
+	// (id 6)
 	Price Price
 	// (id 23)
 	Fees []Fees

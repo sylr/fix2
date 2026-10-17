@@ -63,7 +63,7 @@
         <data name="FeeMemo" id="35" type="varData"/>
     </group>
     <data name="Text" id="20" type="varData"/>
-    <data name="Memo" id="21" type="varData" sinceVersion="2"/>
+    <data name="Memo" id="27" type="varData" sinceVersion="2"/>
 </sbe:message>
 
 <sbe:message name="Quote" id="2" description="No group nor data in version 1">

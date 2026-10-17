@@ -4,12 +4,17 @@
 // Usage:
 //
 //	fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]
-//	fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>] [-tolerate-foreign-metadata] [-tolerate-unfilled-counts] [-assume-same-encodings]
+//	fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>] [-tolerate-foreign-metadata] [-tolerate-undeclared-primitive-types] [-tolerate-group-redefinitions] [-tolerate-field-redefinitions] [-tolerate-unfilled-counts] [-assume-same-encodings]
 //
 // sbe generates codecs of the messages of an SBE 1.0 message schema: a Go
 // struct per message, encoded and decoded whole (see docs/sbe.md). By
 // default it follows SBE strictly: a schema with elements or attributes of
-// other namespaces is refused, unless -tolerate-foreign-metadata; decoders
+// other namespaces is refused, unless -tolerate-foreign-metadata; a field
+// whose type names a primitive no encoding is named, unless
+// -tolerate-undeclared-primitive-types; a group name or id standing for
+// different groups, unless -tolerate-group-redefinitions; a field name or
+// id standing for different fields, unless -tolerate-field-redefinitions;
+// decoders
 // return ErrMalformed for a header's or dimension's numGroups or
 // numVarDataFields other than the received version's, unless
 // -tolerate-unfilled-counts, for counts left zero; and ErrNewer for the
@@ -39,7 +44,7 @@ import (
 
 const (
 	tagValueUsage = "fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]"
-	sbeUsage      = "fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>] [-tolerate-foreign-metadata] [-tolerate-unfilled-counts] [-assume-same-encodings]"
+	sbeUsage      = "fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>] [-tolerate-foreign-metadata] [-tolerate-undeclared-primitive-types] [-tolerate-group-redefinitions] [-tolerate-field-redefinitions] [-tolerate-unfilled-counts] [-assume-same-encodings]"
 	usage         = "Usage:\n  " + tagValueUsage + "\n  " + sbeUsage + "\n"
 )
 
@@ -110,6 +115,12 @@ func runSBE(args []string, stderr io.Writer) int {
 	var opts sbe.Options
 	fs.BoolVar(&load.TolerateForeignMetadata, "tolerate-foreign-metadata", false,
 		"ignore elements and attributes of other namespaces than SBE's, which sbe.xsd does not allow")
+	fs.BoolVar(&load.TolerateUndeclaredPrimitiveTypes, "tolerate-undeclared-primitive-types", false,
+		"resolve a field's type naming a primitive no encoding of <types> is named as that primitive, which a field's type may not name")
+	fs.BoolVar(&load.TolerateGroupRedefinitions, "tolerate-group-redefinitions", false,
+		"accept a group name or id standing for different groups, which SBE forbids, generating a type for each")
+	fs.BoolVar(&load.TolerateFieldRedefinitions, "tolerate-field-redefinitions", false,
+		"accept a field name or id standing for fields of different ids, names or encodings, which SBE forbids")
 	fs.BoolVar(&opts.AssumeSameEncodings, "assume-same-encodings", false,
 		"decoders skip a newer version's groups and data by the schema's groupSizeEncoding and data length, which SBE does not guarantee")
 	fs.BoolVar(&opts.TolerateUnfilledCounts, "tolerate-unfilled-counts", false,

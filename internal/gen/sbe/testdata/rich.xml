@@ -110,7 +110,7 @@
     <field name="OptDouble" id="18" type="optDouble" sinceVersion="2"/>
     <group name="Legs" id="20">
         <field name="Leg" id="21" type="u16"/>
-        <field name="Price" id="22" type="Price"/>
+        <field name="Price" id="6" type="Price"/>
         <group name="Fees" id="23" dimensionType="smallGroupSize">
             <field name="Amount" id="24" type="optI64"/>
             <data name="Memo" id="25" type="shortData"/>

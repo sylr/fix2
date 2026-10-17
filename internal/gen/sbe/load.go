@@ -104,6 +104,46 @@ type LoadOptions struct {
 	// not allow: it declares no wildcard. Off, they are errors. The flag
 	// -tolerate-foreign-metadata of fix2gen sbe.
 	TolerateForeignMetadata bool
+	// TolerateUndeclaredPrimitiveTypes resolves the type of a field naming
+	// an SBE primitive, such as uint32, that no encoding of <types> is
+	// named, as that primitive, required unless the field says otherwise:
+	// the encoding <type name="uint32" primitiveType="uint32"/> would be,
+	// as Real Logic's SbeTool resolves it. A field's type must name an
+	// encoding of <types> (§6.7, sbe.xsd), which an enum's encodingType
+	// need not (§4.13.3). Off, it is an error. The flag
+	// -tolerate-undeclared-primitive-types of fix2gen sbe.
+	TolerateUndeclaredPrimitiveTypes bool
+	// TolerateGroupRedefinitions accepts a group name, or id, standing for
+	// different groups in different places, which a group's name and id
+	// identify throughout a schema (§6.8, §6.9). Each group of such a name
+	// gets a Go type of its own, named by its place (see docs/sbe.md). Off,
+	// it is an error. The flag -tolerate-group-redefinitions of fix2gen sbe.
+	TolerateGroupRedefinitions bool
+	// TolerateFieldRedefinitions accepts a field name, or id, standing for
+	// fields of different ids, names or encodings in different places,
+	// which a field's name and id identify throughout a schema (§6.7,
+	// §6.9), <data> included. The FIX Trading Community's own FIXP schema
+	// needs it. Off, it is an error. The flag -tolerate-field-redefinitions
+	// of fix2gen sbe.
+	TolerateFieldRedefinitions bool
+}
+
+// flags returns the fix2gen sbe flags that set o.
+func (o LoadOptions) flags() []string {
+	var f []string
+	if o.TolerateForeignMetadata {
+		f = append(f, "-tolerate-foreign-metadata")
+	}
+	if o.TolerateUndeclaredPrimitiveTypes {
+		f = append(f, "-tolerate-undeclared-primitive-types")
+	}
+	if o.TolerateGroupRedefinitions {
+		f = append(f, "-tolerate-group-redefinitions")
+	}
+	if o.TolerateFieldRedefinitions {
+		f = append(f, "-tolerate-field-redefinitions")
+	}
+	return f
 }
 
 // checkNames checks the elements and attributes of the schema root by their
@@ -236,22 +276,30 @@ func LoadWith(r io.Reader, opts LoadOptions) (*Schema, error) {
 	if err := checkNames(&root, opts); err != nil {
 		return nil, fmt.Errorf("sbe: %w", err)
 	}
-	l := &loader{named: map[string]*node{}, types: map[string]*Type{}, resolving: map[string]bool{}, groups: map[string]string{}}
+	l := &loader{opts: opts, named: map[string]*node{}, types: map[string]*Type{}, resolving: map[string]bool{},
+		primitives: map[string]*Type{}, groups: map[string]string{}, groupIDs: map[uint64]string{},
+		fields: map[string]fieldIdentity{}, fieldIDs: map[uint64]fieldIdentity{}}
 	s, err := l.schema(&root)
 	if err != nil {
 		return nil, fmt.Errorf("sbe: %w", err)
 	}
+	s.Tolerated = opts
 	return s, nil
 }
 
 type loader struct {
-	s         *Schema
-	named     map[string]*node  // the types of <types>, by name
-	order     []string          // their names, in schema order
-	types     map[string]*Type  // those resolved
-	resolving map[string]bool   // those being resolved, to find cycles
-	groups    map[string]string // the signature of each group, by name
-	valueRefs []valueRef        // the valueRefs of constant types, checked once all are loaded
+	s          *Schema
+	opts       LoadOptions
+	named      map[string]*node         // the types of <types>, by name
+	order      []string                 // their names, in schema order
+	types      map[string]*Type         // those resolved
+	resolving  map[string]bool          // those being resolved, to find cycles
+	primitives map[string]*Type         // the primitives fields name undeclared, by name, if tolerated
+	groups     map[string]string        // the signature of each group, by name
+	groupIDs   map[uint64]string        // and by id
+	fields     map[string]fieldIdentity // the first field or data of each name
+	fieldIDs   map[uint64]fieldIdentity // and of each id
+	valueRefs  []valueRef               // the valueRefs of constant types, checked once all are loaded
 }
 
 // valueRef is the valueRef of a constant type, "Enum.Value".
@@ -337,6 +385,17 @@ func (l *loader) schema(root *node) (*Schema, error) {
 	for _, name := range []string{"blockLength", "templateId", "schemaId", "version"} {
 		if err := unsignedElement(h, name); err != nil {
 			return nil, err
+		}
+	}
+	// The counts are optional, but, present, unsigned like the others
+	// (§5.2.1: "Each of these fields must be encoded as an unsigned integer
+	// type."): a signed one would otherwise pass for absent, its counting
+	// unchecked.
+	for _, name := range []string{"numGroups", "numVarDataFields"} {
+		if element(h, name) != nil {
+			if err := unsignedElement(h, name); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if max := maxOf(element(h, "schemaId").Type.Primitive); s.ID > max {
@@ -756,8 +815,11 @@ func (l *loader) field(n *node, end int) (*Field, error) {
 	if f.Deprecated, err = l.version(n, "deprecated"); err != nil {
 		return nil, err
 	}
-	if f.Type, err = l.resolve(n.get("type")); err != nil {
+	if f.Type, err = l.fieldType(n.get("type")); err != nil {
 		return nil, fmt.Errorf("%s: %w", n.what(), err)
+	}
+	if err := l.identify(n, f.Name, f.ID, f.Type); err != nil {
+		return nil, err
 	}
 	t := f.Type
 	f.SemanticType = n.get("semanticType")
@@ -809,6 +871,27 @@ func (l *loader) field(n *node, end int) (*Field, error) {
 	return f, nil
 }
 
+// fieldType resolves the type of a field: an encoding of <types> (§6.7,
+// sbe.xsd: "Must match the name of an encoding contained by 'types'
+// element"), or, if tolerated, a primitive no encoding is named: a
+// required scalar of it, one per primitive, as the encoding
+// <type name="uint32" primitiveType="uint32"/> would be.
+func (l *loader) fieldType(name string) (*Type, error) {
+	p, primitive := primitiveNames[name]
+	if l.named[name] != nil || !primitive {
+		return l.resolve(name)
+	}
+	if !l.opts.TolerateUndeclaredPrimitiveTypes {
+		return nil, fmt.Errorf("no encoding named %q: a field's type names an encoding of <types> (§6.7), not a primitive: -tolerate-undeclared-primitive-types resolves it as the primitive", name)
+	}
+	t := l.primitives[name]
+	if t == nil {
+		t = &Type{Kind: KindSimple, Name: name, Primitive: p, Length: 1, Size: p.Size(), Presence: Required}
+		l.primitives[name] = t
+	}
+	return t, nil
+}
+
 func (l *loader) group(n *node) (*Group, error) {
 	g := &Group{}
 	if err := l.block(n, &g.Block); err != nil {
@@ -846,13 +929,23 @@ func (l *loader) group(n *node) (*Group, error) {
 	if g.MinEntries > g.MaxEntries {
 		return nil, fmt.Errorf("%s: its dimension allows %d to %d entries", n.what(), g.MinEntries, g.MaxEntries)
 	}
-	// A group appearing in several messages must be the same group in each
-	// (§6.9): one Go type is generated for it.
-	sig := groupSignature(g)
-	if prev, ok := l.groups[g.Name]; ok && prev != sig {
-		return nil, fmt.Errorf("%s: a different group of the same name is defined elsewhere", n.what())
+	// A group's name and id identify it throughout the schema: appearing
+	// in several places, it must be the same group in each, "Each of those
+	// instances must match on both id and name attributes" (§6.8, §6.9).
+	// One Go type is generated for it. Tolerated, each group of a name
+	// that differs gets one of its own.
+	if l.opts.TolerateGroupRedefinitions {
+		return g, nil
 	}
-	l.groups[g.Name] = sig
+	sig := groupSignature(g)
+	const hint = ": -tolerate-group-redefinitions generates a type for each"
+	if prev, ok := l.groups[g.Name]; ok && prev != sig {
+		return nil, fmt.Errorf("%s: a different group of the same name is defined elsewhere%s", n.what(), hint)
+	}
+	if prev, ok := l.groupIDs[g.ID]; ok && prev != sig {
+		return nil, fmt.Errorf("%s: a different group of the same id %d is defined elsewhere%s", n.what(), g.ID, hint)
+	}
+	l.groups[g.Name], l.groupIDs[g.ID] = sig, sig
 	return g, nil
 }
 
@@ -880,6 +973,36 @@ func groupSignature(g *Group) string {
 	return b.String()
 }
 
+// fieldIdentity is what identifies a field, or data, throughout a schema.
+type fieldIdentity struct {
+	name string
+	id   uint64
+	typ  *Type
+}
+
+// identify checks a field's, or data's, name, id and encoding against
+// those of the fields of that name or id elsewhere: "Attributes id and
+// name must uniquely identify a type within a message schema. This applies
+// to fields and groups. To be clear, the same field or group ID may be used
+// in multiple messages, but each instance must represent the same type.
+// Each of those instances must match on both id and name attributes."
+// (§6.9). Its presence may differ, as a FIX field's does between messages.
+func (l *loader) identify(n *node, name string, id uint64, typ *Type) error {
+	if l.opts.TolerateFieldRedefinitions {
+		return nil
+	}
+	const hint = ": -tolerate-field-redefinitions accepts it"
+	this := fieldIdentity{name, id, typ}
+	if prev, ok := l.fields[name]; ok && prev != this {
+		return fmt.Errorf("%s: field %q is id %d of type %q elsewhere, id %d of type %q here (§6.9)%s", n.what(), name, prev.id, prev.typ.Name, id, typ.Name, hint)
+	}
+	if prev, ok := l.fieldIDs[id]; ok && prev != this {
+		return fmt.Errorf("%s: field id %d is %q of type %q elsewhere, %q of type %q here (§6.9)%s", n.what(), id, prev.name, prev.typ.Name, name, typ.Name, hint)
+	}
+	l.fields[name], l.fieldIDs[id] = this, this
+	return nil
+}
+
 func (l *loader) data(n *node) (*Data, error) {
 	d := &Data{Name: n.get("name"), Description: n.get("description")}
 	if err := checkName(n, d.Name); err != nil {
@@ -897,6 +1020,9 @@ func (l *loader) data(n *node) (*Data, error) {
 	}
 	if d.Type, err = l.resolve(n.get("type")); err != nil {
 		return nil, fmt.Errorf("%s: %w", n.what(), err)
+	}
+	if err := l.identify(n, d.Name, d.ID, d.Type); err != nil {
+		return nil, err
 	}
 	d.SemanticType = n.get("semanticType")
 	if d.SemanticType == "" {

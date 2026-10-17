@@ -7,15 +7,20 @@ below (§) are its own. FIXP's session messages are its first user
 ([docs/fixp.md](fixp.md)), venues' application schemas the next.
 
     fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]
-        [-tolerate-foreign-metadata] [-tolerate-unfilled-counts] [-assume-same-encodings]
+        [-tolerate-foreign-metadata] [-tolerate-undeclared-primitive-types]
+        [-tolerate-group-redefinitions] [-tolerate-field-redefinitions]
+        [-tolerate-unfilled-counts] [-assume-same-encodings]
 
-By default it follows SBE 1.0 strictly. Three flags, off by default, each
+By default it follows SBE 1.0 strictly. Six flags, off by default, each
 change what it accepts or what the decoders it generates do, and are
 named in the generated package's doc comment:
 
 | Flag | Does | Kind |
 |---|---|---|
 | `-tolerate-foreign-metadata` | loads a schema holding elements and attributes of other namespaces, and ignores them (see [Schemas](#schemas)) | a toleration: sbe.xsd, normative, allows none |
+| `-tolerate-undeclared-primitive-types` | resolves a field's `type` naming a primitive, such as `uint32`, that no encoding is named, as that primitive (see [Schemas](#schemas)) | a toleration: a field's type names an encoding of `<types>` (§6.7, sbe.xsd) |
+| `-tolerate-group-redefinitions` | loads a schema where a group's name or id stands for different groups, and generates a type for each (see [Generated code](#generated-code)) | a toleration: a group's name and id identify one group throughout a schema (§6.8, §6.9) |
+| `-tolerate-field-redefinitions` | loads a schema where a field's name or id stands for fields of different ids, names or encodings, `<data>` included (see [Schemas](#schemas)) | a toleration: a field's name and id identify one field, of one encoding, throughout a schema (§6.7, §6.9) |
 | `-assume-same-encodings` | decoders skip a newer version's groups and data, which the header's and dimensions' counts tell of, by the schema's `groupSizeEncoding` and data length (see [Decoding](#decoding)) | an assumption SBE does not guarantee: a newer version encoding them otherwise is misread |
 | `-tolerate-unfilled-counts` | decoders take a header's or dimension's `numGroups` or `numVarDataFields` of 0, where the received version holds groups or data, for a count left unfilled, as Real Logic's encoders leave them, rather than `ErrMalformed` (see [Decoding](#decoding)) | a toleration: such counts contradict the message |
 
@@ -37,15 +42,30 @@ come later, if benchmarks call for them.
 | optional composite | the composite, whose first element is an optional scalar: the composite is null when that element is (§6.5.4.4) |
 | optional set | the set: SBE has no null set but the empty one (§4.14.2) |
 | constant | no field: a method returning the constant |
-| `<group>` | a slice of entry structs, one type per group name: a name defines one group throughout a schema (§6.9), which loading checks |
+| `<group>` | a slice of entry structs, one type per group name: a name and an id define one group throughout a schema (§6.8, §6.9), which loading checks. With `-tolerate-group-redefinitions`, each group of a name standing for different groups has a type of its own, named by its place (below) |
 | `<data>` | `[]byte`, decoded as a subslice of the input |
 | message | a struct, its template ID as a constant, `AppendTo(dst) ([]byte, error)`, `Decode(b) (int, error)`, `DecodeBody(h, body) (int, error)` |
-| `messageHeader` | `MessageHeader`, `ReadHeader(b) (MessageHeader, []byte, error)` |
+| `messageHeader` | `MessageHeader`, `ReadHeader(b) (MessageHeader, []byte, error)`. A header with elements beside SBE's six (§5.2), such as Binance's `seqNum` and `sendingTime`, gives each message `AppendWithHeader(dst, h) ([]byte, error)`: SBE's elements are set from the message and the schema, the others written from `h`; `AppendTo` writes them zero |
 
 Names are the schema's, exported: `ClOrdID`, `SideEnum`, `SideEnumBuy`.
+A group's type is its name, exported, but where `-tolerate-group-redefinitions`
+let one name stand for different groups: each group of that name, nested
+ones included, is then named by its place, the names of its message and
+of the groups enclosing it before its own, exported and joined. Binance's
+Orders are `NewOrderListOrders` and `ListStatusOrders`, its MDEntriesBids
+`MarketDataSnapshotMDEntriesBids`, `MarketDataIncrementalBookTickerMDEntriesBids`
+and `MarketDataIncrementalDepthMDEntriesBids`. Every group of such a name
+has its own type, even one identical to another: the type's name tells
+where the group is. Groups of a name all the same share one type, as
+without the flag (Binance's ListTriggeringInstructions, in both Orders);
+a group whose type is shared is generated from its first place, in schema
+order, and so are the names of the groups it holds. The members keep the
+schema's names: `NewOrderList.Orders` is a `[]NewOrderListOrders`.
 Two schema names giving one Go name, a member named as a generated
-method (`AppendTo`, `Decode`, `DecodeBody`, `TemplateID`, a constant's or
-`XString`'s method), or two messages giving one file name (`FooBar` and
+method (`AppendTo`, `AppendWithHeader` where generated, `Decode`,
+`DecodeBody`, `TemplateID`, a constant's or `XString`'s method), two
+groups' places joining into one name (message `AB`'s group `C`, message
+`A`'s group `BC`), or two messages giving one file name (`FooBar` and
 `Foo_Bar`, both `msg_foo_bar.go`), is a generation error.
 
 Null is the schema's `nullValue`, or the default of §4.4.2, an optional
@@ -185,6 +205,7 @@ up to the higher one.
 | Supported | Rejected, with an error naming the element |
 |---|---|
 | `<type>`: the 11 primitives, arrays, `length="0"` in data | a primitive SBE does not define |
+| a field's `type` naming an encoding of `<types>` | a field's `type` naming a primitive no encoding is named (`uint32`), unless `-tolerate-undeclared-primitive-types` |
 | `presence` required, optional (with `nullValue`) and constant (a value or `valueRef`) | `nullValue` on a required or constant type; a constant without a value |
 | `<composite>` with `<type>`, `<enum>`, `<set>`, `<composite>` and `<ref>` | a composite without elements; a reference cycle |
 | `<enum>` over `char` or an unsigned type; `<set>` over an unsigned type | other encodings |
@@ -193,7 +214,7 @@ up to the higher one.
 | `headerType`, `dimensionType` of the schema's | a header without unsigned `blockLength`, `templateId`, `schemaId`, `version`; a dimension without `blockLength` and `numInGroup` |
 | both byte orders | `xi:include` |
 | `minValue`, `maxValue`, `nullValue` | one its type cannot represent; a data length's or a count's `minValue` above its `maxValue` |
-| | a group or data field before a field, a group after data (§5.5); duplicate names or ids; a group name defining two different groups, its members' versions included; ids, versions or block lengths the header or dimension cannot hold |
+| | a group or data field before a field, a group after data (§5.5); duplicate names or ids; a group name or id defining two different groups, its members' versions included, unless `-tolerate-group-redefinitions`; a field name or id standing for another id, name or encoding, unless `-tolerate-field-redefinitions`; a header's `numGroups` or `numVarDataFields` that is not a required unsigned scalar (§5.2.1); ids, versions or block lengths the header or dimension cannot hold |
 
 Elements and attributes are checked by their expanded names, against
 sbe.xsd (§6.1). The root is `messageSchema` of SBE 1.0's namespace,
@@ -214,6 +235,63 @@ ignored, tolerated or not; `xsi:nil` and `xsi:type`, which would change
 validation, are refused, sbe.xsd declaring no element nillable and the
 loader resolving no type they name, as is any other `xsi` name, such as
 `xsi:presense`. `epoch` and `timeUnit` are accepted and ignored.
+
+A field's `type` names an encoding of `<types>`: §6.7, "Must match the
+name attribute of a simple <type>, <composite> encoding type, <enum> or
+<set>"; sbe.xsd, "Must match the name of an encoding contained by
+'types' element"; §6.9 lists as an error "A field or <enum> references a
+type name that is undefined". SBE allows a primitive where it says so, an
+enum's `encodingType` (§4.13.3, "In-line style: the value of
+encodingType is its primitive datatype"), and gives the encodings by
+which its examples' `type="uint32"` are valid (§4.4.4, "These are valid
+encoding specifications for each of the integer primitive types", `<type
+name="uint32" primitiveType="uint32"/>`). Binance's schema types fields
+`uint32`, `int32`, `int64`, `uint64`, `uint16` and `uint8` without
+declaring them, as Real Logic's SbeTool, which predefines the eleven
+primitives, accepts. `-tolerate-undeclared-primitive-types`
+(`LoadOptions.TolerateUndeclaredPrimitiveTypes`) resolves such a name as
+that encoding would be: a required scalar of the primitive, the field's
+`presence` applying, an optional one null as its primitive is (§4.4.2),
+one type per primitive, so that groups using it compare equal. An
+encoding the schema names so is the field's type, tolerated or not. A
+`<data>`'s or `<ref>`'s type still names an encoding.
+
+A group's name and id identify one group throughout a schema: §6.8,
+"Name and id must uniquely identify a group type within a message
+schema"; §6.9, "the same field or group ID may be used in multiple
+messages, but each instance must represent the same type. Each of those
+instances must match on both id and name attributes." A name or an id
+standing for two different groups, their dimensions, members, offsets,
+presences or versions differing, is an error.
+`-tolerate-group-redefinitions` (`LoadOptions.TolerateGroupRedefinitions`)
+accepts it, Binance's schema needing it for Orders, RelatedSym,
+MDEntriesBids and MDEntriesAsks, and the generator names each such group
+by its place (see [Generated code](#generated-code)).
+
+The same rule holds for fields, `<data>` included (sbe.xsd types both
+`fieldType`): §6.7, field `name`, "Name and id must uniquely identify a
+field type within a message schema"; §6.9, "Attributes id and name must
+uniquely identify a type within a message schema. This applies to fields
+and groups." A field name standing for another id or encoding, or an id
+for another name or encoding, is an error; the presence may differ, as a
+FIX field's does between messages. `-tolerate-field-redefinitions`
+(`LoadOptions.TolerateFieldRedefinitions`) accepts it, which the FIX
+Trading Community's own FIXP session schema needs, naming fields `Code`
+with ids 7, 12, 15 and 16 and giving id 8 to `Reason` and `Flow` (see
+[docs/conformance.md](conformance.md#sbe)): `fixp/internal/codec` is
+generated with it. So is Binance's, whose `ClOrdID`, `Symbol` and others
+are `varString8` here and `optionalVarString8` there, and whose id 58 is
+`Text` and `ErrorText`. The generated code does not depend on it.
+
+A message header may have elements beside the six SBE lists (§5.2,
+"The fields of the SBE message header are:"), of any type: SBE requires
+its own to be unsigned (§5.2.1), which loading checks of `blockLength`,
+`templateId`, `schemaId` and `version`, and of `numGroups` and
+`numVarDataFields` when the header has them (a signed count would
+otherwise pass for none, its counting unchecked), and says nothing of
+others.
+Binance's header adds `seqNum`, a `uint32`, and `sendingTime`, an
+`int64` of microseconds.
 
 `semanticType`, `description` and `deprecated` go into comments;
 `minValue` and `maxValue` bound data lengths and group counts, and are
@@ -266,6 +344,29 @@ otherwise the application's to check.
   data lengths are bounded both ways.
 - The FIXP schema, and schemas with descriptions naming Go packages,
   generate code that type-checks.
+- Binance's Spot FIX SBE schema (`internal/gen/sbe/binance`, the schema
+  pinned to a commit of Binance's repository, generated with
+  `-tolerate-foreign-metadata`, `-tolerate-undeclared-primitive-types`,
+  `-tolerate-group-redefinitions` and `-tolerate-field-redefinitions`,
+  each refused without): the sample
+  Logon of Binance's FIX API documentation decoded to the values it
+  lists, its 20-byte header's `seqNum` and `sendingTime` included, and
+  encoded back to its bytes but for the header's version, the schema's;
+  session, order, list and market data messages round-tripping through
+  `AppendWithHeader`, `Decode` and `DecodeBody`, with optional data
+  fields empty and set, null optionals of bare primitives and enums,
+  groups with data and nested groups, NewOrderList's and ListStatus's
+  differing Orders and their dimensions on the wire, and a version 0
+  ExecutionReport without its version 1 field. Decimal mantissas and
+  exponents are left raw, as the schema sends them.
+- Fields and data whose name or id stands for another id, name or
+  encoding refused, in one message or across messages, and accepted
+  tolerated; the FIXP schema refused strictly. Headers with a signed,
+  optional or array count refused. A group entry's member named
+  `AppendWithHeader` accepted, a message's refused.
+- Groups of one name differing, nested ones included, named by their
+  places; groups of a name all the same sharing a type, inside a shared
+  type too; two places whose names join into one Go name refused.
 - Schemas that must be rejected, each with its error, by loading or by
   generation: misspelt attributes, elements out of place, other roots
   and namespaces, metadata of another namespace among them; and schemas

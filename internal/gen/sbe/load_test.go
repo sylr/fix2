@@ -38,7 +38,7 @@ func TestLoadExamples(t *testing.T) {
 }
 
 func TestLoadFIXP(t *testing.T) {
-	s, err := LoadFile("../../../fixp/internal/codec/SBEschemaForFIXP.xml")
+	s, err := LoadFileWith("../../../fixp/internal/codec/SBEschemaForFIXP.xml", LoadOptions{TolerateFieldRedefinitions: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +48,73 @@ func TestLoadFIXP(t *testing.T) {
 	est := s.Messages[4]
 	if est.Name != "Establish" || est.BlockLength != 36 || est.Fields[3].Presence != Optional || len(est.Data) != 1 {
 		t.Fatalf("Establish: %+v", est.Block)
+	}
+	// The FIX Trading Community's schema gives id 8 to Reason and Flow,
+	// and the name Code to fields of four ids (§6.9).
+	if _, err := LoadFile("../../../fixp/internal/codec/SBEschemaForFIXP.xml"); err == nil ||
+		!strings.Contains(err.Error(), `field id 8 is "Reason" of type "CharacterString" elsewhere, "Flow" of type "FlowType" here (§6.9): -tolerate-field-redefinitions accepts it`) {
+		t.Errorf("strictly: %v", err)
+	}
+}
+
+// The header's counts, numGroups and numVarDataFields, are optional, but,
+// present, required unsigned scalars like the header's other fields
+// (§5.2.1): a signed one would pass for absent, its counting unchecked.
+func TestLoadHeaderCounts(t *testing.T) {
+	const std = `<type name="blockLength" primitiveType="uint16"/><type name="templateId" primitiveType="uint16"/><type name="schemaId" primitiveType="uint16"/><type name="version" primitiveType="uint16"/>`
+	for _, c := range []struct{ counts, want string }{
+		{``, ``},
+		{`<type name="numGroups" primitiveType="uint16"/><type name="numVarDataFields" primitiveType="uint8"/>`, ``},
+		{`<type name="numVarDataFields" primitiveType="uint32"/>`, ``},
+		{`<type name="numGroups" primitiveType="int16"/>`, `composite "hdr" has no required unsigned element "numGroups"`},
+		{`<type name="numGroups" primitiveType="uint16"/><type name="numVarDataFields" primitiveType="int8"/>`, `composite "hdr" has no required unsigned element "numVarDataFields"`},
+		{`<type name="numGroups" primitiveType="uint16" presence="optional"/>`, `"numGroups"`},
+		{`<type name="numGroups" primitiveType="uint8" length="2"/>`, `"numGroups"`},
+		{`<type name="numVarDataFields" primitiveType="char"/>`, `"numVarDataFields"`},
+		{`<type name="numGroups" primitiveType="float"/>`, `"numGroups"`},
+	} {
+		src := strings.Replace(schema(`<composite name="hdr">`+std+c.counts+`</composite>`, ``), `id="1" version="1">`, `id="1" version="1" headerType="hdr">`, 1)
+		_, err := Load(strings.NewReader(src))
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s: %v, want an error with %q", c.counts, err, c.want)
+		}
+	}
+}
+
+// A field's name and id identify it, with its encoding, throughout a
+// schema, <data> included (§6.7, §6.9); its presence may differ.
+// TolerateFieldRedefinitions accepts a name or id standing for others.
+func TestLoadFieldRedefinitions(t *testing.T) {
+	types := `<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/><type name="u8b" primitiveType="uint8"/>`
+	same := schema(types, `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/><data name="d" id="3" type="varData"/></sbe:message>
+		<sbe:message name="n" id="2"><group name="g" id="4"><field name="a" id="2" type="u8" presence="optional"/><data name="d" id="3" type="varData"/></group></sbe:message>`)
+	if _, err := Load(strings.NewReader(same)); err != nil {
+		t.Fatalf("the same fields: %v", err)
+	}
+	for _, c := range []struct{ name, messages, want string }{
+		{"a name of two ids", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="a" id="3" type="u8"/></sbe:message>`,
+			`<message name="n">: <field name="a">: field "a" is id 2 of type "u8" elsewhere, id 3 of type "u8" here (§6.9): -tolerate-field-redefinitions accepts it`},
+		{"a name of two types", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="a" id="2" type="u16"/></sbe:message>`,
+			`field "a" is id 2 of type "u8" elsewhere, id 2 of type "u16" here`},
+		{"a name of two encodings alike", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="a" id="2" type="u8b"/></sbe:message>`,
+			`field "a" is id 2 of type "u8" elsewhere, id 2 of type "u8b" here`},
+		{"an id of two names", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="b" id="2" type="u8"/></sbe:message>`,
+			`field id 2 is "a" of type "u8" elsewhere, "b" of type "u8" here`},
+		{"in one message, a group's", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/><group name="g" id="4"><field name="b" id="2" type="u8"/></group></sbe:message>`,
+			`<group name="g">: <field name="b">: field id 2 is "a"`},
+		{"data and a field", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><data name="a" id="2" type="varData"/></sbe:message>`,
+			`<data name="a">: field "a" is id 2 of type "u8" elsewhere, id 2 of type "varData" here`},
+		{"two data", `<sbe:message name="m" id="1"><data name="d" id="2" type="varData"/></sbe:message><sbe:message name="n" id="2"><data name="e" id="2" type="varData"/></sbe:message>`,
+			`field id 2 is "d" of type "varData" elsewhere, "e"`},
+	} {
+		src := schema(types, c.messages)
+		if _, err := Load(strings.NewReader(src)); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v, want an error with %q", c.name, err, c.want)
+		}
+		s, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateFieldRedefinitions: true})
+		if err != nil || !s.Tolerated.TolerateFieldRedefinitions {
+			t.Errorf("%s, tolerated: %v", c.name, err)
+		}
 	}
 }
 
@@ -79,8 +146,14 @@ func TestLoadRejects(t *testing.T) {
 		{"group after data", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><data name="d" id="2" type="varData"/><group name="g" id="3"><field name="a" id="4" type="u8"/></group></sbe:message>`, "group \"g\" after data"},
 		{"blockLength too small", `<type name="u32" primitiveType="uint32"/>`, `<sbe:message name="m" id="1" blockLength="2"><field name="a" id="2" type="u32"/></sbe:message>`, "less than its fields"},
 		{"duplicate message id", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="1"><field name="a" id="2" type="u8"/></sbe:message>`, "duplicate message"},
-		{"two groups of a name", `<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="g" id="2"><field name="a" id="3" type="u16"/></group></sbe:message>`, "different group of the same name"},
+		{"two groups of a name", `<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="g" id="2"><field name="b" id="4" type="u16"/></group></sbe:message>`, "different group of the same name"},
 		{"two groups of a name, their members of different versions", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="g" id="2"><field name="a" id="3" type="u8" sinceVersion="1"/></group></sbe:message>`, "different group of the same name"},
+		{"two groups of an id", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="h" id="2"><field name="a" id="3" type="u8"/></group></sbe:message>`,
+			"different group of the same id 2 is defined elsewhere: -tolerate-group-redefinitions generates a type for each"},
+		{"two nested groups of a name", `<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><group name="n" id="3"><field name="a" id="4" type="u8"/></group></group></sbe:message><sbe:message name="o" id="2"><group name="n" id="3"><field name="b" id="5" type="u16"/></group></sbe:message>`,
+			`<message name="o">: <group name="n">: a different group of the same name`},
+		{"a field of a primitive no encoding is named", ``, `<sbe:message name="Reject" id="1"><field name="RefSeqNum" id="45" type="uint32" presence="optional"/></sbe:message>`,
+			`<message name="Reject">: <field name="RefSeqNum">: no encoding named "uint32": a field's type names an encoding of <types> (§6.7), not a primitive: -tolerate-undeclared-primitive-types resolves it as the primitive`},
 		{"data shorter than it can be", `<composite name="d2"><type name="length" primitiveType="uint8" minValue="5" maxValue="3"/><type name="data" primitiveType="uint8" length="0"/></composite>`, `<sbe:message name="m" id="1"><data name="d" id="2" type="d2"/></sbe:message>`, "its length allows 5 to 3 bytes"},
 		{"valueRef to nothing", `<type name="x" primitiveType="uint8" presence="constant" valueRef="E.v"/>`, ``, "valueRef"},
 		{"data of a scalar", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><data name="d" id="2" type="u8"/></sbe:message>`, "not a composite of an unsigned length"},
@@ -206,5 +279,79 @@ func TestLoadForeignNamespaces(t *testing.T) {
 				t.Errorf("%s, %+v: %v, want an error with %q", c.attr, opts, err, c.want)
 			}
 		}
+	}
+}
+
+// A field's type names an encoding of <types> (§6.7, sbe.xsd), not a
+// primitive. TolerateUndeclaredPrimitiveTypes resolves a primitive no
+// encoding is named as that primitive, required unless the field says
+// otherwise: one type per primitive, as a <type> of that name would be.
+func TestLoadUndeclaredPrimitiveTypes(t *testing.T) {
+	src := schema(`<type name="char" primitiveType="uint8"/>`,
+		`<sbe:message name="m" id="1"><field name="a" id="2" type="uint32" presence="optional"/><field name="b" id="3" type="uint32"/>
+		<field name="c" id="4" type="int8"/><field name="d" id="5" type="double" presence="optional"/><field name="e" id="6" type="char"/></sbe:message>`)
+	if _, err := Load(strings.NewReader(src)); err == nil || !strings.Contains(err.Error(), "-tolerate-undeclared-primitive-types") {
+		t.Fatalf("strictly: %v", err)
+	}
+	s, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateUndeclaredPrimitiveTypes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := s.Messages[0].Fields
+	for i, want := range []struct {
+		p        Primitive
+		presence Presence
+		offset   int
+	}{{Uint32, Optional, 0}, {Uint32, Required, 4}, {Int8, Required, 8}, {Double, Optional, 9}, {Uint8, Required, 17}} {
+		if typ := f[i].Type; typ.Kind != KindSimple || typ.Primitive != want.p || typ.Length != 1 || typ.Size != want.p.Size() ||
+			typ.Presence != Required || typ.Null != "" || f[i].Presence != want.presence || f[i].Offset != want.offset {
+			t.Errorf("field %s: %+v of %+v, want a required %s, the field %s at %d", f[i].Name, f[i], typ, want.p, want.presence, want.offset)
+		}
+	}
+	if f[0].Type != f[1].Type {
+		t.Error("two fields of uint32 have two types")
+	}
+	if f[4].Type.Name != "char" || f[4].Type != s.Types[len(s.Types)-1] {
+		t.Errorf("the encoding named char is not the schema's: %+v", f[4].Type)
+	}
+	if s.Messages[0].BlockLength != 18 || len(s.Types) != 4 {
+		t.Errorf("block length %d, %d types; want 18, the schema's 4", s.Messages[0].BlockLength, len(s.Types))
+	}
+
+	// Fields only: other references, and names that are not primitives,
+	// still name encodings.
+	for _, c := range []struct{ types, messages, want string }{
+		{``, `<sbe:message name="m" id="1"><field name="a" id="2" type="uint128"/></sbe:message>`, `no encoding named "uint128"`},
+		{``, `<sbe:message name="m" id="1"><data name="d" id="2" type="uint8"/></sbe:message>`, `no encoding named "uint8"`},
+		{`<composite name="c"><ref name="r" type="uint8"/></composite>`, ``, `no encoding named "uint8"`},
+		{``, `<sbe:message name="m" id="1"><field name="a" id="2" type="uint8" presence="constant"/></sbe:message>`, "constant field without valueRef nor a constant type"},
+	} {
+		if _, err := LoadWith(strings.NewReader(schema(c.types, c.messages)), LoadOptions{TolerateUndeclaredPrimitiveTypes: true}); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s%s: %v, want an error with %q", c.types, c.messages, err, c.want)
+		}
+	}
+}
+
+// A group's name and id identify it throughout a schema (§6.8, §6.9).
+// TolerateGroupRedefinitions accepts a name or id standing for different
+// groups, nested ones included.
+func TestLoadGroupRedefinitions(t *testing.T) {
+	src := schema(`<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/>`,
+		`<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/><group name="n" id="4"><field name="b" id="5" type="u8"/></group></group></sbe:message>
+		<sbe:message name="o" id="2"><group name="g" id="2"><field name="a" id="3" type="u16"/><group name="n" id="4"><field name="b" id="5" type="u16"/></group></group>
+		<group name="h" id="4"><field name="b" id="5" type="u8"/></group></sbe:message>`)
+	if _, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateFieldRedefinitions: true}); err == nil || !strings.Contains(err.Error(), "-tolerate-group-redefinitions") {
+		t.Fatalf("strictly: %v", err)
+	}
+	s, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateGroupRedefinitions: true, TolerateFieldRedefinitions: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, o := s.Messages[0], s.Messages[1]
+	if m.Groups[0].BlockLength != 1 || o.Groups[0].BlockLength != 2 || m.Groups[0].Groups[0].BlockLength != 1 || o.Groups[0].Groups[0].BlockLength != 2 || o.Groups[1].Name != "h" {
+		t.Errorf("groups %+v, %+v", m.Groups[0], o.Groups)
+	}
+	if !s.Tolerated.TolerateGroupRedefinitions {
+		t.Error("the schema does not record its toleration")
 	}
 }

@@ -55,13 +55,14 @@ type Options struct {
 	TolerateUnfilledCounts bool
 }
 
-// flags returns the fix2gen sbe flags that set o.
-func (o Options) flags() string {
-	var f []string
-	if o.AssumeSameEncodings {
+// flags returns the fix2gen sbe flags that loaded g's schema and set its
+// options.
+func (g *gen) flags() string {
+	f := g.s.Tolerated.flags()
+	if g.opts.AssumeSameEncodings {
 		f = append(f, "-assume-same-encodings")
 	}
-	if o.TolerateUnfilledCounts {
+	if g.opts.TolerateUnfilledCounts {
 		f = append(f, "-tolerate-unfilled-counts")
 	}
 	return strings.Join(f, " ")
@@ -96,13 +97,21 @@ type gen struct {
 	pkg    string
 	opts   Options
 	idents map[string]string // package-level Go identifiers, and what declares each
-	groups map[string]*Group // the groups whose type is generated, by name
+	groups map[string]*Group // the groups whose type is generated, by Go name
 	goName map[*Type]string  // the Go type of each named or inline type
 	files  map[string][]byte // generated files, by name
 	order  string            // binary.LittleEndian or binary.BigEndian
 	w      *bytes.Buffer     // the file being written
 	inline map[*Type]*Type   // inline enums, sets and composites, to declare
 	decls  []*Type           // types to declare, in order
+
+	// The Go type of each group, and where it is in the schema, for
+	// errors and comments: its message's and enclosing groups' names.
+	groupName  map[*Group]string
+	groupPlace map[*Group]string
+	// headerExtra tells the header has elements of its own, beside SBE's,
+	// which AppendWithHeader takes from the caller.
+	headerExtra bool
 }
 
 func (g *gen) p(format string, args ...any) {
@@ -147,6 +156,12 @@ func (g *gen) generate() error {
 			return err
 		}
 	}
+	g.nameGroups()
+	for _, e := range g.s.Header.Elements {
+		if e.Type.Presence != Constant && !slices.Contains(sbeHeaderElements, e.Name) {
+			g.headerExtra = true
+		}
+	}
 	files := map[string]string{}
 	for _, m := range g.s.Messages {
 		file := "msg_" + snake(m.Name) + ".go"
@@ -160,7 +175,7 @@ func (g *gen) generate() error {
 				return err
 			}
 		}
-		if err := g.blockNames(&m.Block, fmt.Sprintf("message %q", m.Name)); err != nil {
+		if err := g.blockNames(&m.Block, fmt.Sprintf("message %q", m.Name), true); err != nil {
 			return err
 		}
 	}
@@ -239,9 +254,13 @@ func member(members map[string]string, name, what string) error {
 }
 
 // blockNames checks the Go names of a message's or group's members, and
-// names its groups' types.
-func (g *gen) blockNames(b *Block, what string) error {
+// names its groups' types. root tells a message's block, whose type alone
+// has AppendWithHeader.
+func (g *gen) blockNames(b *Block, what string, root bool) error {
 	members := map[string]string{"AppendTo": "a method", "Decode": "a method", "DecodeBody": "a method"}
+	if root && g.headerExtra {
+		members["AppendWithHeader"] = "a method"
+	}
 	for _, f := range b.Fields {
 		if err := member(members, export(f.Name), fmt.Sprintf("field %q", f.Name)); err != nil {
 			return fmt.Errorf("%s: %w", what, err)
@@ -256,18 +275,25 @@ func (g *gen) blockNames(b *Block, what string) error {
 		if err := member(members, export(gr.Name), fmt.Sprintf("group %q", gr.Name)); err != nil {
 			return fmt.Errorf("%s: %w", what, err)
 		}
-		if _, ok := g.groups[gr.Name]; ok {
-			continue // the same group, loading checked
-		}
-		g.groups[gr.Name] = gr
+		name := g.groupName[gr]
 		gw := fmt.Sprintf("group %q", gr.Name)
-		name := export(gr.Name)
+		if name != export(gr.Name) {
+			gw = fmt.Sprintf("group %q of %s", gr.Name, g.groupPlace[gr])
+		}
+		if prev, ok := g.groups[name]; ok {
+			if groupSignature(prev) != groupSignature(gr) {
+				// Two places whose names, joined, are one.
+				return fmt.Errorf("%s and %s are both %s in Go: rename one", g.groupPlace[prev]+"."+prev.Name, g.groupPlace[gr]+"."+gr.Name, name)
+			}
+			continue // the same group, generated once
+		}
+		g.groups[name] = gr
 		for _, id := range []string{name, "decode" + name, "append" + name} {
 			if err := g.declare(id, gw); err != nil {
 				return err
 			}
 		}
-		if err := g.blockNames(&gr.Block, gw); err != nil {
+		if err := g.blockNames(&gr.Block, gw, false); err != nil {
 			return err
 		}
 	}
@@ -277,6 +303,41 @@ func (g *gen) blockNames(b *Block, what string) error {
 		}
 	}
 	return nil
+}
+
+// nameGroups names the Go type of each group. A group's name and id
+// identify it throughout a schema (§6.8, §6.9): the groups of a name, all
+// the same, share one type, the name exported. Loaded with
+// TolerateGroupRedefinitions, groups of a name may differ: then each group
+// of that name gets a type of its own, named by its place, the names of its
+// message and of the groups enclosing it before its own, exported and
+// joined (NewOrderListOrders, ListStatusOrders).
+func (g *gen) nameGroups() {
+	g.groupName, g.groupPlace = map[*Group]string{}, map[*Group]string{}
+	var all []*Group
+	paths := map[*Group]string{}
+	sigs := map[string]map[string]bool{} // the signatures of the groups of each name
+	var walk func(b *Block, place, path string)
+	walk = func(b *Block, place, path string) {
+		for _, gr := range b.Groups {
+			all = append(all, gr)
+			g.groupPlace[gr], paths[gr] = place, path+export(gr.Name)
+			if sigs[gr.Name] == nil {
+				sigs[gr.Name] = map[string]bool{}
+			}
+			sigs[gr.Name][groupSignature(gr)] = true
+			walk(&gr.Block, place+"."+gr.Name, paths[gr])
+		}
+	}
+	for _, m := range g.s.Messages {
+		walk(&m.Block, m.Name, export(m.Name))
+	}
+	for _, gr := range all {
+		g.groupName[gr] = export(gr.Name)
+		if len(sigs[gr.Name]) > 1 {
+			g.groupName[gr] = paths[gr]
+		}
+	}
 }
 
 // isString reports whether t is a char array read as US-ASCII text.
@@ -297,7 +358,7 @@ func (g *gen) flush(name string) error {
 	fmt.Fprintf(&src, "%s\n\n", generatedHeader)
 	if name == "sbe.go" {
 		fmt.Fprintf(&src, "// Package %s holds the codecs of the SBE message schema %s (id %d, version %d),\n// generated by fix2gen sbe", g.pkg, cmp(g.s.Package, "of no package"), g.s.ID, g.s.Version)
-		if f := g.opts.flags(); f != "" {
+		if f := g.flags(); f != "" {
 			fmt.Fprintf(&src, " %s", f)
 		}
 		src.WriteString(".\n")
@@ -898,6 +959,21 @@ func (g *gen) typeDecl(t *Type) {
 	}
 }
 
+// sbeHeaderElements are the elements of the message header SBE defines
+// (§5.2). A header may have others, such as a venue's sequence number.
+var sbeHeaderElements = []string{"blockLength", "templateId", "schemaId", "version", "numGroups", "numVarDataFields"}
+
+// sbeHeader returns the elements of the header h SBE defines.
+func sbeHeader(h *Type) []string {
+	var names []string
+	for _, name := range sbeHeaderElements {
+		if element(h, name) != nil {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // message writes a message's constants, struct and codec.
 func (g *gen) message(m *Message) {
 	name := export(m.Name)
@@ -908,22 +984,46 @@ func (g *gen) message(m *Message) {
 	g.comment(name, "the message "+m.Name, m.Description)
 	g.block(name, &m.Block, h, true)
 
+	// The header's elements SBE defines (§5.2), set from the message: in a
+	// composite literal, or, the header having others the caller sets, in
+	// h.
+	format := "%s: %s,"
+	if g.headerExtra {
+		format = "h.%s = %s"
+	}
 	hv := func(elem, value string) {
 		if element(h, elem) != nil {
-			g.p("%s: %s,", export(elem), value)
+			g.p(format, export(elem), value)
 		}
 	}
-	g.p("\n// AppendTo appends m to dst, its header included. It fails without\n// appending if a data field or a group does not fit its encoding.")
-	g.p("func (m *%s) AppendTo(dst []byte) ([]byte, error) {", name)
-	g.p("if err := m.check(); err != nil {\nreturn dst, err\n}")
-	g.p("h := %s{", g.goName[h])
+	if g.headerExtra {
+		g.p("\n// AppendTo appends m to dst, its header included, the header's elements")
+		g.p("// other than SBE's zero: AppendWithHeader sets them. It fails without")
+		g.p("// appending if a data field or a group does not fit its encoding.")
+		g.p("func (m *%s) AppendTo(dst []byte) ([]byte, error) {\nreturn m.AppendWithHeader(dst, %s{})\n}", name, g.goName[h])
+		g.p("")
+		for _, line := range wrap("AppendWithHeader appends m to dst after header h, whose elements SBE defines, "+
+			strings.Join(sbeHeader(h), ", ")+", are set from m and the schema, its others written as they are. "+
+			"It fails without appending if a data field or a group does not fit its encoding.", 76) {
+			g.p("// %s", line)
+		}
+		g.p("func (m *%s) AppendWithHeader(dst []byte, h %s) ([]byte, error) {", name, g.goName[h])
+		g.p("if err := m.check(); err != nil {\nreturn dst, err\n}")
+	} else {
+		g.p("\n// AppendTo appends m to dst, its header included. It fails without\n// appending if a data field or a group does not fit its encoding.")
+		g.p("func (m *%s) AppendTo(dst []byte) ([]byte, error) {", name)
+		g.p("if err := m.check(); err != nil {\nreturn dst, err\n}")
+		g.p("h := %s{", g.goName[h])
+	}
 	hv("blockLength", strconv.Itoa(m.BlockLength))
 	hv("templateId", strconv.FormatUint(m.ID, 10))
 	hv("schemaId", "SchemaID")
 	hv("version", "SchemaVersion")
 	hv("numGroups", strconv.Itoa(len(m.Groups)))
 	hv("numVarDataFields", strconv.Itoa(len(m.Data)))
-	g.p("}")
+	if !g.headerExtra {
+		g.p("}")
+	}
 	g.p("dst, b := extend(dst, HeaderSize+%d)", m.BlockLength)
 	g.p("h.putTo(b[:HeaderSize])\nm.putBlock(b[HeaderSize:])\nreturn m.appendRest(dst), nil\n}")
 
@@ -963,15 +1063,20 @@ func (g *gen) message(m *Message) {
 // group writes the type and codec of a group, and of its own groups, unless
 // already written.
 func (g *gen) group(gr *Group) {
-	if g.groups[gr.Name] == nil {
+	name := g.groupName[gr]
+	// The group named, whose groups' names its type's code uses.
+	if gr = g.groups[name]; gr == nil {
 		return
 	}
-	delete(g.groups, gr.Name) // written once
-	name := export(gr.Name)
+	delete(g.groups, name) // written once
 	dim := gr.Dimension
 	dname := g.goName[dim]
 	g.p("")
-	g.comment(name, "an entry of the group "+gr.Name, gr.Description)
+	what := "an entry of the group " + gr.Name
+	if name != export(gr.Name) {
+		what += ", in " + g.groupPlace[gr]
+	}
+	g.comment(name, what, gr.Description)
 	g.block(name, &gr.Block, dim, false)
 
 	g.p("\nfunc decode%s(s *[]%s, b []byte, version int, entries *int) (int, error) {", name, name)
@@ -1135,7 +1240,7 @@ func (g *gen) block(name string, b *Block, counts *Type, root bool) {
 	}
 	for _, gr := range b.Groups {
 		g.fieldComment(gr.Description, gr.ID, gr.SinceVersion)
-		g.p("%s []%s", export(gr.Name), export(gr.Name))
+		g.p("%s []%s", export(gr.Name), g.groupName[gr])
 	}
 	for _, d := range b.Data {
 		g.fieldComment(d.Description, d.ID, d.SinceVersion)
@@ -1192,7 +1297,7 @@ func (g *gen) block(name string, b *Block, counts *Type, root bool) {
 		if gr.SinceVersion > 0 {
 			g.p("if version >= %d {", gr.SinceVersion)
 		}
-		g.p("{\nn, err := decode%s(&m.%s, b[pos:], version, entries)\nif err != nil {\nreturn 0, err\n}\npos += n\n}", gname, gname)
+		g.p("{\nn, err := decode%s(&m.%s, b[pos:], version, entries)\nif err != nil {\nreturn 0, err\n}\npos += n\n}", g.groupName[gr], gname)
 		if gr.SinceVersion > 0 {
 			g.p("} else {\nm.%s = m.%s[:0]\n}", gname, gname)
 		}
@@ -1263,7 +1368,7 @@ func (g *gen) block(name string, b *Block, counts *Type, root bool) {
 	g.p("\n// appendRest appends m's groups and data to dst.")
 	g.p("func (m *%s) appendRest(dst []byte) []byte {", name)
 	for _, gr := range b.Groups {
-		g.p("dst = append%s(dst, m.%s)", export(gr.Name), export(gr.Name))
+		g.p("dst = append%s(dst, m.%s)", g.groupName[gr], export(gr.Name))
 	}
 	for _, d := range b.Data {
 		length := d.Type.Elements[0].Type
