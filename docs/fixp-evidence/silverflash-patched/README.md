@@ -34,7 +34,11 @@ the failure (`<case>.test.log`, `<case>.server.log`):
 
 - `burst`: 2000 orders sent at once. Its consumer receives 735 of them
   (725 to 738, and 1350, in earlier runs), then no more, without an error;
-  their answers come, in order, the rest never.
+  their answers come, in order, the rest never. Likely the `fragmented`
+  case's cause, a burst filling its reads of 2048 bytes, a frame
+  straddling two of them lost: not confirmed, its reads not instrumented.
+  Once fix2's writer wrote what its queue held in one write (M9), the
+  same run got 962 answers.
 - `finish`: our FinishedSending. Silverflash answers a Terminate (code
   Finished) right away, without FinishedReceiving, and closes the
   connection: the session is not finalized. Our client connects again to

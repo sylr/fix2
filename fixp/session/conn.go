@@ -33,6 +33,15 @@ type conn struct {
 	// connection, the writer's: only then is it the heartbeat, which would
 	// overtake messages queued before it otherwise.
 	finSent bool
+	// out holds application messages, and their Sequences, the writer
+	// writes at once once the queue has no more (flush); outFrames are
+	// its frames, for the observer.
+	out       []byte
+	outFrames []outFrame
+	outSince  time.Time // when out's first frame was buffered
+	// wrote is set once bytes reach the transport, for the writer's
+	// heartbeat timer.
+	wrote bool
 	// finRecvQueued is set while a FinishedReceiving answer is queued and
 	// not written: repetitions of the peer's FinishedSending share it.
 	finRecvQueued atomic.Bool
@@ -161,6 +170,20 @@ func (c *conn) failCode(code fixp.TerminationCode, reason string, err error) {
 func (c *conn) answer(code fixp.TerminationCode, reason string) {
 	s := c.s
 	c.mu.Lock()
+	if c.written {
+		// Ours is written, or being written: theirs crossed it, and
+		// answers it; we send no other (§6.3).
+		c.answered = true
+		sent := c.sent
+		if !sent {
+			c.closeWhenSent = true
+		}
+		c.mu.Unlock()
+		if sent {
+			c.close(nil)
+		}
+		return
+	}
 	c.peers = &fixp.TerminatedError{Code: code, Reason: reason, ByPeer: true}
 	c.urgent = terminateFrame(s.ID(), code, nil)
 	c.mu.Unlock()
@@ -225,13 +248,92 @@ func (c *conn) takeUrgent() []byte {
 // write writes a frame, bounded by the write timeout.
 func (c *conn) write(f []byte) error { return c.writeSeq(f, 0, false) }
 
-// writeSeq writes a frame, an application message's of sequence number
-// seq for the observer.
-func (c *conn) writeSeq(f []byte, seq uint64, retransmission bool) error {
+// outFrame is a frame of conn.out.
+type outFrame struct {
+	f   []byte
+	seq uint64
+	app bool
+}
+
+// maxOut is what conn.out holds before it is written.
+const maxOut = 64 << 10
+
+// buffer adds a frame to what flush writes, writing it all once it holds
+// maxOut, or is a quarter of a keepalive interval old: an application
+// message, of sequence number seq, or its Sequence.
+func (c *conn) buffer(f []byte, seq uint64, app bool) error {
+	if len(c.outFrames) == 0 {
+		c.outSince = time.Now()
+	}
+	c.out = append(c.out, f...)
+	c.outFrames = append(c.outFrames, outFrame{f, seq, app})
+	if len(c.out) >= maxOut || time.Since(c.outSince) >= c.s.cfg.KeepaliveInterval/4 {
+		return c.flush()
+	}
+	return nil
+}
+
+// flush writes what buffer holds, in one write. The frames written whole
+// are observed, and the store may evict what precedes them (retention):
+// a frame buffered is not written yet.
+func (c *conn) flush() error {
+	if len(c.out) == 0 {
+		return nil
+	}
+	s := c.s
+	n, err := c.rawWrite(c.out)
+	var last uint64 // the last application message written whole
+	off := 0
+	for _, of := range c.outFrames {
+		off += len(of.f)
+		if off > n {
+			break
+		}
+		c.observeOut(of.f, of.seq, false)
+		if of.app {
+			s.stats.MessagesSent.Add(1)
+			last = max(last, of.seq)
+		}
+	}
+	if last != 0 {
+		s.retain(last)
+	}
+	c.discard()
+	return err
+}
+
+// discard drops what buffer holds: taken out of the queue, its messages
+// are as written and lost, to be retransmitted or reported NotApplied.
+func (c *conn) discard() {
+	clear(c.outFrames)
+	c.out, c.outFrames = c.out[:0], c.outFrames[:0]
+}
+
+// rawWrite writes b, bounded by the write timeout, and counts what it
+// wrote.
+func (c *conn) rawWrite(b []byte) (int, error) {
 	c.t.SetWriteDeadline(time.Now().Add(c.s.cfg.WriteTimeout))
-	_, err := c.t.Write(f)
-	if err == nil {
-		c.s.stats.BytesSent.Add(uint64(len(f)))
+	n, err := c.t.Write(b)
+	if n > 0 {
+		c.s.stats.BytesSent.Add(uint64(n))
+		c.wrote = true
+	}
+	return n, err
+}
+
+// writeSeq writes a frame, an application message's of sequence number
+// seq for the observer, after what buffer holds.
+func (c *conn) writeSeq(f []byte, seq uint64, retransmission bool) error {
+	if err := c.flush(); err != nil {
+		return err
+	}
+	return c.writeNow(f, seq, retransmission)
+}
+
+// writeNow writes a frame, before what buffer holds if anything.
+func (c *conn) writeNow(f []byte, seq uint64, retransmission bool) error {
+	n, err := c.rawWrite(f)
+	if n == len(f) {
 		c.observeOut(f, seq, retransmission)
 	}
 	return err
@@ -248,19 +350,35 @@ func (c *conn) writeLoop() {
 	terminated := false // our graceful Terminate is written: nothing follows
 	for {
 		if f := c.takeUrgent(); f != nil {
-			c.write(f)
+			// First, before what buffer holds, which the connection
+			// ending loses: as if the write had failed.
+			c.discard()
+			c.writeNow(f, 0, false)
 			c.close(nil)
 			return
 		}
 		if c.isClosing() {
+			c.flush() // what was taken out of the queue, as if written before
 			return
 		}
 		if !terminated {
 			if e, ok := s.q.pop(c); ok {
 				if e.kind == entryTerminate {
-					// Before the write: its answer may come before Write
-					// returns, and must be read as the answer.
+					// What precedes it is written first, the peer's
+					// answers to it read as such.
+					if err := c.flush(); err != nil {
+						c.close(err)
+						return
+					}
+					// Before its write: its answer may come before Write
+					// returns, and must be read as the answer. Unless the
+					// peer's Terminate, or an error, came meanwhile: its
+					// urgent frame goes instead, one Terminate alone.
 					c.mu.Lock()
+					if c.urgent != nil {
+						c.mu.Unlock()
+						continue
+					}
 					c.written = true
 					c.mu.Unlock()
 				}
@@ -283,9 +401,21 @@ func (c *conn) writeLoop() {
 				if e.finishing {
 					c.finSent = true // the heartbeat may be FinishedSending now
 				}
-				idle.Reset(ka)
+				if c.wrote {
+					idle.Reset(ka)
+					c.wrote = false
+				}
 				continue
 			}
+		}
+		// The queue has no more: what buffer holds goes.
+		if err := c.flush(); err != nil {
+			c.close(err)
+			return
+		}
+		if c.wrote {
+			idle.Reset(ka)
+			c.wrote = false
 		}
 		select {
 		case <-s.q.signal:
@@ -298,6 +428,7 @@ func (c *conn) writeLoop() {
 				}
 			}
 			idle.Reset(ka)
+			c.wrote = false
 		case <-c.closing:
 			return
 		}
@@ -333,24 +464,25 @@ func (c *conn) writeEntry(e entry) error {
 		}
 		// Out of the queue, written or not: from now on only a
 		// retransmission sends it, which must not find it beyond what
-		// was sent (the write may fail, the connection ending).
+		// was sent (the write may fail, the connection ending). The
+		// store evicts once it is written (flush).
 		if e.seq > s.written.Load() {
 			s.written.Store(e.seq) // the writer's alone
-			s.retain(e.seq)
 		}
 		if c.outNext != e.seq {
-			if err := c.write(sequenceFrame(e.seq)); err != nil {
+			if err := c.buffer(sequenceFrame(e.seq), 0, false); err != nil {
 				return err
 			}
 		}
 	}
-	if err := c.writeSeq(e.frame, e.seq, false); err != nil {
+	// Written with the messages queued behind it, once the queue has no
+	// more: one write for a burst.
+	if err := c.buffer(e.frame, e.seq, true); err != nil {
 		return err
 	}
 	if e.seq != 0 {
 		c.outNext = e.seq + 1
 	}
-	s.stats.MessagesSent.Add(1)
 	return nil
 }
 
@@ -517,6 +649,9 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 	case codec.TerminateTemplateID:
 		if err := c.term.DecodeBody(h, body); err != nil {
 			return protocolf("Terminate: %v", err)
+		}
+		if c.term.SessionId != c.s.ID() {
+			return protocolf("Terminate of another session")
 		}
 		c.answer(fixp.TerminationCode(c.term.Code), printable(c.term.Reason, c.s.cfg.MaxReasonLength))
 		return errStop
@@ -721,7 +856,80 @@ func (c *conn) waitWriter() {
 	}
 }
 
-// storeCtx returns the context of a store call.
-func (s *Session) storeCtx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), s.cfg.StoreTimeout)
+// storeCtx returns the context of a store call, ending after
+// Config.StoreTimeout; its cancel releases it.
+func (s *Session) storeCtx() *deadlineCtx {
+	return &deadlineCtx{deadline: time.Now().Add(s.cfg.StoreTimeout)}
 }
+
+// deadlineCtx is a context ending at its deadline, or once canceled,
+// without a timer until Done is asked for: every message makes store
+// calls, which an in-memory store answers without looking at Done.
+type deadlineCtx struct {
+	deadline time.Time
+	// end is why it ended, the first reason kept: 0 not yet,
+	// endCanceled, endDeadline.
+	end      atomic.Int32
+	released atomic.Bool // cancel ran
+	once     sync.Once
+	done     chan struct{}
+	timer    *time.Timer
+}
+
+const (
+	endCanceled = 1
+	endDeadline = 2
+)
+
+func (c *deadlineCtx) Deadline() (time.Time, bool) { return c.deadline, true }
+func (c *deadlineCtx) Value(any) any               { return nil }
+
+func (c *deadlineCtx) Done() <-chan struct{} {
+	c.once.Do(func() {
+		if c.Err() != nil {
+			c.done = closedChan
+			return
+		}
+		done := make(chan struct{})
+		c.done = done
+		c.timer = time.AfterFunc(time.Until(c.deadline), func() {
+			c.end.CompareAndSwap(0, endDeadline)
+			close(done)
+		})
+	})
+	return c.done
+}
+
+func (c *deadlineCtx) Err() error {
+	if c.end.Load() == 0 && !time.Now().Before(c.deadline) {
+		c.end.CompareAndSwap(0, endDeadline)
+	}
+	switch c.end.Load() {
+	case endCanceled:
+		return context.Canceled
+	case endDeadline:
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+// cancel ends the context, unless its deadline did first: its Done, if
+// asked for, closes.
+func (c *deadlineCtx) cancel() {
+	if c.released.Swap(true) {
+		return
+	}
+	if c.Err() == nil { // the deadline, passed unobserved, came first
+		c.end.CompareAndSwap(0, endCanceled)
+	}
+	c.once.Do(func() { c.done = closedChan }) // Done, asked for later
+	if c.timer != nil && c.timer.Stop() {
+		close(c.done)
+	}
+}
+
+var closedChan = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}()

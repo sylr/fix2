@@ -395,14 +395,14 @@ func (s *Session) enqueue(f []byte) (uint64, error) {
 	var seq uint64
 	if out.Sequenced() {
 		seq = s.q.nextSeq()
-		sctx, cancel := s.storeCtx()
+		sctx := s.storeCtx()
 		var err error
 		if out == fixp.Recoverable {
 			err = st.Append(sctx, seq, f[sofh.HeaderLen:])
 		} else {
 			err = st.SetNextOutbound(sctx, seq+1)
 		}
-		cancel()
+		sctx.cancel()
 		if err != nil {
 			err = fmt.Errorf("fixp/session: storing message %d: %w", seq, err)
 			s.halt(err)
@@ -422,8 +422,8 @@ func (s *Session) syncTo(seq uint64) error {
 	s.mu.Lock()
 	st := s.st
 	s.mu.Unlock()
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	if err := st.Sync(ctx); err != nil {
 		err = fmt.Errorf("fixp/session: syncing the store: %w", err)
 		s.halt(err)
@@ -451,8 +451,8 @@ func (s *Session) retain(written uint64) {
 	s.mu.Lock()
 	st := s.st
 	s.mu.Unlock()
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	if err := st.Evict(ctx, below); err != nil {
 		// Kept longer: a retention target, not a durability promise.
 		s.logWarn("evicting stored messages", "below", below, "err", err)
@@ -466,8 +466,8 @@ func (s *Session) setInbound(seq uint64, sync bool) error {
 	s.mu.Lock()
 	st := s.st
 	s.mu.Unlock()
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	err := st.SetInbound(ctx, seq)
 	if err == nil && sync {
 		err = st.Sync(ctx)

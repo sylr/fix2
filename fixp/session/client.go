@@ -37,8 +37,8 @@ func NewClient(cfg ClientConfig, d transport.Dialer) (*Client, error) {
 		return nil, &ConfigError{"Dialer", "required"}
 	}
 	s := newSession(cfg.Config, store.Client)
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	states, err := cfg.Store.Sessions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fixp/session: listing the store's sessions: %w", err)
@@ -277,11 +277,11 @@ func (c *Client) negotiate(ctx context.Context, t transport.Conn, r *sofh.Reader
 			if !flowsAllowed(c.cfg.Flow, server) || len(c.cfg.ServerFlows) > 0 && !slices.Contains(c.cfg.ServerFlows, server) {
 				return fmt.Errorf("fixp/session: the server's flow, %s, is not one we accept", server)
 			}
-			sctx, cancel := s.storeCtx()
+			sctx := s.storeCtx()
 			st, err := c.cfg.Store.Create(sctx, store.Meta{
 				ID: id, Role: store.Client, ClientFlow: c.cfg.Flow, ServerFlow: server, NegotiatedAt: time.Now(),
 			})
-			cancel()
+			sctx.cancel()
 			if err != nil {
 				return fmt.Errorf("fixp/session: recording session %s: %w", id, err)
 			}
@@ -395,8 +395,8 @@ func (c *Client) recordEstablished() error {
 	if !st.State().EstablishedAt.IsZero() {
 		return nil
 	}
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	err := st.SetEstablished(ctx, time.Now())
 	if err == nil {
 		err = st.Sync(ctx)

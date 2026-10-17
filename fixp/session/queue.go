@@ -50,7 +50,7 @@ func (q *queue) pushFinish(c *conn, frame []byte, finRecv bool) {
 func (q *queue) wakeRoom() {
 	q.mu.Lock()
 	close(q.room)
-	q.room = make(chan struct{})
+	q.room, q.watched = make(chan struct{}), false
 	q.mu.Unlock()
 }
 
@@ -70,8 +70,10 @@ type queue struct {
 	// signal wakes the writer: entries were added.
 	signal chan struct{}
 	// room is closed, and replaced, when application messages leave the
-	// queue: every Send waiting for room wakes and looks again.
-	room chan struct{}
+	// queue while a Send waits for room (watched): every Send waiting
+	// wakes and looks again.
+	room    chan struct{}
+	watched bool
 }
 
 func newQueue() *queue {
@@ -92,7 +94,11 @@ func notify(ch chan struct{}) {
 func (q *queue) hasRoom(n, maxMsgs, maxBytes int) (bool, <-chan struct{}) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	return q.msgs < maxMsgs && q.bytes+n <= maxBytes, q.room
+	if q.msgs < maxMsgs && q.bytes+n <= maxBytes {
+		return true, nil
+	}
+	q.watched = true
+	return false, q.room
 }
 
 // pending returns the application messages queued.
@@ -157,8 +163,10 @@ func (q *queue) pop(c *conn) (entry, bool) {
 		if e.kind == entryApp {
 			q.msgs--
 			q.bytes -= len(e.frame)
-			close(q.room)
-			q.room = make(chan struct{})
+			if q.watched {
+				close(q.room)
+				q.room, q.watched = make(chan struct{}), false
+			}
 		}
 		q.compact()
 		return e, true

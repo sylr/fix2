@@ -569,6 +569,40 @@ The spike's server first left its send buffers' position at zero, which
 Silverflash's writer flips to empty: the replies and their Sequence were
 lost or garbled. The evidence is from the corrected harness.
 
+## Performance
+
+On an Apple M4, Go 1.27, both ends in one process, a 64-byte application
+message (`go test -bench . ./fixp/session/ ./fixp/internal/codec/
+./internal/gen/sbe/...`):
+
+| Path | Time | Allocations |
+|---|---|---|
+| Encoding or decoding a session message (Sequence, RetransmitRequest, Establish) | 2–5 ns | 0 |
+| Classifying a frame | 2 ns | 0 |
+| Encoding or decoding SBE's NewOrderSingle, ExecutionReport with two fills, a generated codec | 5–11 ns | 0 |
+| `Send`, to the peer's handler, Unsequenced flow, TCP | 165–200 ns | 1 |
+| `Send`, Idempotent flow, TCP | 320–340 ns | 3 |
+| `Send`, Recoverable flow, stored in memory (the last 65536), TCP | 385 ns | 4 |
+| A message and its echo, one at a time, TCP loopback | 28 µs | 9 |
+| The same in memory | 7 µs | 28 (the in-memory transport's) |
+
+`Send` is measured back to back, timed until the peer's handler has the
+last, its writer and the peer's reader running alongside. The writer
+writes in one write what the queue holds, application messages and their
+Sequences, once the queue has no more, or once that holds 64 KiB or is a
+quarter of a keepalive interval old; any other frame is written alone,
+after them, but an urgent Terminate, which drops them, as a write failing
+would. The store evicts messages once written, not once taken out of the
+queue. A round trip is latency: four goroutine wakeups and two loopback
+hops. `contribs/fixpecho` measures the same
+over TCP between processes: 767,000 echoes a second with 100 messages
+in flight, 20 µs a round trip at p50 one at a time.
+
+What a message allocates: its frame, owned by the queue, encoded into a
+pooled buffer and copied at its size; on a sequenced flow, the store
+call's context, without a timer until a store asks for one; on a
+Recoverable flow, the store's copy.
+
 ## Increments
 
 | # | Content | Done |
@@ -582,4 +616,4 @@ lost or garbled. The evidence is from the corrected harness.
 | M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step | yes; restarts tested with a store losing what was not synced, failing each write in turn, its failed write lost or made |
 | M7 | Finalization, retention, observers | yes; finalization tested crashing the server at every write |
 | M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide | yes; every example of §7 run ([docs/fixp-examples.md](fixp-examples.md)); live against a patched Silverflash, its failures characterized; `contribs/fixpecho`; [docs/fixp-app.md](fixp-app.md) |
-| M9 | Benchmarks: codecs, then sessions | |
+| M9 | Benchmarks: codecs, then sessions | yes ([Performance](#performance)); the writer coalescing frames, store contexts without timers, the queue's wakeups only when awaited |

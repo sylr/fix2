@@ -193,7 +193,11 @@ establishes, exchanges thousands of messages paced and terminates
 
 On an Apple M4: parsing a 24-field message into a reused `Message` takes
 280 ns and no allocation; validating it 85 ns; sending an order between an
-initiator and an acceptor in memory, 730 ns and one allocation.
+initiator and an acceptor in memory, 730 ns and one allocation. A FIXP
+session message decodes in 2 to 5 ns, a generated SBE codec's order in 5
+ns, neither allocating; a FIXP `Send` over TCP takes 165 to 385 ns
+depending on the flow, and a round trip 28 µs on loopback
+([docs/fixp.md](docs/fixp.md#performance)).
 
 `fix/tests/benchmarks` compares fix2 with other engines, QuickFIX/Go,
 QuickFIX/J and QuickFIX C++, on orders and their acknowledgements over TCP, each end in a

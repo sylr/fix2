@@ -218,6 +218,9 @@ func TestFinishViolations(t *testing.T) {
 		{"another session's FinishedSending", fixp.Unsequenced, func(r *raw) {
 			r.send(&codec.FinishedSending{SessionId: fixp.NewSessionID()})
 		}, "FinishedSending of another session"},
+		{"another session's Terminate", fixp.Unsequenced, func(r *raw) {
+			r.send(&codec.Terminate{SessionId: fixp.NewSessionID(), Code: codec.TerminationCode(fixp.TerminationFinished)})
+		}, "Terminate of another session"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rs := newRawSession(t, tc.clientFlow, fixp.Idempotent, codec.Some(uint64(1)), nil)

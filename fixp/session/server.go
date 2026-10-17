@@ -252,12 +252,12 @@ func (srv *Server) retireSession(s *Session, reason string, automatic bool) erro
 		c.fail(reason, nil)
 		<-c.unbound // bounded: fail closes within the write timeout
 	}
-	sctx, cancel := s.storeCtx()
+	sctx := s.storeCtx()
 	err := st.Retire(sctx, time.Now())
 	if err == nil {
 		err = st.Sync(sctx)
 	}
-	cancel()
+	sctx.cancel()
 	if err != nil {
 		err = fmt.Errorf("fixp/session: retiring: %w", err)
 		s.mu.Lock()
@@ -630,14 +630,14 @@ func (srv *Server) establish(ctx context.Context, t transport.Conn, r *sofh.Read
 	st := s.st
 	s.mu.Unlock()
 	if st.State().EstablishedAt.IsZero() {
-		sctx, cancel := s.storeCtx()
+		sctx := s.storeCtx()
 		// Durable before the ack: a crash must not retire, as never
 		// established, a session the client was told is.
 		err := st.SetEstablished(sctx, time.Now())
 		if err == nil {
 			err = st.Sync(sctx)
 		}
-		cancel()
+		sctx.cancel()
 		if err != nil {
 			s.halt(fmt.Errorf("fixp/session: recording the establishment: %w", err))
 			return reject(fixp.EstablishmentUnspecified, "session halted")

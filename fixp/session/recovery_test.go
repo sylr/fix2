@@ -1,9 +1,12 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,6 +16,7 @@ import (
 	"github.com/sylr/fix2/fixp/internal/codec"
 	"github.com/sylr/fix2/fixp/store"
 	"github.com/sylr/fix2/fixp/store/memstore"
+	"github.com/sylr/fix2/sofh"
 	"github.com/sylr/fix2/transport"
 	"github.com/sylr/fix2/transport/mem"
 )
@@ -559,16 +563,16 @@ func TestRetransmitRequestFlood(t *testing.T) {
 	}
 }
 
-// failingWriteConn fails its failAt-th Write, closing: the connection
-// ends with a message taken from the queue and never written.
+// failingWriteConn fails the first Write holding failOn, closing: the
+// connection ends with a message taken from the queue and never written.
 type failingWriteConn struct {
 	transport.Conn
-	writes *atomic.Int32
-	failAt int32
+	failed *atomic.Bool
+	failOn string
 }
 
 func (c failingWriteConn) Write(b []byte) (int, error) {
-	if c.writes.Add(1) == c.failAt {
+	if bytes.Contains(b, []byte(c.failOn)) && c.failed.CompareAndSwap(false, true) {
 		c.Conn.Close()
 		return 0, errors.New("write failed")
 	}
@@ -583,14 +587,14 @@ func TestUnwrittenMessageRetransmitted(t *testing.T) {
 	_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
 	defer func() { cancelSrv(); <-srvDone }()
 	var dials atomic.Int32
-	writes := &atomic.Int32{}
+	failed := &atomic.Bool{}
 	dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) {
 		c, err := l.Dial(ctx)
 		if err != nil || dials.Add(1) > 1 {
 			return c, err
 		}
-		// Negotiate, Establish, Sequence, message 1, then message 2 fails.
-		return failingWriteConn{Conn: c, writes: writes, failAt: 5}, nil
+		// The write holding message 2 fails, message 1 with it or not.
+		return failingWriteConn{Conn: c, failed: failed, failOn: "message 2"}, nil
 	})
 	cliH := newRecorder()
 	c := newClient(t, dialer, memstore.New(), cliH, fixp.Recoverable, func(c *ClientConfig) {
@@ -600,7 +604,7 @@ func TestUnwrittenMessageRetransmitted(t *testing.T) {
 	defer func() { cancelCli(); <-cliDone }()
 	cliH.expect(t, "established")
 	for i := 1; i <= 3; i++ {
-		if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprint(i)}); err != nil {
+		if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprintf("message %d", i)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -614,12 +618,320 @@ func TestUnwrittenMessageRetransmitted(t *testing.T) {
 			}
 			e = srvH.next(t)
 		}
-		if e.seq != uint64(i) || e.body != fmt.Sprint(i) {
+		if e.seq != uint64(i) || e.body != fmt.Sprintf("message %d", i) {
 			t.Fatalf("message %d: %v", i, e)
 		}
 	}
 	if unbound != 1 {
 		t.Fatalf("%d unbindings, want the failed write's alone", unbound)
+	}
+}
+
+// markedSlowConn delays the writes holding slowOn.
+type markedSlowConn struct {
+	transport.Conn
+	slowOn string
+	delay  time.Duration
+}
+
+func (c markedSlowConn) Write(b []byte) (int, error) {
+	if bytes.Contains(b, []byte(c.slowOn)) {
+		time.Sleep(c.delay)
+	}
+	return c.Conn.Write(b)
+}
+
+// The peer's messages coming while what precedes our Terminate is still
+// being written are delivered: only once our Terminate goes is the rest
+// ignored, waiting for its answer.
+func TestMessagesBeforeOurTerminate(t *testing.T) {
+	l := mem.Listen("server")
+	srvH := newRecorder()
+	srvH.onMessage = func(ctx context.Context, s *Session, msg []byte, _ Inbound) error {
+		if string(msg[8:]) != "ping" {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+		_, err := s.Send(ctx, appMsg{1, "pong"})
+		return err
+	}
+	_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
+	defer func() { cancelSrv(); <-srvDone }()
+	dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) {
+		c, err := l.Dial(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return markedSlowConn{Conn: c, slowOn: "slow", delay: 300 * time.Millisecond}, nil
+	})
+	cliH := newRecorder()
+	c := newClient(t, dialer, memstore.New(), cliH, fixp.Unsequenced, func(c *ClientConfig) {
+		c.KeepaliveInterval = time.Second
+	})
+	cancelCli, cliDone := runClient(c)
+	defer func() { cancelCli(); <-cliDone }()
+	cliH.expect(t, "established")
+	if _, err := c.Session().Send(bg, appMsg{1, "ping"}); err != nil {
+		t.Fatal(err)
+	}
+	srvH.until(t, "message") // the pong follows in 100ms
+	if _, err := c.Session().Send(bg, appMsg{1, "slow"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Session().Terminate(bg, ""); err != nil {
+		t.Fatal(err)
+	}
+	if e := cliH.next(t); e.kind != "message" || e.body != "pong" {
+		t.Fatalf("event %v, not the pong", e)
+	}
+}
+
+// partialWriteConn writes the write holding "three" but its last frame,
+// then fails; the write holding "one" waits, the others queue behind.
+type partialWriteConn struct {
+	transport.Conn
+}
+
+func (c partialWriteConn) Write(b []byte) (int, error) {
+	switch {
+	case bytes.Contains(b, []byte("three")):
+		last := sofh.HeaderLen + 8 + len("three")
+		n, _ := c.Conn.Write(b[:len(b)-last])
+		c.Conn.Close()
+		return n, errors.New("write cut")
+	case bytes.Contains(b, []byte("one")):
+		time.Sleep(100 * time.Millisecond)
+	}
+	return c.Conn.Write(b)
+}
+
+// outbound records the application messages written.
+type outbound struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (o *outbound) OnInbound(*Session, Frame) {}
+func (o *outbound) OnOutbound(_ *Session, f Frame) {
+	if f.Header.SchemaID == 33 {
+		o.mu.Lock()
+		o.msgs = append(o.msgs, string(f.Msg[8:]))
+		o.mu.Unlock()
+	}
+}
+
+// A write cut short: the frames it wrote whole are observed and counted,
+// the one cut not.
+func TestPartialWriteObserved(t *testing.T) {
+	l := mem.Listen("server")
+	srvH := newRecorder()
+	_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
+	defer func() { cancelSrv(); <-srvDone }()
+	var dials atomic.Int32
+	dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) {
+		c, err := l.Dial(ctx)
+		if err != nil || dials.Add(1) > 1 {
+			return c, err
+		}
+		return partialWriteConn{c}, nil
+	})
+	cliH := newRecorder()
+	obs := &outbound{}
+	c := newClient(t, dialer, memstore.New(), cliH, fixp.Unsequenced, func(c *ClientConfig) {
+		c.KeepaliveInterval = time.Second
+		c.Observer = obs
+	})
+	cancelCli, cliDone := runClient(c)
+	defer func() { cancelCli(); <-cliDone }()
+	cliH.expect(t, "established")
+	for _, m := range []string{"one", "two", "three"} {
+		if _, err := c.Session().Send(bg, appMsg{1, m}); err != nil {
+			t.Fatal(err)
+		}
+		if m == "one" {
+			time.Sleep(20 * time.Millisecond) // its write begun, waiting
+		}
+	}
+	cliH.until(t, "unbound")
+	obs.mu.Lock()
+	got := strings.Join(obs.msgs, ",")
+	obs.mu.Unlock()
+	if got != "one,two" || c.Session().Stats().MessagesSent.Load() != 2 {
+		t.Fatalf("observed %q, %d counted", got, c.Session().Stats().MessagesSent.Load())
+	}
+}
+
+// A queue never empty, each message waiting for a slow Sync, still
+// writes within a quarter of a keepalive interval: the peer sees traffic.
+func TestBatchAgeBounded(t *testing.T) {
+	l := mem.Listen("server")
+	srvH := &countingHandler{}
+	_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
+	defer func() { cancelSrv(); <-srvDone }()
+	cliH := newRecorder()
+	c := newClient(t, l, slowSyncStore{memstore.New(), 10 * time.Millisecond}, cliH, fixp.Recoverable, func(c *ClientConfig) {
+		c.KeepaliveInterval = 100 * time.Millisecond
+		c.Leniency = 1.5
+	})
+	cancelCli, cliDone := runClient(c)
+	defer func() { cancelCli(); <-cliDone }()
+	cliH.expect(t, "established")
+	ctx, stop := context.WithTimeout(bg, time.Second)
+	defer stop()
+	// A message a millisecond: some come during each Sync, the queue never
+	// empty, 64 KiB seconds away.
+	for ctx.Err() == nil {
+		c.Session().Send(ctx, appMsg{1, "x"})
+		time.Sleep(time.Millisecond)
+	}
+	if srvH.unbound.Load() != 0 || srvH.n.Load() == 0 {
+		t.Fatalf("%d unbindings, %d messages received", srvH.unbound.Load(), srvH.n.Load())
+	}
+}
+
+// countingHandler counts the messages and unbindings.
+type countingHandler struct {
+	BaseHandler
+	n, unbound atomic.Int64
+}
+
+func (h *countingHandler) OnMessage(context.Context, *Session, []byte, Inbound) error {
+	h.n.Add(1)
+	return nil
+}
+
+func (h *countingHandler) OnUnbound(context.Context, *Session, error) { h.unbound.Add(1) }
+
+// The peer's Terminate coming while what precedes ours is written: one
+// Terminate goes, the answer to theirs, then the connection closes.
+func TestTerminatesCrossingDuringFlush(t *testing.T) {
+	l := mem.Listen("server")
+	cliH := newRecorder()
+	dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) {
+		c, err := l.Dial(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return markedSlowConn{Conn: c, slowOn: "slow", delay: 300 * time.Millisecond}, nil
+	})
+	c := newClient(t, dialer, memstore.New(), cliH, fixp.Unsequenced, func(c *ClientConfig) {
+		c.HandshakeTimeout = time.Second
+		c.KeepaliveInterval = time.Second
+	})
+	cancel, done := runClient(c)
+	defer func() { cancel(); <-done }()
+	r := acceptRaw(t, l)
+	r.answerNegotiate(fixp.Unsequenced)
+	e := r.readEstablish()
+	r.send(&codec.EstablishmentAck{SessionId: e.SessionId, RequestTimestamp: e.Timestamp, KeepaliveInterval: 1000})
+	cliH.expect(t, "established")
+	if _, err := c.Session().Send(bg, appMsg{1, "slow"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Session().Terminate(bg, ""); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond) // the write of "slow" waiting
+	r.send(&codec.Terminate{SessionId: r.id, Code: codec.TerminationCode(fixp.TerminationFinished)})
+	terminates := 0
+	r.c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for {
+		_, msg, err := r.r.Next()
+		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				t.Fatal("connection not closed")
+			}
+			break
+		}
+		if h, _, _ := codec.ReadHeader(msg); h.SchemaId == codec.SchemaID && h.TemplateId == codec.TerminateTemplateID {
+			terminates++
+		}
+	}
+	if terminates != 1 {
+		t.Fatalf("%d Terminates", terminates)
+	}
+}
+
+// slowSyncStore makes its sessions' Sync wait: the writer, syncing a
+// message, finds the next one queued when it returns.
+type slowSyncStore struct {
+	store.Store
+	delay time.Duration
+}
+
+type slowSyncSession struct {
+	store.Session
+	delay time.Duration
+}
+
+func (s slowSyncStore) Create(ctx context.Context, m store.Meta) (store.Session, error) {
+	ss, err := s.Store.Create(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	return slowSyncSession{ss, s.delay}, nil
+}
+
+func (s slowSyncStore) Open(ctx context.Context, id fixp.SessionID) (store.Session, error) {
+	ss, err := s.Store.Open(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return slowSyncSession{ss, s.delay}, nil
+}
+
+func (s slowSyncSession) Sync(ctx context.Context) error {
+	time.Sleep(s.delay)
+	return s.Session.Sync(ctx)
+}
+
+// Messages written in one write that fails stay retransmittable, however
+// short the retention: the store evicts what was written, not what was
+// taken out of the queue.
+func TestRetentionAfterFailedWrite(t *testing.T) {
+	l := mem.Listen("server")
+	srvH := newRecorder()
+	_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
+	defer func() { cancelSrv(); <-srvDone }()
+	var dials atomic.Int32
+	failed := &atomic.Bool{}
+	dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) {
+		c, err := l.Dial(ctx)
+		if err != nil || dials.Add(1) > 1 {
+			return c, err
+		}
+		return failingWriteConn{Conn: c, failed: failed, failOn: "message 1"}, nil
+	})
+	cliH := newRecorder()
+	c := newClient(t, dialer, slowSyncStore{memstore.New(), 50 * time.Millisecond}, cliH, fixp.Recoverable, func(c *ClientConfig) {
+		c.KeepaliveInterval = time.Second
+		c.MaxStoredMessages = 1
+	})
+	cancelCli, cliDone := runClient(c)
+	defer func() { cancelCli(); <-cliDone }()
+	cliH.expect(t, "established")
+	for i := 1; i <= 2; i++ {
+		if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprintf("message %d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Within a few connections: a message lost would make them endless.
+	deadline := time.Now().Add(5 * time.Second)
+	for i := 1; i <= 2; {
+		if time.Now().After(deadline) {
+			t.Fatalf("message %d not delivered", i)
+		}
+		e := srvH.next(t)
+		if e.kind != "message" {
+			continue
+		}
+		if e.seq != uint64(i) || e.body != fmt.Sprintf("message %d", i) {
+			t.Fatalf("message %d: %v", i, e)
+		}
+		i++
+	}
+	if !failed.Load() {
+		t.Fatal("no write failed")
 	}
 }
 

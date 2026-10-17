@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/binary"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -15,16 +16,31 @@ type encoder interface {
 	AppendTo(dst []byte) ([]byte, error)
 }
 
-// frame encodes m as a SOFH frame of SBE 1.0 little-endian.
+// scratch holds the buffers frame encodes into, before copying the frame
+// out at its size: one allocation, whatever the message's size.
+var scratch = sync.Pool{New: func() any { b := make([]byte, 0, 512); return &b }}
+
+// maxScratch bounds the buffers kept for reuse.
+const maxScratch = 64 << 10
+
+// frame encodes m as a SOFH frame of SBE 1.0 little-endian, its own.
 func frame(m encoder) ([]byte, error) {
-	b, err := m.AppendTo(make([]byte, sofh.HeaderLen, 64))
-	if err != nil {
-		return nil, err
+	bp := scratch.Get().(*[]byte)
+	b, err := m.AppendTo((*bp)[:sofh.HeaderLen])
+	if err == nil {
+		err = sofh.PutHeader(b, sofh.SBE10LittleEndian, len(b)-sofh.HeaderLen)
 	}
-	if err := sofh.PutHeader(b, sofh.SBE10LittleEndian, len(b)-sofh.HeaderLen); err != nil {
-		return nil, err
+	var f []byte
+	if err == nil {
+		f = append(make([]byte, 0, len(b)), b...)
+	} else {
+		b = *bp // what AppendTo returned with its error may be anything
 	}
-	return b, nil
+	if cap(b) <= maxScratch {
+		*bp = b[:0]
+		scratch.Put(bp)
+	}
+	return f, err
 }
 
 // mustFrame encodes a session message, which cannot fail: its data fields

@@ -29,8 +29,8 @@ func (s *Session) updateFinish(f func(out, in *store.Finish) bool) error {
 	if !f(&out, &in) {
 		return nil
 	}
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	err := st.SetFinish(ctx, out, in)
 	if err == nil {
 		err = st.Sync(ctx)
@@ -307,12 +307,12 @@ func (s *Session) finalize() {
 	s.mu.Lock()
 	st := s.st
 	s.mu.Unlock()
-	ctx, cancel := s.storeCtx()
+	ctx := s.storeCtx()
 	err := st.Finalize(ctx, time.Now())
 	if err == nil {
 		err = st.Sync(ctx)
 	}
-	cancel()
+	ctx.cancel()
 	if err != nil {
 		s.halt(fmt.Errorf("fixp/session: finalizing: %w", err))
 		return

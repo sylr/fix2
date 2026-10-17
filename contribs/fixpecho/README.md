@@ -14,11 +14,12 @@ go run . client -connect 127.0.0.1:7760 -token s3cret -count 100000 -window 100
 ```
 
 ```
-sent 100000, echoed 100000, duplicates 0, not applied 0, connections 1, in 376.867ms: 265345 echoes/s
-round trip: min 69µs, p50 332µs, p90 553µs, p99 755µs, p99.9 1.069ms, max 1.719ms
+sent 100000, echoed 100000, duplicates 0, not applied 0, connections 1, in 130.391ms: 766926 echoes/s
+round trip: min 17µs, p50 85µs, p90 120µs, p99 206µs, p99.9 778µs, max 1.497ms
 ```
 
-(Apple M4, loopback, both ends on one machine.)
+(Apple M4, loopback, both ends on one machine. With `-window 1`, one
+message at a time: 42,897 echoes/s, round trip p50 20µs, p99 36µs.)
 
 The message is an SBE message of schema 100, template 1: its number and
 send time, padded to `-size` bytes. A round trip runs from its send to its

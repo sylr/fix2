@@ -384,8 +384,8 @@ func (c *conn) retransmit(j retransmitJob) error {
 	s.mu.Lock()
 	st, id := s.st, s.id
 	s.mu.Unlock()
-	ctx, cancel := s.storeCtx()
-	defer cancel()
+	ctx := s.storeCtx()
+	defer ctx.cancel()
 	headed := false
 	var buf []byte
 	last := j.from + uint64(j.count) - 1
