@@ -62,6 +62,11 @@ type Config struct {
 	// SenderCompID identifies the session: 1 to 8 letters, digits, - or
 	// _, unique among the account's sessions.
 	SenderCompID string
+	// SignatureTime is the text form of the Logon's sendingTime in the
+	// payload it signs. Leave it zero: SignatureTimeMicros, the form
+	// Binance checks (settled on the testnet). The other forms are
+	// diagnostics, for cmd/binancefix's logon command (see SignatureTime).
+	SignatureTime SignatureTime
 
 	// HeartBtInt is the heartbeat interval, whole seconds from 5s to 60s,
 	// DefaultHeartBtInt if 0.
@@ -147,6 +152,9 @@ func (cfg Config) withDefaults() (Config, error) {
 	}
 	if !senderCompID.MatchString(cfg.SenderCompID) {
 		errs = append(errs, fmt.Errorf("SenderCompID %q: 1 to 8 letters, digits, - or _", cfg.SenderCompID))
+	}
+	if cfg.SignatureTime >= numSignatureTimes {
+		errs = append(errs, fmt.Errorf("SignatureTime %d unknown", cfg.SignatureTime))
 	}
 	if cfg.HeartBtInt == 0 {
 		cfg.HeartBtInt = DefaultHeartBtInt

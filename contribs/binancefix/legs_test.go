@@ -134,6 +134,15 @@ func TestCancelReplace(t *testing.T) {
 			"cancel c1 refused;order n1 pending;"},
 		{"cancel refused, allow failure, new order placed", allow, []encoder{cancelReject("c1"), reportOf("n1", fixsbe.ExecTypeNew)}, Answered,
 			"cancel c1 refused;order n1 accepted;"},
+		// As the testnet answered on 2026-10-17: the new order's NEW
+		// before the OrderCancelReject, each leg answered on its own.
+		{"cancel refused, allow failure, new order placed first", allow, []encoder{reportOf("n1", fixsbe.ExecTypeNew), cancelReject("c1")}, Answered,
+			"cancel c1 refused;order n1 accepted;"},
+		// As the testnet answered: the OrderCancelReject, then the new
+		// order's REJECTED -2010 "order placement not attempted", which
+		// finds the request already answered.
+		{"cancel refused, stop on failure, then not attempted", stop, []encoder{cancelReject("c1"), notAttempted("n1")}, Answered,
+			"cancel c1 refused;order n1 refused;"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, p, h := session(t, nil)
@@ -173,6 +182,50 @@ func TestCancelReplace(t *testing.T) {
 }
 
 func isER(e encoder) bool { _, ok := e.(*ExecutionReport); return ok }
+
+// notAttempted is the ExecutionReport REJECTED the testnet sends for the
+// new order of a STOP_ON_FAILURE cancel/replace whose cancellation failed.
+func notAttempted(id string) *ExecutionReport {
+	er := reportOf(id, fixsbe.ExecTypeRejected)
+	er.OrderID, er.ErrorCode, er.ErrorText = Optional[int64]{}, Some[int32](-2010), []byte("Unable to cancel order, order placement not attempted.")
+	return er
+}
+
+// The cancellation of a list, as the testnet answered it on 2026-10-17: a
+// ListStatus ALL_DONE carrying the cancellation's ClOrdID as ClListID
+// first, which does not answer it, then an ExecutionReport CANCELED per
+// order carrying the cancellation's ClOrdID, the first of which does.
+func TestListCancelAnsweredAfterListStatus(t *testing.T) {
+	c, p, h := session(t, nil)
+	r, err := c.Send(&OrderCancelRequest{ClOrdID: []byte("x"), OrigClOrdID: []byte{}, OrigClListID: []byte("L"), Symbol: []byte("BTCUSDT")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.expect(t, fixsbe.OrderCancelRequestTemplateID)
+	p.send(t, &fixsbe.ListStatus{ListID: Some[int64](9), ListStatusType: fixsbe.ListStatusTypeAllDone, ListOrderStatus: fixsbe.ListOrderStatusAllDone,
+		ClListID: []byte("x"), OrigClListID: []byte("L"),
+		Orders: []ListStatusOrders{{OrderID: Some[int64](91), ClOrdID: []byte("w"), Symbol: []byte("BTCUSDT")}, {OrderID: Some[int64](92), ClOrdID: []byte("p"), Symbol: []byte("BTCUSDT")}}})
+	if x := h.next(t, "list"); x.in.Receipt != nil || r.State() != Written {
+		t.Fatalf("the ListStatus answered the cancellation: %v, %s", r.State(), legs(r))
+	}
+	cancelled := func(orig string) *ExecutionReport {
+		er := reportOf("x", fixsbe.ExecTypeCanceled)
+		er.OrigClOrdID, er.ListID = []byte(orig), Some[int64](9)
+		return er
+	}
+	p.send(t, cancelled("w"))
+	if x := h.next(t, "er"); x.in.Receipt != r {
+		t.Fatalf("the first CANCELED did not answer the cancellation")
+	}
+	waitState(t, r, Answered)
+	if got := legs(r); got != "cancel x accepted;" {
+		t.Errorf("legs %s", got)
+	}
+	p.send(t, cancelled("p"))
+	if x := h.next(t, "er"); x.in.Receipt != nil {
+		t.Errorf("the second CANCELED matched a request")
+	}
+}
 
 // A ListStatus whose order entry carries -1007 leaves that order's status
 // unknown: the list is StatusUnknown, not Answered.

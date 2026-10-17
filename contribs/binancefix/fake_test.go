@@ -221,8 +221,27 @@ func (p *peer) logon(t *testing.T, cfg *Config) *fixsbe.Logon {
 }
 
 // checkLogon checks Logon m against cfg: its header, its fields, its
-// signature.
+// signature, its SendingTime's text the default form.
 func checkLogon(t *testing.T, m msg, cfg *Config) *fixsbe.Logon {
+	t.Helper()
+	return checkLogonAs(t, m, cfg, SignatureTimeMicros)
+}
+
+// sendingTimeForms are the texts of the Logon's SendingTime the fake
+// verifies a signature with, by form: written here apart from the client's
+// SignatureTime.Format, as Binance would.
+var sendingTimeForms = map[SignatureTime]func(time.Time) string{
+	SignatureTimeMillis:     func(t time.Time) string { return t.UTC().Format("20060102-15:04:05.000") },
+	SignatureTimeMicros:     func(t time.Time) string { return t.UTC().Format("20060102-15:04:05.000000") },
+	SignatureTimeSeconds:    func(t time.Time) string { return t.UTC().Format("20060102-15:04:05") },
+	SignatureTimeNanos:      func(t time.Time) string { return t.UTC().Format("20060102-15:04:05.000000000") },
+	SignatureTimeUnixMicros: func(t time.Time) string { return strconv.FormatInt(t.UnixMicro(), 10) },
+	SignatureTimeUnixMillis: func(t time.Time) string { return strconv.FormatInt(t.UnixMilli(), 10) },
+}
+
+// checkLogonAs checks Logon m against cfg, its signature made of the
+// SendingTime's text in form f, and no other.
+func checkLogonAs(t *testing.T, m msg, cfg *Config, f SignatureTime) *fixsbe.Logon {
 	t.Helper()
 	var l fixsbe.Logon
 	if _, err := l.DecodeBody(m.h, m.body); err != nil {
@@ -230,9 +249,6 @@ func checkLogon(t *testing.T, m msg, cfg *Config) *fixsbe.Logon {
 	}
 	if m.h.SeqNum != 1 || m.h.SchemaId != 1 || m.h.Version != 1 {
 		t.Errorf("Logon header %+v", m.h)
-	}
-	if m.h.SendingTime%1000 != 0 {
-		t.Errorf("Logon sendingTime %d: not whole milliseconds", m.h.SendingTime)
 	}
 	if d := time.Since(time.UnixMicro(m.h.SendingTime)); d < 0 || d > wait {
 		t.Errorf("Logon sendingTime %v ago", d)
@@ -242,13 +258,18 @@ func checkLogon(t *testing.T, m msg, cfg *Config) *fixsbe.Logon {
 		time.Duration(l.HeartBtInt)*time.Second != cfg.HeartBtInt || l.DropCopyFlag.Valid {
 		t.Errorf("Logon %+v", l)
 	}
-	// The signature, checked as Binance would, under the assumption on
-	// SendingTime's text (signedSendingTime).
-	payload := strings.Join([]string{"A", string(l.SenderCompId), string(l.TargetCompId), strconv.FormatUint(uint64(m.h.SeqNum), 10),
-		time.UnixMicro(m.h.SendingTime).UTC().Format("20060102-15:04:05.000")}, "\x01")
+	// The signature, checked as Binance would, under an assumption on
+	// SendingTime's text (SignatureTime): of form f, and no other.
 	sig, err := base64.StdEncoding.DecodeString(string(l.RawData))
-	if err != nil || !ed25519.Verify(testKey(t).Public().(ed25519.PublicKey), []byte(payload), sig) {
-		t.Errorf("Logon signature %q does not verify %q", l.RawData, payload)
+	if err != nil {
+		t.Errorf("Logon signature %q: %v", l.RawData, err)
+	}
+	for g, text := range sendingTimeForms {
+		payload := strings.Join([]string{"A", string(l.SenderCompId), string(l.TargetCompId), strconv.FormatUint(uint64(m.h.SeqNum), 10),
+			text(time.UnixMicro(m.h.SendingTime))}, "\x01")
+		if ok := ed25519.Verify(testKey(t).Public().(ed25519.PublicKey), []byte(payload), sig); ok != (g == f) {
+			t.Errorf("Logon signature %q verifies %q: %v", l.RawData, payload, ok)
+		}
 	}
 	return &l
 }

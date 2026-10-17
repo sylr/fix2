@@ -16,8 +16,10 @@
 //
 //   - logs on with a Logon whose seqNum, 1 (ResetSeqNumFlag: Binance
 //     resets on every Logon), and sendingTime are set once and signed
-//     with Ed25519 as Binance documents, never stamped again (see
-//     signedSendingTime for the textual form of the time, an assumption);
+//     with Ed25519 as Binance documents, never stamped again, the time
+//     signed as FIX text in UTC at microsecond precision, the field's
+//     own, which Binance checks (settled on the testnet: see
+//     SignatureTime);
 //   - refuses a LogonAck whose required fields are null (HeartBtInt's
 //     4,294,967,295, SbeSchemaIdVersionDeprecated's 255: SBE §4.4.2
 //     forbids a producer to send them) or empty (UUID), whose HeartBtInt
@@ -96,18 +98,27 @@
 //     too, its ErrorCode telling;
 //   - a cancellation (OrderCancelRequest, an
 //     OrderCancelRequestAndNewOrderSingle's CancelClOrdID, which Send then
-//     requires): an ExecutionReport CANCELED, or an OrderCancelReject (by
+//     requires): an ExecutionReport CANCELED, carrying the cancellation's
+//     ClOrdID, the order's as OrigClOrdID, or an OrderCancelReject (by
 //     the CancelClOrdID or the request's ClOrdID); in STOP_ON_FAILURE mode,
-//     a refused cancellation refuses the new order, not attempted; in
-//     ALLOW_FAILURE mode, the new order's own answer is awaited;
+//     a refused cancellation refuses the new order, not attempted (Binance
+//     then tells so by an ExecutionReport REJECTED -2010, "order placement
+//     not attempted", which finds the request answered); in ALLOW_FAILURE
+//     mode, the new order's own answer is awaited, before or after the
+//     OrderCancelReject (Binance sends it first);
 //   - an amendment (OrderAmendKeepPriorityRequest), whose ClOrdID may be
-//     the amended order's: an ExecutionReport REPLACED, or an
-//     OrderAmendReject; the order's fills (TRADE) do not answer it;
+//     the amended order's: an ExecutionReport REPLACED (OrdStatus NEW,
+//     the amendment's ClOrdID, the order's as OrigClOrdID: the order's
+//     ClOrdID from then on), or an OrderAmendReject; the order's fills
+//     (TRADE) do not answer it;
 //   - a list (NewOrderList): its ListStatus, by ClListID, or, ClListID
 //     being optional, by an entry naming one of its orders; each entry
 //     answers its order with its own error code. A ListStatus never
 //     answers a cancellation: an earlier fill's update carries the same
-//     IDs;
+//     IDs, and the ListStatus ALL_DONE Binance sends first when a list is
+//     cancelled, carrying the cancellation's ClOrdID as ClListID, is
+//     followed by the ExecutionReports CANCELED, carrying it too, the
+//     first of which answers;
 //   - a mass cancellation: its OrderMassCancelReport; a limits query: its
 //     LimitResponse, by ReqID;
 //   - any leg: a Reject, by its RefSeqNum, refuses the whole request.
@@ -135,4 +146,15 @@
 // server
 // with a clean Logout. LogonEvent.SchemaDeprecated tells that Binance
 // deprecated the schema the codecs were generated from.
+//
+// # Settled on the testnet
+//
+// Where Binance's documentation is silent, the client relied on
+// assumptions, all settled against the Spot testnet on 2026-10-17 by
+// cmd/binancefix (logon, probe: 8 confirmed, 0 contradicted, 0
+// inconclusive; README.md, "Settled on the testnet", records the messages
+// seen): the signed SendingTime's microsecond form, the LogonAck numbered
+// 1, and how each kind of request is answered, as above. The command and
+// the opt-in tests of testnet_test.go stay as the regression check should
+// Binance change.
 package binancefix

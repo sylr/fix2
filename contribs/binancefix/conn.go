@@ -184,7 +184,7 @@ func (k *conn) wake() {
 func (k *conn) logonFrame(t time.Time) ([]byte, error) {
 	cfg := &k.c.cfg
 	t = logonTime(t)
-	m := buildLogon(cfg, sign(cfg.PrivateKey, cfg.SenderCompID, TargetCompID, 1, t))
+	m := buildLogon(cfg, sign(cfg.PrivateKey, cfg.SignatureTime, cfg.SenderCompID, TargetCompID, 1, t))
 	b, err := m.AppendWithHeader(lesofh.Reserve(nil), MessageHeader{SeqNum: 1, SendingTime: t.UnixMicro()})
 	if err != nil {
 		return nil, fmt.Errorf("binancefix: encoding the Logon: %w", err)

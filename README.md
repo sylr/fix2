@@ -121,9 +121,20 @@ on with an Ed25519-signed Logon, heartbeats, ends the connection on a gap
 in Binance's numbers (Binance resends nothing), and reconnects within
 Binance's connection limits. It keeps no store and resends nothing: each
 request's receipt tells whether Binance answered it, never saw it (safe to
-send again), or may have seen it (to reconcile):
+send again), or may have seen it (to reconcile). Its command, `binancefix`,
+checks against the Spot testnet, and only it, what the client relies on
+where Binance's documentation is silent, all of it settled on 2026-10-17:
+`logon` checks the Logon (its signed SendingTime's form, microseconds,
+was settled with it), `probe` places small orders below the market
+(`--price-far`, required, inside the symbol's price bands), judges each
+answer confirmed, contradicted or inconclusive, and cancels what it placed.
+It needs a testnet Ed25519 API key with the `FIX_API` permission:
 
-    cd contribs/binancefix && make test
+    cd contribs/binancefix && make
+    export BINANCE_API_KEY=... BINANCE_PRIVATE_KEY=/path/to/ed25519-private.pem
+    dist/binancefix logon
+    dist/binancefix probe --price-far 70000   # BTCUSDT at about 81,500
+    dist/binancefix probe --price-far 70000 --json amend list-cancel
 
 See its [README](contribs/binancefix/README.md).
 

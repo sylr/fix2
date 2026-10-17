@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -50,27 +51,36 @@ func unhex(t *testing.T, dump string) []byte {
 	return b
 }
 
-// The signature of Binance's example, its SendingTime text the
-// assumption's (signedSendingTime).
+// The signature of Binance's example, its SendingTime text in the
+// millisecond form of the FIX example; the client signs the microsecond
+// form, which Binance checks (signedSendingTime).
 func TestSignatureVector(t *testing.T) {
 	at := time.Date(2024, 6, 27, 11, 17, 25, 223e6, time.UTC)
-	if s := signedSendingTime(at); s != "20240627-11:17:25.223" {
+	if s := signedSendingTime(at); s != "20240627-11:17:25.223000" {
 		t.Errorf("signedSendingTime = %q", s)
 	}
 	// Whatever the zone of t: UTC.
-	if s := signedSendingTime(at.In(time.FixedZone("CEST", 2*3600))); s != "20240627-11:17:25.223" {
+	if s := signedSendingTime(at.In(time.FixedZone("CEST", 2*3600))); s != "20240627-11:17:25.223000" {
 		t.Errorf("signedSendingTime in CEST = %q", s)
 	}
-	if got := sign(testKey(t), "EXAMPLE", "SPOT", 1, at); string(got) != docSignature {
+	// The testnet's evidence: the text Binance accepted (2026-10-17).
+	if s := signedSendingTime(time.Date(2026, 10, 17, 18, 58, 1, 373e6, time.UTC)); s != "20261017-18:58:01.373000" {
+		t.Errorf("signedSendingTime = %q", s)
+	}
+	if got := sign(testKey(t), SignatureTimeMillis, "EXAMPLE", "SPOT", 1, at); string(got) != docSignature {
 		t.Errorf("signature %s, want %s", got, docSignature)
 	}
-	if p := signaturePayload("EXAMPLE", "SPOT", 1, at); string(p) != "A\x01EXAMPLE\x01SPOT\x011\x0120240627-11:17:25.223" {
+	if p := signaturePayload(SignatureTimeMillis, "EXAMPLE", "SPOT", 1, at); string(p) != "A\x01EXAMPLE\x01SPOT\x011\x0120240627-11:17:25.223" {
 		t.Errorf("payload %q", p)
 	}
-	// The Logon's time is truncated to the millisecond: no digit is lost
-	// in its text.
-	if lt := logonTime(at.Add(456 * time.Microsecond)); !lt.Equal(at) {
+	// The Logon's time is truncated to the microsecond, the SBE field's
+	// precision: its text and its value on the wire are one instant.
+	if lt := logonTime(at.Add(456*time.Microsecond + 789)); !lt.Equal(at.Add(456 * time.Microsecond)) {
 		t.Errorf("logonTime %v", lt)
+	}
+	if lt := logonTime(at.Add(456 * time.Microsecond)); signedSendingTime(lt) != "20240627-11:17:25.223456" ||
+		time.UnixMicro(lt.UnixMicro()).UTC().Format("20060102-15:04:05.000000") != signedSendingTime(lt) {
+		t.Errorf("logonTime %v: %q", lt, signedSendingTime(lt))
 	}
 }
 
@@ -83,9 +93,10 @@ func TestSignatureVector(t *testing.T) {
 func TestLogonSample(t *testing.T) {
 	sample := unhex(t, logonSample)
 	signedAt := time.Date(2024, 6, 27, 11, 17, 25, 223e6, time.UTC)
+	// The sample is signed in the FIX example's millisecond form.
 	cfg := &Config{APIKey: docAPIKey, PrivateKey: testKey(t), SenderCompID: "EXAMPLE", HeartBtInt: 30 * time.Second,
-		MessageHandling: fixsbe.MessageHandlingSequential}
-	m := buildLogon(cfg, sign(cfg.PrivateKey, cfg.SenderCompID, TargetCompID, 1, signedAt))
+		MessageHandling: fixsbe.MessageHandlingSequential, SignatureTime: SignatureTimeMillis}
+	m := buildLogon(cfg, sign(cfg.PrivateKey, cfg.SignatureTime, cfg.SenderCompID, TargetCompID, 1, signedAt))
 	b, err := m.AppendWithHeader(nil, MessageHeader{SeqNum: 1, SendingTime: signedAt.UnixMicro()})
 	if err != nil {
 		t.Fatal(err)
@@ -104,19 +115,76 @@ func TestLogonSample(t *testing.T) {
 	if !bytes.Equal(frame, want) {
 		t.Errorf("Logon\n%x\nwant\n%x", frame, want)
 	}
-	if sig := sign(cfg.PrivateKey, "EXAMPLE", "SPOT", 1, sampleAt); string(sig) == docSignature {
+	if sig := sign(cfg.PrivateKey, SignatureTimeMillis, "EXAMPLE", "SPOT", 1, sampleAt); string(sig) == docSignature {
 		t.Error("the sample's own sendingTime signs as documented: the assumption is to be revisited")
 	}
 
-	// The connection's Logon frame: seqNum 1 and the time given, stamped
-	// once.
+	// The connection's Logon frame: seqNum 1 and the time given, to the
+	// microsecond, stamped once.
 	k := &conn{c: &Client{cfg: *cfg}}
-	lf, err := k.logonFrame(signedAt.Add(789 * time.Microsecond))
+	lf, err := k.logonFrame(signedAt.Add(789 * time.Nanosecond))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(lf, want) {
 		t.Errorf("logonFrame\n%x\nwant\n%x", lf, want)
+	}
+}
+
+// The forms of the Logon's sendingTime in its signature, which the logon
+// command tries against the testnet: the default is Binance's,
+// microsecond FIX text, then the other candidates in order.
+func TestSignatureTimes(t *testing.T) {
+	// Whatever t's zone: UTC.
+	at := time.Date(2024, 6, 27, 9, 17, 25, 223e6, time.UTC).In(time.FixedZone("CEST", 2*3600))
+	want := map[SignatureTime][2]string{
+		SignatureTimeMillis:     {"ms", "20240627-09:17:25.223"},
+		SignatureTimeMicros:     {"us", "20240627-09:17:25.223000"},
+		SignatureTimeSeconds:    {"s", "20240627-09:17:25"},
+		SignatureTimeNanos:      {"ns", "20240627-09:17:25.223000000"},
+		SignatureTimeUnixMicros: {"unix-us", "1719479845223000"},
+		SignatureTimeUnixMillis: {"unix-ms", "1719479845223"},
+	}
+	fs := SignatureTimes()
+	if len(fs) != len(want) || !slices.Equal(fs, []SignatureTime{SignatureTimeMicros, SignatureTimeMillis, SignatureTimeSeconds, SignatureTimeNanos, SignatureTimeUnixMicros, SignatureTimeUnixMillis}) || SignatureTime(0) != SignatureTimeMicros {
+		t.Fatalf("SignatureTimes() = %v", fs)
+	}
+	for _, f := range fs {
+		w := want[f]
+		if f.String() != w[0] || f.Format(at) != w[1] {
+			t.Errorf("%d: %q %q, want %q", f, f, f.Format(at), w)
+		}
+		if g, err := ParseSignatureTime(strings.ToUpper(w[0])); err != nil || g != f {
+			t.Errorf("ParseSignatureTime(%q) = %v, %v", w[0], g, err)
+		}
+	}
+	if _, err := ParseSignatureTime("auto"); err == nil {
+		t.Error("ParseSignatureTime(auto) accepted")
+	}
+	if s := SignatureTime(42).String(); s != "SignatureTime(42)" {
+		t.Errorf("String of an unknown form %q", s)
+	}
+	if signedSendingTime(at) != SignatureTimeMicros.Format(at) {
+		t.Error("signedSendingTime is not the default form")
+	}
+	cfg := Config{APIKey: "k", PrivateKey: testKey(t), SenderCompID: "S", SignatureTime: numSignatureTimes}
+	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "SignatureTime") {
+		t.Errorf("New with an unknown SignatureTime: %v", err)
+	}
+}
+
+// The Logon is signed with Config.SignatureTime's form, the default's when
+// zero.
+func TestLogonSignatureTime(t *testing.T) {
+	for _, f := range SignatureTimes() {
+		t.Run(f.String(), func(t *testing.T) {
+			fk := newFake(t)
+			cfg := testConfig(fk, newRecorder())
+			cfg.SignatureTime, cfg.HeartBtInt = f, DefaultHeartBtInt
+			start(t, cfg, 0)
+			p := fk.accept()
+			checkLogonAs(t, p.expect(t, fixsbe.LogonTemplateID), &cfg, f)
+		})
 	}
 }
 

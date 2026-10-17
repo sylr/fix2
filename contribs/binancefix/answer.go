@@ -21,11 +21,17 @@ const (
 	// of an OrderCancelRequestAndNewOrderSingle (its CancelClOrdID). An
 	// ExecutionReport of ExecType CANCELED answers it, or an
 	// OrderCancelReject; never a ListStatus, which an earlier fill of the
-	// list sends with the same IDs.
+	// list sends with the same IDs. Seen on the testnet (2026-10-17): the
+	// CANCELED carries the cancellation's ClOrdID, the order's as
+	// OrigClOrdID; a list's cancellation gets a ListStatus ALL_DONE
+	// carrying the cancellation's ClOrdID as ClListID first, then the
+	// CANCELED per order, which answer.
 	LegCancel
 	// LegAmend is an OrderAmendKeepPriorityRequest. An ExecutionReport of
 	// ExecType REPLACED answers it, or an OrderAmendReject: its ClOrdID may
-	// be the amended order's, whose fills (TRADE) do not answer it.
+	// be the amended order's, whose fills (TRADE) do not answer it. Seen on
+	// the testnet: REPLACED, OrdStatus NEW, carrying the amendment's
+	// ClOrdID, the order's as OrigClOrdID.
 	LegAmend
 	// LegList is a NewOrderList: its ListStatus answers it.
 	LegList
@@ -253,7 +259,9 @@ func (r *Receipt) apply(m any, a Answer) bool {
 		o := outcome(Some(m.ErrorCode), true)
 		done := set(i, o)
 		if done && r.stopOnFailure {
-			// STOP_ON_FAILURE: the new order is not attempted.
+			// STOP_ON_FAILURE: the new order is not attempted (seen on
+			// the testnet: its ExecutionReport REJECTED -2010, "order
+			// placement not attempted", follows, the request answered).
 			if j := slices.IndexFunc(r.legs, func(l Leg) bool { return l.Kind == LegOrder }); j >= 0 {
 				set(j, o)
 			}
@@ -266,7 +274,10 @@ func (r *Receipt) apply(m any, a Answer) bool {
 	case *fixsbe.ListStatus:
 		// A ListStatus never answers a cancellation: one of an earlier
 		// fill carries the same IDs. The cancellation's ExecutionReports
-		// (CANCELED) or OrderCancelReject do.
+		// (CANCELED) or OrderCancelReject do: on the testnet, the
+		// ListStatus ALL_DONE of a cancelled list, carrying the
+		// cancellation's ClOrdID as ClListID, comes first, the CANCELED
+		// after (TestListCancelAnsweredAfterListStatus).
 		//
 		// It is our list's when its ClListID is, or, ClListID being
 		// optional, when one of its entries is one of our list's orders.
