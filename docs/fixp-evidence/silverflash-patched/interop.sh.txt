@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# interop.sh OUTDIR: runs the Silverflash interop tests, each case against
+# a fresh patched server (server.sh, the spike's), logs in OUTDIR. Fails if
+# a server does not start or a case fails.
+set -uo pipefail
+out=$1
+mkdir -p "$out"
+port=7770
+srv=
+stop() {
+	[ -n "$srv" ] || return 0
+	pkill -P "$srv" 2>/dev/null
+	kill "$srv" 2>/dev/null
+	wait "$srv" 2>/dev/null
+	pkill -f "SpikeServer $port " 2>/dev/null
+	srv=
+	return 0
+}
+trap stop EXIT INT TERM
+failed=0
+run() {
+	local name=$1 env=$2 pattern=$3 expect=${4:-} ready=0 status
+	port=$((port + 1))
+	bash /tmp/claude-501/fixp/spike/server.sh run $port 120000 Idempotent >"$out/$name.server.log" 2>&1 &
+	srv=$!
+	# Not by connecting: a connection closed without a frame kills
+	# Silverflash's session thread.
+	for _ in $(seq 60); do
+		if lsof -nP -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1; then ready=1; break; fi
+		sleep 1
+	done
+	if [ $ready = 0 ]; then
+		echo "$name: server not listening on $port"
+		failed=1
+		stop
+		return
+	fi
+	env FIX2_SILVERFLASH=127.0.0.1:$port $env go test -count=1 -v -run "^($pattern)\$" ./fixp/tests/silverflash/ >"$out/$name.test.log" 2>&1
+	status=$?
+	echo "$name: exit $status"
+	grep -E "^(--- |    --- |ok|FAIL)|answers to" "$out/$name.test.log"
+	[ $status = 0 ] || failed=1
+	stop
+	# The failure the case characterizes, in the server's log.
+	if [ -n "$expect" ] && ! grep -q "$expect" "$out/$name.server.log"; then
+		echo "$name: no \"$expect\" in the server's log"
+		failed=1
+	fi
+}
+run passing "" 'TestPaced|TestOrders'
+run burst FIX2_SILVERFLASH_BURST=1 TestBurstCharacterization
+run finish "FIX2_SILVERFLASH_FINISH=1 FIX2_SILVERFLASH_LOG=1" TestFinishCharacterization 'EventReactor.getSubscriber'
+run fragmented FIX2_SILVERFLASH_FRAGMENTED=1 TestFragmentedCharacterization 'EventReactor.getSubscriber'
+exit $failed

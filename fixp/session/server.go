@@ -565,6 +565,8 @@ func (srv *Server) establish(ctx context.Context, t transport.Conn, r *sofh.Read
 	srv.mu.Unlock()
 	keepalive := time.Duration(e.KeepaliveInterval) * time.Millisecond
 	switch {
+	case !id.Valid():
+		return reject(fixp.EstablishmentUnspecified, "session ID is not a version 4 UUID")
 	case s == nil:
 		return reject(fixp.EstablishmentUnnegotiated, "")
 	case len(e.Credentials) > srv.cfg.MaxCredentialsLength:

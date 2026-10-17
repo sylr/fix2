@@ -191,9 +191,24 @@ EstablishmentReject.
 - A server answers an Establish for a session it never negotiated, or one
   finalized, with `Unnegotiated` (§7.2.5.1); for a session established on
   another connection, with `AlreadyEstablished` (§7.2.5.2): the earlier
-  binding stays, until it terminates or its keepalive lapses. A keepalive
+  binding stays, until it terminates or its keepalive lapses. An Establish
+  again on the connection the session is established on is redundant, and
+  gets `AlreadyEstablished` too, the binding staying (§4.3.3); one for
+  another session there is a protocol violation. A keepalive
   interval outside the configured range gets `KeepaliveInterval`
-  (§7.2.5.4).
+  (§7.2.5.4); a session ID that is not a version 4 UUID, a timestamp out
+  of range, or a `NextSeqNo` below what the server received, `Unspecified`
+  (§7.2.5.5, §7.2.5.6, and §7.3.3 the other way). A session the
+  application blocks, its `Authenticate` hook returning a
+  `*fixp.EstablishmentRejectedError`, gets that code, such as
+  `SessionBlocked` (§7.2.5.3), which a client keeps trying, a block being
+  temporary; `Unnegotiated`, `Credentials` and `KeepaliveInterval` end its
+  `Run`.
+- A client ignores an EstablishmentAck or a NegotiationResponse that is
+  not its request's, by session ID or timestamp, and connects again once
+  its handshake timeout lapses: under the same session ID for an
+  Establish (§7.2.5.8, §7.2.5.9), a new one for a Negotiate (§7.1.7.5,
+  §7.1.7.6).
 - The server authenticates the client at Negotiate and again at every
   Establish, with its credentials and the connection's identity (TLS
   state, or the principal a `transport.PrincipalConn` reports).
@@ -315,10 +330,11 @@ EstablishmentAck, and sends RetransmitRequest for it (§4.6.1):
   its `RequestTimestamp`; a Retransmission or RetransmitReject matching no
   outstanding request is a protocol violation.
 - The sender may answer with a partial batch; the receiver requests the
-  rest (§4.6.2.2). The engine as sender answers in batches of a
-  configured size, interleaved with real-time messages, each batch after
-  a Retransmission, real-time messages after a Sequence (§4.6.2.2,
-  §7.4.4.2).
+  rest (§4.6.2.2). The engine as sender answers a request with one
+  batch, of a configured size at most: a Retransmission then its
+  messages, real-time messages following after a Sequence. A second
+  batch for the same request, as §7.4.4.2 shows, the engine neither sends
+  nor accepts (see [the contradictions](#where-the-standard-contradicts-itself)).
 - Messages after a gap are kept, up to a configured bound, and delivered
   in order once the gap is filled (§4.6.1). Beyond the bound they are
   dropped and requested again: they are recoverable.
@@ -446,12 +462,19 @@ it all.
 | Application messages after FinishedReceiving | forbidden to its sender (§6.3) | sent until the sender's own FinishedSending (§7.5.1, §7.5.6) | sends none; accepts them from a peer |
 | RetransmitRequest after one's own FinishedSending | allowed: the receiving flow is not finished (§4.7) | a protocol violation (§7.5.6) | sends it when its inbound flow needs it; accepts it from a peer |
 | When the session is finalized | the side that started finalization terminates on one FinishedReceiving (§4.7.2) | both sides send and receive FinishedReceiving first (§7.5.1); terminating earlier is a violation (§7.5.4) | waits for both flows, then either side terminates; finalized once that exchange completes; a peer's early Terminate leaves the unfinished flow re-establishable |
+| A None flow both ways | "only one of the flows may be None" (§3.4.4.1) | a None/None session negotiated and established (§7.2.4) | NegotiationReject `FlowTypeNotSupported` |
+| Batches answering one RetransmitRequest | "one or more Retransmission messages" (§4.6.1), yet the requester asks again for the rest of a partial batch (§4.6.2.2) | a second batch under the first request's `RequestTimestamp` (§7.4.4.2) | sends one batch per request; as requester, asks for the rest at once, and takes a second batch for a request answered as a protocol violation: an interoperability restriction, matching each batch to the one request outstanding |
+| A peer's FinishedSending answered | FinishedReceiving (§4.7.2); nothing of the answerer's after it (§6.3) | FinishedReceiving, then the answerer's own FinishedSending (§7.5.1) | its own FinishedSending first, then FinishedReceiving |
+| Answer to a Terminate before both flows are finished | a Terminate (§4.4) | `UnspecifiedError`, reason "Logical Flow Interrupted" (§7.5.4) | the peer's code and an empty reason, as any Terminate's answer |
+| First sequence number | 1 (§5.1.1, for multicast; the examples' values are illustrative, §7) | first establishments at `NextSeqNo` 100 or 200, acked at 1000 (§7.3.2, §7.4.1 and after) | 1; a higher first `NextSeqNo` is a gap: NotApplied on an Idempotent flow, RetransmitRequest on a Recoverable one |
+| Example §7.4.1.1 | — | NotApplied 101 count 100 for messages 101 to 199 | count 99 |
 | Example §7.1.4 | — | titled "Client None and Server Recoverable", shows a server Unsequenced flow | no consequence |
 
 The choices aim at messages a peer of either reading handles, and accept
 what either reading sends, unless accepting would deliver messages wrongly
 numbered or twice. Where no choice satisfies both, the text wins over the
-examples.
+examples. [docs/fixp-examples.md](fixp-examples.md) goes through every
+example, with the tests that run it.
 
 ## Interoperability
 
@@ -525,6 +548,23 @@ Recoverable flow. Interoperability rests on, in order:
 3. live sessions against a peer found later, or a patched Silverflash
    (SOFH length, Recoverable sender), clearly labelled as such.
 
+### Patched Silverflash, live
+
+With its SOFH length patched to include the header
+([evidence](fixp-evidence/silverflash-patched/)), Silverflash serves
+fix2's client: negotiation, establishment with an Idempotent or a
+Recoverable client flow, 2000 orders and their answers each way, paced by
+windows of 50, and the Terminate exchange (`fixp/tests/silverflash`,
+opt-in with `FIX2_SILVERFLASH`). Partial interoperability, with a patched
+peer, and opt-in tests characterize what fails on its side: unpaced, its
+consumer receives some hundreds of 2000 orders, then no more; it answers
+our FinishedSending with a Terminate, unfinalized, and our
+re-establishment kills its session thread, as does a Negotiate written in
+two parts 50ms apart, its read buffer cleared before each read; it sends
+no heartbeat. A Recoverable server flow, re-establishment of a live session,
+retransmission, NotApplied and fix2's server against its client are not
+exercised.
+
 The spike's server first left its send buffers' position at zero, which
 Silverflash's writer flips to empty: the replies and their Sequence were
 lost or garbled. The evidence is from the corrected harness.
@@ -541,5 +581,5 @@ lost or garbled. The evidence is from the corrected harness.
 | M5 | `fixp/session`, both roles: negotiation, establishment, keepalive, termination, Unsequenced and None flows, limits, credential-free logs, persisted session state | yes; sequenced flows run while nothing is missed: a gap, retransmission and finalization terminate the connection as not supported yet, until M6 and M7 |
 | M6 | `fixp/store`; Recoverable and Idempotent flows: retransmission, gaps, NotApplied, restarts at every persistence step | yes; restarts tested with a store losing what was not synced, failing each write in turn, its failed write lost or made |
 | M7 | Finalization, retention, observers | yes; finalization tested crashing the server at every write |
-| M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide | |
+| M8 | Cross-checks with Real Logic's SBE codecs, wire fixtures, live sessions against what peer there is, runnable client and server, application codec guide | yes; every example of §7 run ([docs/fixp-examples.md](fixp-examples.md)); live against a patched Silverflash, its failures characterized; `contribs/fixpecho`; [docs/fixp-app.md](fixp-app.md) |
 | M9 | Benchmarks: codecs, then sessions | |

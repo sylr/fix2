@@ -1,0 +1,34 @@
+--- patch-orig/SofhFrameEncoder.java	2026-10-17 01:25:48
++++ silverflash/silverflash-core/src/main/java/io/fixprotocol/silverflash/frame/sofh/SofhFrameEncoder.java	2026-10-17 01:26:00
+@@ -48,7 +48,8 @@
+   @Override
+   public SofhFrameEncoder encodeFrameHeader() {
+     buffer.order(ByteOrder.BIG_ENDIAN);
+-    buffer.putInt(frameStartOffset + MESSAGE_LENGTH_OFFSET, (int) (messageLength & 0xffffffff));
++    // SOFH 1.0: the length includes the header.
++    buffer.putInt(frameStartOffset + MESSAGE_LENGTH_OFFSET, (int) ((messageLength + HEADER_LENGTH) & 0xffffffff));
+     buffer.putShort(frameStartOffset + ENCODING_OFFSET, encoding);
+     buffer.order(originalByteOrder);
+     return this;
+@@ -62,7 +63,8 @@
+   @Override
+   public SofhFrameEncoder encodeFrameTrailer() {
+     buffer.order(ByteOrder.BIG_ENDIAN);
+-    buffer.putInt(frameStartOffset + MESSAGE_LENGTH_OFFSET, (int) (messageLength & 0xffffffff));
++    // SOFH 1.0: the length includes the header.
++    buffer.putInt(frameStartOffset + MESSAGE_LENGTH_OFFSET, (int) ((messageLength + HEADER_LENGTH) & 0xffffffff));
+     buffer.putShort(frameStartOffset + ENCODING_OFFSET, encoding);
+     buffer.position(frameStartOffset + HEADER_LENGTH + (int) messageLength);
+     buffer.order(originalByteOrder);
+--- patch-orig/SofhFrameDecoder.java	2026-10-17 01:25:48
++++ silverflash/silverflash-core/src/main/java/io/fixprotocol/silverflash/frame/sofh/SofhFrameDecoder.java	2026-10-17 01:26:01
+@@ -48,7 +48,8 @@
+   @Override
+   public SofhFrameDecoder decodeFrameHeader() {
+     buffer.order(ByteOrder.BIG_ENDIAN);
+-    messageLength = buffer.getInt(frameStartOffset + MESSAGE_LENGTH_OFFSET);
++    // SOFH 1.0: the length includes the header.
++    messageLength = buffer.getInt(frameStartOffset + MESSAGE_LENGTH_OFFSET) - HEADER_LENGTH;
+     encoding = buffer.getShort(frameStartOffset + ENCODING_OFFSET);
+     buffer.position(frameStartOffset + HEADER_LENGTH);
+     buffer.order(originalByteOrder);

@@ -1,0 +1,48 @@
+Picked up JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/tmp/claude-501/fixp/jtmp
+Error setting thread affinity; java.lang.UnsatisfiedLinkError: Error looking up function 'sched_setaffinity': dlsym(0x3642cf430, sched_setaffinity): symbol not foundError setting thread affinity; java.lang.UnsatisfiedLinkError: Error looking up function 'sched_setaffinity': dlsym(0x3642cf430, sched_setaffinity): symbol not foundlistening on localhost/127.0.0.1:7773
+server session opened
+Authenticated session ID=8ee1e1bd-84da-4da2-8563-3434f81b5a12 credentials=spike
+server received seq=1 0 bytes: 
+java.nio.channels.ClosedChannelException
+	at java.base/sun.nio.ch.SocketChannelImpl.ensureOpenAndConnected(SocketChannelImpl.java:222)
+	at java.base/sun.nio.ch.SocketChannelImpl.write(SocketChannelImpl.java:568)
+	at io.fixprotocol.silverflash.transport.AbstractTcpChannel.write(AbstractTcpChannel.java:179)
+	at io.fixprotocol.silverflash.fixp.flow.IdempotentFlowSender.send(IdempotentFlowSender.java:125)
+	at io.fixprotocol.silverflash.fixp.flow.IdempotentFlowSender.send(IdempotentFlowSender.java:116)
+	at io.fixprotocol.silverflash.fixp.FixpSession.send(FixpSession.java:728)
+	at SpikeServer$1.accept(SpikeServer.java:71)
+	at io.fixprotocol.silverflash.fixp.flow.IdempotentFlowReceiver.accept(IdempotentFlowReceiver.java:168)
+	at io.fixprotocol.silverflash.fixp.flow.IdempotentFlowReceiver.accept(IdempotentFlowReceiver.java:55)
+	at io.fixprotocol.silverflash.frame.sofh.SofhFrameSpliterator.tryAdvance(SofhFrameSpliterator.java:108)
+	at java.base/java.util.Spliterator.forEachRemaining(Spliterator.java:332)
+	at io.fixprotocol.silverflash.fixp.FixpSession$6.accept(FixpSession.java:447)
+	at io.fixprotocol.silverflash.fixp.FixpSession$6.accept(FixpSession.java:439)
+	at io.fixprotocol.silverflash.transport.AbstractTcpChannel.readyToRead(AbstractTcpChannel.java:127)
+	at io.fixprotocol.silverflash.transport.IOReactor.run(IOReactor.java:106)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+server session opened
+Oct 17, 2026 2:12:18 AM com.lmax.disruptor.FatalExceptionHandler handleEventException
+SEVERE: Exception processing: 10 BufferEvent [topic=null, payload=java.nio.DirectByteBuffer[pos=6 lim=2048 cap=2048]]
+java.lang.NullPointerException: Cannot invoke "Object.hashCode()" because "key" is null
+	at java.base/java.util.concurrent.ConcurrentHashMap.get(ConcurrentHashMap.java:936)
+	at io.fixprotocol.silverflash.reactor.EventReactor.getSubscriber(EventReactor.java:234)
+	at io.fixprotocol.silverflash.reactor.EventReactor.handleEvent(EventReactor.java:239)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:129)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+
+Exception in thread "SES-1" java.lang.RuntimeException: java.lang.NullPointerException: Cannot invoke "Object.hashCode()" because "key" is null
+	at com.lmax.disruptor.FatalExceptionHandler.handleEventException(FatalExceptionHandler.java:45)
+	at com.lmax.disruptor.dsl.ExceptionHandlerWrapper.handleEventException(ExceptionHandlerWrapper.java:18)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:148)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	at io.fixprotocol.silverflash.util.platform.AffinityThread.run(AffinityThread.java:60)
+Caused by: java.lang.NullPointerException: Cannot invoke "Object.hashCode()" because "key" is null
+	at java.base/java.util.concurrent.ConcurrentHashMap.get(ConcurrentHashMap.java:936)
+	at io.fixprotocol.silverflash.reactor.EventReactor.getSubscriber(EventReactor.java:234)
+	at io.fixprotocol.silverflash.reactor.EventReactor.handleEvent(EventReactor.java:239)
+	at com.lmax.disruptor.BatchEventProcessor.run(BatchEventProcessor.java:129)
+	... 2 more
+server session opened
+server session opened

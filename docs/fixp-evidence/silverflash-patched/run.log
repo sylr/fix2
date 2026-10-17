@@ -1,0 +1,19 @@
+=== RUN   TestPaced
+=== RUN   TestPaced/Idempotent
+    silverflash_test.go:337: event established seq=0 "" <nil>
+=== RUN   TestPaced/Recoverable
+    silverflash_test.go:337: event established seq=0 "" <nil>
+--- PASS: TestPaced (0.26s)
+    --- PASS: TestPaced/Idempotent (0.16s)
+    --- PASS: TestPaced/Recoverable (0.10s)
+=== RUN   TestOrders
+    silverflash_test.go:362: event established seq=0 "" <nil>
+    silverflash_test.go:370: event message seq=1 "ack 1" <nil>
+    silverflash_test.go:370: event message seq=2 "ack 2" <nil>
+    silverflash_test.go:370: event message seq=3 "ack 3" <nil>
+    silverflash_test.go:370: event message seq=4 "ack 4" <nil>
+    silverflash_test.go:370: event message seq=5 "ack 5" <nil>
+    silverflash_test.go:376: event unbound seq=0 "" fixp: terminated by us: Finished
+--- PASS: TestOrders (0.00s)
+PASS
+ok  	github.com/sylr/fix2/fixp/tests/silverflash	0.564s

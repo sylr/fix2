@@ -1,0 +1,13 @@
+=== RUN   TestFinishCharacterization
+time=2026-10-17T02:12:17.664+02:00 level=INFO msg=negotiated fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client client_flow=Idempotent server_flow=Idempotent
+time=2026-10-17T02:12:17.667+02:00 level=INFO msg=established fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client remote=127.0.0.1:7773
+    silverflash_test.go:304: event established seq=0 "" <nil>
+time=2026-10-17T02:12:17.667+02:00 level=INFO msg=finishing fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client last_seq_no=0
+time=2026-10-17T02:12:17.668+02:00 level=INFO msg=unbound fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client err="fixp: terminated by the peer: Finished"
+    silverflash_test.go:308: event unbound seq=0 "" fixp: terminated by the peer: Finished
+time=2026-10-17T02:12:19.797+02:00 level=INFO msg="connection attempt failed" fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client err="fixp/session: no answer in time"
+time=2026-10-17T02:12:21.990+02:00 level=INFO msg="connection attempt failed" fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client err="fixp/session: no answer in time"
+time=2026-10-17T02:12:25.035+02:00 level=INFO msg="connection attempt failed" fixp_session=8ee1e1bd-84da-4da2-8563-3434f81b5a12 role=client err="fixp/session: no answer in time"
+--- PASS: TestFinishCharacterization (10.02s)
+PASS
+ok  	github.com/sylr/fix2/fixp/tests/silverflash	10.125s

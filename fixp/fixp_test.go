@@ -48,3 +48,23 @@ func TestFlowType(t *testing.T) {
 		t.Error(FlowType(9).String())
 	}
 }
+
+func TestCodes(t *testing.T) {
+	for _, c := range []struct{ got, want string }{
+		{NegotiationDuplicateID.String(), "DuplicateId"},
+		{NegotiationRejectCode(4).String(), "NegotiationRejectCode(4)"},
+		{EstablishmentCredentials.String(), "Credentials"},
+		{EstablishmentRejectCode(6).String(), "EstablishmentRejectCode(6)"},
+		{RetransmitRequestLimitExceeded.String(), "RequestLimitExceeded"},
+		{TerminationReRequestInProgress.String(), "ReRequestInProgress"},
+		{TerminationCode(9).String(), "TerminationCode(9)"},
+		{(&NegotiationRejectedError{Code: NegotiationCredentials}).Error(), "fixp: negotiation rejected: Credentials"},
+		{(&EstablishmentRejectedError{Code: EstablishmentUnnegotiated, Reason: "gone"}).Error(), "fixp: establishment rejected: Unnegotiated: gone"},
+		{(&TerminatedError{Code: TerminationFinished}).Error(), "fixp: terminated by us: Finished"},
+		{(&TerminatedError{Code: TerminationUnspecifiedError, Reason: "bad", ByPeer: true}).Error(), "fixp: terminated by the peer: UnspecifiedError: bad"},
+	} {
+		if c.got != c.want {
+			t.Errorf("%q, want %q", c.got, c.want)
+		}
+	}
+}

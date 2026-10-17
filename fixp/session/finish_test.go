@@ -201,12 +201,17 @@ func TestFinishViolations(t *testing.T) {
 			r.send(appMsg{1, "2"})
 			r.send(&codec.FinishedSending{SessionId: r.id, LastSeqNo: codec.Some(uint64(1))})
 		}, "FinishedSending's LastSeqNo 1 below the messages received"},
-		{"application message after FinishedSending", fixp.Idempotent, func(r *raw) {
+		{"Sequence after FinishedSending (§7.5.5)", fixp.Idempotent, func(r *raw) {
 			r.send(appMsg{1, "1"})
 			r.send(&codec.FinishedSending{SessionId: r.id, LastSeqNo: codec.Some(uint64(1))})
 			r.send(&codec.Sequence{NextSeqNo: 2})
 			r.send(appMsg{1, "2"})
-		}, "application message 2 after FinishedSending's LastSeqNo 1"},
+		}, "Sequence after FinishedSending"},
+		{"application message after FinishedSending", fixp.Idempotent, func(r *raw) {
+			r.send(appMsg{1, "1"})
+			r.send(&codec.FinishedSending{SessionId: r.id, LastSeqNo: codec.Some(uint64(1))})
+			r.send(appMsg{1, "2"})
+		}, "application message before a Sequence"},
 		{"FinishedReceiving unasked", fixp.Idempotent, func(r *raw) {
 			r.send(&codec.FinishedReceiving{SessionId: r.id})
 		}, "FinishedReceiving of a flow not finishing"},
@@ -365,7 +370,7 @@ func TestBeyondLastSeqNo(t *testing.T) {
 		}
 	}
 	var term codec.Terminate
-	if err := term.Decode(msg); err != nil || string(term.Reason) != "Sequence 5 beyond FinishedSending's LastSeqNo 2" {
+	if err := term.Decode(msg); err != nil || string(term.Reason) != "Sequence after FinishedSending" {
 		t.Fatalf("Terminate: %q, %v", term.Reason, err)
 	}
 }

@@ -272,7 +272,7 @@ func (c *conn) onRetransmitReject(h codec.MessageHeader, body []byte) error {
 		r.limit = req.count / 2
 	default:
 		// InvalidSession, our request carrying our own ID, or unknown.
-		return protocolf("RetransmitReject code %d: %s", rj.Code, reason)
+		return protocolf("RetransmitReject %s: %s", fixp.RetransmitRejectCode(rj.Code), reason)
 	}
 	return c.progress()
 }
@@ -342,7 +342,9 @@ func (c *conn) onRetransmitRequest(h codec.MessageHeader, body []byte) error {
 		return &terminateError{fixp.TerminationReRequestInProgress, "RetransmitRequest while one is in progress"}
 	}
 	written := s.written.Load()
-	if rr.Count == 0 || rr.FromSeqNo == 0 || rr.FromSeqNo > written {
+	// A request reaching beyond what was sent, in part even, is refused
+	// whole (§7.4.5.1, §7.4.5.2).
+	if rr.Count == 0 || rr.FromSeqNo == 0 || rr.FromSeqNo > written || uint64(rr.Count)-1 > written-rr.FromSeqNo {
 		c.retransmitting.CompareAndSwap(id, 0)
 		return reject(fixp.RetransmitOutOfRange, "beyond what was sent")
 	}

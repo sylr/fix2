@@ -1,0 +1,4 @@
+=== RUN   TestFragmentedCharacterization
+--- PASS: TestFragmentedCharacterization (5.00s)
+PASS
+ok  	github.com/sylr/fix2/fixp/tests/silverflash	5.098s

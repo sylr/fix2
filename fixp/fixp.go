@@ -133,7 +133,38 @@ const (
 	TerminationReRequestInProgress  TerminationCode = 3
 )
 
-// String methods of the codes are elided from this draft.
+// codeName returns names[c], the schema's name of the code, or the type's
+// and the number for a code it does not know.
+func codeName[C ~uint8](c C, names []string, typ string) string {
+	if int(c) < len(names) {
+		return names[c]
+	}
+	return fmt.Sprintf("%s(%d)", typ, uint8(c))
+}
+
+func (c NegotiationRejectCode) String() string {
+	return codeName(c, []string{"Credentials", "FlowTypeNotSupported", "DuplicateId", "Unspecified"}, "NegotiationRejectCode")
+}
+
+func (c EstablishmentRejectCode) String() string {
+	return codeName(c, []string{"Unnegotiated", "AlreadyEstablished", "SessionBlocked", "KeepaliveInterval", "Credentials", "Unspecified"}, "EstablishmentRejectCode")
+}
+
+func (c RetransmitRejectCode) String() string {
+	return codeName(c, []string{"OutOfRange", "InvalidSession", "RequestLimitExceeded"}, "RetransmitRejectCode")
+}
+
+func (c TerminationCode) String() string {
+	return codeName(c, []string{"Finished", "UnspecifiedError", "ReRequestOutOfBounds", "ReRequestInProgress"}, "TerminationCode")
+}
+
+// withReason appends ": reason" to s, if there is a reason.
+func withReason(s, reason string) string {
+	if reason == "" {
+		return s
+	}
+	return s + ": " + reason
+}
 
 // NegotiationRejectedError is a server's NegotiationReject.
 type NegotiationRejectedError struct {
@@ -142,7 +173,7 @@ type NegotiationRejectedError struct {
 }
 
 func (e *NegotiationRejectedError) Error() string {
-	return fmt.Sprintf("fixp: negotiation rejected: code %d: %s", e.Code, e.Reason)
+	return withReason("fixp: negotiation rejected: "+e.Code.String(), e.Reason)
 }
 
 // EstablishmentRejectedError is a server's EstablishmentReject.
@@ -152,7 +183,7 @@ type EstablishmentRejectedError struct {
 }
 
 func (e *EstablishmentRejectedError) Error() string {
-	return fmt.Sprintf("fixp: establishment rejected: code %d: %s", e.Code, e.Reason)
+	return withReason("fixp: establishment rejected: "+e.Code.String(), e.Reason)
 }
 
 // TerminatedError tells why a connection was unbound: a Terminate sent or
@@ -169,14 +200,11 @@ type TerminatedError struct {
 }
 
 func (e *TerminatedError) Error() string {
-	who := "we"
+	who := "us"
 	if e.ByPeer {
-		who = "peer"
+		who = "the peer"
 	}
-	s := fmt.Sprintf("fixp: terminated by %s: code %d", who, e.Code)
-	if e.Reason != "" {
-		s += ": " + e.Reason
-	}
+	s := withReason(fmt.Sprintf("fixp: terminated by %s: %s", who, e.Code), e.Reason)
 	if e.Err != nil {
 		s += ": " + e.Err.Error()
 	}

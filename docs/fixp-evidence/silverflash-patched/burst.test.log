@@ -1,0 +1,6 @@
+=== RUN   TestBurstCharacterization
+    silverflash_test.go:265: event established seq=0 "" <nil>
+    silverflash_test.go:288: 735 answers to 2000 orders
+--- PASS: TestBurstCharacterization (5.09s)
+PASS
+ok  	github.com/sylr/fix2/fixp/tests/silverflash	5.189s

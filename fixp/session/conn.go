@@ -12,6 +12,7 @@ import (
 
 	"github.com/sylr/fix2/fixp"
 	"github.com/sylr/fix2/fixp/internal/codec"
+	"github.com/sylr/fix2/fixp/store"
 	"github.com/sylr/fix2/sofh"
 	"github.com/sylr/fix2/transport"
 )
@@ -531,8 +532,40 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		return c.onFinishedSending(h, body)
 	case codec.FinishedReceivingTemplateID:
 		return c.onFinishedReceiving(h, body)
+	case codec.EstablishTemplateID:
+		if c.s.role == store.Server {
+			return c.onEstablish(h, body)
+		}
 	}
 	return protocolf("unexpected session message, template %d", h.TemplateId)
+}
+
+// onEstablish answers an Establish on the connection the session is
+// established on: redundant, it is rejected AlreadyEstablished, the
+// binding staying (§4.3.3, §7.2.5.2). One for another session is a
+// protocol violation: a connection carries one session.
+func (c *conn) onEstablish(h codec.MessageHeader, body []byte) error {
+	s := c.s
+	var e codec.Establish
+	err := e.DecodeBody(h, body)
+	clear(body) // its credentials, as they were read
+	if err != nil {
+		return protocolf("Establish: %v", err)
+	}
+	if fixp.SessionID(e.SessionId) != s.ID() {
+		return protocolf("Establish for another session, %s", fixp.SessionID(e.SessionId))
+	}
+	// Any session message but those setting the numbering ends it (§3.5.4).
+	c.inNext = 0
+	if c.answers.Load() >= maxAnswers {
+		return protocolf("requests faster than their answers are read")
+	}
+	c.answers.Add(1)
+	s.q.pushAnswer(c, mustFrame(&codec.EstablishmentReject{
+		SessionId: e.SessionId, RequestTimestamp: e.Timestamp,
+		Code: codec.EstablishmentRejectCodeAlreadyEstablished, Reason: truncate("established on this connection already", s.cfg.MaxReasonLength),
+	}))
+	return nil
 }
 
 // onSequence handles the peer's Sequence (§4.5, §7.4.1).
@@ -555,8 +588,10 @@ func (c *conn) onSequence(next uint64) error {
 	switch {
 	case next < expected:
 		return protocolf("Sequence %d below the next sequence number expected, %d", next, expected)
-	case fin.Finishing && next > fin.LastSeqNo+1:
-		return protocolf("Sequence %d beyond FinishedSending's LastSeqNo %d", next, fin.LastSeqNo)
+	case fin.Finishing:
+		// Its flow ended: its heartbeat is FinishedSending, a Sequence
+		// would resume the flow (§7.5.5).
+		return protocolf("Sequence after FinishedSending")
 	case next > expected:
 		c.inNext = next
 		return c.gap(expected, next)
@@ -673,11 +708,6 @@ func (c *conn) startRecovery() error {
 	from, to := c.rec.pendingFrom, c.rec.pendingTo
 	c.rec.pendingFrom, c.rec.pendingTo = 0, 0
 	return c.gap(from, to+1)
-}
-
-// errUnsupported is what M5 answers to what M7 implements.
-func errUnsupported(what string) error {
-	return protocolf("%s is not supported yet", what)
 }
 
 // waitWriter waits for the writer to end, closing the connection if it

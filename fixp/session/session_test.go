@@ -484,6 +484,7 @@ func TestProtocolViolations(t *testing.T) {
 	}{
 		{"Sequence on an Unsequenced flow", fixp.Unsequenced, func(r *raw) { r.send(&codec.Sequence{NextSeqNo: 1}) }, "Sequence on an Unsequenced flow"},
 		{"Topic", fixp.Unsequenced, func(r *raw) { r.send(&codec.Topic{SessionId: r.id}) }, "codec: Topic or Context on a point-to-point session"},
+		{"Context", fixp.Idempotent, func(r *raw) { r.send(&codec.Context{SessionId: r.id, NextSeqNo: 1}) }, "codec: Topic or Context on a point-to-point session"},
 		{"application message before Sequence", fixp.Idempotent, func(r *raw) { r.send(appMsg{1, "x"}) }, "application message before a Sequence"},
 		{"Sequence going back", fixp.Idempotent, func(r *raw) {
 			r.send(&codec.Sequence{NextSeqNo: 1})
