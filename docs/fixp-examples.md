@@ -52,7 +52,7 @@ where the example gives one fix2 shares, not the sample numbers.
 | 7.3.1 | keepalive lapsed: Terminate, establish again | diverges: `UnspecifiedError`, a new connection (rows "Termination code on a lapsed keepalive", "Establishing again after Terminate") | `TestExample_7_3_1_and_7_3_2_EstablishAgain/7.3.1`, `TestKeepaliveLapsed` |
 | 7.3.2 | Sequence going back: Terminate, establish again | as shown, but establishes again on a new connection (row "Establishing again after Terminate") | `TestExample_7_3_1_and_7_3_2_EstablishAgain/7.3.2`, `TestProtocolViolations/Sequence going back` |
 | 7.3.3 | ack's `NextSeqNo` going back: the client terminates | as shown, on a new connection; a server rejects the same `Unspecified` | `TestExample_7_3_3_NextSeqNoGoingBack` |
-| 7.3.4 | Terminate `Finished` answered; established again, same ID | as shown | `TestTerminateReestablish` |
+| 7.3.4 | Terminate `Finished` answered; established again, same ID | as shown; until the answer, the peer's messages handled, nothing written (§4.4.1, §6.3) | `TestTerminateReestablish`, `TestReceiveOnlyAfterTerminate` |
 | 7.3.5 | disconnection: negotiates a new ID | diverges: re-establishes under the same ID (row "Reconnecting after a disconnection") | `TestSendWhileUnbound`, `TestClientResumes` |
 
 ## 7.4 Transferring
@@ -67,7 +67,7 @@ where the example gives one fix2 shares, not the sample numbers.
 | 7.4.3 | UnsequencedHeartbeat | as shown | `TestExample_7_4_1_3_and_7_4_3_Heartbeats/7.4.3`, `TestKeepalive` |
 | 7.4.4 | RetransmitRequest, Retransmission; later messages held | as shown | `TestRetransmitServed`, `TestRecoverableGapFilled` |
 | 7.4.4.1 | a request while one is outstanding: `ReRequestInProgress` | as shown | `TestReRequestInProgress`, `TestRetransmitOwnership` |
-| 7.4.4.2 | batches interleaved; a second batch for one request | diverges: one batch per request, the rest asked for (row "Batches answering one RetransmitRequest") | `TestExample_7_4_4_2_PartialBatch`, `TestRetransmitServed` |
+| 7.4.4.2 | batches interleaved; a second batch for one request | as shown as receiver, the second batch taken while `PartialBatchWait` runs, the rest asked for after it; as sender, one batch per request (row "Batches answering one RetransmitRequest") | `TestExample_7_4_4_2_PartialBatch`, `TestRetransmissionBatches`, `TestRetransmitServed` |
 | 7.4.5.1 | `FromSeqNo` beyond what was sent: `OutOfRange` | diverges: Terminate `ReRequestOutOfBounds`; as shown with `RejectRetransmitRequestBeyondSent` (row "RetransmitRequest beyond what was sent") | `TestExample_7_4_5_1_and_2_Beyond`, `TestRetransmitServed` |
 | 7.4.5.2 | a range partly beyond: `OutOfRange` | diverges as 7.4.5.1; with `RejectRetransmitRequestBeyondSent` as shown, refused whole | `TestExample_7_4_5_1_and_2_Beyond` |
 | 7.4.5.3 | another session: `InvalidSession` | as shown | `TestRetransmitServed` |
@@ -80,7 +80,7 @@ where the example gives one fix2 shares, not the sample numbers.
 |---|---|---|---|
 | 7.5.1 | FinishedSending and FinishedReceiving both ways, then Terminate | as shown, its own FinishedSending before FinishedReceiving (row "A peer's FinishedSending answered") | `TestFinalize`, `TestFinishRecoverableCompletes` |
 | 7.5.2 | FinishedSending repeated until answered | as shown, and until finalized (§4.7.1) | `TestExample_7_5_2_FinishedSendingRepeated`, `TestFinishedSendingRepeatedCoalesced`, `TestFinishResumedOnReconnect` |
-| 7.5.3 | FinishedSending past a gap: RetransmitRequest, then FinishedReceiving | as shown; NotApplied on an Idempotent flow | `TestFinishRecoverableCompletes`, `TestFinishIdempotentGap` |
+| 7.5.3 | FinishedSending past a gap: RetransmitRequest, then FinishedReceiving | as shown; NotApplied on an Idempotent flow; the peer's FinishedReceiving meanwhile terminates nothing | `TestFinishRecoverableCompletes`, `TestFinishIdempotentGap`, `TestFinishedReceivingDuringRecovery` |
 | 7.5.4 | Terminate before both flows finished: a violation | diverges: answered, the session re-establishable (rows "When the session is finalized", "Answer to a Terminate before both flows are finished") | `TestExample_7_5_4_TerminateBeforeFinished` |
 | 7.5.5 | Sequence after FinishedSending: Terminate | as shown | `TestExample_7_5_5_SequenceAfterFinishedSending`, `TestFinishViolations`, `TestBeyondLastSeqNo` |
-| 7.5.6 | half close | diverges on what follows FinishedReceiving and a RetransmitRequest after one's own FinishedSending (rows of those names) | `TestExample_7_5_6_HalfClose` |
+| 7.5.6 | half close | diverges on what follows FinishedReceiving, a protocol violation, as shown with `AcceptMessagesAfterFinishedReceiving`, and on a RetransmitRequest after one's own FinishedSending (rows of those names) | `TestExample_7_5_6_HalfClose` |

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"slices"
@@ -210,6 +211,104 @@ func TestReader_ReaderError(t *testing.T) {
 	r = io.MultiReader(bytes.NewReader(frame(TagValue, "abc")[:4]), iotest.ErrReader(boom))
 	if frames, err := readAll(t, r, ReaderOptions{}); len(frames) != 0 || err != boom {
 		t.Fatalf("%d frames, %v; want 0, boom", len(frames), err)
+	}
+}
+
+// timeoutErr is a deadline passing, as net.Conn reports it.
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string { return "i/o timeout" }
+func (timeoutErr) Timeout() bool { return true }
+
+// steps returns its reads' results in turn: bytes, or an error.
+type steps []any
+
+func (s *steps) Read(b []byte) (int, error) {
+	if len(*s) == 0 {
+		return 0, io.EOF
+	}
+	step := (*s)[0]
+	*s = (*s)[1:]
+	switch step := step.(type) {
+	case error:
+		return 0, step
+	case both:
+		return copy(b, step.b), step.err
+	}
+	return copy(b, step.([]byte)), nil
+}
+
+// both is a read returning bytes and an error at once, as io.Reader allows.
+type both struct {
+	b   []byte
+	err error
+}
+
+// Bytes a read returns with a timeout count first: a frame they complete
+// is returned, the timeout coming with the next read; one they do not,
+// the timeout, the frame resumed after.
+func TestReader_TimeoutWithBytes(t *testing.T) {
+	f := frame(TagValue, "abc")
+	for _, tc := range []struct {
+		name  string
+		steps steps
+		// timeouts before the frame
+		before int
+	}{
+		{"whole frame", steps{both{f, timeoutErr{}}}, 0},
+		{"its end, header split", steps{f[:3], both{f[3:], timeoutErr{}}}, 0},
+		{"its end, at the body", steps{f[:HeaderLen], both{f[HeaderLen:], timeoutErr{}}}, 0},
+		// The timeout returned without reading the body: a reader need not
+		// time out again before the deadline is moved.
+		{"its header only", steps{both{f[:HeaderLen], timeoutErr{}}, f[HeaderLen:]}, 1},
+		{"part of its header", steps{both{f[:2], timeoutErr{}}, f[2:]}, 1},
+		{"part of its body", steps{both{f[:HeaderLen+1], timeoutErr{}}, f[HeaderLen+1:]}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := append(tc.steps, timeoutErr{})
+			r := NewReader(&src, ReaderOptions{})
+			for i := range tc.before {
+				if _, _, err := r.Next(); !errors.As(err, new(timeoutErr)) {
+					t.Fatalf("read %d: %v, want the timeout", i, err)
+				}
+				// One read, the one timing out.
+				if left := len(src); left != len(tc.steps)-i {
+					t.Fatalf("%d reads, want 1", len(tc.steps)+1-left)
+				}
+			}
+			if enc, msg, err := r.Next(); err != nil || enc != TagValue || string(msg) != "abc" {
+				t.Fatalf("Next = %v %q %v, want the frame", enc, msg, err)
+			}
+			if _, _, err := r.Next(); !errors.As(err, new(timeoutErr)) {
+				t.Fatalf("Next = %v, want the timeout", err)
+			}
+		})
+	}
+}
+
+// A timeout ends nothing: Next resumes the frame it was reading, between
+// frames or inside one, header included; another error stays.
+func TestReader_TimeoutResumes(t *testing.T) {
+	f := frame(TagValue, "abc")
+	src := &steps{timeoutErr{}, f[:3], timeoutErr{}, f[3:8], fmt.Errorf("wrapped: %w", timeoutErr{}), f[8:], timeoutErr{}}
+	r := NewReader(src, ReaderOptions{})
+	for i := range 3 {
+		var te timeoutErr
+		if _, _, err := r.Next(); !errors.As(err, &te) {
+			t.Fatalf("read %d: %v, want the timeout", i, err)
+		}
+	}
+	if enc, msg, err := r.Next(); err != nil || enc != TagValue || string(msg) != "abc" {
+		t.Fatalf("Next = %v %q %v, want the frame", enc, msg, err)
+	}
+	if _, _, err := r.Next(); !errors.As(err, new(timeoutErr)) {
+		t.Fatalf("Next = %v, want the timeout", err)
+	}
+	if _, _, err := r.Next(); err != io.EOF {
+		t.Fatalf("Next = %v, want EOF", err)
+	}
+	if _, _, err := r.Next(); err != io.EOF {
+		t.Fatalf("Next again = %v, want EOF kept", err)
 	}
 }
 

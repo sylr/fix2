@@ -85,6 +85,25 @@ type Config struct {
 	// violation (§6.3, whose "should be immediately terminated" leaves the
 	// choice).
 	RejectRetransmitRequestBeyondSent bool
+	// PartialBatchWait is how long, once a Retransmission batch answered
+	// our RetransmitRequest in part, we wait for a further batch answering
+	// it, under its RequestTimestamp, before asking for the remainder: a
+	// request may be "answered by one or more Retransmission messages"
+	// (§4.6.1), as §7.4.4.2 shows, and "should" be followed by "another
+	// RetransmitRequest for the remainder" (§4.6.2.2). The peer's keepalive
+	// interval if 0; negative asks at once, for peers known to answer with
+	// one batch. A further batch coming after we asked again is taken all
+	// the same.
+	PartialBatchWait time.Duration
+	// AcceptMessagesAfterFinishedReceiving delivers the application
+	// messages the peer sends after its FinishedReceiving acknowledged our
+	// flow's end, as FIXP's examples have it keep sending until its own
+	// FinishedSending (§7.5.1, §7.5.6). By default each is a protocol
+	// violation, ignored, and the connection terminates (§6.3: the responder
+	// "may not send an application message after sending
+	// FinishedReceiving", of which the session "should be immediately
+	// terminated"). Retransmitted messages are delivered either way.
+	AcceptMessagesAfterFinishedReceiving bool
 	// Observer, if set, sees every frame of an established connection.
 	Observer Observer
 	// Logger receives the session's events, never credentials; nothing is

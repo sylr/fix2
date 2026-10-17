@@ -514,35 +514,43 @@ func TestExample_7_4_1_3_and_7_4_3_Heartbeats(t *testing.T) {
 	}
 }
 
-// §7.4.4.2 the text's way (§4.6.2.2): a batch shorter than asked is
-// followed by a request for the rest; the example's second batch for the
-// first request is then a protocol violation.
+// §7.4.4.2: a request answered by two batches under its timestamp, real-time
+// messages between them, the client waiting for the second
+// (PartialBatchWait, the server's keepalive interval by default); and the
+// text's way (§4.6.2.2), a batch shorter than asked followed, once the
+// wait passed, by a request for the rest.
 func TestExample_7_4_4_2_PartialBatch(t *testing.T) {
-	_, h, l := clientOfRaw(t, fixp.Idempotent)
-	r := acceptRaw(t, l)
-	r.answerNegotiate(fixp.Recoverable)
-	e := r.readEstablish()
-	r.send(&codec.EstablishmentAck{SessionId: e.SessionId, RequestTimestamp: e.Timestamp, KeepaliveInterval: 1000, NextSeqNo: codec.Some(uint64(1))})
-	h.expect(t, "established")
-	r.send(appMsg{1, "1"})
-	h.expect(t, "message")
-	r.send(&codec.Sequence{NextSeqNo: 5})
-	r.send(appMsg{1, "5"})
-	var rr1 codec.RetransmitRequest
-	if _, err := rr1.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr1.FromSeqNo != 2 || rr1.Count != 3 {
-		t.Fatalf("RetransmitRequest %+v, %v", rr1, err)
+	for _, example := range []bool{true, false} {
+		t.Run(fmt.Sprintf("second batch=%v", example), func(t *testing.T) {
+			_, h, l := clientOfRaw(t, fixp.Idempotent)
+			r := acceptRaw(t, l)
+			r.answerNegotiate(fixp.Recoverable)
+			e := r.readEstablish()
+			r.send(&codec.EstablishmentAck{SessionId: e.SessionId, RequestTimestamp: e.Timestamp, KeepaliveInterval: 1000, NextSeqNo: codec.Some(uint64(1))})
+			h.expect(t, "established")
+			r.send(appMsg{1, "1"})
+			h.expect(t, "message")
+			r.send(&codec.Sequence{NextSeqNo: 5})
+			r.send(appMsg{1, "5"})
+			rr := r.request(2, 3)
+			r.batch(rr.Timestamp, 2, 1)
+			h.messages(t, 2)
+			if example {
+				r.send(&codec.Sequence{NextSeqNo: 6})
+				r.send(appMsg{1, "6"})
+				r.batch(rr.Timestamp, 3, 2)
+				h.messages(t, 3, 4, 5, 6)
+				r.none(codec.RetransmitRequestTemplateID, 50*time.Millisecond)
+				return
+			}
+			rr2 := r.request(3, 2)
+			if rr2.Timestamp == rr.Timestamp {
+				t.Fatal("the remainder asked under the first request's timestamp")
+			}
+			r.batch(rr2.Timestamp, 3, 2)
+			h.messages(t, 3, 4, 5)
+		})
 	}
-	r.send(&codec.Retransmission{SessionId: rr1.SessionId, RequestTimestamp: rr1.Timestamp, NextSeqNo: 2, Count: 1})
-	r.send(appMsg{1, "2"})
-	if e := h.expect(t, "message"); e.seq != 2 {
-		t.Fatalf("message %v", e)
-	}
-	var rr2 codec.RetransmitRequest
-	if _, err := rr2.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr2.FromSeqNo != 3 || rr2.Count != 2 || rr2.Timestamp == rr1.Timestamp {
-		t.Fatalf("RetransmitRequest for the rest %+v, %v", rr2, err)
-	}
-	r.send(&codec.Retransmission{SessionId: rr1.SessionId, RequestTimestamp: rr1.Timestamp, NextSeqNo: 3, Count: 2})
-	r.terminated(fixp.TerminationUnspecifiedError, "Retransmission answering no request of ours")
 }
 
 // §7.4.5.1, §7.4.5.2: a request reaching beyond what was sent, wholly or
@@ -692,11 +700,31 @@ func TestExample_7_5_5_SequenceAfterFinishedSending(t *testing.T) {
 }
 
 // §7.5.6, the half close: after the server's FinishedSending answered, the
-// client's flow goes on, the server asking for what it missed; after the
-// client's FinishedSending, it still asks the server for what it missed.
+// client's application messages are a protocol violation (§6.3), ignored;
+// with AcceptMessagesAfterFinishedReceiving, the client's flow goes on as
+// the example has it, the server asking for what it missed, and its
+// retransmission delivered. After the client's FinishedSending, it still
+// asks the server for what it missed.
 func TestExample_7_5_6_HalfClose(t *testing.T) {
 	t.Run("server finished", func(t *testing.T) {
 		r, h, srv, _ := rawClient(t, fixp.Recoverable, fixp.Recoverable, 1000)
+		if err := srv.Session(r.id).Finish(bg); err != nil {
+			t.Fatal(err)
+		}
+		r.until(codec.FinishedSendingTemplateID)
+		r.send(&codec.FinishedReceiving{SessionId: r.id})
+		r.send(&codec.Sequence{NextSeqNo: 1})
+		r.send(appMsg{1, "1"})
+		r.terminated(fixp.TerminationUnspecifiedError, "application message after FinishedReceiving")
+		// Ignored: not delivered.
+		if e := h.next(t); e.kind != "unbound" || e.err == nil {
+			t.Fatalf("event %v, want unbound on the violation", e)
+		}
+	})
+	t.Run("server finished, AcceptMessagesAfterFinishedReceiving", func(t *testing.T) {
+		r, h, srv, _ := rawClientWith(t, fixp.Recoverable, fixp.Recoverable, 1000, func(c *ServerConfig) {
+			c.AcceptMessagesAfterFinishedReceiving = true
+		})
 		if err := srv.Session(r.id).Finish(bg); err != nil {
 			t.Fatal(err)
 		}
@@ -710,10 +738,25 @@ func TestExample_7_5_6_HalfClose(t *testing.T) {
 		}
 		r.send(&codec.Sequence{NextSeqNo: 4})
 		r.send(appMsg{1, "4"})
-		var rr codec.RetransmitRequest
-		if _, err := rr.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 {
-			t.Fatalf("RetransmitRequest %+v, %v", rr, err)
+		rr := r.request(2, 2)
+		r.batch(rr.Timestamp, 2, 2)
+		h.messages(t, 2, 3, 4)
+	})
+	// Retransmitted, at our request, a message is not sent anew: delivered
+	// by default too.
+	t.Run("server finished, a retransmission", func(t *testing.T) {
+		r, h, srv, _ := rawClient(t, fixp.Recoverable, fixp.Recoverable, 1000)
+		r.send(appMsg{1, "1"})
+		r.send(&codec.Sequence{NextSeqNo: 3})
+		r.send(appMsg{1, "3"})
+		rr := r.request(2, 1)
+		if err := srv.Session(r.id).Finish(bg); err != nil {
+			t.Fatal(err)
 		}
+		r.until(codec.FinishedSendingTemplateID)
+		r.send(&codec.FinishedReceiving{SessionId: r.id})
+		r.batch(rr.Timestamp, 2, 1)
+		h.messages(t, 1, 2, 3)
 	})
 	t.Run("client finished", func(t *testing.T) {
 		r, _, srv, _ := rawClient(t, fixp.Recoverable, fixp.Recoverable, 1000)

@@ -194,6 +194,13 @@ func (c *conn) onFinishedSending(h codec.MessageHeader, body []byte) error {
 // complete: on a Recoverable flow every message up to LastSeqNo delivered
 // or skipped, on an Idempotent one the gap up to it reported (§4.7.1,
 // §7.5.3).
+//
+// A Terminate of ours queued, or written, FinishedReceiving would follow it,
+// never written (§6.3): the flow is not recorded finished, nor the handler
+// told, the peer, unanswered, sending FinishedSending again on the next
+// establishment (§4.7.1). Recorded finished, the session would be finalized
+// on the Terminate exchange, the peer not having heard the answer. While
+// the answer is prepared, our Terminate waits behind it (conn.terminate).
 func (c *conn) completePeerFlow() error {
 	s := c.s
 	if !c.peerFinishing || c.peerAnswered {
@@ -214,6 +221,22 @@ func (c *conn) completePeerFlow() error {
 			}
 		}
 	}
+	if !c.beginAnswer() {
+		return nil
+	}
+	err := c.answerPeerFinished()
+	c.endAnswer()
+	if err != nil {
+		return err
+	}
+	s.logInfo("peer finished", "last_seq_no", in.LastSeqNo)
+	return c.maybeTerminate()
+}
+
+// answerPeerFinished tells the handler the peer's flow is complete, then
+// finishes ours, records the peer's finished and queues FinishedReceiving.
+func (c *conn) answerPeerFinished() error {
+	s := c.s
 	c.peerAnswered = true
 	if err := s.handler.OnPeerFinished(s.cbCtx, s); err != nil {
 		return &handlerError{fmt.Errorf("finishing: %w", err)}
@@ -235,17 +258,46 @@ func (c *conn) completePeerFlow() error {
 	if err != nil {
 		return errHalted
 	}
-	s.logInfo("peer finished", "last_seq_no", in.LastSeqNo)
-	return c.maybeTerminate()
+	return nil
+}
+
+// beginAnswer reports whether FinishedReceiving may answer the peer: no
+// Terminate of ours, nor of the peer's, queued or written. Until
+// endAnswer, our graceful Terminate waits.
+func (c *conn) beginAnswer() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ours != nil || c.peers != nil {
+		return false
+	}
+	c.answering = true
+	return true
+}
+
+// endAnswer queues our graceful Terminate, if it waited for the answer.
+func (c *conn) endAnswer() {
+	c.mu.Lock()
+	f := c.deferred
+	c.answering, c.deferred = false, nil
+	c.mu.Unlock()
+	if f != nil {
+		c.s.q.pushSession(c, f, entryTerminate)
+	}
 }
 
 // queueFinishedReceiving queues our FinishedReceiving, unless one is
-// queued already: a peer repeating FinishedSending without reading gets
-// one answer, not as many.
+// queued or being written already: a peer repeating FinishedSending without
+// reading gets one answer, not as many; or a Terminate of ours is queued
+// or written, nothing following it, but the one waiting for this answer
+// (answering).
 func (c *conn) queueFinishedReceiving() {
-	if c.finRecvQueued.CompareAndSwap(false, true) {
-		c.s.q.pushFinish(c, mustFrame(&codec.FinishedReceiving{SessionId: c.s.ID()}), true)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.finRecv == finRecvQueued || c.finRecv == finRecvWriting || c.peers != nil || c.ours != nil && !c.answering {
+		return
 	}
+	c.finRecv = finRecvQueued
+	c.s.q.pushFinish(c, mustFrame(&codec.FinishedReceiving{SessionId: c.s.ID()}), true)
 }
 
 // onFinishedReceiving handles the peer's acknowledgement of our flow.
@@ -297,6 +349,11 @@ func (c *conn) finishedExchange() bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.finRecv == finRecvQueued || c.finRecv == finRecvWriting {
+		// Our answer to the peer's flow not written: the peer never heard
+		// it, whatever Terminate came; re-establishable.
+		return false
+	}
 	// Ours written whole and answered, or the peer's, sent once it heard
 	// our FinishedReceiving.
 	return c.answered && c.sent || c.peers != nil && c.peers.Code == fixp.TerminationFinished

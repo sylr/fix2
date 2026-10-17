@@ -104,7 +104,7 @@ func (c *conn) observeIn(enc sofh.Encoding, msg []byte) {
 	retrans := false
 	if _, in := s.Flows(); in.Sequenced() && len(msg) >= codec.HeaderSize {
 		if h := readHeader(msg); h.SchemaID != codec.SchemaID || h.TemplateID == codec.AppliedTemplateID || h.TemplateID == codec.NotAppliedTemplateID {
-			if c.rec.batch {
+			if c.rec.batch != nil {
 				seq, retrans = c.rec.batchNext, true
 			} else {
 				seq = c.inNext

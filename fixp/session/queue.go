@@ -175,6 +175,20 @@ func (q *queue) pop(c *conn) (entry, bool) {
 	return entry{}, false
 }
 
+// finRecvFirst reports whether the first entry c may write is its
+// FinishedReceiving: everything queued before it is written.
+func (q *queue) finRecvFirst(c *conn) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, e := range q.entries[q.head:] {
+		if e.kind != entryApp && e.conn != c {
+			continue
+		}
+		return e.finRecv && e.conn == c
+	}
+	return false
+}
+
 // compact reclaims the room of popped entries.
 func (q *queue) compact() {
 	if q.head == len(q.entries) {

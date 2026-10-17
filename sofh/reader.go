@@ -1,6 +1,7 @@
 package sofh
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
@@ -40,6 +41,10 @@ type Reader struct {
 	max    int
 	empty  int // consecutive reads returning no data and no error
 	moved  int // bytes fill moved in or to a new buffer, for tests
+
+	// timeout came with the bytes completing the header, in this Next:
+	// returned unless they complete the frame too, never read past.
+	timeout error
 }
 
 // NewReader returns a Reader reading from r.
@@ -72,11 +77,16 @@ func (r *Reader) SetMaxLength(n int) {
 // A frame whose header is malformed (ErrShortLength) or too long
 // (ErrLongLength) cannot be skipped: Next returns that error, and keeps
 // returning it. Any other error is the reader's: io.EOF once the stream
-// ends between frames, io.ErrUnexpectedEOF if it ends inside one.
+// ends between frames, io.ErrUnexpectedEOF if it ends inside one. A read
+// error reporting a timeout, as os.ErrDeadlineExceeded does, ends nothing:
+// Next returns it, keeping what it read of the frame, and the next call
+// resumes once the deadline is moved, a deadline serving as a timer. Any
+// other read error is returned again by every later call.
 func (r *Reader) Next() (Encoding, []byte, error) {
 	if r.failed != nil {
 		return 0, nil, r.failed
 	}
+	r.timeout = nil
 	if err := r.fill(HeaderLen); err != nil {
 		if r.end > r.start {
 			return 0, nil, unexpected(err)
@@ -107,6 +117,12 @@ func (r *Reader) fill(n int) error {
 		if r.err != nil {
 			return r.err
 		}
+		if r.timeout != nil {
+			// The header came with a timeout: the body is not read for
+			// now, a reader need not time out again before the caller
+			// moves its deadline.
+			return r.timeout
+		}
 		if n > len(r.buf)-r.start {
 			r.moved += r.end - r.start
 			if n > len(r.buf) {
@@ -121,6 +137,17 @@ func (r *Reader) fill(n int) error {
 		m, err := r.r.Read(r.buf[r.end:])
 		r.end += m
 		switch {
+		case isTimeout(err):
+			// Not kept beyond this Next: the stream goes on. What came
+			// with it counts first: enough for the frame, it is returned;
+			// enough for its header only, the timeout is returned without
+			// reading again (timeout).
+			r.empty = 0
+			if r.end-r.start >= n {
+				r.timeout = err
+				return nil
+			}
+			return err
 		case err != nil:
 			r.err = err
 		case m == 0:
@@ -133,6 +160,13 @@ func (r *Reader) fill(n int) error {
 		}
 	}
 	return nil
+}
+
+// isTimeout reports whether err reports a timeout: a deadline passed, the
+// stream still usable once it is moved (net.Conn).
+func isTimeout(err error) bool {
+	var t interface{ Timeout() bool }
+	return err != nil && errors.As(err, &t) && t.Timeout()
 }
 
 // unexpected turns io.EOF in the middle of a frame into io.ErrUnexpectedEOF.

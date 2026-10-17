@@ -23,11 +23,17 @@ type heldMsg struct {
 	in  Inbound
 }
 
-// request is our outstanding RetransmitRequest.
+// request is a RetransmitRequest of ours.
 type request struct {
-	ts          uint64 // its Timestamp, which the answer carries
+	ts          uint64 // its Timestamp, which the batches answering it carry
 	from, count uint64
+	// next is where the next batch answering it must start: from, then
+	// where the last one ended, as §7.4.4.2's second batch does.
+	next uint64
 }
+
+// end returns the last sequence number it asks for.
+func (q *request) end() uint64 { return q.from + q.count - 1 }
 
 // recovery is the state of a connection's inbound recovery.
 type recovery struct {
@@ -36,10 +42,32 @@ type recovery struct {
 	// last is the highest sequence number the peer is known to have
 	// sent: what is missing up to it is asked for.
 	last uint64
-	req  *request
-	// batch is the Retransmission being read: its next sequence number,
-	// and the messages left.
-	batch     bool
+	// req is our outstanding request, one at a time (§4.6.1). It may be
+	// "answered by one or more Retransmission messages" (§4.6.1), or by one
+	// batch in part, the requester asking "another RetransmitRequest for the
+	// remainder" (§4.6.2.2): answered in part, it stays outstanding,
+	// further batches under its RequestTimestamp taken, until waitUntil
+	// (Config.PartialBatchWait); then older keeps it, and a new request asks
+	// for what is still missing. Both kinds of peers are served, neither
+	// waited for beyond the bound.
+	req *request
+	// older are the requests answered in part that req, or one between,
+	// asks the remainder of, oldest first, maxOlder at most: a batch of one,
+	// late, the peer answering it with several, is told from req's by its
+	// RequestTimestamp, and taken as a retransmission still, its messages
+	// already received dropped as duplicates. One answered whole leaves it;
+	// beyond maxOlder, the oldest is forgotten, a batch of it then answering
+	// no request of ours. The batch being read keeps its request (batch)
+	// whatever happens to the set.
+	older []*request
+	// waitUntil, unless zero, is when req, answered in part, gives way to a
+	// request for the remainder: the reader's read deadline is a timer for
+	// it, no goroutine sharing this state.
+	waitUntil time.Time
+	// batch is the request the Retransmission being read answers, nil
+	// between batches; batchNext its next sequence number, batchLeft the
+	// messages left.
+	batch     *request
 	batchNext uint64
 	batchLeft uint64
 	// limit bounds the count of our requests, lowered when the peer
@@ -83,11 +111,13 @@ func (c *conn) gap(from, next uint64) error {
 	return nil
 }
 
-// recover asks for what is missing, unless a request is outstanding.
+// recover asks for what is missing, unless a request is outstanding, or
+// our Terminate is written: nothing follows it (§6.3), the next
+// establishment asking.
 func (c *conn) recover() error {
 	s := c.s
 	r := &c.rec
-	if r.req != nil || r.batch {
+	if r.req != nil || r.batch != nil || c.written.Load() {
 		return nil
 	}
 	from := s.inbound + 1
@@ -104,7 +134,7 @@ func (c *conn) recover() error {
 	count := min(to-from+1, r.limit, maxCount) // never the null count
 	ts := max(nanos(time.Now()), r.lastTS+1)
 	r.lastTS = ts
-	r.req = &request{ts: ts, from: from, count: count}
+	r.req = &request{ts: ts, from: from, count: count, next: from}
 	s.q.pushSession(c, mustFrame(&codec.RetransmitRequest{
 		SessionId: s.ID(), Timestamp: ts, FromSeqNo: from, Count: uint32(count),
 	}), entryEndsNumbering)
@@ -129,15 +159,93 @@ func (c *conn) onRecoverable(h codec.MessageHeader, msg, body []byte, inb Inboun
 	default:
 		c.hold(msg, inb)
 	}
-	if r.batch {
+	if q := r.batch; q != nil {
 		r.batchLeft--
 		if r.batchLeft == 0 {
 			// The batch is over; real-time messages follow a Sequence.
-			r.batch, r.req = false, nil
+			r.batch = nil
 			c.inNext = 0
+			c.batchEnded(q)
 		}
 	}
 	return c.progress()
+}
+
+// batchEnded settles the request a batch answered, its last message read:
+// answered whole, it is over; in part, the outstanding request waits for a
+// further batch, PartialBatchWait, or gives way at once if that is
+// negative; an older one, in part, stays among them, req asking for its
+// remainder already.
+func (c *conn) batchEnded(q *request) {
+	r := &c.rec
+	switch {
+	case q.next > q.end() && q == r.req:
+		r.req, r.waitUntil = nil, time.Time{}
+	case q.next > q.end():
+		r.forget(q)
+	case q == r.req:
+		w := c.s.cfg.PartialBatchWait
+		if w == 0 {
+			w = c.peerKeepalive
+		}
+		if w > 0 {
+			r.waitUntil = time.Now().Add(w)
+		} else {
+			r.supersede() // progress asks for the remainder
+		}
+	}
+}
+
+// maxOlder bounds the requests answered in part whose late batches are
+// still taken.
+const maxOlder = 4
+
+// supersede moves req, answered in part, to older, the oldest forgotten
+// beyond maxOlder.
+func (r *recovery) supersede() {
+	if len(r.older) == maxOlder {
+		r.older = append(r.older[:0], r.older[1:]...)
+	}
+	r.older = append(r.older, r.req)
+	r.req, r.waitUntil = nil, time.Time{}
+}
+
+// forget removes q from older.
+func (r *recovery) forget(q *request) {
+	for i, o := range r.older {
+		if o == q {
+			r.older = append(r.older[:i], r.older[i+1:]...)
+			return
+		}
+	}
+}
+
+// askRemainder gives up waiting for a further batch of req, answered in
+// part, once waitUntil passed: older keeps it, for a batch of it coming
+// late, and the remainder is asked for (§4.6.2.2), what is missing then,
+// once the batch being read, if any, is over.
+func (c *conn) askRemainder() error {
+	c.rec.supersede()
+	return c.recover()
+}
+
+// answered returns the request of ours an answer of RequestTimestamp ts
+// is to, nil if none: req, or one of older, which the peer may answer
+// still (a batch of it late, or its RetransmitReject); none in a batch,
+// which nothing interrupts.
+func (r *recovery) answered(ts uint64) *request {
+	switch {
+	case r.batch != nil:
+	case r.req != nil && ts == r.req.ts:
+		return r.req
+	default:
+		for _, o := range r.older {
+			if o.ts == ts {
+				return o
+			}
+		}
+	}
+	return nil
 }
 
 // progress asks for what is still missing, and answers the peer's
@@ -207,7 +315,9 @@ func (c *conn) drainHeld() error {
 }
 
 // onRetransmission handles a Retransmission: the next count application
-// messages are the peer's from NextSeqNo on, answering our request.
+// messages are the peer's from NextSeqNo on, answering a request of ours,
+// as its first batch or a further one, each starting where the last one
+// answering the request ended (§4.6.1, §7.4.4.2).
 func (c *conn) onRetransmission(h codec.MessageHeader, body []byte) error {
 	r := &c.rec
 	if _, in := c.s.Flows(); in != fixp.Recoverable {
@@ -217,18 +327,28 @@ func (c *conn) onRetransmission(h codec.MessageHeader, body []byte) error {
 	if err := c.s.cfg.decodeBody(&rt, h, body); err != nil {
 		return protocolf("Retransmission: %v", err)
 	}
-	if r.req == nil || r.batch || rt.RequestTimestamp != r.req.ts {
+	q := r.answered(rt.RequestTimestamp)
+	if q == nil {
 		return protocolf("Retransmission answering no request of ours")
 	}
-	if rt.SessionId != c.s.ID() || rt.NextSeqNo != r.req.from || uint64(rt.Count) > r.req.count {
-		return protocolf("Retransmission of %d from %d, %d from %d asked", rt.Count, rt.NextSeqNo, r.req.count, r.req.from)
+	if left := q.end() - q.next + 1; rt.SessionId != c.s.ID() || rt.NextSeqNo != q.next || uint64(rt.Count) > left {
+		return protocolf("Retransmission of %d from %d, %d from %d asked", rt.Count, rt.NextSeqNo, left, q.next)
 	}
 	c.inNext = 0
+	if q == r.req {
+		r.waitUntil = time.Time{} // answered further: no longer waiting
+	}
 	if rt.Count == 0 {
-		r.req = nil
+		// Nothing more for it: what is still missing is asked for.
+		if q == r.req {
+			r.req = nil
+		} else {
+			r.forget(q)
+		}
 		return c.recover()
 	}
-	r.batch, r.batchNext, r.batchLeft = true, rt.NextSeqNo, uint64(rt.Count)
+	q.next += uint64(rt.Count)
+	r.batch, r.batchNext, r.batchLeft = q, rt.NextSeqNo, uint64(rt.Count)
 	return nil
 }
 
@@ -243,32 +363,53 @@ func (c *conn) onRetransmitReject(h codec.MessageHeader, body []byte) error {
 	if err := s.cfg.decodeBody(&rj, h, body); err != nil {
 		return protocolf("RetransmitReject: %v", err)
 	}
-	if r.req == nil || r.batch || rj.RequestTimestamp != r.req.ts || rj.SessionId != s.ID() {
+	q := r.answered(rj.RequestTimestamp)
+	if q == nil || rj.SessionId != s.ID() {
 		return protocolf("RetransmitReject answering no request of ours")
 	}
-	req := r.req
+	if q != r.req {
+		// The rest of a request whose remainder req asks for: req's answer
+		// tells.
+		r.forget(q)
+		return nil
+	}
+	// What the request still asks for: all of it, or what its batches left.
+	count := q.end() - q.next + 1
+	r.waitUntil = time.Time{}
 	reason := printable(rj.Reason, s.cfg.MaxReasonLength)
 	switch fixp.RetransmitRejectCode(rj.Code) {
 	case fixp.RetransmitOutOfRange:
-		// Lost: skipped only with the handler's consent.
-		if err := s.handler.OnLost(s.cbCtx, s, req.from, req.count); err != nil {
-			return &handlerError{fmt.Errorf("messages %d to %d lost (%s): %w", req.from, req.from+req.count-1, reason, err)}
-		}
-		s.logWarn("messages lost, skipped", "from", req.from, "count", req.count, "reason", reason)
 		r.req = nil
+		// Lost: what the rejection covers and is still unresolved, from the
+		// frontier up to the request's end or the first message held, a
+		// late batch of an older request having delivered some, or all.
+		// The frontier never moves back, nor past a number the rejection
+		// does not cover; what is left missing is asked for again.
+		from, to := s.inbound+1, q.end()
+		if len(r.held) > 0 {
+			to = min(to, r.held[0].in.Seq-1)
+		}
+		if from < q.next || from > to {
+			break
+		}
+		// Skipped only with the handler's consent.
+		if err := s.handler.OnLost(s.cbCtx, s, from, to-from+1); err != nil {
+			return &handlerError{fmt.Errorf("messages %d to %d lost (%s): %w", from, to, reason, err)}
+		}
+		s.logWarn("messages lost, skipped", "from", from, "count", to-from+1, "reason", reason)
 		// Durable: a restart must not ask the handler again.
-		if err := s.setInbound(req.from+req.count-1, true); err != nil {
+		if err := s.setInbound(to, true); err != nil {
 			return errHalted
 		}
 		if err := c.drainHeld(); err != nil {
 			return err
 		}
 	case fixp.RetransmitRequestLimitExceeded:
-		if req.count == 1 {
+		if count == 1 {
 			return protocolf("RetransmitReject RequestLimitExceeded for one message")
 		}
 		r.req = nil
-		r.limit = req.count / 2
+		r.limit = count / 2
 	default:
 		// InvalidSession, our request carrying our own ID, or unknown.
 		return protocolf("RetransmitReject %s: %s", fixp.RetransmitRejectCode(rj.Code), reason)
@@ -321,6 +462,11 @@ func (c *conn) onRetransmitRequest(h codec.MessageHeader, body []byte) error {
 	var rr codec.RetransmitRequest
 	if err := s.cfg.decodeBody(&rr, h, body); err != nil {
 		return protocolf("RetransmitRequest: %v", err)
+	}
+	if c.written.Load() {
+		// After our Terminate, unanswered (§6.3): the peer asks again on
+		// the next establishment.
+		return nil
 	}
 	// The answers wait for the writer: a peer asking faster than it reads
 	// them would fill memory.
