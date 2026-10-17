@@ -72,6 +72,8 @@ type MessageDef struct {
 	requiredTags []tracked      // tags required unconditionally, in order
 	conds        []compiledCond // tags required only when an optional component is present
 	slots        int32          // presence slots, the envelope's included
+	fraction     int            // fraction digits its body's timestamps may have
+	transport    bool           // a transport's message, which Compose kept
 }
 
 // Condition records the required fields of an optional component: they must
@@ -118,6 +120,13 @@ type Dict struct {
 	enums        tagTable // tag -> index in enumChecks
 	enumChecks   []enumCheck
 	formats      tagTable // tag -> format of its values, see ValidateWith
+	// fraction and envFraction are the fraction digits a timestamp may have
+	// in the messages' bodies, and in the header, trailer and transport's
+	// messages (see CheckTimestampPrecision). transportVersion is the type,
+	// major and minor of the transport Compose took them from, nil if d has
+	// none.
+	fraction, envFraction int
+	transportVersion      *[3]string
 	// groupRules holds what an entry of each group requires, by spec.
 	groupRules map[*fix.GroupSpec]*groupRules
 

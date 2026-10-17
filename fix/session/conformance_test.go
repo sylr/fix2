@@ -96,8 +96,9 @@ func conformanceConfig(t *testing.T, spec, v string) session.Config {
 		Handler:     &echo{orders: map[string]bool{}},
 		Tolerations: session.QuickFIXTolerations(),
 		// Choices FIX leaves open, made as QuickFIX makes them.
-		ServeResendRequestSeqTooLow: true,
-		UnannouncedResetOnLogon:     true,
+		ServeResendRequestSeqTooLow:          true,
+		UnannouncedResetOnLogon:              true,
+		RejectUndefinedTagAsInvalidTagNumber: true,
 		// QuickFIX's default, which the scripts' 20s wait for a
 		// disconnection after our Logout needs: twice their HeartBtInt of
 		// 30s, FIX's recommendation, is longer.

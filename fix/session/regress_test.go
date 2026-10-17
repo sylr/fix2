@@ -466,9 +466,9 @@ func TestSkipUnknownTags(t *testing.T) {
 		skip   dictionary.Checks
 		reject []string // the Reject's RefTagID and SessionRejectReason, if rejected
 	}{
-		{"rejected", 0, []string{"371", "9001", "373", "0"}},
-		{"user-defined accepted", dictionary.CheckUserDefinedTags, []string{"371", "4999", "373", "0"}},
-		{"below 5000 accepted", dictionary.CheckUnknownTags, []string{"371", "9001", "373", "0"}},
+		{"rejected", 0, []string{"371", "9001", "373", "3"}},
+		{"user-defined accepted", dictionary.CheckUserDefinedTags, []string{"371", "4999", "373", "3"}},
+		{"below 5000 accepted", dictionary.CheckUnknownTags, []string{"371", "9001", "373", "3"}},
 		{"accepted", dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

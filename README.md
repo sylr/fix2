@@ -31,8 +31,9 @@ followed and what each toleration relaxes.
   Community publishes (FIX Latest, FIX 4.2, FIX 4.4 and the FIXT session
   layer, from
   [FIXTradingCommunity/orchestrations](https://github.com/FIXTradingCommunity/orchestrations)),
-  or generated ones, with the SessionRejectReason of each error; `Compose`
-  for FIXT 1.1 application messages.
+  or generated ones, with the SessionRejectReason of each error, value
+  ranges, group counts and timestamp precisions per FIX version included;
+  `Compose` for FIXT 1.1 application messages.
 - **Code generation** (`cmd/fix2gen`): `fix2gen tagvalue` writes typed
   readers, builders and the dictionary as Go code, from a QuickFIX
   dictionary or an Orchestra repository; `-dispatch` adds a typed handler
@@ -186,9 +187,10 @@ The session engine passes the 505 session acceptance test scripts of
 QuickFIX (FIX 4.0 to 5.0 SP2, NextExpectedMsgSeqNum, LastMsgSeqNumProcessed,
 ResendRequest chunking), configured as QuickFIX behaves: with
 `session.QuickFIXTolerations()`, where QuickFIX departs from the 2020 Session
-Layer, and `ServeResendRequestSeqTooLow`, `UnannouncedResetOnLogon` and a
+Layer, `ServeResendRequestSeqTooLow`, `UnannouncedResetOnLogon` and a
 `LogoutTimeout` of 2s, where it makes choices the Session Layer leaves
-open. Run them with a
+open, and `RejectUndefinedTagAsInvalidTagNumber`, where it follows the
+FIXT 1.1 test cases rather than the Session Layer's reject codes. Run them with a
 quickfix-go checkout:
 
     FIX2_QUICKFIX_TESTS=/path/to/quickfix-go/_test go test -run TestConformance ./fix/session/

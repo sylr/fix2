@@ -2,8 +2,10 @@ package dictionary_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -38,21 +40,21 @@ func TestValidateWith(t *testing.T) {
 		{"header after body", "35=D\x0149=S\x0156=T\x0134=1\x01" + body + "52=20231001-12:00:00\x0155=A\x01", dictionary.CheckOrder, dictionary.ErrOutOfOrder, 52, dictionary.ReasonTagSpecifiedOutOfOrder},
 		{"too few entries", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x01", dictionary.CheckGroupCounts, dictionary.ErrGroupCount, 78, dictionary.ReasonIncorrectNumInGroupCount},
 		{"count not a number", "35=D\x01" + header + body + "55=A\x0178=x\x0179=A\x01", dictionary.CheckGroupCounts, dictionary.ErrGroupCount, 78, dictionary.ReasonIncorrectNumInGroupCount},
-		{"undefined tag", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 4999, dictionary.ReasonInvalidTagNumber},
+		{"undefined tag", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 4999, dictionary.ReasonUndefinedTag},
 		{"undefined tag accepted", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, nil, 0, 0},
 		{"tag of another message", "35=D\x01" + header + body + "55=A\x01112=x\x01", dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 112, dictionary.ReasonTagNotDefinedForMessageType},
 		{"tag of another message accepted", "35=D\x01" + header + body + "55=A\x01112=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, nil, 0, 0},
 		{"unknown tag in the header accepted", "35=D\x014999=x\x01" + header + body + "55=A\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, nil, 0, 0},
-		{"user-defined tag not accepted with tags below 5000", "35=D\x01" + header + body + "55=A\x019001=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonInvalidTagNumber},
+		{"user-defined tag not accepted with tags below 5000", "35=D\x01" + header + body + "55=A\x019001=x\x01", dictionary.CheckAll &^ dictionary.CheckUnknownTags, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonUndefinedTag},
 		{"user-defined tag accepted", "35=D\x01" + header + body + "55=A\x019001=x\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, nil, 0, 0},
-		{"tag below 5000 not accepted with user-defined tags", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrUnexpectedTag, 4999, dictionary.ReasonInvalidTagNumber},
+		{"tag below 5000 not accepted with user-defined tags", "35=D\x01" + header + body + "55=A\x014999=x\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrUnexpectedTag, 4999, dictionary.ReasonUndefinedTag},
 		{"accepted unknown tag repeated", "35=D\x01" + header + body + "55=A\x019001=x\x019001=y\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrRepeatedTag, 9001, dictionary.ReasonTagAppearsMoreThanOnce},
-		{"rejected unknown tag repeated", "35=D\x01" + header + body + "55=A\x019001=x\x019001=y\x01", dictionary.CheckAll, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonInvalidTagNumber},
+		{"rejected unknown tag repeated", "35=D\x01" + header + body + "55=A\x019001=x\x019001=y\x01", dictionary.CheckAll, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonUndefinedTag},
 		{"unknown tag still checked for a value", "35=D\x01" + header + body + "55=A\x019001=\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, dictionary.ErrEmptyValue, 9001, dictionary.ReasonTagSpecifiedWithoutAValue},
 		// An entry keeps the unknown tags it holds: they neither end the
 		// group nor make its other entries' tags repeat outside it.
 		{"unknown tags in group entries accepted", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x019001=x\x019001=y\x0179=B\x014999=z\x01", dictionary.CheckAll &^ (dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags), nil, 0, 0},
-		{"unknown tag in a group entry reported", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x019001=x\x0179=B\x01", dictionary.CheckAll, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonInvalidTagNumber},
+		{"unknown tag in a group entry reported", "35=D\x01" + header + body + "55=A\x0178=2\x0179=A\x019001=x\x0179=B\x01", dictionary.CheckAll, dictionary.ErrUnexpectedTag, 9001, dictionary.ReasonUndefinedTag},
 		{"required tag after an unknown tag in a group entry", "35=D\x01" + header + body + "78=1\x0179=A\x019001=x\x0155=A\x01", dictionary.CheckAll &^ dictionary.CheckUserDefinedTags, nil, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,7 +184,7 @@ func TestValidateWith_Formats(t *testing.T) {
     <message name="M" msgtype="M" msgcat="app">
       <field name="I" required="N"/><field name="F" required="N"/><field name="C" required="N"/>
       <field name="B" required="N"/><field name="T" required="N"/><field name="D" required="N"/>
-      <field name="Y" required="N"/><field name="S" required="N"/>
+      <field name="Y" required="N"/><field name="S" required="N"/><field name="DM" required="N"/>
     </message>
   </messages>
   <components/>
@@ -196,6 +198,7 @@ func TestValidateWith_Formats(t *testing.T) {
     <field number="5006" name="D" type="LOCALMKTDATE"/>
     <field number="5007" name="Y" type="MONTHYEAR"/>
     <field number="5008" name="S" type="STRING"/>
+    <field number="5009" name="DM" type="DAYOFMONTH"/>
   </fields>
 </fix>`
 	d, err := xmldict.Load(strings.NewReader(xml))
@@ -215,12 +218,198 @@ func TestValidateWith_Formats(t *testing.T) {
 		{"5006", []string{"20231001"}, []string{"2023101", "20231301"}},
 		{"5007", []string{"202310", "20231001", "202310w2"}, []string{"202313", "202300", "202310w6", "2023101"}},
 		{"5008", []string{"anything at all"}, nil},
+		// TagValue §6.2.2, DayOfMonth: "Day number within a month (values 1
+		// to 31)", an int, which may have leading zeros.
+		{"5009", []string{"1", "9", "31", "07", "0031"}, []string{"0", "00", "32", "99", "100", "-1", "+1", "1.0", "x"}},
 	} {
 		for _, v := range append(tc.ok, tc.bad...) {
 			want := !contains(tc.bad, v)
 			msg := parseMsg(t, buildFIXMsg("35=M\x01"+tc.field+"="+v+"\x01"))
-			if err := d.ValidateWith(&msg, dictionary.CheckFormats); (err == nil) != want {
+			err := d.ValidateWith(&msg, dictionary.CheckFormats)
+			if (err == nil) != want {
 				t.Errorf("tag %s value %q: err = %v, want valid %v", tc.field, v, err, want)
+			}
+			var ve *dictionary.ValidationError
+			if err != nil && (!errors.As(err, &ve) || !errors.Is(err, dictionary.ErrIncorrectFormat) || ve.Reason != dictionary.ReasonIncorrectDataFormat) {
+				t.Errorf("tag %s value %q: err = %v, want an incorrect data format", tc.field, v, err)
+			}
+		}
+	}
+}
+
+// A UTCTimestamp or UTCTimeOnly has at most the fraction digits its
+// dictionary's version allows: whole seconds in FIX 4.0 and 4.1,
+// milliseconds in FIX 4.3, picoseconds in the versions the Time Precision
+// Addendum amends, FIX 4.2, 4.4 and 5.0 and later, FIXT 1.1's dictionaries
+// too. CheckTimestampPrecision checks it, CheckFormats only the format.
+func TestValidateWith_TimestampPrecision(t *testing.T) {
+	for _, tc := range []struct {
+		typ, major, minor string
+		fraction          int
+	}{
+		{"FIX", "4", "0", 0}, {"FIX", "4", "1", 0}, {"FIX", "4", "2", 12}, {"FIX", "4", "3", 3},
+		{"FIX", "4", "4", 12}, {"FIX", "5", "0", 12}, {"FIXT", "1", "1", 12}, {"FIX", "Latest", "", 12},
+	} {
+		xml := `<fix type="` + tc.typ + `" major="` + tc.major + `" minor="` + tc.minor + `">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app"><field name="TS" required="N"/><field name="TO" required="N"/></message></messages>
+  <components/>
+  <fields><field number="35" name="MsgType" type="STRING"/>
+    <field number="5001" name="TS" type="UTCTIMESTAMP"/><field number="5002" name="TO" type="UTCTIMEONLY"/></fields>
+</fix>`
+		d, err := xmldict.Load(strings.NewReader(xml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		version := tc.typ + "." + tc.major + "." + tc.minor
+		for _, digits := range []int{0, 3, 6, 9, 12} {
+			frac := ""
+			if digits > 0 {
+				frac = "." + strings.Repeat("1", digits)
+			}
+			for _, f := range []string{"5001=20231001-12:00:00" + frac, "5002=12:00:00" + frac} {
+				msg := parseMsg(t, buildFIXMsg("35=M\x01"+f+"\x01"))
+				err := d.ValidateWith(&msg, dictionary.CheckTimestampPrecision)
+				var ve *dictionary.ValidationError
+				if digits <= tc.fraction && err != nil {
+					t.Errorf("%s %s: %v, want valid", version, f, err)
+				}
+				if digits > tc.fraction && (!errors.As(err, &ve) || !errors.Is(err, dictionary.ErrIncorrectFormat) || ve.Reason != dictionary.ReasonIncorrectDataFormat || ve.Tag != 5001 && ve.Tag != 5002) {
+					t.Errorf("%s %s: %v, want an incorrect data format", version, f, err)
+				}
+				if err := d.ValidateWith(&msg, dictionary.CheckAll&^dictionary.CheckTimestampPrecision); err != nil {
+					t.Errorf("%s %s without CheckTimestampPrecision: %v, want valid", version, f, err)
+				}
+				if err := d.Validate(&msg); (err == nil) != (digits <= tc.fraction) {
+					t.Errorf("%s %s: Validate = %v, want valid %v", version, f, err, digits <= tc.fraction)
+				}
+			}
+		}
+	}
+}
+
+// TagValue §4.3.6.4: a NumInGroup "is required and must be larger than zero
+// if the repeating group is required"; an optional group's may be 0, its
+// entries absent. A group an optional component requires is required once
+// the component is present, in a message or a group entry: any of the
+// component's fields shows it, the counter itself included.
+// CheckEmptyRequiredGroups checks it, CheckGroupCounts the other counts.
+func TestValidateWith_RequiredGroupCount(t *testing.T) {
+	const xml = `<fix type="FIX" major="4" minor="4">
+  <header><field name="MsgType" required="Y"/></header><trailer/>
+  <messages><message name="M" msgtype="M" msgcat="app">
+    <group name="NoR" required="Y"><field name="R" required="Y"/></group>
+    <group name="NoO" required="N"><field name="O" required="Y"/></group>
+    <component name="C" required="N"/>
+    <group name="NoE" required="N"><field name="E" required="Y"/><component name="D" required="N"/></group>
+  </message></messages>
+  <components><component name="C"><field name="CF" required="N"/>
+    <group name="NoC" required="Y"><field name="CG" required="Y"/></group></component>
+    <component name="D"><field name="DF" required="N"/>
+    <group name="NoD" required="Y"><field name="DG" required="Y"/></group></component></components>
+  <fields><field number="35" name="MsgType" type="STRING"/>
+    <field number="100" name="NoR" type="NUMINGROUP"/><field number="101" name="R" type="STRING"/>
+    <field number="200" name="NoO" type="NUMINGROUP"/><field number="201" name="O" type="STRING"/>
+    <field number="300" name="CF" type="STRING"/>
+    <field number="400" name="NoC" type="NUMINGROUP"/><field number="401" name="CG" type="STRING"/>
+    <field number="500" name="NoE" type="NUMINGROUP"/><field number="501" name="E" type="STRING"/>
+    <field number="600" name="DF" type="STRING"/>
+    <field number="700" name="NoD" type="NUMINGROUP"/><field number="701" name="DG" type="STRING"/></fields>
+</fix>`
+	d, err := xmldict.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		body string
+		tag  int // 0 if valid
+	}{
+		{"100=1|101=a|", 0},
+		{"100=0|", 100},
+		{"100=00|", 100},
+		{"100=1|101=a|200=0|", 0},
+		{"100=1|101=a|200=1|201=b|", 0},
+		{"100=1|101=a|300=c|400=0|", 400},
+		{"100=1|101=a|400=0|", 400},
+		{"100=1|101=a|300=c|400=1|401=d|", 0},
+		{"100=1|101=a|500=1|501=e|", 0},
+		{"100=1|101=a|500=1|501=e|600=f|700=0|", 700},
+		{"100=1|101=a|500=2|501=e|501=e|700=0|", 700},
+		{"100=1|101=a|500=1|501=e|600=f|700=1|701=g|", 0},
+	} {
+		msg := parseMsg(t, buildFIXMsg("35=M\x01"+strings.ReplaceAll(tc.body, "|", "\x01")))
+		err := d.ValidateWith(&msg, dictionary.CheckEmptyRequiredGroups)
+		var ve *dictionary.ValidationError
+		switch {
+		case tc.tag == 0 && err != nil:
+			t.Errorf("%q: %v, want valid", tc.body, err)
+		case tc.tag != 0 && (!errors.As(err, &ve) || !errors.Is(err, dictionary.ErrGroupCount) || ve.Tag != tc.tag || ve.Reason != dictionary.ReasonIncorrectNumInGroupCount):
+			t.Errorf("%q: %v, want an incorrect NumInGroup for %d", tc.body, err, tc.tag)
+		}
+		if err := d.Validate(&msg); (err == nil) != (tc.tag == 0) {
+			t.Errorf("%q: Validate = %v, want valid %v", tc.body, err, tc.tag == 0)
+		}
+		for _, checks := range []dictionary.Checks{dictionary.CheckAll &^ dictionary.CheckEmptyRequiredGroups, dictionary.CheckGroupCounts} {
+			if err := d.ValidateWith(&msg, checks); err != nil {
+				t.Errorf("%q with checks %b: %v, want valid", tc.body, checks, err)
+			}
+		}
+	}
+}
+
+// A group an optional component of a group entry requires needs entries
+// whatever its place among the entry's nested groups: the 64th and 65th of
+// 66, a narrow group's, and of 300, a wide one's (see wideScratch), and the
+// last. Without CheckEmptyRequiredGroups, as TolerateEmptyRequiredGroups
+// has it, its 0 is accepted.
+func TestValidateWith_RequiredGroupCountManyNested(t *testing.T) {
+	for _, nested := range []int{66, 300} {
+		required := slices.Compact([]int{64, 65, nested - 1})
+		var groups, fields strings.Builder
+		fields.WriteString(`<field number="35" name="MsgType" type="STRING"/><field number="500" name="NoE" type="NUMINGROUP"/>` +
+			`<field number="501" name="E" type="STRING"/><field number="600" name="DF" type="STRING"/>`)
+		for c := range nested {
+			req := "N"
+			if slices.Contains(required, c) {
+				req = "Y"
+			}
+			fmt.Fprintf(&groups, `<group name="NoN%d" required="%s"><field name="N%d" required="Y"/></group>`, c, req, c)
+			fmt.Fprintf(&fields, `<field number="%d" name="NoN%d" type="NUMINGROUP"/><field number="%d" name="N%d" type="STRING"/>`, 2000+2*c, c, 2001+2*c, c)
+		}
+		d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4"><header><field name="MsgType" required="Y"/></header><trailer/>
+<messages><message name="M" msgtype="M" msgcat="app">
+  <group name="NoE" required="N"><field name="E" required="Y"/><component name="D" required="N"/></group>
+</message></messages>
+<components><component name="D"><field name="DF" required="N"/>` + groups.String() + `</component></components>
+<fields>` + fields.String() + `</fields></fix>`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// msg holds the required nested groups, empty the one at index empty,
+		// if any.
+		msg := func(empty int) fix.Message {
+			body := "35=M\x01500=1\x01501=e\x01600=f\x01"
+			for _, c := range required {
+				if c == empty {
+					body += fmt.Sprintf("%d=0\x01", 2000+2*c)
+				} else {
+					body += fmt.Sprintf("%d=1\x01%d=x\x01", 2000+2*c, 2001+2*c)
+				}
+			}
+			return parseMsg(t, buildFIXMsg(body))
+		}
+		m := msg(-1)
+		if err := d.Validate(&m); err != nil {
+			t.Fatalf("%d nested groups, all required ones held: %v", nested, err)
+		}
+		for _, c := range required {
+			m := msg(c)
+			var ve *dictionary.ValidationError
+			if err := d.Validate(&m); !errors.As(err, &ve) || ve.Tag != 2000+2*c || ve.Reason != dictionary.ReasonIncorrectNumInGroupCount {
+				t.Errorf("%d nested groups, group %d empty: %v, want an incorrect NumInGroup for %d", nested, c, err, 2000+2*c)
+			}
+			if err := d.ValidateWith(&m, dictionary.CheckAll&^dictionary.CheckEmptyRequiredGroups); err != nil {
+				t.Errorf("%d nested groups, group %d empty, without CheckEmptyRequiredGroups: %v, want valid", nested, c, err)
 			}
 		}
 	}
@@ -322,7 +511,8 @@ func TestValidateWith_StructureEdges(t *testing.T) {
 	}
 }
 
-// FIX 4.0 timestamps have whole seconds.
+// FIX 4.0 timestamps, TIME, have whole seconds: CheckTimestampPrecision
+// refuses a fraction, which CheckFormats, checking their syntax, lets pass.
 func TestValidateWith_FIX40Time(t *testing.T) {
 	d, err := xmldict.LoadFile("testdata/FIX40.xml")
 	if err != nil {
@@ -331,8 +521,21 @@ func TestValidateWith_FIX40Time(t *testing.T) {
 	for v, ok := range map[string]bool{"20231001-12:00:00": true, "20231001-12:00:00.123": false} {
 		body := "35=0\x0149=S\x0156=T\x0134=1\x0152=" + v + "\x01"
 		m := parseMsg(t, fix.AppendTrailer([]byte("8=FIX.4.0\x019="+strconv.Itoa(len(body))+"\x01"+body), 0))
-		if err := d.ValidateWith(&m, dictionary.CheckFormats); (err == nil) != ok {
-			t.Errorf("SendingTime %s: err = %v, want valid %v", v, err, ok)
+		if err := d.ValidateWith(&m, dictionary.CheckTimestampPrecision); (err == nil) != ok {
+			t.Errorf("SendingTime %s: CheckTimestampPrecision = %v, want valid %v", v, err, ok)
+		}
+		if err := d.Validate(&m); (err == nil) != ok {
+			t.Errorf("SendingTime %s: Validate = %v, want valid %v", v, err, ok)
+		}
+		if err := d.ValidateWith(&m, dictionary.CheckAll&^dictionary.CheckTimestampPrecision); err != nil {
+			t.Errorf("SendingTime %s without CheckTimestampPrecision: %v, want valid", v, err)
+		}
+	}
+	for _, v := range []string{"20231001-12:00", "20231001-12:00:00.1"} {
+		body := "35=0\x0149=S\x0156=T\x0134=1\x0152=" + v + "\x01"
+		m := parseMsg(t, fix.AppendTrailer([]byte("8=FIX.4.0\x019="+strconv.Itoa(len(body))+"\x01"+body), 0))
+		if err := d.ValidateWith(&m, dictionary.CheckFormats); !errors.Is(err, dictionary.ErrIncorrectFormat) {
+			t.Errorf("SendingTime %s: CheckFormats = %v, want an incorrect data format", v, err)
 		}
 	}
 }
@@ -451,8 +654,8 @@ func TestValidate_GroupFieldOutsideEntries(t *testing.T) {
 		// Unchanged.
 		{"count 2, one entry", "35=P|100=2|101=A|102=R|", verdict{}, verdict{100, 16}, verdict{100, 16}},
 		{"nested count 2, one entry", "35=M|100=1|101=A|102=R|110=2|111=x|", verdict{}, verdict{110, 16}, verdict{110, 16}},
-		{"unknown tags", "35=P|4999=x|9001=y|", verdict{4999, 0}, verdict{4999, 0}, verdict{}},
-		{"unknown tags in an entry", "35=P|100=1|101=A|4999=x|102=R|9001=y|", verdict{4999, 0}, verdict{4999, 0}, verdict{}},
+		{"unknown tags", "35=P|4999=x|9001=y|", verdict{4999, 3}, verdict{4999, 3}, verdict{}},
+		{"unknown tags in an entry", "35=P|100=1|101=A|4999=x|102=R|9001=y|", verdict{4999, 3}, verdict{4999, 3}, verdict{}},
 		{"second entry without its required R", "35=P|100=2|101=A|102=R|110=1|111=x|101=B|", verdict{}, verdict{102, 1}, verdict{102, 1}},
 		{"valid", "35=P|100=2|101=A|102=R|110=1|111=x|101=B|102=S|", verdict{}, verdict{}, verdict{}},
 	} {

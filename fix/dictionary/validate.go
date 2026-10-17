@@ -69,10 +69,10 @@ func (e *ValidationError) Unwrap() error {
 //
 // Validate is ValidateWith with CheckAll: besides 1 to 6, which
 // CheckUnknownTags and CheckUserDefinedTags are 5 of, it checks empty
-// values, value formats, repeated tags, field order, group counts, and
-// group entries' required fields and order (see Checks), as FIX requires a
-// received message to be validated. ValidateWith runs fewer, for a
-// counterparty that needs some tolerated.
+// values, value formats and timestamp precisions, repeated tags, field
+// order, group counts, and group entries' required fields and order (see
+// Checks), as FIX requires a received message to be validated. ValidateWith
+// runs fewer, for a counterparty that needs some tolerated.
 func (d *Dict) Validate(msg *fix.Message) error {
 	return d.validate(msg, CheckAll)
 }
@@ -118,10 +118,11 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 
 	// Presence of the tracked tags (required ones and those activating
 	// optional components), anywhere and at the top level.
-	var small [2][4]uint64
-	present, top := small[0][:], small[1][:]
+	// zero records the counters at the top level whose NumInGroup is 0.
+	var small [3][4]uint64
+	present, top, zero := small[0][:], small[1][:], small[2][:]
 	if n := (int(mdef.slots) + 63) / 64; n > len(small[0]) {
-		present, top = make([]uint64, n), make([]uint64, n)
+		present, top, zero = make([]uint64, n), make([]uint64, n), make([]uint64, n)
 	}
 
 	// One pass over every field records presence and finds the first tag
@@ -137,7 +138,7 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 				fieldErr = d.unexpected(mdef, f.Tag)
 			}
 			if fieldErr == nil && checks&checksValue != 0 {
-				fieldErr = d.checkValue(f, checks)
+				fieldErr = d.checkValue(f, checks, mdef.fraction)
 			}
 			continue
 		}
@@ -149,7 +150,12 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 			misplaced = f.Tag
 		}
 		if fieldErr == nil && !e.structural && checks&checksValue != 0 {
-			fieldErr = d.checkValue(f, checks)
+			// The header's and trailer's timestamps are the transport's.
+			fraction := mdef.fraction
+			if e.section == sectionHeader || e.section == sectionTrailer {
+				fraction = d.envFraction
+			}
+			fieldErr = d.checkValue(f, checks, fraction)
 		}
 		if fieldErr == nil && !e.structural {
 			fieldErr = d.checkEnum(f)
@@ -173,6 +179,11 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 			}
 			if e.slot >= 0 {
 				top[e.slot/64] |= 1 << (e.slot % 64)
+				if e.counter && checks&CheckEmptyRequiredGroups != 0 {
+					if v, err := fix.ParseInt(f.Value); err == nil && v == 0 {
+						zero[e.slot/64] |= 1 << (e.slot % 64)
+					}
+				}
 			}
 			if misplaced == 0 && e.grouped && checks&unknownCheck(f.Tag) != 0 {
 				misplaced = f.Tag
@@ -204,7 +215,9 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 	// 4b. Required fields of optional components that are present: any of
 	// their activation tags is, anywhere, since a component can show its
 	// presence through one of its groups. A header or trailer activation tag
-	// the message also declares in its body could be the body's.
+	// the message also declares in its body could be the body's. A group
+	// such a component requires needs entries, reported with group counts.
+	var empty error
 	for i, conds := range [...][]compiledCond{d.headerConds, d.trailerConds, mdef.conds} {
 		envelope := i < 2
 		for _, c := range conds {
@@ -232,11 +245,25 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 					}
 				}
 			}
+			for _, t := range c.groups {
+				if empty == nil && has(zero, t.slot) {
+					where := [...]string{"header", "trailer", "message " + mdef.Name}[i]
+					empty = &ValidationError{
+						Err:    ErrGroupCount,
+						Tag:    t.tag,
+						Reason: ReasonIncorrectNumInGroupCount,
+						Msg:    fmt.Sprintf("NumInGroup %d%s is 0 but component %s requires the group in %s", t.tag, d.fieldName(t.tag), c.component, where),
+					}
+				}
+			}
 		}
 	}
 
-	if groups := checks & (CheckGroupCounts | CheckGroupRequired); fieldErr == nil && groups != 0 {
+	if groups := checks & (CheckGroupCounts | CheckGroupRequired | CheckEmptyRequiredGroups); fieldErr == nil && groups != 0 {
 		fieldErr = d.checkStructure(msg, mdef, groups)
+	}
+	if fieldErr == nil {
+		fieldErr = empty
 	}
 	if fieldErr == nil && misplaced != 0 {
 		return &ValidationError{
@@ -249,10 +276,12 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 	return fieldErr
 }
 
-// unexpected reports tag, which mdef does not allow: an invalid tag number if
-// the dictionary does not define it at all, as QuickFIX and its acceptance
-// tests have it (FIX's "undefined tag", reason 3, is less used), a tag not
-// defined for the message type otherwise.
+// unexpected reports tag, which mdef does not allow: an undefined tag (reason
+// 3) if the dictionary does not define it at all, as the Session Layer's code
+// list has it (§11.11), a tag not defined for the message type (reason 2)
+// otherwise. FIXT 1.1's test case 14a, and QuickFIX, answer the first with
+// reason 0, Invalid tag number, which the code list keeps for a malformed
+// tag number: a session's RejectUndefinedTagAsInvalidTagNumber sends it.
 func (d *Dict) unexpected(mdef *MessageDef, tag int) *ValidationError {
 	if fd := d.Fields[tag]; fd != nil {
 		return &ValidationError{
@@ -265,7 +294,7 @@ func (d *Dict) unexpected(mdef *MessageDef, tag int) *ValidationError {
 	return &ValidationError{
 		Err:    ErrUnexpectedTag,
 		Tag:    tag,
-		Reason: ReasonInvalidTagNumber,
+		Reason: ReasonUndefinedTag,
 		Msg:    fmt.Sprintf("tag %d not defined by the dictionary, in message %s", tag, mdef.Name),
 	}
 }
@@ -376,13 +405,19 @@ func (d *Dict) groupSpecs(groups []GroupDef, unknown func(int) bool) []*fix.Grou
 	return specs
 }
 
-// groupRules is what an entry of a group requires (see CheckGroupRequired
-// and CheckGroupOrder), its tags by position (see position).
+// groupRules is what a group requires of its count (see CheckGroupCounts)
+// and of its entries (see CheckGroupRequired and CheckGroupOrder), their
+// tags by position (see position).
 type groupRules struct {
-	name     string
-	rank     []int32 // a tag's place in the group's Layout, -1 if none
-	required []int
-	conds    []entryCond
+	name string
+	// needed tells whether the group is required where it is, its
+	// NumInGroup then above zero (see CheckEmptyRequiredGroups);
+	// condGroups, whether an optional component of its entries requires a
+	// nested group, once present.
+	needed, condGroups bool
+	rank               []int32 // a tag's place in the group's Layout, -1 if none
+	required           []int
+	conds              []entryCond
 	// activates holds, by position, the indexes in conds of the conditions
 	// its tag activates; nil without conditions.
 	activates [][]int
@@ -407,7 +442,7 @@ type entryCond struct {
 // rulesOf returns the rules of the entries of gd, of spec s.
 func (d *Dict) rulesOf(gd GroupDef, s *fix.GroupSpec) *groupRules {
 	n := len(s.Tags) + len(s.Nested)
-	r := &groupRules{name: gd.Name, rank: make([]int32, n)}
+	r := &groupRules{name: gd.Name, needed: gd.Required, rank: make([]int32, n)}
 	// Positions by tag, the first winning and a nested counter's over a
 	// tag's, as in position.
 	pos := make(map[int]tagEntry, n)
@@ -482,6 +517,9 @@ func (d *Dict) rulesOf(gd GroupDef, s *fix.GroupSpec) *groupRules {
 		}
 		if len(activation) == 0 || len(ec.required) == 0 {
 			continue
+		}
+		if slices.ContainsFunc(ec.required, func(k int) bool { return k >= len(s.Tags) }) {
+			r.condGroups = true
 		}
 		// An entry finds the conditions it activates from the tags it
 		// holds, not from every activation tag: a wide optional component

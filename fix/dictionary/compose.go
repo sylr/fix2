@@ -11,10 +11,13 @@ import "maps"
 // transport's own messages (Logon, Heartbeat...) are kept and win over app
 // messages of the same MsgType. Fields come from both; for a tag both define,
 // app's definition is used, with the enums of both (no restriction if either
-// has none, nil or empty). The result takes app's version. transport and app are not
-// changed.
+// has none, nil or empty). The result takes app's version, but for the
+// precision of timestamps in the header, the trailer and transport's
+// messages, transport's (see CheckTimestampPrecision). transport and app are
+// not changed.
 func Compose(transport, app *Dict) *Dict {
 	d := &Dict{
+		transportVersion:  &[3]string{transport.Type, transport.Major, transport.Minor},
 		Type:              app.Type,
 		Major:             app.Major,
 		Minor:             app.Minor,
@@ -55,6 +58,7 @@ func Compose(transport, app *Dict) *Dict {
 				Fields:     md.Fields,
 				Groups:     md.Groups,
 				Conditions: md.Conditions,
+				transport:  src == transport,
 			}
 		}
 	}

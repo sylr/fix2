@@ -624,6 +624,9 @@ func (s *Session) sendingTimeProblem(m *fix.Message, now time.Time) (dictionary.
 	if err != nil {
 		return dictionary.ReasonIncorrectDataFormat, tagSendingTime, rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagSendingTime)+" is "+quoteValue(v))
 	}
+	if s.tooFine(v) {
+		return dictionary.ReasonIncorrectDataFormat, tagSendingTime, rejectText(dictionary.ReasonIncorrectDataFormat, s.tooFineText(tagSendingTime, v))
+	}
 	if max := s.cfg.MaxLatency; max > 0 {
 		if d := now.Sub(t); d >= max || d <= -max {
 			return dictionary.ReasonSendingTimeAccuracyProblem, noTag, rejectText(dictionary.ReasonSendingTimeAccuracyProblem,
@@ -631,6 +634,18 @@ func (s *Session) sendingTimeProblem(m *fix.Message, now time.Time) (dictionary.
 		}
 	}
 	return 0, 0, ""
+}
+
+// tooFine reports whether v, a received timestamp, is finer than the
+// session's version allows, and not tolerated (see TolerateFinerTimestamps).
+func (s *Session) tooFine(v []byte) bool {
+	return !s.cfg.TolerateFinerTimestamps && s.prof.tooFine(v)
+}
+
+// tooFineText says that v, the value of tag, is finer than the session's
+// version allows.
+func (s *Session) tooFineText(tag int, v []byte) string {
+	return fmt.Sprintf("%s is %s, finer than %s allows (%d fraction digits)", fieldDesc(nil, tag), quoteValue(v), s.prof.beginString, s.prof.fraction)
 }
 
 // seqVerdict is what a received MsgSeqNum means.
@@ -700,6 +715,12 @@ func (s *Session) origTimeOK(c *conn, m *fix.Message, inSequence bool) bool {
 	if err1 != nil || err2 != nil {
 		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagOrigSendingTime,
 			rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagOrigSendingTime)+" is "+quoteValue(orig)))
+		consumed()
+		return false
+	}
+	if s.tooFine(orig) {
+		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagOrigSendingTime,
+			rejectText(dictionary.ReasonIncorrectDataFormat, s.tooFineText(tagOrigSendingTime, orig)))
 		consumed()
 		return false
 	}
@@ -1137,9 +1158,20 @@ func mend(d *dictionary.Dict, m *fix.Message, tag int, v []byte) (*fix.Message, 
 	return c, fix.ParseInto(c, frame, d.Profile())
 }
 
-// validateWith validates m against d, but for the checks tolerated.
+// validateWith validates m against d, but for the checks tolerated: those
+// TolerateValidationFailures names, timestamps' precision with
+// TolerateFinerTimestamps, and required groups without entries with
+// TolerateEmptyRequiredGroups. An undefined tag is reason 0 with
+// RejectUndefinedTagAsInvalidTagNumber.
 func (s *Session) validateWith(d *dictionary.Dict, m *fix.Message) *dictionary.ValidationError {
-	err := d.ValidateWith(m, dictionary.CheckAll&^s.cfg.TolerateValidationFailures)
+	checks := dictionary.CheckAll &^ s.cfg.TolerateValidationFailures
+	if s.cfg.TolerateFinerTimestamps {
+		checks &^= dictionary.CheckTimestampPrecision
+	}
+	if s.cfg.TolerateEmptyRequiredGroups {
+		checks &^= dictionary.CheckEmptyRequiredGroups
+	}
+	err := d.ValidateWith(m, checks)
 	var ve *dictionary.ValidationError
 	if errors.As(err, &ve) {
 		if errors.Is(ve, dictionary.ErrUnknownMsgType) {
@@ -1148,6 +1180,9 @@ func (s *Session) validateWith(d *dictionary.Dict, m *fix.Message) *dictionary.V
 			if fd := d.Fields[tagMsgType]; fd != nil && fd.Enums[string(m.MsgType())] != "" && s.prof.businessRej {
 				return &dictionary.ValidationError{Err: ve.Err, Tag: tagMsgType, Reason: -1, Msg: "Unsupported Message Type"}
 			}
+		}
+		if ve.Reason == dictionary.ReasonUndefinedTag && s.cfg.RejectUndefinedTagAsInvalidTagNumber {
+			ve = &dictionary.ValidationError{Err: ve.Err, Tag: ve.Tag, Reason: dictionary.ReasonInvalidTagNumber, Msg: ve.Msg}
 		}
 		return ve
 	}

@@ -196,9 +196,14 @@ func (p *peer) build(msgType string, seq int, fields ...string) []byte {
 		seq = p.seq
 		p.seq++
 	}
+	// FIX 4.0 and 4.1 timestamps have whole seconds.
+	prec := fix.Milliseconds
+	if p.beginString == session.FIX40 || p.beginString == session.FIX41 {
+		prec = fix.Seconds
+	}
 	b := fix.NewBuilder(p.beginString, msgType).
 		SetString(49, p.sender).SetString(56, p.target).SetInt(34, seq).
-		SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds)))
+		SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), prec)))
 	for i := 0; i+1 < len(fields); i += 2 {
 		tag, err := strconv.Atoi(fields[i])
 		if err != nil {

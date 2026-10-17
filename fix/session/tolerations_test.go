@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sylr/fix2/fix"
 	"github.com/sylr/fix2/fix/dictionary/xmldict"
 	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/fix/tests/dicts/fix40"
 	"github.com/sylr/fix2/fix/tests/dicts/fix44"
 	"github.com/sylr/fix2/transport/mem"
 )
@@ -380,6 +382,317 @@ func TestTolerateTagLeadingZerosFirstLogon(t *testing.T) {
 			p.expect("A", "34", "1")
 			rec.wait(t, func() bool { return rec.logons == 1 })
 		})
+	}
+}
+
+// A tag the dictionary does not define is rejected with SessionRejectReason
+// 3, Undefined tag, as the Session Layer's code list has it, or 0, Invalid
+// tag number, with RejectUndefinedTagAsInvalidTagNumber, as FIXT 1.1's test
+// case 14a and QuickFIX expect. A tag defined but not for the message type is
+// 2, a malformed tag number 0, either way.
+func TestRejectUndefinedTagAsInvalidTagNumber(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		invalid   bool
+		undefined string
+	}{{"default", false, "3"}, {"invalid tag number", true, "0"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, _, p := loggedOn(t, func(c *session.Config) {
+				c.Dictionaries.Session = fix44.Dictionary()
+				c.RejectUndefinedTagAsInvalidTagNumber = tc.invalid
+			})
+			p.send("1", 0, "112", "U", "4999", "x")
+			p.expect("3", "45", "2", "371", "4999", "373", tc.undefined)
+			p.send("1", 0, "112", "N", "11", "x")
+			p.expect("3", "45", "3", "371", "11", "373", "2")
+			p.writeRaw(rawFrame("35=1|49=ACC|56=INI|34=4|52="+sendingTime()+"|112=M|abc=x|", ""))
+			p.expect("3", "45", "4", "373", "0")
+			p.send("1", 5, "112", "AFTER")
+			p.expect("0", "112", "AFTER")
+		})
+	}
+}
+
+// timestamp returns at as a UTCTimestamp of digits fraction digits, 12 for
+// picoseconds.
+func timestamp(at time.Time, digits int) string {
+	if digits == 12 {
+		return string(fix.AppendUTCTimestamp(nil, at, fix.Nanoseconds)) + "000"
+	}
+	return string(fix.AppendUTCTimestamp(nil, at, fix.TimePrecision(digits)))
+}
+
+// A received SendingTime or OrigSendingTime finer than the session's FIX
+// version allows is an incorrect data format, rejected (SessionRejectReason
+// 6 from FIX 4.2): FIX 4.0 and 4.1 timestamps have whole seconds, FIX 4.3's
+// milliseconds, while the Time Precision Addendum takes FIX 4.2 and 4.4 down
+// to picoseconds. TolerateFinerTimestamps accepts them.
+func TestTolerateFinerTimestamps(t *testing.T) {
+	for _, v := range []struct {
+		begin    string
+		ok, fine int // fraction digits allowed, and finer; -1 for none
+	}{
+		{session.FIX40, 0, 3}, {session.FIX41, 0, 3}, {session.FIX42, 12, -1}, {session.FIX43, 3, 6}, {session.FIX44, 12, -1},
+	} {
+		for _, tolerate := range []bool{false, true} {
+			t.Run(v.begin+"/"+map[bool]string{false: "strict", true: "tolerated"}[tolerate], func(t *testing.T) {
+				t.Parallel()
+				l := mem.Listen("acceptor")
+				_, rec := startInitiator(t, l, func(c *session.Config) {
+					c.ID.BeginString = v.begin
+					c.TolerateFinerTimestamps = tolerate
+				})
+				p := acceptPeer(t, l)
+				p.expect("A")
+				now := func(digits int) string { return timestamp(time.Now(), digits) }
+				p.writeRaw(frameOf(v.begin, "35=A|49=ACC|56=INI|34=1|52="+now(v.ok)+"|98=0|108=30|"))
+				rec.wait(t, func() bool { return rec.logons == 1 })
+				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=2|52="+now(v.ok)+"|112=OK|"))
+				p.expect("0", "112", "OK")
+				if v.fine < 0 {
+					return
+				}
+				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=3|52="+now(v.fine)+"|112=FINE|"))
+				orig := timestamp(time.Now().Add(-time.Second), v.fine)
+				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=4|43=Y|52="+now(v.ok)+"|122="+orig+"|112=ORIG|"))
+				switch {
+				case tolerate:
+					p.expect("0", "112", "FINE")
+					p.expect("0", "112", "ORIG")
+				case v.begin == session.FIX43:
+					p.expect("3", "45", "3", "371", "52", "373", "6")
+					p.expect("3", "45", "4", "371", "122", "373", "6")
+				default:
+					// No SessionRejectReason before FIX 4.2: the Text says why.
+					if m := p.expect("3", "45", "3"); !strings.HasPrefix(string(m.Get(58)), "Incorrect data format for value") {
+						t.Errorf("Reject Text %q, want an incorrect data format", m.Get(58))
+					}
+					p.expect("3", "45", "4")
+				}
+				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=5|52="+now(v.ok)+"|112=AFTER|"))
+				p.expect("0", "112", "AFTER")
+			})
+		}
+	}
+}
+
+// An acceptor refuses a first Logon whose SendingTime is finer than its
+// version allows, without a word, as any invalid first Logon, and logs on
+// with TolerateFinerTimestamps.
+func TestTolerateFinerTimestampsFirstLogon(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tolerate bool
+	}{{"strict", false}, {"tolerated", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, rec, p := acceptorPeer(t, func(c *session.Config) {
+				c.ID.BeginString = session.FIX43
+				c.TolerateFinerTimestamps = tc.tolerate
+			})
+			p.writeRaw(frameOf(session.FIX43, "35=A|49=INI|56=ACC|34=1|52="+timestamp(time.Now(), 6)+"|98=0|108=30|"))
+			if !tc.tolerate {
+				refused(t, rec, p)
+				return
+			}
+			p.expect("A", "34", "1")
+			rec.wait(t, func() bool { return rec.logons == 1 })
+		})
+	}
+}
+
+// The dictionaries refuse a UTCTimestamp field finer than their version
+// allows (dictionary.CheckTimestampPrecision): a FIX 4.3 TransactTime of
+// microseconds, unless TolerateFinerTimestamps.
+func TestTolerateFinerTimestampsDictionary(t *testing.T) {
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="3" servicepack="0">
+  <header>
+    <field name="BeginString" required="Y"/><field name="BodyLength" required="Y"/>
+    <field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/>
+    <field name="TargetCompID" required="Y"/><field name="MsgSeqNum" required="Y"/>
+    <field name="SendingTime" required="Y"/>
+  </header>
+  <trailer><field name="CheckSum" required="Y"/></trailer>
+  <messages>
+    <message name="Heartbeat" msgtype="0" msgcat="admin"><field name="TestReqID" required="N"/></message>
+    <message name="Logon" msgtype="A" msgcat="admin">
+      <field name="EncryptMethod" required="Y"/><field name="HeartBtInt" required="Y"/>
+    </message>
+    <message name="NewOrderSingle" msgtype="D" msgcat="app">
+      <field name="ClOrdID" required="Y"/><field name="TransactTime" required="Y"/>
+    </message>
+  </messages>
+  <fields>
+    <field number="8" name="BeginString" type="STRING"/><field number="9" name="BodyLength" type="LENGTH"/>
+    <field number="10" name="CheckSum" type="STRING"/><field number="11" name="ClOrdID" type="STRING"/>
+    <field number="34" name="MsgSeqNum" type="SEQNUM"/>
+    <field number="35" name="MsgType" type="STRING"/><field number="49" name="SenderCompID" type="STRING"/>
+    <field number="52" name="SendingTime" type="UTCTIMESTAMP"/><field number="56" name="TargetCompID" type="STRING"/>
+    <field number="60" name="TransactTime" type="UTCTIMESTAMP"/>
+    <field number="98" name="EncryptMethod" type="INT"/><field number="108" name="HeartBtInt" type="INT"/>
+    <field number="112" name="TestReqID" type="STRING"/>
+  </fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		tolerate bool
+	}{{"strict", false}, {"tolerated", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			l := mem.Listen("acceptor")
+			_, rec := startInitiator(t, l, func(c *session.Config) {
+				c.ID.BeginString = session.FIX43
+				c.Dictionaries.Session = d
+				c.TolerateFinerTimestamps = tc.tolerate
+			})
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.writeRaw(frameOf(session.FIX43, "35=A|49=ACC|56=INI|34=1|52="+sendingTime()+"|98=0|108=30|"))
+			rec.wait(t, func() bool { return rec.logons == 1 })
+			p.writeRaw(frameOf(session.FIX43, "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|60="+timestamp(time.Now(), 6)+"|"))
+			if tc.tolerate {
+				rec.wait(t, func() bool { return len(rec.apps) == 1 })
+				return
+			}
+			p.expect("3", "45", "2", "371", "60", "373", "6")
+		})
+	}
+}
+
+// A FIX 4.0 dictionary's timestamps, of type TIME, have whole seconds: its
+// checks refuse a SendingTime of milliseconds, as the session's do, and
+// TolerateFinerTimestamps lets both pass it.
+func TestTolerateFinerTimestampsFIX40Dictionary(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tolerate bool
+	}{{"strict", false}, {"tolerated", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			l := mem.Listen("acceptor")
+			_, rec := startInitiator(t, l, func(c *session.Config) {
+				c.ID.BeginString = session.FIX40
+				c.Dictionaries.Session = fix40.Dictionary()
+				c.TolerateFinerTimestamps = tc.tolerate
+			})
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.writeRaw(frameOf(session.FIX40, "35=A|49=ACC|56=INI|34=1|52="+timestamp(time.Now(), 0)+"|98=0|108=30|"))
+			rec.wait(t, func() bool { return rec.logons == 1 })
+			p.writeRaw(frameOf(session.FIX40, "35=1|49=ACC|56=INI|34=2|52="+timestamp(time.Now(), 3)+"|112=FINE|"))
+			if tc.tolerate {
+				p.expect("0", "112", "FINE")
+			} else {
+				p.expect("3", "45", "2")
+			}
+			p.writeRaw(frameOf(session.FIX40, "35=1|49=ACC|56=INI|34=3|52="+timestamp(time.Now(), 0)+"|112=AFTER|"))
+			p.expect("0", "112", "AFTER")
+		})
+	}
+}
+
+// A required group whose NumInGroup is 0 is rejected, SessionRejectReason
+// 16, as FIX requires its count above zero; TolerateEmptyRequiredGroups
+// accepts it, as an empty book's MarketDataSnapshotFullRefresh, and nothing
+// else: a count its entries do not match is still rejected.
+func TestTolerateEmptyRequiredGroups(t *testing.T) {
+	d, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="4" minor="4" servicepack="0">
+  <header>
+    <field name="BeginString" required="Y"/><field name="BodyLength" required="Y"/>
+    <field name="MsgType" required="Y"/><field name="SenderCompID" required="Y"/>
+    <field name="TargetCompID" required="Y"/><field name="MsgSeqNum" required="Y"/>
+    <field name="SendingTime" required="Y"/>
+  </header>
+  <trailer><field name="CheckSum" required="Y"/></trailer>
+  <messages>
+    <message name="Heartbeat" msgtype="0" msgcat="admin"><field name="TestReqID" required="N"/></message>
+    <message name="Logon" msgtype="A" msgcat="admin">
+      <field name="EncryptMethod" required="Y"/><field name="HeartBtInt" required="Y"/>
+    </message>
+    <message name="MarketDataSnapshotFullRefresh" msgtype="W" msgcat="app">
+      <field name="Symbol" required="Y"/>
+      <group name="NoMDEntries" required="Y"><field name="MDEntryType" required="Y"/><field name="MDEntryPx" required="N"/></group>
+    </message>
+  </messages>
+  <fields>
+    <field number="8" name="BeginString" type="STRING"/><field number="9" name="BodyLength" type="LENGTH"/>
+    <field number="10" name="CheckSum" type="STRING"/><field number="34" name="MsgSeqNum" type="SEQNUM"/>
+    <field number="35" name="MsgType" type="STRING"/><field number="49" name="SenderCompID" type="STRING"/>
+    <field number="52" name="SendingTime" type="UTCTIMESTAMP"/><field number="55" name="Symbol" type="STRING"/>
+    <field number="56" name="TargetCompID" type="STRING"/>
+    <field number="98" name="EncryptMethod" type="INT"/><field number="108" name="HeartBtInt" type="INT"/>
+    <field number="112" name="TestReqID" type="STRING"/><field number="268" name="NoMDEntries" type="NUMINGROUP"/>
+    <field number="269" name="MDEntryType" type="CHAR"/><field number="270" name="MDEntryPx" type="PRICE"/>
+  </fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		tolerate bool
+	}{{"strict", false}, {"tolerated", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, rec, p := loggedOn(t, func(c *session.Config) {
+				c.Dictionaries.Session = d
+				c.TolerateEmptyRequiredGroups = tc.tolerate
+			})
+			p.send("W", 0, "55", "EUR/USD", "268", "0")
+			if tc.tolerate {
+				rec.wait(t, func() bool { return len(rec.apps) == 1 })
+			} else {
+				p.expect("3", "45", "2", "371", "268", "373", "16")
+			}
+			p.send("W", 0, "55", "EUR/USD", "268", "2", "269", "0", "270", "1.1")
+			p.expect("3", "45", "3", "371", "268", "373", "16")
+		})
+	}
+}
+
+// Timestamps finer than the session's version allows are a configuration
+// error, not clamped: FIX 4.0 and 4.1 write whole seconds, FIX 4.3
+// milliseconds, FIX 4.2, 4.4 and FIXT 1.1 down to nanoseconds.
+func TestConfigTimestamps(t *testing.T) {
+	for _, tc := range []struct {
+		begin string
+		ts    session.TimestampPrecision
+		ok    bool
+	}{
+		{session.FIX40, session.DefaultTimestamps, true},
+		{session.FIX40, session.SecondTimestamps, true},
+		{session.FIX40, session.MillisecondTimestamps, false},
+		{session.FIX41, session.MicrosecondTimestamps, false},
+		{session.FIX42, session.NanosecondTimestamps, true},
+		{session.FIX43, session.MillisecondTimestamps, true},
+		{session.FIX43, session.MicrosecondTimestamps, false},
+		{session.FIX44, session.MicrosecondTimestamps, true},
+		{session.FIXT11, session.NanosecondTimestamps, true},
+	} {
+		cfg := session.Config{
+			ID:         session.SessionID{BeginString: tc.begin, SenderCompID: "INI", TargetCompID: "ACC"},
+			Handler:    &session.BaseHandler{},
+			Timestamps: tc.ts,
+		}
+		if tc.begin == session.FIXT11 {
+			cfg.Dictionaries.DefaultApplVerID = "9"
+		}
+		err := cfg.Validate()
+		if tc.ok && err != nil || !tc.ok && (err == nil || !strings.Contains(err.Error(), "Timestamps:")) {
+			t.Errorf("%s, Timestamps %d: Validate = %v, want valid %v", tc.begin, tc.ts, err, tc.ok)
+		}
+	}
+	// A FIX 4.4 session writes the microseconds asked for.
+	l := mem.Listen("acceptor")
+	startInitiator(t, l, func(c *session.Config) { c.Timestamps = session.MicrosecondTimestamps })
+	p := acceptPeer(t, l)
+	logon := p.expect("A")
+	if v := logon.Get(52); len(v) != len("20060102-15:04:05.000000") {
+		t.Errorf("SendingTime %q, want microseconds", v)
 	}
 }
 

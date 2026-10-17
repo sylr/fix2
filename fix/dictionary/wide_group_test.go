@@ -238,14 +238,17 @@ func TestValidateWith_NestedGroupInComponentToo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, body := range []string{"73=1|1000=a|74=0|", "73=1|1000=a|74=1|2000=b|"} {
-		m := parseMsg(t, buildFIXMsg("35=Z\x01"+strings.ReplaceAll(body, "|", "\x01")))
-		if err := d.ValidateWith(&m, dictionary.CheckAll); err != nil {
-			t.Errorf("CheckAll(%q): %v, want nil", body, err)
-		}
+	m := parseMsg(t, buildFIXMsg("35=Z\x0173=1\x011000=a\x0174=1\x012000=b\x01"))
+	if err := d.ValidateWith(&m, dictionary.CheckAll); err != nil {
+		t.Errorf("CheckAll: %v, want nil", err)
 	}
-	m := parseMsg(t, buildFIXMsg("35=Z\x011000=x\x01"))
+	// Required, the nested group needs an entry.
+	m = parseMsg(t, buildFIXMsg("35=Z\x0173=1\x011000=a\x0174=0\x01"))
 	var ve *dictionary.ValidationError
+	if err := d.ValidateWith(&m, dictionary.CheckAll); !errors.As(err, &ve) || ve.Tag != 74 || ve.Reason != dictionary.ReasonIncorrectNumInGroupCount {
+		t.Errorf("CheckAll with NoN = 0: %v, want an incorrect NumInGroup for 74", err)
+	}
+	m = parseMsg(t, buildFIXMsg("35=Z\x011000=x\x01"))
 	if err := d.ValidateWith(&m, dictionary.CheckAll); !errors.As(err, &ve) || ve.Tag != 73 {
 		t.Errorf("CheckAll without NoG: %v, want tag 73 missing", err)
 	}

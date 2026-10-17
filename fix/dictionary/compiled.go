@@ -105,6 +105,21 @@ type compiledCond struct {
 	component  string
 	activation []tracked // tags showing the component is present
 	required   []tracked
+	groups     []tracked // the counters of required, whose groups need entries
+}
+
+// condGroups sets the groups of conds, the counters among their required
+// tags, which entries tells.
+func condGroups(conds []compiledCond, entries map[int]tagEntry) {
+	for i := range conds {
+		c := &conds[i]
+		c.groups = nil
+		for _, t := range c.required {
+			if entries[t.tag].counter {
+				c.groups = append(c.groups, t)
+			}
+		}
+	}
 }
 
 // enumCheck holds the valid values of a field with enums.
@@ -204,6 +219,8 @@ func (d *Dict) compile() {
 		e.section = s
 		envEntries[tag] = e
 	}
+	condGroups(d.headerConds, envEntries)
+	condGroups(d.trailerConds, envEntries)
 	d.envelope = newTagTable(envEntries)
 	anyTags := map[int]tagEntry{}
 	for tag := range envEntries {
@@ -240,6 +257,10 @@ func (d *Dict) compile() {
 			m.conds = append(m.conds, cc)
 		}
 		m.slots = env.n + body.n
+		m.fraction = d.fraction
+		if m.transport {
+			m.fraction = d.envFraction
+		}
 
 		entries := map[int]tagEntry{}
 		unknown := func(tag int) bool { return d.lookup(m, tag) == nil }
@@ -256,6 +277,7 @@ func (d *Dict) compile() {
 			e.grouped = e.grouped && env.grouped
 			entries[tag] = e
 		}
+		condGroups(m.conds, entries)
 		m.body = newTagTable(entries)
 		for tag := range entries {
 			anyTags[tag] = tagEntry{slot: -1}

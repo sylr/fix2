@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/sylr/fix2/fix"
@@ -33,16 +34,22 @@ type profile struct {
 	rejectReason bool // SessionRejectReason (373) and RefTagID (371), from FIX 4.2
 	maxReason    dictionary.RejectReason
 	businessRej  bool // BusinessMessageReject (35=j), from FIX 4.2
-	precision    fix.TimePrecision
+	// precision is the finest timestamps the session may write, and fraction
+	// the most fraction digits a received one may have: whole seconds in FIX
+	// 4.0 and 4.1, milliseconds in FIX 4.3; picoseconds in the versions the
+	// Time Precision Addendum amends, FIX 4.2, 4.4 and, for FIXT 1.1, 5.0 and
+	// later, of which a session writes nanoseconds at most, as time.Time.
+	precision fix.TimePrecision
+	fraction  int
 }
 
 var profiles = map[string]*profile{
-	FIX40:  {beginString: FIX40, infinity: 999999, accept999999: true, precision: fix.Seconds},
-	FIX41:  {beginString: FIX41, infinity: 999999, accept999999: true, resetSeqNum: true, precision: fix.Seconds},
-	FIX42:  {beginString: FIX42, accept999999: true, resetSeqNum: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonInvalidMsgType, businessRej: true, precision: fix.Milliseconds},
-	FIX43:  {beginString: FIX43, resetSeqNum: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonNonDataValueIncludesSOH, businessRej: true, precision: fix.Milliseconds},
-	FIX44:  {beginString: FIX44, resetSeqNum: true, nextExpected: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonOther, businessRej: true, precision: fix.Milliseconds},
-	FIXT11: {beginString: FIXT11, fixt: true, resetSeqNum: true, nextExpected: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonOther, businessRej: true, precision: fix.Nanoseconds},
+	FIX40:  {beginString: FIX40, infinity: 999999, accept999999: true, precision: fix.Seconds, fraction: 0},
+	FIX41:  {beginString: FIX41, infinity: 999999, accept999999: true, resetSeqNum: true, precision: fix.Seconds, fraction: 0},
+	FIX42:  {beginString: FIX42, accept999999: true, resetSeqNum: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonInvalidMsgType, businessRej: true, precision: fix.Nanoseconds, fraction: 12},
+	FIX43:  {beginString: FIX43, resetSeqNum: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonNonDataValueIncludesSOH, businessRej: true, precision: fix.Milliseconds, fraction: 3},
+	FIX44:  {beginString: FIX44, resetSeqNum: true, nextExpected: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonOther, businessRej: true, precision: fix.Nanoseconds, fraction: 12},
+	FIXT11: {beginString: FIXT11, fixt: true, resetSeqNum: true, nextExpected: true, lastProc: true, rejectReason: true, maxReason: dictionary.ReasonOther, businessRej: true, precision: fix.Nanoseconds, fraction: 12},
 }
 
 func profileOf(beginString string) (*profile, error) {
@@ -68,6 +75,15 @@ func (p *profile) reasonAllowed(r dictionary.RejectReason) bool {
 		return r <= dictionary.ReasonNonDataValueIncludesSOH
 	}
 	return r <= p.maxReason
+}
+
+// tooFine reports whether v, a received UTCTimestamp, has more fraction
+// digits than the version allows.
+func (p *profile) tooFine(v []byte) bool {
+	if i := bytes.IndexByte(v, '.'); i >= 0 {
+		return len(v)-i-1 > p.fraction
+	}
+	return false
 }
 
 // isInfinity reports whether EndSeqNo end means "up to the last".

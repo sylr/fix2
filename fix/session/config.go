@@ -39,7 +39,7 @@ type Dictionaries struct {
 type TimestampPrecision int
 
 const (
-	// DefaultTimestamps is milliseconds, seconds before FIX 4.2.
+	// DefaultTimestamps is milliseconds, seconds in FIX 4.0 and 4.1.
 	DefaultTimestamps TimestampPrecision = iota
 	SecondTimestamps
 	MillisecondTimestamps
@@ -103,6 +103,24 @@ type Tolerations struct {
 	// garbled if received before logon or ahead of its MsgType or
 	// MsgSeqNum.
 	TolerateTagLeadingZeros bool
+	// TolerateFinerTimestamps accepts received timestamps finer than the
+	// session's FIX version allows: SendingTime (52) and OrigSendingTime
+	// (122), and the UTCTimestamp and UTCTimeOnly fields the dictionaries
+	// check, as their own versions allow (dictionary.CheckTimestampPrecision).
+	// FIX 4.0 and 4.1 timestamps have whole seconds, FIX 4.3's milliseconds;
+	// the Time Precision Addendum takes FIX 4.2, 4.4 and 5.0 and later down
+	// to picoseconds. Such a timestamp is otherwise an incorrect data format
+	// (SessionRejectReason 6), a first Logon refused.
+	TolerateFinerTimestamps bool
+	// TolerateEmptyRequiredGroups accepts a NumInGroup of 0, without
+	// entries, for a group the dictionaries require, as a counterparty may
+	// send for an empty book a MarketDataSnapshotFullRefresh whose
+	// NoMDEntries is 0, as dictionary.CheckEmptyRequiredGroups turned off
+	// does: FIX
+	// requires such a count above zero, rejected otherwise as an incorrect
+	// NumInGroup count (SessionRejectReason 16). The other count errors are
+	// still rejected.
+	TolerateEmptyRequiredGroups bool
 	// TolerateValidationFailures turns off validations the dictionaries
 	// would run: all run by default (see dictionary.Checks). Tolerating
 	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
@@ -119,7 +137,8 @@ type Tolerations struct {
 // without each: TolerateUnsupportedDefaultApplVerID,
 // TolerateLogoutBeforeGapRecovery and TolerateNoHeartbeatAwaitingTestRequest.
 // They also need ServeResendRequestSeqTooLow and UnannouncedResetOnLogon,
-// choices the specifications leave open.
+// choices the specifications leave open, and
+// RejectUndefinedTagAsInvalidTagNumber, where they contradict each other.
 func QuickFIXTolerations() Tolerations {
 	return Tolerations{
 		TolerateUnsupportedDefaultApplVerID:    true,
@@ -220,7 +239,12 @@ type Config struct {
 	// Handler receives the session's events and application messages.
 	Handler Handler
 
-	// Timestamps is the precision of SendingTime and OrigSendingTime.
+	// Timestamps is the precision of SendingTime and OrigSendingTime. One
+	// finer than the session's FIX version allows is a configuration error:
+	// FIX 4.0 and 4.1 have whole seconds, FIX 4.3 milliseconds, FIX 4.2, 4.4
+	// and FIXT 1.1 down to picoseconds, of which a session writes
+	// nanoseconds. Beyond milliseconds, FIX wants the counterparties'
+	// agreement (Time Precision Addendum).
 	Timestamps TimestampPrecision
 	// MaxLatency is how far SendingTime (52) may be from our clock, 120s if
 	// 0; negative disables the check.
@@ -260,6 +284,12 @@ type Config struct {
 	// QuickFIX does and its acceptance tests expect; by default it logs out
 	// unserved, as FIX recommends.
 	ServeResendRequestSeqTooLow bool
+	// RejectUndefinedTagAsInvalidTagNumber rejects a message holding a tag
+	// its dictionary does not define with SessionRejectReason 0, Invalid tag
+	// number, as FIXT 1.1's test case 14a and QuickFIX's acceptance tests
+	// expect, rather than 3, Undefined tag, as the Session Layer's code list
+	// has it; 0 is for a malformed tag number either way.
+	RejectUndefinedTagAsInvalidTagNumber bool
 	// Tolerations, all off by default, depart from the FIX specifications
 	// as some counterparties need: QuickFIXTolerations for those QuickFIX's
 	// acceptance tests need.
@@ -400,20 +430,23 @@ func (c *Config) parseOptions() fix.ParseOptions {
 	return fix.ParseOptions{TolerateTagLeadingZeros: c.TolerateTagLeadingZeros}
 }
 
-// precision returns the timestamp precision for version p.
+// precision returns the timestamp precision for version p: Timestamps,
+// which Validate checks p allows, or milliseconds by default, as p allows.
 func (c *Config) precision(p *profile) fix.TimePrecision {
-	var want fix.TimePrecision
-	switch c.Timestamps {
+	return min(c.Timestamps.precision(), p.precision)
+}
+
+// precision returns the precision t stands for.
+func (t TimestampPrecision) precision() fix.TimePrecision {
+	switch t {
 	case SecondTimestamps:
-		want = fix.Seconds
+		return fix.Seconds
 	case MicrosecondTimestamps:
-		want = fix.Microseconds
+		return fix.Microseconds
 	case NanosecondTimestamps:
-		want = fix.Nanoseconds
-	default:
-		want = fix.Milliseconds
+		return fix.Nanoseconds
 	}
-	return min(want, p.precision)
+	return fix.Milliseconds
 }
 
 // ConfigError lists everything wrong with a Config.
@@ -502,6 +535,9 @@ func (c *Config) Validate() error {
 		}
 		if c.LastMsgSeqNumProcessed && !p.lastProc {
 			add("LastMsgSeqNumProcessed", "%s has no LastMsgSeqNumProcessed (369): FIX.4.2 or later required", c.ID.BeginString)
+		}
+		if t := c.Timestamps.precision(); c.Timestamps != DefaultTimestamps && t > p.precision {
+			add("Timestamps", "%s timestamps have %d fraction digits at most, not %d", c.ID.BeginString, p.precision, t)
 		}
 	}
 	if len(errs) == 0 {
