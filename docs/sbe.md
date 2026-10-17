@@ -344,11 +344,15 @@ otherwise the application's to check.
   data lengths are bounded both ways.
 - The FIXP schema, and schemas with descriptions naming Go packages,
   generate code that type-checks.
-- Binance's Spot FIX SBE schema (`internal/gen/sbe/binance`, the schema
-  pinned to a commit of Binance's repository, generated with
+- Binance's Spot FIX SBE schema (`testdata/binance`, the schema pinned
+  to a commit of Binance's repository and its SHA-256): it loads with
   `-tolerate-foreign-metadata`, `-tolerate-undeclared-primitive-types`,
   `-tolerate-group-redefinitions` and `-tolerate-field-redefinitions`,
-  each refused without): the sample
+  and without each fails telling which, and the package generated from
+  it type-checks. The codecs generated from it, and their tests, are
+  `contribs/binancefix/internal/fixsbe`'s, from the same file (`make -C
+  contribs/binancefix generate-verify`, in CI, checks they are what the
+  generator makes): the sample
   Logon of Binance's FIX API documentation decoded to the values it
   lists, its 20-byte header's `seqNum` and `sendingTime` included, and
   encoded back to its bytes but for the header's version, the schema's;
@@ -360,15 +364,15 @@ otherwise the application's to check.
   ExecutionReport without its version 1 field. Decimal mantissas and
   exponents are left raw, as the schema sends them. 54 messages Real
   Logic's SBE 1.33.0 encodes from the same schema
-  (`testdata/reallogic/binance.hex`, `BinanceCheck.java.txt`), every
+  (`contribs/binancefix/testdata/reallogic`: `binance.hex`,
+  `BinanceCheck.java.txt`), every
   template, each of the 193 optional fields (data and groups' members
   included) set in one and null in another, which a test enumerating
   them from the schema checks, groups empty and of several
   entries, nested ones, data up to its bounds, decode to every value
   Real Logic's program set, header included, and encode back to the same
   bytes; a `varString8` holds 254 bytes, as Real Logic enforces too.
-  `contribs/binancefix`'s codecs, generated alike, encode them back to the
-  same bytes, and its client takes them from a fake Binance.
+  binancefix's client takes them from a fake Binance too.
 - Fields and data whose name or id stands for another id, name or
   encoding refused, in one message or across messages, and accepted
   tolerated; the FIXP schema refused strictly. Headers with a signed,

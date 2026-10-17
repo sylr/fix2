@@ -1,4 +1,4 @@
-package binance
+package fixsbe
 
 import (
 	"bytes"

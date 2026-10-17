@@ -18,9 +18,8 @@ import (
 
 // rlFrames returns the frames Real Logic's SBE codecs encoded from
 // Binance's schema, framed in Binance's SOFH, by name
-// (testdata/reallogic/binance-sofh.hex, a copy of fix2's
-// internal/gen/sbe/testdata/reallogic, where BinanceCheck.java.txt tells
-// their values).
+// (testdata/reallogic/binance-sofh.hex, whose README tells how they are
+// made, and BinanceCheck.java.txt their values).
 func rlFrames(t *testing.T) map[string][]byte {
 	t.Helper()
 	f, err := os.Open("testdata/reallogic/binance-sofh.hex")

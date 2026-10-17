@@ -9,7 +9,7 @@ import (
 
 func TestRun(t *testing.T) {
 	out, sbeOut, sbeAssume, sbeBinance := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
-	const binance = "../../internal/gen/sbe/binance/spot-fixsbe-1_1.xml"
+	const binance = "../../internal/gen/sbe/testdata/binance/spot-fixsbe-1_1.xml"
 	for _, tc := range []struct {
 		name string
 		args []string

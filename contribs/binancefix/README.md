@@ -17,10 +17,14 @@ FIX SBE is Binance's own protocol: its documentation is the specification
 here, out of the scope of fix2's strictness rule
 ([docs/conformance.md](../../docs/conformance.md)). The codecs are generated
 by `fix2gen sbe` from Binance's schema, vendored and pinned
-([internal/fixsbe](internal/fixsbe)), the same as fix2's
-`internal/gen/sbe/binance`, and exported by the package through aliases
+([internal/fixsbe](internal/fixsbe), its tests checking every field
+against Real Logic's codecs), and exported by the package through aliases
 ([codecs.go](codecs.go)). `go generate ./...` (`make generate`) regenerates
-both; nothing is downloaded.
+both; nothing is downloaded, and `make generate-verify` (run in CI) checks
+the committed codecs are what the generator makes. fix2 keeps the same
+schema file as the generator's test data
+(`internal/gen/sbe/testdata/binance`), checking it loads only with the four
+tolerations it needs.
 
 ```go
 key, err := binancefix.LoadPrivateKey("ed25519-private.pem")
@@ -495,11 +499,14 @@ heartbeats and TestRequest answers going on; a write failing at every
 byte of a request's frame; the connection lost at each phase of a request;
 Binance's documented Logon read through the client's framing and codecs.
 A fake Binance answers with messages Real Logic's SBE codecs encoded
-(`testdata/reallogic`, a copy of fix2's
-`internal/gen/sbe/testdata/reallogic`, which tells how they are made):
-the client hands them to the Handler with Real Logic's values, matches
-its receipts by them, and its requests, of the same values, are Real
-Logic's bytes.
+([testdata/reallogic](testdata/reallogic), whose README tells how they
+are made): the client hands them to the Handler with Real Logic's values,
+matches its receipts by them, and its requests, of the same values, are
+Real Logic's bytes. The codecs' own tests (`internal/fixsbe`) decode
+every one of them to Real Logic's values, field by field, each of the
+schema's 193 optional fields set in one and null in another, encode them
+back to the same bytes, and check Binance's documented Logon sample, the
+round trips of every kind of message and the schema's pinned SHA-256.
 
 The probes and the command are tested offline as well:
 `internal/fakebinance`, an in-memory Binance that checks the Logon's

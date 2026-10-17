@@ -5,9 +5,9 @@ import fix_sbe.*;
 /**
  * Encodes, with Real Logic's codecs of Binance's Spot FIX SBE schema
  * (spot-fixsbe-1_1.xml), a message set with fixed values, and prints them
- * one per line, name then hexadecimal: the fixtures of fix2's generated
- * codecs of the schema (internal/gen/sbe/binance,
- * contribs/binancefix/internal/fixsbe). Every field is set, null ones to
+ * one per line, name then hexadecimal: the fixtures of binancefix's
+ * generated codecs of the schema (internal/fixsbe) and of its client.
+ * Every field is set, null ones to
  * the null value Real Logic's codecs give: they fill nothing on their own.
  *
  * With the argument "sofh", every message is printed framed: Binance's
