@@ -269,3 +269,6 @@ with its hash, before code relies on it.
 Rows marked "Binance M1" come from the first milestone of Binance's
 "FIX SBE" support: `fix2gen sbe` generating codecs from Binance's Spot
 FIX SBE schema ([`internal/gen/sbe/binance`](../internal/gen/sbe/binance)).
+The second, [`contribs/binancefix`](../contribs/binancefix), a client of
+Binance's FIX SBE order entry API, follows Binance's documentation: it is
+out of this document's scope, and adds no row.

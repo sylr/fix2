@@ -9,7 +9,8 @@ coverage:
       default:
         informational: true
 ignore:
-  # The contribs, binancemd and coinbasemd: tools, not the library.
+  # The contribs, binancefix, binancemd, coinbasemd and the others: built
+  # on the library, not part of it.
   - "contribs"
   # Packages fix2gen generates for tests.
   - "fix/tests"
