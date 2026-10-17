@@ -73,7 +73,7 @@ func TestRealLogic(t *testing.T) {
 		t.Fatalf("encoded\n%x\nReal Logic\n%x", want, msgs["order"])
 	}
 	var got Order
-	if err := got.Decode(msgs["order"]); err != nil {
+	if _, err := got.Decode(msgs["order"]); err != nil {
 		t.Fatal(err)
 	}
 	if again, _ := got.AppendTo(nil); !bytes.Equal(again, want) || got.Legs[1].Fees[1].Amount != Some(int64(7)) || got.OptDouble != Some(2.25) {

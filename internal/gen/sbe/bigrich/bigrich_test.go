@@ -46,7 +46,7 @@ func TestBigEndian(t *testing.T) {
 		}
 	}
 	var got Order
-	if err := got.Decode(b); err != nil {
+	if _, err := got.Decode(b); err != nil {
 		t.Fatal(err)
 	}
 	again, _ := got.AppendTo(nil)

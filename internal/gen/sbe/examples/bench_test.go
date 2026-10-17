@@ -41,7 +41,7 @@ func benchReport() *ExecutionReport {
 
 type message interface {
 	AppendTo([]byte) ([]byte, error)
-	Decode([]byte) error
+	Decode([]byte) (int, error)
 }
 
 func benchEncode(b *testing.B, m message) {
@@ -63,13 +63,13 @@ func benchDecode(b *testing.B, m, into message) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	if err := into.Decode(buf); err != nil {
+	if _, err := into.Decode(buf); err != nil {
 		b.Fatal(err)
 	}
 	b.SetBytes(int64(len(buf)))
 	b.ReportAllocs()
 	for b.Loop() {
-		if err := into.Decode(buf); err != nil {
+		if _, err := into.Decode(buf); err != nil {
 			b.Fatal(err)
 		}
 	}

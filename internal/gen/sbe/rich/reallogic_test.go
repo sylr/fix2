@@ -44,7 +44,7 @@ func realLogic(t testing.TB, file string) map[string][]byte {
 func TestRealLogic(t *testing.T) {
 	msgs := realLogic(t, "rich.hex")
 	var got Order
-	if err := got.Decode(msgs["order"]); err != nil {
+	if _, err := got.Decode(msgs["order"]); err != nil {
 		t.Fatal(err)
 	}
 	if !same(&got, full()) {
@@ -54,7 +54,7 @@ func TestRealLogic(t *testing.T) {
 		t.Errorf("encoded\n%x\nReal Logic\n%x", b, msgs["order"])
 	}
 	var p Ping
-	if err := p.Decode(msgs["ping"]); err != nil {
+	if _, err := p.Decode(msgs["ping"]); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := p.AppendTo(nil); !bytes.Equal(b, msgs["ping"]) {

@@ -53,7 +53,7 @@ func BenchmarkDecode(b *testing.B) {
 			b.SetBytes(int64(len(buf)))
 			b.ReportAllocs()
 			for b.Loop() {
-				if err := into.Decode(buf); err != nil {
+				if _, err := into.Decode(buf); err != nil {
 					b.Fatal(err)
 				}
 			}

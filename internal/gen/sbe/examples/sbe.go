@@ -38,6 +38,11 @@ var (
 	ErrLength = errors.New("examples: data length out of bounds")
 	// ErrEntries reports a group entry count out of its bounds, or beyond MaxEntries.
 	ErrEntries = errors.New("examples: group entry count out of bounds")
+	// ErrNewer reports a message of a newer version than the schema's that
+	// holds groups or data the schema does not know, or may hold them where
+	// nothing tells, or whose counts of them contradict the schema: what
+	// follows cannot be found with certainty.
+	ErrNewer = errors.New("examples: groups or data of a newer version, which this decoder cannot bound")
 )
 
 // Optional is a value that may be null on the wire. The zero Optional is

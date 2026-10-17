@@ -458,7 +458,7 @@ func (srv *Server) authenticate(ctx context.Context, req *AuthRequest) (string, 
 // is negotiated.
 func (srv *Server) negotiate(ctx context.Context, t transport.Conn, msg []byte) bool {
 	var n codec.Negotiate
-	if err := n.Decode(msg); err != nil {
+	if _, err := n.Decode(msg); err != nil {
 		return false
 	}
 	id := fixp.SessionID(n.SessionId)
@@ -549,7 +549,7 @@ func (srv *Server) negotiate(ctx context.Context, t transport.Conn, msg []byte) 
 // connection to run it on, nil if rejected.
 func (srv *Server) establish(ctx context.Context, t transport.Conn, r *sofh.Reader, msg []byte) (*Session, *conn) {
 	var e codec.Establish
-	if err := e.Decode(msg); err != nil {
+	if _, err := e.Decode(msg); err != nil {
 		return nil, nil
 	}
 	id := fixp.SessionID(e.SessionId)

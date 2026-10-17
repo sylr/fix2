@@ -17,7 +17,7 @@ import (
 
 type message interface {
 	AppendTo([]byte) ([]byte, error)
-	Decode([]byte) error
+	Decode([]byte) (int, error)
 }
 
 // newMessage returns a new message of a template of the FIXP schema, nil
@@ -141,8 +141,8 @@ func TestRealLogic(t *testing.T) {
 			t.Errorf("%s encodes as\n%x, %v; Real Logic:\n%x", name, enc, err, b)
 		}
 		got := fresh(m)
-		if err := got.Decode(b); err != nil || !same(got, m) {
-			t.Errorf("%s decodes as %+v, %v; want %+v", name, got, err, m)
+		if n, err := got.Decode(b); err != nil || n != len(b) || !same(got, m) {
+			t.Errorf("%s decodes as %+v, %d of %d bytes, %v; want %+v", name, got, n, len(b), err, m)
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -224,12 +224,14 @@ func TestSilverflash(t *testing.T) {
 				continue
 			}
 			m := newMessage(h.TemplateId)
-			if err := m.Decode(msg); err != nil {
+			n, err := m.Decode(msg)
+			if err != nil {
 				t.Fatalf("%s: %s: %v", log.name, label, err)
 			}
+			// The padding is not read: what was is the message.
 			enc2, err := m.AppendTo(nil)
-			if err != nil || !bytes.HasPrefix(msg, enc2) || bytes.Count(msg[len(enc2):], []byte{0}) != len(msg)-len(enc2) {
-				t.Errorf("%s: %s: %x encodes back as %x, %v", log.name, label, msg, enc2, err)
+			if err != nil || n != len(enc2) || !bytes.HasPrefix(msg, enc2) || bytes.Count(msg[len(enc2):], []byte{0}) != len(msg)-len(enc2) {
+				t.Errorf("%s: %s: %x, %d bytes read, encodes back as %x, %v", log.name, label, msg, n, enc2, err)
 			}
 			wantKind := Session
 			if _, ok := m.(*NotApplied); ok {
@@ -344,10 +346,11 @@ func TestClassifyFixtures(t *testing.T) {
 			continue
 		}
 		got := fresh(m)
-		if err := got.(interface {
-			DecodeBody(MessageHeader, []byte) error
-		}).DecodeBody(h, body); err != nil || !same(got, m) {
-			t.Errorf("%s: DecodeBody: %+v, %v", name, got, err)
+		n, err := got.(interface {
+			DecodeBody(MessageHeader, []byte) (int, error)
+		}).DecodeBody(h, body)
+		if err != nil || n != len(body) || !same(got, m) {
+			t.Errorf("%s: DecodeBody: %+v, %d of %d bytes, %v", name, got, n, len(body), err)
 		}
 	}
 	if len(templates) != 19 {
@@ -367,7 +370,7 @@ func TestClassifyNewerVersion(t *testing.T) {
 		t.Fatalf("%s, %v", kind, err)
 	}
 	var m Sequence
-	if err := m.DecodeBody(h, body); err != nil || m.NextSeqNo != 42 {
+	if _, err := m.DecodeBody(h, body); err != nil || m.NextSeqNo != 42 {
 		t.Fatalf("%+v, %v", m, err)
 	}
 }
@@ -399,15 +402,19 @@ func FuzzClassify(f *testing.F) {
 		if want, _ := kindOf(m); kind != want {
 			t.Fatalf("%T classified %s", m, kind)
 		}
-		if m.Decode(b) != nil {
+		n, err := m.Decode(b)
+		if err != nil {
 			return
+		}
+		if n < HeaderSize || n > len(b) {
+			t.Fatalf("read %d of %d bytes", n, len(b))
 		}
 		enc, err := m.AppendTo(nil)
 		if err != nil {
 			t.Fatalf("%T decoded but does not encode: %v", m, err)
 		}
 		again := fresh(m)
-		if err := again.Decode(enc); err != nil || !same(again, m) {
+		if _, err := again.Decode(enc); err != nil || !same(again, m) {
 			t.Fatalf("%T: %+v decodes back as %+v, %v", m, m, again, err)
 		}
 	})

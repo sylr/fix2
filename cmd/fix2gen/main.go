@@ -4,10 +4,17 @@
 // Usage:
 //
 //	fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]
-//	fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]
+//	fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>] [-tolerate-foreign-metadata] [-tolerate-unfilled-counts] [-assume-same-encodings]
 //
 // sbe generates codecs of the messages of an SBE 1.0 message schema: a Go
-// struct per message, encoded and decoded whole (see docs/sbe.md).
+// struct per message, encoded and decoded whole (see docs/sbe.md). By
+// default it follows SBE strictly: a schema with elements or attributes of
+// other namespaces is refused, unless -tolerate-foreign-metadata; decoders
+// return ErrMalformed for a header's or dimension's numGroups or
+// numVarDataFields other than the received version's, unless
+// -tolerate-unfilled-counts, for counts left zero; and ErrNewer for the
+// groups and data of a newer schema version, which -assume-same-encodings
+// lets them skip.
 //
 // tagvalue generates readers and builders of FIX tagvalue messages from a
 // QuickFIX XML dictionary, or from a FIX Orchestra repository such as those
@@ -32,7 +39,7 @@ import (
 
 const (
 	tagValueUsage = "fix2gen tagvalue -dict <xml-path> -pkg <package-name> [-out <dir>] [-dispatch] [-bytes]"
-	sbeUsage      = "fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]"
+	sbeUsage      = "fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>] [-tolerate-foreign-metadata] [-tolerate-unfilled-counts] [-assume-same-encodings]"
 	usage         = "Usage:\n  " + tagValueUsage + "\n  " + sbeUsage + "\n"
 )
 
@@ -99,6 +106,14 @@ func runSBE(args []string, stderr io.Writer) int {
 	schemaPath := fs.String("schema", "", "SBE message schema file (required)")
 	pkg := fs.String("pkg", "", "Go package name for output (required)")
 	outDir := fs.String("out", ".", "output directory")
+	var load sbe.LoadOptions
+	var opts sbe.Options
+	fs.BoolVar(&load.TolerateForeignMetadata, "tolerate-foreign-metadata", false,
+		"ignore elements and attributes of other namespaces than SBE's, which sbe.xsd does not allow")
+	fs.BoolVar(&opts.AssumeSameEncodings, "assume-same-encodings", false,
+		"decoders skip a newer version's groups and data by the schema's groupSizeEncoding and data length, which SBE does not guarantee")
+	fs.BoolVar(&opts.TolerateUnfilledCounts, "tolerate-unfilled-counts", false,
+		"take numGroups and numVarDataFields of 0 for counts left unfilled, as Real Logic's encoders leave them")
 	if err := fs.Parse(args); err == flag.ErrHelp {
 		return 0
 	} else if err != nil {
@@ -111,13 +126,13 @@ func runSBE(args []string, stderr io.Writer) int {
 		return 1
 	}
 
-	s, err := sbe.LoadFile(*schemaPath)
+	s, err := sbe.LoadFileWith(*schemaPath, load)
 	if err != nil {
 		fmt.Fprintf(stderr, "fix2gen: %v\n", err)
 		return 1
 	}
 
-	if err := sbe.Generate(s, *pkg, *outDir); err != nil {
+	if err := sbe.GenerateWith(s, *pkg, *outDir, opts); err != nil {
 		fmt.Fprintf(stderr, "fix2gen: %v\n", err)
 		return 1
 	}

@@ -39,7 +39,7 @@ func newRawSession(t *testing.T, clientFlow, serverFlow fixp.FlowType, next code
 	r := dialRaw(t, l)
 	r.negotiate(clientFlow, "user:alice")
 	var ack codec.EstablishmentAck
-	if err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
+	if _, err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
 		t.Fatalf("establishing: %v", err)
 	}
 	h.expect(t, "established")
@@ -132,19 +132,19 @@ func TestRetransmitServed(t *testing.T) {
 	var rj codec.RestransmitReject
 	// Beyond what was sent.
 	rs.r.send(&codec.RetransmitRequest{SessionId: rs.r.id, Timestamp: 8, FromSeqNo: 7, Count: 1})
-	if err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || rj.Code != codec.RetransmitRejectCodeOutOfRange || rj.RequestTimestamp != 8 {
+	if _, err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || rj.Code != codec.RetransmitRejectCodeOutOfRange || rj.RequestTimestamp != 8 {
 		t.Fatalf("beyond: %+v, %v", rj, err)
 	}
 	// Another session's.
 	rs.r.send(&codec.RetransmitRequest{SessionId: fixp.NewSessionID(), Timestamp: 9, FromSeqNo: 1, Count: 1})
-	if err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || rj.Code != codec.RetransmitRejectCodeInvalidSession {
+	if _, err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || rj.Code != codec.RetransmitRejectCodeInvalidSession {
 		t.Fatalf("other session: %+v, %v", rj, err)
 	}
 	// No longer kept.
 	st, _ := rs.st.Open(bg, rs.r.id)
 	st.Evict(bg, 3)
 	rs.r.send(&codec.RetransmitRequest{SessionId: rs.r.id, Timestamp: 10, FromSeqNo: 1, Count: 3})
-	if err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || rj.Code != codec.RetransmitRejectCodeOutOfRange || string(rj.Reason) != "no longer available" {
+	if _, err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || rj.Code != codec.RetransmitRejectCodeOutOfRange || string(rj.Reason) != "no longer available" {
 		t.Fatalf("evicted: %+v %q, %v", rj, rj.Reason, err)
 	}
 	// Still established: a Sequence and real-time messages go on.
@@ -162,7 +162,7 @@ func TestRecoverableGapFilled(t *testing.T) {
 	r.send(appMsg{1, "4"})
 	r.send(appMsg{1, "5"})
 	var rr codec.RetransmitRequest
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 || rr.SessionId != r.id {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 || rr.SessionId != r.id {
 		t.Fatalf("RetransmitRequest: %+v, %v", rr, err)
 	}
 	if e := rs.h.expect(t, "message"); e.body != "1" {
@@ -198,13 +198,13 @@ func TestRecoverableLost(t *testing.T) {
 			r.send(&codec.Sequence{NextSeqNo: 3})
 			r.send(appMsg{1, "3"})
 			var rr codec.RetransmitRequest
-			if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 2 {
+			if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 2 {
 				t.Fatalf("RetransmitRequest: %+v, %v", rr, err)
 			}
 			r.send(&codec.RestransmitReject{SessionId: r.id, RequestTimestamp: rr.Timestamp, Code: codec.RetransmitRejectCodeOutOfRange})
 			if !skip {
 				var term codec.Terminate
-				if err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || string(term.Reason) != "application error" {
+				if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || string(term.Reason) != "application error" {
 					t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 				}
 				rs.h.expect(t, "unbound")
@@ -230,18 +230,18 @@ func TestRecoverableRequestLimit(t *testing.T) {
 	r.send(&codec.Sequence{NextSeqNo: 9})
 	r.send(appMsg{1, "9"})
 	var rr codec.RetransmitRequest
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 8 {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 8 {
 		t.Fatalf("RetransmitRequest: %+v, %v", rr, err)
 	}
 	r.send(&codec.RestransmitReject{SessionId: r.id, RequestTimestamp: rr.Timestamp, Code: codec.RetransmitRejectCodeRequestLimitExceeded})
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 4 {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 4 {
 		t.Fatalf("second RetransmitRequest: %+v, %v", rr, err)
 	}
 	r.send(&codec.Retransmission{SessionId: r.id, RequestTimestamp: rr.Timestamp, NextSeqNo: 1, Count: 4})
 	for i := 1; i <= 4; i++ {
 		r.send(appMsg{1, fmt.Sprint(i)})
 	}
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 5 || rr.Count != 4 {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 5 || rr.Count != 4 {
 		t.Fatalf("third RetransmitRequest: %+v, %v", rr, err)
 	}
 	r.send(&codec.Retransmission{SessionId: r.id, RequestTimestamp: rr.Timestamp, NextSeqNo: 5, Count: 4})
@@ -259,7 +259,7 @@ func TestRecoverableRequestLimit(t *testing.T) {
 func TestRecoverableGapAtEstablishment(t *testing.T) {
 	rs := newRawSession(t, fixp.Recoverable, fixp.Unsequenced, codec.Some(uint64(3)), nil)
 	var rr codec.RetransmitRequest
-	if err := rr.Decode(rs.r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 2 {
+	if _, err := rr.Decode(rs.r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 2 {
 		t.Fatalf("RetransmitRequest: %+v, %v", rr, err)
 	}
 }
@@ -274,13 +274,13 @@ func TestRecoverableHeldBound(t *testing.T) {
 	r.send(appMsg{1, "2"}) // held
 	r.send(appMsg{1, "3"}) // dropped
 	var rr codec.RetransmitRequest
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 1 {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 1 || rr.Count != 1 {
 		t.Fatalf("RetransmitRequest: %+v, %v", rr, err)
 	}
 	r.send(&codec.Retransmission{SessionId: r.id, RequestTimestamp: rr.Timestamp, NextSeqNo: 1, Count: 1})
 	r.send(appMsg{1, "1"})
 	// 1 and 2 delivered, 3 asked for again.
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 3 || rr.Count != 1 {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 3 || rr.Count != 1 {
 		t.Fatalf("second RetransmitRequest: %+v, %v", rr, err)
 	}
 	r.send(&codec.Retransmission{SessionId: r.id, RequestTimestamp: rr.Timestamp, NextSeqNo: 3, Count: 1})
@@ -326,7 +326,7 @@ func TestRecoverableViolations(t *testing.T) {
 				}
 			}
 			var term codec.Terminate
-			if err := term.Decode(msg); err != nil || string(term.Reason) != tc.reason {
+			if _, err := term.Decode(msg); err != nil || string(term.Reason) != tc.reason {
 				t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 			}
 		})
@@ -345,7 +345,7 @@ func TestReRequestInProgress(t *testing.T) {
 	c.retransmitting.Store(1 << 62)
 	rs.r.send(&codec.RetransmitRequest{SessionId: rs.r.id, Timestamp: 1, FromSeqNo: 1, Count: 1})
 	var term codec.Terminate
-	if err := term.Decode(rs.r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeReRequestInProgress {
+	if _, err := term.Decode(rs.r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeReRequestInProgress {
 		t.Fatalf("Terminate: %+v, %v", term, err)
 	}
 }
@@ -533,7 +533,7 @@ func TestRetransmitOwnership(t *testing.T) {
 	// B's batch, let go, yields to the Terminate.
 	close(g.before[1])
 	var term codec.Terminate
-	if err := term.Decode(rs.r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeReRequestInProgress {
+	if _, err := term.Decode(rs.r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeReRequestInProgress {
 		t.Fatalf("Terminate: %+v, %v", term, err)
 	}
 }
@@ -975,7 +975,7 @@ func TestRecoveryViolations(t *testing.T) {
 				}
 			}
 			var term codec.Terminate
-			if err := term.Decode(msg); err != nil || string(term.Reason) != tc.reason {
+			if _, err := term.Decode(msg); err != nil || string(term.Reason) != tc.reason {
 				t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 			}
 		})

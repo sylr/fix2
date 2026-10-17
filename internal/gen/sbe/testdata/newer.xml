@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Version 2 of older.xml, as SBE 1.0 lets a schema be extended (7.3): a
+  field at the end of a block, a group after the groups, data after the
+  data, in the message and in its group's entries; the new groups hold
+  groups and data of their own. Report's new group and data are of other
+  encodings than version 1's (7.1.1, 5.4.10.2).
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+    package="evolve" id="9" version="2" byteOrder="littleEndian">
+<types>
+    <composite name="messageHeader">
+        <type name="blockLength" primitiveType="uint16"/>
+        <type name="templateId" primitiveType="uint16"/>
+        <type name="schemaId" primitiveType="uint16"/>
+        <type name="version" primitiveType="uint16"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="groupSizeEncoding">
+        <type name="blockLength" primitiveType="uint16"/>
+        <type name="numInGroup" primitiveType="uint16"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="varData">
+        <type name="length" primitiveType="uint16"/>
+        <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+    <composite name="wideGroupSize" description="Another dimension than version 1's">
+        <type name="blockLength" primitiveType="uint32"/>
+        <type name="numInGroup" primitiveType="uint32"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="varData32" description="Another data length than version 1's">
+        <type name="length" primitiveType="uint32"/>
+        <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+    <type name="u16" primitiveType="uint16"/>
+    <type name="u32" primitiveType="uint32"/>
+    <type name="u64" primitiveType="uint64"/>
+</types>
+
+<sbe:message name="Order" id="1">
+    <field name="Id" id="1" type="u32"/>
+    <field name="Qty" id="2" type="u64" sinceVersion="2"/>
+    <group name="Legs" id="10">
+        <field name="Leg" id="11" type="u16"/>
+        <field name="Px" id="13" type="u32" sinceVersion="2"/>
+        <group name="Allocs" id="14" sinceVersion="2">
+            <field name="Account" id="15" type="u32"/>
+        </group>
+        <data name="Note" id="12" type="varData"/>
+        <data name="LegMemo" id="16" type="varData" sinceVersion="2"/>
+    </group>
+    <group name="Fees" id="30" sinceVersion="2">
+        <field name="Amount" id="31" type="u32"/>
+        <group name="Taxes" id="32">
+            <field name="Rate" id="33" type="u16"/>
+            <data name="TaxCode" id="34" type="varData"/>
+        </group>
+        <data name="FeeMemo" id="35" type="varData"/>
+    </group>
+    <data name="Text" id="20" type="varData"/>
+    <data name="Memo" id="21" type="varData" sinceVersion="2"/>
+</sbe:message>
+
+<sbe:message name="Quote" id="2" description="No group nor data in version 1">
+    <field name="Id" id="1" type="u32"/>
+    <group name="Sizes" id="40" sinceVersion="2">
+        <field name="Size" id="41" type="u32"/>
+    </group>
+    <data name="Venue" id="42" type="varData" sinceVersion="2"/>
+</sbe:message>
+
+<sbe:message name="Report" id="3" description="Version 2 adds data and a group of other encodings">
+    <field name="Id" id="1" type="u32"/>
+    <group name="Lines" id="50">
+        <field name="Line" id="51" type="u16"/>
+        <data name="LineBlob" id="52" type="varData32" sinceVersion="2"/>
+    </group>
+    <group name="Wide" id="53" dimensionType="wideGroupSize" sinceVersion="2">
+        <field name="W" id="54" type="u16"/>
+    </group>
+    <data name="Text" id="20" type="varData"/>
+    <data name="Remark" id="21" type="varData" sinceVersion="1"/>
+</sbe:message>
+</sbe:messageSchema>

@@ -21,8 +21,9 @@ type Batch struct {
 }
 
 // decode decodes m from b: a block of blockLen bytes, then groups and
-// data. It returns the bytes it read.
-func (m *Batch) decode(b []byte, blockLen, version int, entries *int) (int, error) {
+// data, numGroups and numData of them in all if its header or dimension
+// counts them, 0 otherwise. It returns the bytes it read.
+func (m *Batch) decode(b []byte, blockLen, version int, numGroups, numData uint64, entries *int) (int, error) {
 	if len(b) < blockLen {
 		return 0, ErrShort
 	}
@@ -50,6 +51,11 @@ func (m *Batch) decode(b []byte, blockLen, version int, entries *int) (int, erro
 			return 0, err
 		}
 		pos += n
+	}
+	// A newer version's groups, which nothing tells of, would be here:
+	// what follows cannot be found with certainty.
+	if version > SchemaVersion {
+		return 0, ErrNewer
 	}
 	{
 		if len(b)-pos < 4 {
@@ -126,39 +132,48 @@ func (m *Batch) AppendTo(dst []byte) ([]byte, error) {
 	return m.appendRest(dst), nil
 }
 
-// Decode decodes m from b, a message with its header. Its []byte fields
-// alias b. On error, m is left zero.
-func (m *Batch) Decode(b []byte) error {
+// Decode decodes m from b, a message with its header, and returns the
+// length of the message, header included: the bytes after it are not read.
+// Its []byte fields alias b. On error, m is left zero and the length is 0.
+func (m *Batch) Decode(b []byte) (int, error) {
 	h, body, err := ReadHeader(b)
 	if err == nil && uint64(h.SchemaId) != SchemaID {
 		err = ErrSchema
 	}
 	if err != nil {
 		*m = Batch{}
-		return err
+		return 0, err
 	}
-	return m.DecodeBody(h, body)
+	n, err := m.DecodeBody(h, body)
+	if err != nil {
+		return 0, err
+	}
+	return HeaderSize + n, nil
 }
 
-// DecodeBody decodes m from body, the message body after header h. Its
-// []byte fields alias body. On error, m is left zero.
-func (m *Batch) DecodeBody(h MessageHeader, body []byte) error {
+// DecodeBody decodes m from body, the message body after header h, and
+// returns the length of the body: its root block of h's blockLength,
+// padding or a newer version's fields included, its groups and its data,
+// those of a newer version being ErrNewer. Its []byte fields alias body.
+// On error, m is left zero and the length is 0.
+func (m *Batch) DecodeBody(h MessageHeader, body []byte) (int, error) {
 	if uint64(h.TemplateId) != BatchTemplateID {
 		*m = Batch{}
-		return ErrTemplate
+		return 0, ErrTemplate
 	}
 	// Bounded before they become ints, which a wide one would wrap.
 	if uint64(h.BlockLength) > uint64(len(body)) {
 		*m = Batch{}
-		return ErrShort
+		return 0, ErrShort
 	}
 	version := int(min(uint64(h.Version), 1<<31-1))
 	entries := 0
-	if _, err := m.decode(body, int(h.BlockLength), version, &entries); err != nil {
+	n, err := m.decode(body, int(h.BlockLength), version, 0, 0, &entries)
+	if err != nil {
 		*m = Batch{}
-		return err
+		return 0, err
 	}
-	return nil
+	return n, nil
 }
 
 // Items is an entry of the group Items.
@@ -172,8 +187,9 @@ type Items struct {
 }
 
 // decode decodes m from b: a block of blockLen bytes, then groups and
-// data. It returns the bytes it read.
-func (m *Items) decode(b []byte, blockLen, version int, entries *int) (int, error) {
+// data, numGroups and numData of them in all if its header or dimension
+// counts them, 0 otherwise. It returns the bytes it read.
+func (m *Items) decode(b []byte, blockLen, version int, numGroups, numData uint64, entries *int) (int, error) {
 	if len(b) < blockLen {
 		return 0, ErrShort
 	}
@@ -190,6 +206,11 @@ func (m *Items) decode(b []byte, blockLen, version int, entries *int) (int, erro
 		}
 		pos += n
 	}
+	// A newer version's groups, which nothing tells of, would be here:
+	// what follows cannot be found with certainty.
+	if version > SchemaVersion {
+		return 0, ErrNewer
+	}
 	{
 		if len(b)-pos < 4 {
 			return 0, ErrShort
@@ -204,6 +225,11 @@ func (m *Items) decode(b []byte, blockLen, version int, entries *int) (int, erro
 		}
 		m.Tag = b[pos : pos+int(l) : pos+int(l)]
 		pos += int(l)
+	}
+	// A newer version's data, which nothing tells of, would be here:
+	// what follows cannot be found with certainty.
+	if version > SchemaVersion {
+		return 0, ErrNewer
 	}
 	return pos, nil
 }
@@ -281,7 +307,7 @@ func decodeItems(s *[]Items, b []byte, version int, entries *int) (int, error) {
 		*s = (*s)[:n]
 	}
 	for i := range *s {
-		c, err := (*s)[i].decode(b[pos:], blockLen, version, entries)
+		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
 		if err != nil {
 			return 0, err
 		}
@@ -311,8 +337,9 @@ type Parts struct {
 }
 
 // decode decodes m from b: a block of blockLen bytes, then groups and
-// data. It returns the bytes it read.
-func (m *Parts) decode(b []byte, blockLen, version int, entries *int) (int, error) {
+// data, numGroups and numData of them in all if its header or dimension
+// counts them, 0 otherwise. It returns the bytes it read.
+func (m *Parts) decode(b []byte, blockLen, version int, numGroups, numData uint64, entries *int) (int, error) {
 	if len(b) < blockLen {
 		return 0, ErrShort
 	}
@@ -322,6 +349,16 @@ func (m *Parts) decode(b []byte, blockLen, version int, entries *int) (int, erro
 	}
 	m.Part = getUint32(b[0:])
 	pos := blockLen
+	// A newer version's groups, which nothing tells of, would be here:
+	// what follows cannot be found with certainty.
+	if version > SchemaVersion {
+		return 0, ErrNewer
+	}
+	// A newer version's data, which nothing tells of, would be here:
+	// what follows cannot be found with certainty.
+	if version > SchemaVersion {
+		return 0, ErrNewer
+	}
 	return pos, nil
 }
 
@@ -378,7 +415,7 @@ func decodeParts(s *[]Parts, b []byte, version int, entries *int) (int, error) {
 		*s = (*s)[:n]
 	}
 	for i := range *s {
-		c, err := (*s)[i].decode(b[pos:], blockLen, version, entries)
+		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
 		if err != nil {
 			return 0, err
 		}

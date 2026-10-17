@@ -600,7 +600,7 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		// Waiting for the answer to our Terminate: the rest is ignored.
 		if kind == codec.Session && h.TemplateId == codec.TerminateTemplateID {
 			// The answer, if it is one: of this session, well-formed.
-			if err := c.term.DecodeBody(h, body); err != nil || c.term.SessionId != c.s.ID() {
+			if _, err := c.term.DecodeBody(h, body); err != nil || c.term.SessionId != c.s.ID() {
 				c.close(nil)
 				return errStop
 			}
@@ -624,7 +624,7 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 	case codec.Ignored:
 		// MessageTemplate: well-formed, then ignored. A session message,
 		// it ends the numbering (§3.5.4).
-		if err := c.mt.DecodeBody(h, body); err != nil {
+		if _, err := c.mt.DecodeBody(h, body); err != nil {
 			return protocolf("MessageTemplate: %v", err)
 		}
 		c.inNext = 0
@@ -634,12 +634,12 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 	}
 	switch h.TemplateId {
 	case codec.SequenceTemplateID:
-		if err := c.seq.DecodeBody(h, body); err != nil {
+		if _, err := c.seq.DecodeBody(h, body); err != nil {
 			return protocolf("Sequence: %v", err)
 		}
 		return c.onSequence(c.seq.NextSeqNo)
 	case codec.UnsequencedHeartbeatTemplateID:
-		if err := c.hb.DecodeBody(h, body); err != nil {
+		if _, err := c.hb.DecodeBody(h, body); err != nil {
 			return protocolf("UnsequencedHeartbeat: %v", err)
 		}
 		// Any session message but those setting the numbering ends it
@@ -647,7 +647,7 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		c.inNext = 0
 		return nil
 	case codec.TerminateTemplateID:
-		if err := c.term.DecodeBody(h, body); err != nil {
+		if _, err := c.term.DecodeBody(h, body); err != nil {
 			return protocolf("Terminate: %v", err)
 		}
 		if c.term.SessionId != c.s.ID() {
@@ -682,7 +682,7 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 func (c *conn) onEstablish(h codec.MessageHeader, body []byte) error {
 	s := c.s
 	var e codec.Establish
-	err := e.DecodeBody(h, body)
+	_, err := e.DecodeBody(h, body)
 	clear(body) // its credentials, as they were read
 	if err != nil {
 		return protocolf("Establish: %v", err)
@@ -792,7 +792,7 @@ func (c *conn) deliver(h codec.MessageHeader, msg, body []byte, in Inbound) erro
 	var err error
 	switch {
 	case h.SchemaId == codec.SchemaID && h.TemplateId == codec.AppliedTemplateID:
-		if err := c.ap.DecodeBody(h, body); err != nil {
+		if _, err := c.ap.DecodeBody(h, body); err != nil {
 			return protocolf("Applied: %v", err)
 		}
 		err = s.handler.OnApplied(s.cbCtx, s, c.ap.FromSeqNo, c.ap.Count, in)
@@ -801,7 +801,7 @@ func (c *conn) deliver(h codec.MessageHeader, msg, body []byte, in Inbound) erro
 		if out, _ := s.Flows(); out != fixp.Idempotent {
 			return protocolf("NotApplied of our %s flow", out)
 		}
-		if err := c.nap.DecodeBody(h, body); err != nil {
+		if _, err := c.nap.DecodeBody(h, body); err != nil {
 			return protocolf("NotApplied: %v", err)
 		}
 		err = s.handler.OnNotApplied(s.cbCtx, s, c.nap.FromSeqNo, c.nap.Count, in)

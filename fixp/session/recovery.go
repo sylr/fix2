@@ -215,7 +215,7 @@ func (c *conn) onRetransmission(h codec.MessageHeader, body []byte) error {
 		return protocolf("Retransmission on an %s flow", in)
 	}
 	var rt codec.Retransmission
-	if err := rt.DecodeBody(h, body); err != nil {
+	if _, err := rt.DecodeBody(h, body); err != nil {
 		return protocolf("Retransmission: %v", err)
 	}
 	if r.req == nil || r.batch || rt.RequestTimestamp != r.req.ts {
@@ -241,7 +241,7 @@ func (c *conn) onRetransmitReject(h codec.MessageHeader, body []byte) error {
 		return protocolf("RetransmitReject on an %s flow", in)
 	}
 	var rj codec.RestransmitReject
-	if err := rj.DecodeBody(h, body); err != nil {
+	if _, err := rj.DecodeBody(h, body); err != nil {
 		return protocolf("RetransmitReject: %v", err)
 	}
 	if r.req == nil || r.batch || rj.RequestTimestamp != r.req.ts || rj.SessionId != s.ID() {
@@ -318,7 +318,7 @@ func (c *conn) onRetransmitRequest(h codec.MessageHeader, body []byte) error {
 		return protocolf("RetransmitRequest on an %s flow", out)
 	}
 	var rr codec.RetransmitRequest
-	if err := rr.DecodeBody(h, body); err != nil {
+	if _, err := rr.DecodeBody(h, body); err != nil {
 		return protocolf("RetransmitRequest: %v", err)
 	}
 	// The answers wait for the writer: a peer asking faster than it reads

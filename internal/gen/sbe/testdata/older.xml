@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Version 1 of a schema newer.xml extends to version 2: a decoder of this
+  schema reads messages of the next, which add fields, groups and data
+  (SBE 1.0, 7.3). Its header and dimensions count groups and data, and its
+  data lengths are all of one type, so that a decoder assuming the next
+  version encodes its groups and data as this one does may skip them; in
+  Report, the next version does not.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+    package="evolve" id="9" version="1" byteOrder="littleEndian">
+<types>
+    <composite name="messageHeader">
+        <type name="blockLength" primitiveType="uint16"/>
+        <type name="templateId" primitiveType="uint16"/>
+        <type name="schemaId" primitiveType="uint16"/>
+        <type name="version" primitiveType="uint16"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="groupSizeEncoding">
+        <type name="blockLength" primitiveType="uint16"/>
+        <type name="numInGroup" primitiveType="uint16"/>
+        <type name="numGroups" primitiveType="uint16"/>
+        <type name="numVarDataFields" primitiveType="uint16"/>
+    </composite>
+    <composite name="varData">
+        <type name="length" primitiveType="uint16"/>
+        <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+    <type name="u16" primitiveType="uint16"/>
+    <type name="u32" primitiveType="uint32"/>
+</types>
+
+<sbe:message name="Order" id="1">
+    <field name="Id" id="1" type="u32"/>
+    <group name="Legs" id="10">
+        <field name="Leg" id="11" type="u16"/>
+        <data name="Note" id="12" type="varData"/>
+    </group>
+    <data name="Text" id="20" type="varData"/>
+</sbe:message>
+
+<sbe:message name="Quote" id="2" description="No group nor data in version 1">
+    <field name="Id" id="1" type="u32"/>
+</sbe:message>
+
+<sbe:message name="Report" id="3" description="Version 2 adds data and a group of other encodings">
+    <field name="Id" id="1" type="u32"/>
+    <group name="Lines" id="50">
+        <field name="Line" id="51" type="u16"/>
+    </group>
+    <data name="Text" id="20" type="varData"/>
+    <data name="Remark" id="21" type="varData" sinceVersion="1"/>
+</sbe:message>
+</sbe:messageSchema>

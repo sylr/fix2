@@ -22,13 +22,13 @@ func BenchmarkOrderEncode(b *testing.B) {
 func BenchmarkOrderDecode(b *testing.B) {
 	buf := encode(b, full())
 	var m Order
-	if err := m.Decode(buf); err != nil {
+	if _, err := m.Decode(buf); err != nil {
 		b.Fatal(err)
 	}
 	b.SetBytes(int64(len(buf)))
 	b.ReportAllocs()
 	for b.Loop() {
-		if err := m.Decode(buf); err != nil {
+		if _, err := m.Decode(buf); err != nil {
 			b.Fatal(err)
 		}
 	}

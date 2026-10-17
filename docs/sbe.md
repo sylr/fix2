@@ -7,6 +7,17 @@ below (§) are its own. FIXP's session messages are its first user
 ([docs/fixp.md](fixp.md)), venues' application schemas the next.
 
     fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]
+        [-tolerate-foreign-metadata] [-tolerate-unfilled-counts] [-assume-same-encodings]
+
+By default it follows SBE 1.0 strictly. Three flags, off by default, each
+change what it accepts or what the decoders it generates do, and are
+named in the generated package's doc comment:
+
+| Flag | Does | Kind |
+|---|---|---|
+| `-tolerate-foreign-metadata` | loads a schema holding elements and attributes of other namespaces, and ignores them (see [Schemas](#schemas)) | a toleration: sbe.xsd, normative, allows none |
+| `-assume-same-encodings` | decoders skip a newer version's groups and data, which the header's and dimensions' counts tell of, by the schema's `groupSizeEncoding` and data length (see [Decoding](#decoding)) | an assumption SBE does not guarantee: a newer version encoding them otherwise is misread |
+| `-tolerate-unfilled-counts` | decoders take a header's or dimension's `numGroups` or `numVarDataFields` of 0, where the received version holds groups or data, for a count left unfilled, as Real Logic's encoders leave them, rather than `ErrMalformed` (see [Decoding](#decoding)) | a toleration: such counts contradict the message |
 
 ## Generated code
 
@@ -28,7 +39,7 @@ come later, if benchmarks call for them.
 | constant | no field: a method returning the constant |
 | `<group>` | a slice of entry structs, one type per group name: a name defines one group throughout a schema (§6.9), which loading checks |
 | `<data>` | `[]byte`, decoded as a subslice of the input |
-| message | a struct, its template ID as a constant, `AppendTo(dst) ([]byte, error)`, `Decode(b) error`, `DecodeBody(h, body) error` |
+| message | a struct, its template ID as a constant, `AppendTo(dst) ([]byte, error)`, `Decode(b) (int, error)`, `DecodeBody(h, body) (int, error)` |
 | `messageHeader` | `MessageHeader`, `ReadHeader(b) (MessageHeader, []byte, error)` |
 
 Names are the schema's, exported: `ClOrdID`, `SideEnum`, `SideEnumBuy`.
@@ -48,9 +59,20 @@ Real Logic's codecs do, null or not.
 
 `Decode(b)` reads the header, checks its schema id and template id, and
 decodes the body. `DecodeBody(h, body)` decodes a body whose header the
-caller read, checking the template id. On error, the struct is left zero.
-A decoded struct's `[]byte` fields alias the input: they are valid until
-the input is changed or reused.
+caller read, checking the template id. Both return the length they read:
+`Decode` the message's, header included, `DecodeBody` the body's. It is
+the root block of the header's `blockLength`, padding or a newer
+version's fields included, then the groups and data, entries counted by
+their dimension's `blockLength` likewise, and, with
+`-assume-same-encodings`, the groups and data of a newer version the
+decoder skips (below). On error, the struct is left
+zero and the length is 0. A decoded struct's `[]byte` fields alias the
+input: they are valid until the input is changed or reused.
+
+Until S3 of the strict-by-default effort
+([docs/conformance.md](conformance.md#milestones)), `Decode` and
+`DecodeBody` returned the error alone: a caller not needing the length
+discards it, `_, err := m.Decode(b)`.
 
 Every read is bounded by the input. A message, group entry or field that
 does not fit is an error, never a panic or a read past the input.
@@ -77,16 +99,66 @@ does not fit is an error, never a panic or a read past the input.
   groups, a constant of the generated package (65535 by default), so an
   older version's one-byte entries cannot fill large structs without
   limit.
-- A newer version may add fixed fields: they are skipped. It may also add
-  groups and data fields; those cannot be found without the
-  `numGroups`/`numVarDataFields` counts SBE 1.0 makes optional (§7.3.2),
-  and fix2's codecs do not read them: a newer version's message decodes
-  correctly only if it adds fixed fields alone. FIXP's schema is at
-  version 0 and has no group.
+- Where the header or a group's dimension has `numGroups` or
+  `numVarDataFields`, it is the number of groups or data fields the
+  received version holds there, those whose `sinceVersion` is not above
+  it (§7.3.2), in a message of any version: another count is
+  `ErrMalformed`, but for a newer version's groups and data (below).
+  Real Logic's encoders leave these counts zero unless the application
+  sets them: `-tolerate-unfilled-counts` takes a count of 0 for one the
+  encoder did not fill, and the decoder reads what it knows the version
+  holds.
+- A newer version, a header `version` above the schema's, may add fixed
+  fields at the end of a block: the block's `blockLength` skips them
+  (§7.3.1). It may add groups after the groups and data after the data,
+  of the message or of a group's entries, each of a type of its own:
+  new fields may have new types (§7.1.1), a group another `dimensionType`
+  (§5.4.10.2). A decoder finds them only by the `numGroups` and
+  `numVarDataFields` counts a header or dimension may carry (§7.3.2,
+  "This supports a walk by a decoder of all the elements of a message"),
+  and cannot bound them without knowing their types. So, in a message of
+  a newer version, a decoder returns `ErrNewer`:
+  - where the header or the dimension counts them, for a count above the
+    groups or data the schema knows: the newer version's cannot be
+    bounded (below, the count is malformed, as in any version);
+  - where nothing counts them, wherever they could come before something
+    the decoder reads: groups before a message's data, groups and data in
+    a group's entries, which the next entry, or what follows the group,
+    follows. A message's data, or its groups when it has no data, are
+    followed by nothing: a newer version's groups or data after them
+    cannot be told from bytes after the message, and are not read, nor
+    counted in the length, the caller deciding.
+
+  `-assume-same-encodings` assumes instead that a newer version encodes
+  its groups and data as the schema does: where the header or dimension
+  counts them, a count above the schema's tells of groups and data the
+  decoder skips, and counts in its length, a group by SBE's default
+  dimension, `groupSizeEncoding`, its entries by its `blockLength`,
+  `numGroups` and `numVarDataFields`, recursively, bounded as the
+  schema's entries are, `MaxEntries` included; data by the length type
+  all the schema's data encodings share. A schema without a
+  `groupSizeEncoding` that has both counts, or whose data lengths are of
+  several types, cannot skip them: `ErrNewer`. A newer version that does
+  encode them otherwise is misread, silently or not: a `uint32` length
+  `02 00 00 00 58 59` read as a `uint16` skips 4 bytes, not 6. Without
+  counts, as by default.
+
+  A count of 0 that `-tolerate-unfilled-counts` takes for unfilled tells
+  nothing of a newer version's groups and data: alone, the flag leaves
+  them as where nothing counts them, `ErrNewer` where they could come
+  before what the decoder reads; with `-assume-same-encodings`, they are
+  taken to be none, and a newer version's group before the message's
+  data is misread, its dimension read as the data's length.
+
+  A schema meant to evolve with groups and data puts the counts in its
+  header and dimensions. FIXP's has none, and is at version 0: a FIXP
+  message of a newer version holding data, as Negotiate, is `ErrNewer`.
 - Values are not validated: an unknown enum value or a null in a required
   field decodes as it is, `Known()` and the application tell (§4.15,
   §7.4). Structure is (§5.6).
-- Bytes after the message are ignored (see [FIXP](fixp.md#limits)).
+- Bytes after the message are not read: the length returned tells where
+  the message ends, and the caller decides what the rest is (see
+  [FIXP](fixp.md#limits)).
 
 ## Encoding
 
@@ -123,6 +195,26 @@ up to the higher one.
 | `minValue`, `maxValue`, `nullValue` | one its type cannot represent; a data length's or a count's `minValue` above its `maxValue` |
 | | a group or data field before a field, a group after data (§5.5); duplicate names or ids; a group name defining two different groups, its members' versions included; ids, versions or block lengths the header or dimension cannot hold |
 
+Elements and attributes are checked by their expanded names, against
+sbe.xsd (§6.1). The root is `messageSchema` of SBE 1.0's namespace,
+`http://fixprotocol.io/2016/sbe` (§6.2): another, such as SBE 2.0's
+`http://fixprotocol.io/2017/sbe` or a release candidate's, or none, is an
+error. `message` is of that namespace too, the other elements and every
+attribute of none, as sbe.xsd declares them: an element of no namespace
+where sbe.xsd has none, an attribute sbe.xsd does not give its element
+(a misspelt `presense`), an SBE element or attribute qualified otherwise,
+or a prefix never declared, is an error naming it. Elements and
+attributes of another namespace, such as a venue's metadata, are errors
+too: sbe.xsd declares no wildcard for them. `-tolerate-foreign-metadata`
+(`LoadOptions.TolerateForeignMetadata`) accepts and ignores them, an
+element with all it holds. Of XML Schema instance's attributes, which
+XML Schema allows on any element, the location hints
+`xsi:schemaLocation` and `xsi:noNamespaceSchemaLocation` are accepted and
+ignored, tolerated or not; `xsi:nil` and `xsi:type`, which would change
+validation, are refused, sbe.xsd declaring no element nillable and the
+loader resolving no type they name, as is any other `xsi` name, such as
+`xsi:presense`. `epoch` and `timeUnit` are accepted and ignored.
+
 `semanticType`, `description` and `deprecated` go into comments;
 `minValue` and `maxValue` bound data lengths and group counts, and are
 otherwise the application's to check.
@@ -145,6 +237,29 @@ otherwise the application's to check.
   padding ignored.
 - Matrices beyond round trips: every null and boundary value, every older
   and newer version of the richer schema, truncation at every byte.
+- The length decoding returns: whole messages, with bytes after them,
+  root blocks and group entries longer than the schema's.
+- Counts and a newer version: `testdata/older.xml` at version 1,
+  generated four times, strictly (`older`), with `-assume-same-encodings`
+  (`oldersame`), with `-tolerate-unfilled-counts` (`olderunfilled`) and
+  with both (`oldersameunfilled`), and
+  `testdata/newer.xml` at version 2 (`newer`, whose tests check them
+  all), which adds a field, a group and a data field to a message and to
+  its group's entries, the new groups holding groups and data of their
+  own, and to another message a data field and a group of other
+  encodings than version 1's. Strictly, version 2's messages are
+  `ErrNewer`, a field added alone decoding; assuming the same encodings,
+  they decode whole to the values encoded, every prefix failing, and
+  those of other encodings are misread, as the assumption says. Counts
+  of headers and dimensions, at versions 0 and 1: those of the version
+  decode, others are `ErrMalformed`, and counts of 0 decode to the values
+  encoded with `-tolerate-unfilled-counts`; in version 2, they are
+  `ErrNewer` before what the decoder reads but with both flags. Real
+  Logic's messages of the richer schema have their counts filled, by its
+  program for the header and Legs' dimension, and need no flag. The
+  richer schema and the §9 examples, without counts, check the strict
+  rules: a newer version's tail left unread, `ErrNewer` where it could
+  come before what the decoder reads.
 - A schema whose header, dimensions and data lengths are 64 and 32 bits
   wide (`testdata/wide.xml`): their largest values, and those with the
   sign bit of an `int` set, decode as errors, never wrapping an `int`;
@@ -152,7 +267,11 @@ otherwise the application's to check.
 - The FIXP schema, and schemas with descriptions naming Go packages,
   generate code that type-checks.
 - Schemas that must be rejected, each with its error, by loading or by
-  generation.
+  generation: misspelt attributes, elements out of place, other roots
+  and namespaces, metadata of another namespace among them; and schemas
+  whose metadata of another namespace loads, tolerated, as if it were
+  not there.
 - Fuzzing: arbitrary bytes decoded into every message of the test
-  schemas, never panicking nor allocating beyond the bounds above; what
-  decodes encodes back to the same fields.
+  schemas, never panicking nor allocating beyond the bounds above, the
+  length read within the input; what decodes encodes back to the same
+  fields.

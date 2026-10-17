@@ -35,7 +35,7 @@ func (r *raw) until(template uint16) []byte {
 func (r *raw) terminated(code fixp.TerminationCode, reason string) {
 	r.t.Helper()
 	var term codec.Terminate
-	if err := term.Decode(r.until(codec.TerminateTemplateID)); err != nil || fixp.TerminationCode(term.Code) != code || string(term.Reason) != reason {
+	if _, err := term.Decode(r.until(codec.TerminateTemplateID)); err != nil || fixp.TerminationCode(term.Code) != code || string(term.Reason) != reason {
 		r.t.Fatalf("Terminate %v %q, want %v %q: %v", fixp.TerminationCode(term.Code), term.Reason, code, reason, err)
 	}
 }
@@ -71,7 +71,7 @@ func rawClientWith(t *testing.T, clientFlow, serverFlow fixp.FlowType, keepalive
 		next = codec.Some(uint64(1))
 	}
 	var ack codec.EstablishmentAck
-	if err := ack.Decode(r.establish(keepalive, next, "user:alice")); err != nil {
+	if _, err := ack.Decode(r.establish(keepalive, next, "user:alice")); err != nil {
 		t.Fatal(err)
 	}
 	h.expect(t, "established")
@@ -94,7 +94,7 @@ func clientOfRaw(t *testing.T, flow fixp.FlowType) (*Client, *recorder, *mem.Lis
 func (r *raw) answerNegotiate(serverFlow fixp.FlowType) codec.Negotiate {
 	r.t.Helper()
 	var n codec.Negotiate
-	if err := n.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
+	if _, err := n.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
 		r.t.Fatal(err)
 	}
 	r.id = n.SessionId
@@ -106,7 +106,7 @@ func (r *raw) answerNegotiate(serverFlow fixp.FlowType) codec.Negotiate {
 func (r *raw) readEstablish() codec.Establish {
 	r.t.Helper()
 	var e codec.Establish
-	if err := e.Decode(r.readTemplate(codec.EstablishTemplateID)); err != nil {
+	if _, err := e.Decode(r.readTemplate(codec.EstablishTemplateID)); err != nil {
 		r.t.Fatal(err)
 	}
 	return e
@@ -134,7 +134,7 @@ func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 			defer func() { cancel(); <-done }()
 			r := dialRaw(t, l)
 			var resp codec.NegotiationResponse
-			if err := resp.Decode(r.negotiate(tc.client, "user:alice")); err != nil {
+			if _, err := resp.Decode(r.negotiate(tc.client, "user:alice")); err != nil {
 				t.Fatal(err)
 			}
 			if resp.SessionId != r.id || resp.RequestTimestamp != r.ts || fixp.FlowType(resp.ServerFlow) != tc.serverFlow {
@@ -145,7 +145,7 @@ func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 				next = codec.Some(uint64(1))
 			}
 			var ack codec.EstablishmentAck
-			if err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
+			if _, err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
 				t.Fatal(err)
 			}
 			wantNext := codec.Optional[uint64]{}
@@ -188,7 +188,7 @@ func TestExample_7_1_7_4_TimestampInSeconds(t *testing.T) {
 	r := dialRaw(t, l)
 	r.send(&codec.Negotiate{SessionId: r.id, Timestamp: 86400, ClientFlow: codec.FlowTypeUnsequenced, Credentials: []byte("user:alice")})
 	var rej codec.NegotiationReject
-	if err := rej.Decode(r.readTemplate(codec.NegotiationRejectTemplateID)); err != nil {
+	if _, err := rej.Decode(r.readTemplate(codec.NegotiationRejectTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	if rej.SessionId != r.id || rej.RequestTimestamp != 86400 || fixp.NegotiationRejectCode(rej.Code) != fixp.NegotiationUnspecified || string(rej.Reason) != "timestamp out of range" {
@@ -202,14 +202,14 @@ func TestExample_7_1_7_5_ResponseOfAnotherSession(t *testing.T) {
 	_, h, l := clientOfRaw(t, fixp.Unsequenced)
 	r := acceptRaw(t, l)
 	var n1 codec.Negotiate
-	if err := n1.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
+	if _, err := n1.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	r.send(&codec.NegotiationResponse{SessionId: fixp.NewSessionID(), RequestTimestamp: n1.Timestamp, ServerFlow: codec.FlowTypeUnsequenced})
 	r.closed()
 	r = acceptRaw(t, l)
 	var n2 codec.Negotiate
-	if err := n2.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil || n2.SessionId == n1.SessionId {
+	if _, err := n2.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil || n2.SessionId == n1.SessionId {
 		t.Fatalf("Negotiate again: %+v, %v", n2, err)
 	}
 	h.quiet(t, 50*time.Millisecond)
@@ -223,7 +223,7 @@ func TestExample_7_2_5_2_AlreadyEstablishedHere(t *testing.T) {
 	ts := nanos(time.Now())
 	r.send(&codec.Establish{SessionId: r.id, Timestamp: ts, KeepaliveInterval: 1000, NextSeqNo: codec.Some(uint64(1)), Credentials: []byte("user:alice")})
 	var rej codec.EstablishmentReject
-	if err := rej.Decode(r.until(codec.EstablishmentRejectTemplateID)); err != nil {
+	if _, err := rej.Decode(r.until(codec.EstablishmentRejectTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	if rej.SessionId != r.id || rej.RequestTimestamp != ts || fixp.EstablishmentRejectCode(rej.Code) != fixp.EstablishmentAlreadyEstablished || string(rej.Reason) != "established" {
@@ -259,7 +259,7 @@ func TestExample_7_2_5_3_SessionBlocked(t *testing.T) {
 	r := dialRaw(t, l)
 	r.negotiate(fixp.Unsequenced, "user:alice")
 	var rej codec.EstablishmentReject
-	if err := rej.Decode(r.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil {
+	if _, err := rej.Decode(r.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil {
 		t.Fatal(err)
 	}
 	if rej.RequestTimestamp != r.ts || fixp.EstablishmentRejectCode(rej.Code) != fixp.EstablishmentSessionBlocked || string(rej.Reason) != "blocked, call us" {
@@ -287,7 +287,7 @@ func TestExample_7_2_5_5_InvalidSessionID(t *testing.T) {
 	r.negotiate(fixp.Unsequenced, "user:alice")
 	r.id = fixp.SessionID{}
 	var rej codec.EstablishmentReject
-	if err := rej.Decode(r.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil {
+	if _, err := rej.Decode(r.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil {
 		t.Fatal(err)
 	}
 	if fixp.EstablishmentRejectCode(rej.Code) != fixp.EstablishmentUnspecified || string(rej.Reason) != "session ID is not a version 4 UUID" {
@@ -304,7 +304,7 @@ func TestExample_7_2_5_6_TimestampInSeconds(t *testing.T) {
 	r.negotiate(fixp.Unsequenced, "user:alice")
 	r.send(&codec.Establish{SessionId: r.id, Timestamp: 86400, KeepaliveInterval: 1000, Credentials: []byte("user:alice")})
 	var rej codec.EstablishmentReject
-	if err := rej.Decode(r.readTemplate(codec.EstablishmentRejectTemplateID)); err != nil {
+	if _, err := rej.Decode(r.readTemplate(codec.EstablishmentRejectTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	if rej.RequestTimestamp != 86400 || fixp.EstablishmentRejectCode(rej.Code) != fixp.EstablishmentUnspecified || string(rej.Reason) != "timestamp out of range" {
@@ -368,7 +368,7 @@ func TestExample_7_3_1_and_7_3_2_EstablishAgain(t *testing.T) {
 			r2 := dialRaw(t, l)
 			r2.id = r.id
 			var ack codec.EstablishmentAck
-			if err := ack.Decode(r2.establish(1000, codec.Some(tc.next), "user:alice")); err != nil || ack.SessionId != r.id {
+			if _, err := ack.Decode(r2.establish(1000, codec.Some(tc.next), "user:alice")); err != nil || ack.SessionId != r.id {
 				t.Fatalf("EstablishmentAck %+v, %v", ack, err)
 			}
 			h.expect(t, "established")
@@ -418,7 +418,7 @@ func TestExample_7_3_3_NextSeqNoGoingBack(t *testing.T) {
 		r2 := dialRaw(t, l)
 		r2.id = r.id
 		var rej codec.EstablishmentReject
-		if err := rej.Decode(r2.establish(1000, codec.Some(uint64(2)), "user:alice")); err != nil {
+		if _, err := rej.Decode(r2.establish(1000, codec.Some(uint64(2)), "user:alice")); err != nil {
 			t.Fatal(err)
 		}
 		if fixp.EstablishmentRejectCode(rej.Code) != fixp.EstablishmentUnspecified || string(rej.Reason) != "NextSeqNo 2 below the next sequence number expected, 4: the peer lost messages it sent" {
@@ -502,7 +502,7 @@ func TestExample_7_4_4_2_PartialBatch(t *testing.T) {
 	r.send(&codec.Sequence{NextSeqNo: 5})
 	r.send(appMsg{1, "5"})
 	var rr1 codec.RetransmitRequest
-	if err := rr1.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr1.FromSeqNo != 2 || rr1.Count != 3 {
+	if _, err := rr1.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr1.FromSeqNo != 2 || rr1.Count != 3 {
 		t.Fatalf("RetransmitRequest %+v, %v", rr1, err)
 	}
 	r.send(&codec.Retransmission{SessionId: rr1.SessionId, RequestTimestamp: rr1.Timestamp, NextSeqNo: 2, Count: 1})
@@ -511,7 +511,7 @@ func TestExample_7_4_4_2_PartialBatch(t *testing.T) {
 		t.Fatalf("message %v", e)
 	}
 	var rr2 codec.RetransmitRequest
-	if err := rr2.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr2.FromSeqNo != 3 || rr2.Count != 2 || rr2.Timestamp == rr1.Timestamp {
+	if _, err := rr2.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr2.FromSeqNo != 3 || rr2.Count != 2 || rr2.Timestamp == rr1.Timestamp {
 		t.Fatalf("RetransmitRequest for the rest %+v, %v", rr2, err)
 	}
 	r.send(&codec.Retransmission{SessionId: rr1.SessionId, RequestTimestamp: rr1.Timestamp, NextSeqNo: 3, Count: 2})
@@ -531,7 +531,7 @@ func TestExample_7_4_5_2_PartlyBeyond(t *testing.T) {
 	r.send(&codec.RetransmitRequest{SessionId: r.id, Timestamp: ts, FromSeqNo: 4, Count: 5})
 	// Heartbeats at most before it: nothing retransmitted.
 	var rj codec.RestransmitReject
-	if err := rj.Decode(r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil {
+	if _, err := rj.Decode(r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	if rj.RequestTimestamp != ts || fixp.RetransmitRejectCode(rj.Code) != fixp.RetransmitOutOfRange || string(rj.Reason) != "beyond what was sent" {
@@ -555,7 +555,7 @@ func TestExample_7_5_2_FinishedSendingRepeated(t *testing.T) {
 		for range 3 {
 			hd, msg := r.read()
 			var fs codec.FinishedSending
-			if hd.TemplateId != codec.FinishedSendingTemplateID || fs.Decode(msg) != nil || fs.LastSeqNo != codec.Some(uint64(1)) {
+			if _, err := fs.Decode(msg); hd.TemplateId != codec.FinishedSendingTemplateID || err != nil || fs.LastSeqNo != codec.Some(uint64(1)) {
 				t.Fatalf("template %d %+v, want FinishedSending 1", hd.TemplateId, fs)
 			}
 		}
@@ -567,7 +567,7 @@ func TestExample_7_5_2_FinishedSendingRepeated(t *testing.T) {
 	ts := nanos(time.Now())
 	r.send(&codec.RetransmitRequest{SessionId: r.id, Timestamp: ts, FromSeqNo: 1, Count: 1})
 	var rt codec.Retransmission
-	if err := rt.Decode(r.until(codec.RetransmissionTemplateID)); err != nil || rt.RequestTimestamp != ts {
+	if _, err := rt.Decode(r.until(codec.RetransmissionTemplateID)); err != nil || rt.RequestTimestamp != ts {
 		t.Fatalf("Retransmission %+v, %v", rt, err)
 	}
 	if hd, _ := r.read(); hd.SchemaId == codec.SchemaID {
@@ -596,7 +596,7 @@ func TestExample_7_5_4_TerminateBeforeFinished(t *testing.T) {
 	r2 := dialRaw(t, l)
 	r2.id = r.id
 	var ack codec.EstablishmentAck
-	if err := ack.Decode(r2.establish(1000, codec.Some(uint64(1)), "user:alice")); err != nil {
+	if _, err := ack.Decode(r2.establish(1000, codec.Some(uint64(1)), "user:alice")); err != nil {
 		t.Fatal(err)
 	}
 	r2.until(codec.FinishedSendingTemplateID)
@@ -643,7 +643,7 @@ func TestExample_7_5_6_HalfClose(t *testing.T) {
 		r.send(&codec.Sequence{NextSeqNo: 4})
 		r.send(appMsg{1, "4"})
 		var rr codec.RetransmitRequest
-		if err := rr.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 {
+		if _, err := rr.Decode(r.until(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 {
 			t.Fatalf("RetransmitRequest %+v, %v", rr, err)
 		}
 	})
@@ -659,7 +659,7 @@ func TestExample_7_5_6_HalfClose(t *testing.T) {
 		ts := nanos(time.Now())
 		r.send(&codec.RetransmitRequest{SessionId: r.id, Timestamp: ts, FromSeqNo: 1, Count: 3})
 		var rt codec.Retransmission
-		if err := rt.Decode(r.until(codec.RetransmissionTemplateID)); err != nil || rt.RequestTimestamp != ts || rt.NextSeqNo != 1 || rt.Count != 3 {
+		if _, err := rt.Decode(r.until(codec.RetransmissionTemplateID)); err != nil || rt.RequestTimestamp != ts || rt.NextSeqNo != 1 || rt.Count != 3 {
 			t.Fatalf("Retransmission %+v, %v", rt, err)
 		}
 		got := r.readApps(3)

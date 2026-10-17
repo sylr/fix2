@@ -109,7 +109,7 @@ func TestFinishRecoverableCompletes(t *testing.T) {
 	r.send(appMsg{1, "1"})
 	r.send(&codec.FinishedSending{SessionId: r.id, LastSeqNo: codec.Some(uint64(3))})
 	var rr codec.RetransmitRequest
-	if err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 {
+	if _, err := rr.Decode(r.readTemplate(codec.RetransmitRequestTemplateID)); err != nil || rr.FromSeqNo != 2 || rr.Count != 2 {
 		t.Fatalf("RetransmitRequest: %+v, %v", rr, err)
 	}
 	r.send(&codec.Retransmission{SessionId: r.id, RequestTimestamp: rr.Timestamp, NextSeqNo: 2, Count: 2})
@@ -127,7 +127,7 @@ func TestFinishRecoverableCompletes(t *testing.T) {
 	// Our acknowledgement, then the Terminate exchange.
 	r.send(&codec.FinishedReceiving{SessionId: r.id})
 	var term codec.Terminate
-	if err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeFinished {
+	if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeFinished {
 		t.Fatalf("Terminate: %+v, %v", term, err)
 	}
 	r.send(&codec.Terminate{SessionId: r.id, Code: codec.TerminationCodeFinished})
@@ -172,7 +172,7 @@ func TestFinishResumedOnReconnect(t *testing.T) {
 	// The server's FinishedSending again; ours, unanswered here, answered
 	// again.
 	var fs codec.FinishedSending
-	if err := fs.Decode(r2.readTemplate(codec.FinishedSendingTemplateID)); err != nil || !fs.LastSeqNo.Valid || fs.LastSeqNo.Value != 0 {
+	if _, err := fs.Decode(r2.readTemplate(codec.FinishedSendingTemplateID)); err != nil || !fs.LastSeqNo.Valid || fs.LastSeqNo.Value != 0 {
 		t.Fatalf("FinishedSending: %+v, %v", fs, err)
 	}
 	r2.send(&codec.FinishedSending{SessionId: r2.id})
@@ -234,7 +234,7 @@ func TestFinishViolations(t *testing.T) {
 				}
 			}
 			var term codec.Terminate
-			if err := term.Decode(msg); err != nil || string(term.Reason) != tc.reason {
+			if _, err := term.Decode(msg); err != nil || string(term.Reason) != tc.reason {
 				t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 			}
 		})
@@ -252,7 +252,7 @@ func TestOnPeerFinishedRefused(t *testing.T) {
 	rawHandshake(r, fixp.Unsequenced, codec.Optional[uint64]{})
 	r.send(&codec.FinishedSending{SessionId: r.id})
 	var term codec.Terminate
-	if err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || string(term.Reason) != "application error" {
+	if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || string(term.Reason) != "application error" {
 		t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 	}
 }
@@ -373,7 +373,7 @@ func TestBeyondLastSeqNo(t *testing.T) {
 		}
 	}
 	var term codec.Terminate
-	if err := term.Decode(msg); err != nil || string(term.Reason) != "Sequence after FinishedSending" {
+	if _, err := term.Decode(msg); err != nil || string(term.Reason) != "Sequence after FinishedSending" {
 		t.Fatalf("Terminate: %q, %v", term.Reason, err)
 	}
 }

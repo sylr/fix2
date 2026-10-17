@@ -52,19 +52,19 @@ func redact(msg []byte) []byte {
 	switch h.TemplateId {
 	case codec.NegotiateTemplateID:
 		var m codec.Negotiate
-		if m.Decode(c) != nil {
+		if _, err := m.Decode(c); err != nil {
 			return zeroBody(c)
 		}
 		creds = m.Credentials
 	case codec.NegotiationResponseTemplateID:
 		var m codec.NegotiationResponse
-		if m.Decode(c) != nil {
+		if _, err := m.Decode(c); err != nil {
 			return zeroBody(c)
 		}
 		creds = m.Credentials
 	case codec.EstablishTemplateID:
 		var m codec.Establish
-		if m.Decode(c) != nil {
+		if _, err := m.Decode(c); err != nil {
 			return zeroBody(c)
 		}
 		creds = m.Credentials

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -47,18 +48,180 @@ func (n *node) what() string {
 // not follow.
 const xincludeSpace = "http://www.w3.org/2001/XInclude"
 
+// sbeSpace is the namespace of SBE 1.0's message schemas (§6.2), sbe.xsd's
+// target namespace. SBE's release candidates and SBE 2.0 have others, which
+// the loader refuses: their schemas differ.
+const sbeSpace = "http://fixprotocol.io/2016/sbe"
+
+// sbeElements lists, for each element of sbe.xsd the loader supports, the
+// attributes it may carry, unqualified, and the elements it may hold. Of
+// them, sbe.xsd declares messageSchema and message in sbeSpace, the others
+// unqualified (elementFormDefault="unqualified").
+var sbeElements = func() map[string]struct{ attrs, children []string } {
+	version := []string{"sinceVersion", "deprecated"} // versionAttributes
+	semantic := []string{"semanticType", "description"}
+	join := func(lists ...[]string) []string { return slices.Concat(lists...) }
+	field := join([]string{"name", "id", "type", "epoch", "timeUnit", "offset", "presence", "valueRef"}, semantic, version)
+	block := join([]string{"name", "id", "blockLength"}, semantic, version)
+	encoded := join([]string{"name", "encodingType", "offset"}, semantic, version)
+	value := join([]string{"name", "description"}, version)
+	types := []string{"type", "composite", "enum", "set"}
+	members := []string{"field", "group", "data"}
+	type element = struct{ attrs, children []string }
+	return map[string]element{
+		"messageSchema": {[]string{"package", "id", "version", "semanticVersion", "description", "byteOrder", "headerType"}, []string{"types", "message"}},
+		"types":         {nil, types},
+		"type": {join([]string{"name", "nullValue", "minValue", "maxValue", "length", "primitiveType", "characterEncoding",
+			"offset", "presence", "valueRef"}, semantic, version), nil},
+		"composite":  {join([]string{"name", "offset"}, semantic, version), append(slices.Clone(types), "ref")},
+		"ref":        {join([]string{"name", "type", "offset"}, version), nil},
+		"enum":       {encoded, []string{"validValue"}},
+		"validValue": {value, nil},
+		"set":        {encoded, []string{"choice"}},
+		"choice":     {value, nil},
+		"message":    {block, members},
+		"group":      {join(block, []string{"dimensionType"}), members},
+		"field":      {field, nil},
+		"data":       {field, nil},
+	}
+}()
+
+// xsiSpace is the namespace of XML Schema's instance attributes, four of
+// which XML Schema allows on any element whatever its schema declares (XML
+// Schema Part 1, §3.2.7): xsi:schemaLocation and
+// xsi:noNamespaceSchemaLocation, hints of where schemas are, which the
+// loader ignores; xsi:nil and xsi:type, which change how an element is
+// validated, and which the loader refuses: sbe.xsd declares no element
+// nillable, and the loader does not resolve the types they would name.
+const xsiSpace = "http://www.w3.org/2001/XMLSchema-instance"
+
+// LoadOptions are the departures from SBE 1.0 a loader accepts, all off by
+// default.
+type LoadOptions struct {
+	// TolerateForeignMetadata accepts and ignores the elements and
+	// attributes of namespaces other than SBE's and XML Schema instance's,
+	// such as a venue's annotations, which sbe.xsd, normative (§6.1), does
+	// not allow: it declares no wildcard. Off, they are errors. The flag
+	// -tolerate-foreign-metadata of fix2gen sbe.
+	TolerateForeignMetadata bool
+}
+
+// checkNames checks the elements and attributes of the schema root by their
+// expanded names (§6.1, sbe.xsd). The root is SBE 1.0's messageSchema; an
+// element or attribute of no namespace, or an element of SBE's, must be one
+// sbe.xsd declares there, in its place. XML Schema instance's attributes
+// are accepted, and ignored. Those of other namespaces, and their elements,
+// are errors, unless opts tolerates them: then they are ignored, and the
+// elements removed.
+func checkNames(root *node, opts LoadOptions) error {
+	if root.XMLName.Local != "messageSchema" {
+		return fmt.Errorf("root element <%s>, want <messageSchema>", root.XMLName.Local)
+	}
+	if root.XMLName.Space != sbeSpace {
+		return fmt.Errorf("root element <messageSchema> %s, want %q, SBE 1.0's", inSpace(root.XMLName.Space), sbeSpace)
+	}
+	return checkNode(root, "", opts)
+}
+
+// inSpace describes the namespace space for errors.
+func inSpace(space string) string {
+	if space == "" {
+		return "in no namespace"
+	}
+	return fmt.Sprintf("in namespace %q", space)
+}
+
+// foreignHint is how an error about foreign metadata ends.
+const foreignHint = "metadata of another namespace, which sbe.xsd does not allow: -tolerate-foreign-metadata ignores it"
+
+// checkNode checks n, an element of sbeElements whose path in errors is
+// path, and its descendants.
+func checkNode(n *node, path string, opts LoadOptions) error {
+	def := sbeElements[n.XMLName.Local]
+	what := path + n.what()
+	for _, a := range n.Attrs {
+		switch {
+		case a.Name.Space == "xmlns", a.Name.Space == "" && a.Name.Local == "xmlns":
+			// a namespace declaration
+		case a.Name.Space == "":
+			if !slices.Contains(def.attrs, a.Name.Local) {
+				return fmt.Errorf("%s: unknown attribute %q", what, a.Name.Local)
+			}
+		case a.Name.Space == sbeSpace:
+			return fmt.Errorf("%s: attribute %q in the SBE namespace: sbe.xsd declares its attributes unqualified", what, a.Name.Local)
+		case !strings.Contains(a.Name.Space, ":"):
+			return fmt.Errorf("%s: attribute %q of the undeclared prefix %q", what, a.Name.Local, a.Name.Space)
+		case a.Name.Space == xsiSpace:
+			switch a.Name.Local {
+			case "schemaLocation", "noNamespaceSchemaLocation":
+				// a hint, ignored
+			case "nil", "type":
+				return fmt.Errorf("%s: xsi:%s is not supported: sbe.xsd declares no element nillable, nor types to substitute", what, a.Name.Local)
+			default:
+				return fmt.Errorf("%s: xsi:%s is not an attribute of XML Schema instances", what, a.Name.Local)
+			}
+		case opts.TolerateForeignMetadata:
+			// ignored
+		default:
+			return fmt.Errorf("%s: attribute %q %s: %s", what, a.Name.Local, inSpace(a.Name.Space), foreignHint)
+		}
+	}
+	// The path of the children: the schema and <types> are left out, as
+	// they are of the loader's other errors.
+	if local := n.XMLName.Local; local != "messageSchema" && local != "types" {
+		path = what + ": "
+	}
+	kept := n.Children[:0]
+	for i := range n.Children {
+		c := &n.Children[i]
+		space, local := c.XMLName.Space, c.XMLName.Local
+		switch {
+		case space == xincludeSpace:
+			return fmt.Errorf("%s<%s>: XInclude is not supported: include the types in the schema", path, local)
+		case space != "" && space != sbeSpace && !strings.Contains(space, ":"):
+			return fmt.Errorf("%s<%s:%s>: undeclared prefix %q", path, space, local, space)
+		case space != "" && space != sbeSpace && opts.TolerateForeignMetadata:
+			continue // ignored
+		case space != "" && space != sbeSpace:
+			return fmt.Errorf("%s<%s> %s: %s", path, local, inSpace(space), foreignHint)
+		case !slices.Contains(def.children, local):
+			return fmt.Errorf("%s: unexpected element %s", what, c.what())
+		case local == "message" && space != sbeSpace:
+			return fmt.Errorf("%s%s: %s, want %q: sbe.xsd declares message in the SBE namespace", path, c.what(), inSpace(space), sbeSpace)
+		case local != "message" && space != "":
+			return fmt.Errorf("%s%s: in the SBE namespace: sbe.xsd declares it unqualified", path, c.what())
+		}
+		if err := checkNode(c, path, opts); err != nil {
+			return err
+		}
+		kept = append(kept, *c)
+	}
+	n.Children = kept
+	return nil
+}
+
 // LoadFile loads and checks the SBE message schema in the file at path.
 func LoadFile(path string) (*Schema, error) {
+	return LoadFileWith(path, LoadOptions{})
+}
+
+// LoadFileWith is LoadFile with options.
+func LoadFileWith(path string, opts LoadOptions) (*Schema, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("sbe: %w", err)
 	}
 	defer f.Close()
-	return Load(f)
+	return LoadWith(f, opts)
 }
 
 // Load loads and checks an SBE message schema.
 func Load(r io.Reader) (*Schema, error) {
+	return LoadWith(r, LoadOptions{})
+}
+
+// LoadWith is Load with options.
+func LoadWith(r io.Reader, opts LoadOptions) (*Schema, error) {
 	data, err := io.ReadAll(io.LimitReader(r, maxSchemaSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("sbe: %w", err)
@@ -68,6 +231,9 @@ func Load(r io.Reader) (*Schema, error) {
 	}
 	var root node
 	if err := xml.Unmarshal(data, &root); err != nil {
+		return nil, fmt.Errorf("sbe: %w", err)
+	}
+	if err := checkNames(&root, opts); err != nil {
 		return nil, fmt.Errorf("sbe: %w", err)
 	}
 	l := &loader{named: map[string]*node{}, types: map[string]*Type{}, resolving: map[string]bool{}, groups: map[string]string{}}
@@ -95,9 +261,6 @@ type valueRef struct {
 }
 
 func (l *loader) schema(root *node) (*Schema, error) {
-	if root.XMLName.Local != "messageSchema" {
-		return nil, fmt.Errorf("root element <%s>, want <messageSchema>", root.XMLName.Local)
-	}
 	s := &Schema{
 		Package:         root.get("package"),
 		SemanticVersion: root.get("semanticVersion"),
@@ -124,14 +287,9 @@ func (l *loader) schema(root *node) (*Schema, error) {
 	for i := range root.Children {
 		c := &root.Children[i]
 		switch {
-		case c.XMLName.Space == xincludeSpace:
-			return nil, fmt.Errorf("<%s>: XInclude is not supported: include the types in the schema", c.XMLName.Local)
 		case c.XMLName.Local == "types":
 			for j := range c.Children {
 				t := &c.Children[j]
-				if t.XMLName.Space == xincludeSpace {
-					return nil, fmt.Errorf("<%s>: XInclude is not supported: include the types in the schema", t.XMLName.Local)
-				}
 				switch t.XMLName.Local {
 				case "type", "composite", "enum", "set":
 				default:

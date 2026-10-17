@@ -120,7 +120,7 @@ func TestMessageTemplateEndsNumbering(t *testing.T) {
 	r.send(&codec.MessageTemplate{EncodingType: 0xEB50, Version: []byte("1.0"), Template: []byte("<xml/>")})
 	r.send(appMsg{1, "two"})
 	var term codec.Terminate
-	if err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || string(term.Reason) != "application message before a Sequence" {
+	if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || string(term.Reason) != "application message before a Sequence" {
 		t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 	}
 	if e := h.expect(t, "message"); e.body != "one" {

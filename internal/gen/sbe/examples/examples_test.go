@@ -2,9 +2,11 @@ package examples
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -61,7 +63,7 @@ func roundTrip(t *testing.T, m interface{ AppendTo([]byte) ([]byte, error) }, ms
 func TestNewOrderSingle(t *testing.T) {
 	msg := frame(t, newOrderSingleHex)
 	var m NewOrderSingle
-	if err := m.Decode(msg); err != nil {
+	if _, err := m.Decode(msg); err != nil {
 		t.Fatal(err)
 	}
 	if m.ClOrdIDString() != "ORD00001" || m.AccountString() != "ACCT01" || m.SymbolString() != "GEM4" {
@@ -86,7 +88,7 @@ func TestNewOrderSingle(t *testing.T) {
 func TestExecutionReport(t *testing.T) {
 	msg := frame(t, executionReportHex)
 	var m ExecutionReport
-	if err := m.Decode(msg); err != nil {
+	if _, err := m.Decode(msg); err != nil {
 		t.Fatal(err)
 	}
 	if m.OrderIDString() != "O0000001" || m.ExecIDString() != "EXEC0000" || m.SymbolString() != "GEM4" {
@@ -114,7 +116,7 @@ func TestExecutionReport(t *testing.T) {
 func TestBusinessMessageReject(t *testing.T) {
 	msg := frame(t, businessMessageRejectHex)
 	var m BusinessMessageReject
-	if err := m.Decode(msg); err != nil {
+	if _, err := m.Decode(msg); err != nil {
 		t.Fatal(err)
 	}
 	if m.BusinessRejectRefIDString() != "ORD00001" || m.BusinessRejectReason != BusinessRejectReasonEnumNotAuthorized ||
@@ -130,8 +132,8 @@ func TestTruncation(t *testing.T) {
 	for _, dump := range []string{newOrderSingleHex, executionReportHex, businessMessageRejectHex} {
 		msg := frame(t, dump)
 		for n := range len(msg) {
-			for _, m := range []interface{ Decode([]byte) error }{&NewOrderSingle{}, &ExecutionReport{}, &BusinessMessageReject{}} {
-				if err := m.Decode(msg[:n]); err == nil {
+			for _, m := range []interface{ Decode([]byte) (int, error) }{&NewOrderSingle{}, &ExecutionReport{}, &BusinessMessageReject{}} {
+				if _, err := m.Decode(msg[:n]); err == nil {
 					t.Fatalf("%T decoded %d of %d bytes of %x", m, n, len(msg), msg)
 				}
 			}
@@ -142,44 +144,103 @@ func TestTruncation(t *testing.T) {
 func TestDecodeErrors(t *testing.T) {
 	msg := frame(t, newOrderSingleHex)
 	var m NewOrderSingle
-	if err := m.Decode(msg); err != nil {
+	if _, err := m.Decode(msg); err != nil {
 		t.Fatal(err)
 	}
 
 	other := bytes.Clone(msg)
 	other[4] = 92 // schema id
-	if err := m.Decode(other); !errors.Is(err, ErrSchema) || m.Side != 0 {
+	if _, err := m.Decode(other); !errors.Is(err, ErrSchema) || m.Side != 0 {
 		t.Errorf("another schema: %v, m %+v", err, m)
 	}
 	var er ExecutionReport
-	if err := er.Decode(msg); !errors.Is(err, ErrTemplate) {
+	if _, err := er.Decode(msg); !errors.Is(err, ErrTemplate) {
 		t.Errorf("another template: %v", err)
 	}
 	short := bytes.Clone(msg)
 	short[0] = 53 // block length, one less than the fields
-	if err := m.Decode(short); !errors.Is(err, ErrMalformed) {
+	if _, err := m.Decode(short); !errors.Is(err, ErrMalformed) {
 		t.Errorf("short block: %v", err)
 	}
 }
 
-// A newer version's message, its root block longer, decodes: the bytes
-// after the fields this schema knows are skipped.
-func TestNewerVersionBlock(t *testing.T) {
-	msg := frame(t, businessMessageRejectHex)
-	h, body, err := ReadHeader(msg)
+// The length decoding returns counts the root block and the group entries
+// by the header's and the dimension's blockLength, padding included.
+func TestConsumedLength(t *testing.T) {
+	for _, c := range []struct {
+		dump string
+		m    interface{ Decode([]byte) (int, error) }
+	}{
+		{newOrderSingleHex, &NewOrderSingle{}},
+		{executionReportHex, &ExecutionReport{}},
+		{businessMessageRejectHex, &BusinessMessageReject{}},
+	} {
+		msg := frame(t, c.dump)
+		if n, err := c.m.Decode(append(bytes.Clone(msg), 0xFF)); err != nil || n != len(msg) {
+			t.Errorf("%T: %d of %d bytes, %v", c.m, n, len(msg), err)
+		}
+	}
+
+	// ExecutionReport's FillsGrp entries, 12 bytes, padded to 14.
+	msg := frame(t, executionReportHex)
+	at := HeaderSize + ExecutionReportBlockLength
+	count := int(binary.LittleEndian.Uint16(msg[at+2:]))
+	padded := bytes.Clone(msg[:at+GroupSizeEncodingSize])
+	binary.LittleEndian.PutUint16(padded[at:], 14)
+	for i := range count {
+		entry := msg[at+GroupSizeEncodingSize+12*i:][:12]
+		padded = append(append(padded, entry...), 0xEE, 0xEE)
+	}
+	var want, got ExecutionReport
+	if _, err := want.Decode(msg); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := got.Decode(append(padded, 0xFF)); err != nil || n != len(padded) || !reflect.DeepEqual(got, want) {
+		t.Errorf("padded entries: %d of %d bytes, %+v, %v", n, len(padded), got, err)
+	}
+}
+
+// This schema's header and dimension have no numGroups nor
+// numVarDataFields: nothing tells of a newer version's groups and data.
+// Its fields, at the end of the root block, are skipped by the header's
+// blockLength (§7.3.1). After all the schema knows of a message, its
+// groups and data cannot be told from bytes after the message: they are
+// not read, nor counted. Before what it knows, they may be anywhere a
+// newer version may add them, unseen: a message holding data, where a group
+// may come before them, or entries, which may hold groups and data after
+// theirs, is ErrNewer.
+func TestNewerVersionUncounted(t *testing.T) {
+	newer := func(dump string, block int, extend, tail []byte) []byte {
+		msg := frame(t, dump)
+		b := slices.Concat(msg[:HeaderSize+block], extend, msg[HeaderSize+block:], tail)
+		binary.LittleEndian.PutUint16(b[0:], uint16(block+len(extend)))
+		binary.LittleEndian.PutUint16(b[6:], 1)
+		return b
+	}
+	// A field and a group added: the field skipped, the group not read.
+	var nos NewOrderSingle
+	b := newer(newOrderSingleHex, NewOrderSingleBlockLength, []byte{0xAA, 0xBB}, []byte{4, 0, 1, 0, 0xEE, 0xEE, 0xEE, 0xEE})
+	if n, err := nos.Decode(b); err != nil || n != len(frame(t, newOrderSingleHex))+2 || nos.ClOrdIDString() != "ORD00001" {
+		t.Errorf("NewOrderSingle: %d bytes, %q, %v", n, nos.ClOrdIDString(), err)
+	}
+	// Data: a group may come before it.
+	var bmr BusinessMessageReject
+	if _, err := bmr.Decode(newer(businessMessageRejectHex, BusinessMessageRejectBlockLength, []byte{0xAA}, nil)); !errors.Is(err, ErrNewer) {
+		t.Errorf("BusinessMessageReject: %v", err)
+	}
+	// Entries: they may hold groups and data.
+	var er ExecutionReport
+	if _, err := er.Decode(newer(executionReportHex, ExecutionReportBlockLength, nil, nil)); !errors.Is(err, ErrNewer) {
+		t.Errorf("ExecutionReport: %v", err)
+	}
+	// None.
+	empty, err := (&ExecutionReport{}).AppendTo(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	longer := append(append([]byte{}, body[:9]...), 0xAA, 0xBB, 0xCC)
-	longer = append(longer, body[9:]...)
-	h.BlockLength += 3
-	h.Version++
-	var m BusinessMessageReject
-	if err := m.DecodeBody(h, longer); err != nil {
-		t.Fatal(err)
-	}
-	if m.BusinessRejectReason != BusinessRejectReasonEnumNotAuthorized || string(m.Text) != "Not authorized to trade that instrument" {
-		t.Errorf("%v %q", m.BusinessRejectReason, m.Text)
+	binary.LittleEndian.PutUint16(empty[6:], 1)
+	if n, err := er.Decode(append(empty, 0xEE)); err != nil || n != len(empty) {
+		t.Errorf("ExecutionReport without entries: %d of %d bytes, %v", n, len(empty), err)
 	}
 }
 
@@ -189,14 +250,14 @@ func TestGroupBounds(t *testing.T) {
 	many := bytes.Clone(msg)
 	many[8+42+2] = 0xFF
 	var m ExecutionReport
-	if err := m.Decode(many); !errors.Is(err, ErrShort) {
+	if _, err := m.Decode(many); !errors.Is(err, ErrShort) {
 		t.Errorf("count beyond the bytes: %v", err)
 	}
 	// Entries of no bytes.
 	empty := bytes.Clone(msg[:8+42+4])
 	empty[8+42] = 0
 	empty[8+42+1] = 0
-	if err := m.Decode(empty); !errors.Is(err, ErrMalformed) {
+	if _, err := m.Decode(empty); !errors.Is(err, ErrMalformed) {
 		t.Errorf("empty entries: %v", err)
 	}
 	// Encoding as many entries as a uint16 holds: its largest value is null.
@@ -212,7 +273,7 @@ func TestGroupBounds(t *testing.T) {
 	}
 	b[8+42+2], b[8+42+3] = 0xff, 0xff
 	b = append(b, make([]byte, 12)...)
-	if err := m.Decode(b); err != nil || len(m.FillsGrp) != 65535 {
+	if _, err := m.Decode(b); err != nil || len(m.FillsGrp) != 65535 {
 		t.Errorf("decoding 65535 entries: %v, %d", err, len(m.FillsGrp))
 	}
 }
@@ -234,7 +295,10 @@ func TestDecodeDoesNotAllocate(t *testing.T) {
 	var er ExecutionReport
 	var bmr BusinessMessageReject
 	decode := func() {
-		if nos.Decode(msgs[0]) != nil || er.Decode(msgs[1]) != nil || bmr.Decode(msgs[2]) != nil {
+		_, err1 := nos.Decode(msgs[0])
+		_, err2 := er.Decode(msgs[1])
+		_, err3 := bmr.Decode(msgs[2])
+		if err1 != nil || err2 != nil || err3 != nil {
 			t.Fatal("decode failed")
 		}
 	}
@@ -250,10 +314,10 @@ func FuzzDecode(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, b []byte) {
 		for _, m := range []interface {
-			Decode([]byte) error
+			Decode([]byte) (int, error)
 			AppendTo([]byte) ([]byte, error)
 		}{&NewOrderSingle{}, &ExecutionReport{}, &BusinessMessageReject{}} {
-			if m.Decode(b) != nil {
+			if _, err := m.Decode(b); err != nil {
 				continue
 			}
 			// What decodes encodes, its encoding decodes, and encodes
@@ -266,10 +330,10 @@ func FuzzDecode(f *testing.F) {
 				t.Fatalf("%T: decoded but does not encode: %v", m, err)
 			}
 			fresh := reflect.New(reflect.TypeOf(m).Elem()).Interface().(interface {
-				Decode([]byte) error
+				Decode([]byte) (int, error)
 				AppendTo([]byte) ([]byte, error)
 			})
-			if err := fresh.Decode(enc); err != nil {
+			if _, err := fresh.Decode(enc); err != nil {
 				t.Fatalf("%T: its encoding %x does not decode: %v", m, enc, err)
 			}
 			again, err := fresh.AppendTo(nil)

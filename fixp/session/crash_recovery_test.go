@@ -161,7 +161,7 @@ func notAppliedRanges(st *crashStore, id fixp.SessionID) map[uint64]bool {
 	out := map[uint64]bool{}
 	for _, m := range st.sessions[id].live.msgs {
 		var na codec.NotApplied
-		if na.Decode(m) == nil {
+		if _, err := na.Decode(m); err == nil {
 			for seq := na.FromSeqNo; seq < na.FromSeqNo+uint64(na.Count); seq++ {
 				out[seq] = true
 			}

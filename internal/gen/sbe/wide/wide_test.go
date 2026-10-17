@@ -47,7 +47,7 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("%d bytes, want %d: %x", len(b), messageLength, b)
 	}
 	var got Batch
-	if err := got.Decode(b); err != nil {
+	if _, err := got.Decode(b); err != nil {
 		t.Fatal(err)
 	}
 	if again := encode(t, &got); !bytes.Equal(again, b) || got.Seq != Some(uint64(7)) || got.Late != 9 {
@@ -64,7 +64,7 @@ func TestNullOfARequiredType(t *testing.T) {
 		t.Fatalf("null Seq encoded as %#x", v)
 	}
 	var got Batch
-	if err := got.Decode(b); err != nil || got.Seq.Valid {
+	if _, err := got.Decode(b); err != nil || got.Seq.Valid {
 		t.Fatalf("%v, Seq %+v", err, got.Seq)
 	}
 }
@@ -82,7 +82,7 @@ func TestWideFields(t *testing.T) {
 		{"header blockLength, all ones", headerBlockLength, 8, math.MaxUint64, ErrShort},
 		{"header blockLength, sign bit", headerBlockLength, 8, 1 << 63, ErrShort},
 		{"header blockLength, beyond 32 bits", headerBlockLength, 8, 1<<32 + 12, ErrShort},
-		{"header version, all ones", headerVersion, 8, math.MaxUint64, nil},
+		{"header version, all ones", headerVersion, 8, math.MaxUint64, ErrNewer}, // newer, not wrapped below 0: its groups and data uncounted
 		{"Items blockLength, all ones", itemsBlockLength, 8, math.MaxUint64, ErrShort},
 		{"Items count, all ones", itemsCount, 8, math.MaxUint64, ErrShort},
 		{"Items count, sign bit", itemsCount, 8, 1 << 63, ErrShort},
@@ -103,7 +103,7 @@ func TestWideFields(t *testing.T) {
 				binary.LittleEndian.PutUint32(b[tc.at:], uint32(tc.value))
 			}
 			var got Batch
-			if err := got.Decode(b); !errors.Is(err, tc.want) {
+			if _, err := got.Decode(b); !errors.Is(err, tc.want) {
 				t.Fatalf("Decode = %v, want %v", err, tc.want)
 			}
 		})
@@ -134,15 +134,19 @@ func FuzzDecode(f *testing.F) {
 	f.Add(encode(f, test()))
 	f.Fuzz(func(t *testing.T, b []byte) {
 		var m Batch
-		if m.Decode(b) != nil {
+		n, err := m.Decode(b)
+		if err != nil {
 			return
+		}
+		if n < HeaderSize || n > len(b) {
+			t.Fatalf("read %d of %d bytes", n, len(b))
 		}
 		enc, err := m.AppendTo(nil)
 		if err != nil {
 			t.Fatalf("decoded but does not encode: %v", err)
 		}
 		var again Batch
-		if err := again.Decode(enc); err != nil {
+		if _, err := again.Decode(enc); err != nil {
 			t.Fatalf("its encoding does not decode: %v", err)
 		}
 		if b, _ := again.AppendTo(nil); !bytes.Equal(b, enc) {

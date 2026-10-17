@@ -100,7 +100,7 @@ func TestObserverRedacts(t *testing.T) {
 		}
 	}
 	var n codec.Negotiate
-	if err := n.Decode(in[len(in)-1].Msg); err != nil || len(n.Credentials) != 6 || n.SessionId != rs.r.id {
+	if _, err := n.Decode(in[len(in)-1].Msg); err != nil || len(n.Credentials) != 6 || n.SessionId != rs.r.id {
 		t.Fatalf("redacted Negotiate: %+v, %v", n, err)
 	}
 }
@@ -150,7 +150,7 @@ func TestRetention(t *testing.T) {
 	}
 	var rj codec.RestransmitReject
 	rs.r.send(&codec.RetransmitRequest{SessionId: rs.r.id, Timestamp: 1, FromSeqNo: 1, Count: 2})
-	if err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || string(rj.Reason) != "no longer available" {
+	if _, err := rj.Decode(rs.r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil || string(rj.Reason) != "no longer available" {
 		t.Fatalf("RetransmitReject: %+v %q, %v", rj, rj.Reason, err)
 	}
 	rs.r.send(&codec.RetransmitRequest{SessionId: rs.r.id, Timestamp: 2, FromSeqNo: 25, Count: 2})

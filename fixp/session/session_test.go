@@ -324,18 +324,18 @@ func TestOwnerBinding(t *testing.T) {
 	defer func() { cancel(); <-done }()
 	r := dialRaw(t, l)
 	var resp codec.NegotiationResponse
-	if err := resp.Decode(r.negotiate(fixp.Unsequenced, "user:alice")); err != nil || resp.SessionId != r.id {
+	if _, err := resp.Decode(r.negotiate(fixp.Unsequenced, "user:alice")); err != nil || resp.SessionId != r.id {
 		t.Fatalf("negotiation: %+v, %v", resp, err)
 	}
 	mallory := dialRaw(t, l)
 	mallory.id = r.id
 	var rej codec.EstablishmentReject
-	if err := rej.Decode(mallory.establish(1000, codec.Optional[uint64]{}, "user:mallory")); err != nil || rej.Code != codec.EstablishmentRejectCodeCredentials {
+	if _, err := rej.Decode(mallory.establish(1000, codec.Optional[uint64]{}, "user:mallory")); err != nil || rej.Code != codec.EstablishmentRejectCodeCredentials {
 		t.Fatalf("mallory: %+v, %v", rej, err)
 	}
 	mallory.closed()
 	var ack codec.EstablishmentAck
-	if err := ack.Decode(r.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || ack.KeepaliveInterval != 50 {
+	if _, err := ack.Decode(r.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || ack.KeepaliveInterval != 50 {
 		t.Fatalf("alice: %+v, %v", ack, err)
 	}
 }
@@ -349,18 +349,18 @@ func TestDuplicateAndAlreadyEstablished(t *testing.T) {
 	again := dialRaw(t, l)
 	again.id = r.id
 	var rej codec.NegotiationReject
-	if err := rej.Decode(again.negotiate(fixp.Unsequenced, "user:alice")); err != nil || rej.Code != codec.NegotiationRejectCodeDuplicateId {
+	if _, err := rej.Decode(again.negotiate(fixp.Unsequenced, "user:alice")); err != nil || rej.Code != codec.NegotiationRejectCodeDuplicateId {
 		t.Fatalf("second Negotiate: %+v, %v", rej, err)
 	}
 	r.establish(1000, codec.Optional[uint64]{}, "user:alice")
 	other := dialRaw(t, l)
 	other.id = r.id
 	var erej codec.EstablishmentReject
-	if err := erej.Decode(other.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || erej.Code != codec.EstablishmentRejectCodeAlreadyEstablished {
+	if _, err := erej.Decode(other.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || erej.Code != codec.EstablishmentRejectCodeAlreadyEstablished {
 		t.Fatalf("second Establish: %+v, %v", erej, err)
 	}
 	unknown := dialRaw(t, l)
-	if err := erej.Decode(unknown.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || erej.Code != codec.EstablishmentRejectCodeUnnegotiated {
+	if _, err := erej.Decode(unknown.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || erej.Code != codec.EstablishmentRejectCodeUnnegotiated {
 		t.Fatalf("unknown session: %+v, %v", erej, err)
 	}
 }
@@ -373,13 +373,13 @@ func TestNegotiateChecks(t *testing.T) {
 
 	r := dialRaw(t, l)
 	r.id = fixp.SessionID{}
-	if err := rej.Decode(r.negotiate(fixp.Unsequenced, "user:alice")); err != nil || rej.Code != codec.NegotiationRejectCodeUnspecified {
+	if _, err := rej.Decode(r.negotiate(fixp.Unsequenced, "user:alice")); err != nil || rej.Code != codec.NegotiationRejectCodeUnspecified {
 		t.Fatalf("nil UUID: %+v, %v", rej, err)
 	}
 
 	r = dialRaw(t, l)
 	r.send(&codec.Negotiate{SessionId: r.id, Timestamp: nanos(time.Now().Add(-time.Hour)), ClientFlow: codec.FlowTypeUnsequenced, Credentials: []byte("user:alice")})
-	if err := rej.Decode(r.readTemplate(codec.NegotiationRejectTemplateID)); err != nil || rej.Code != codec.NegotiationRejectCodeUnspecified || string(rej.Reason) != "timestamp out of range" {
+	if _, err := rej.Decode(r.readTemplate(codec.NegotiationRejectTemplateID)); err != nil || rej.Code != codec.NegotiationRejectCodeUnspecified || string(rej.Reason) != "timestamp out of range" {
 		t.Fatalf("old timestamp: %+v, %v", rej, err)
 	}
 
@@ -387,7 +387,7 @@ func TestNegotiateChecks(t *testing.T) {
 	big := make([]byte, 2000)
 	copy(big, "user:alice")
 	r.send(&codec.Negotiate{SessionId: r.id, Timestamp: nanos(time.Now()), ClientFlow: codec.FlowTypeUnsequenced, Credentials: big})
-	if err := rej.Decode(r.readTemplate(codec.NegotiationRejectTemplateID)); err != nil || rej.Code != codec.NegotiationRejectCodeCredentials {
+	if _, err := rej.Decode(r.readTemplate(codec.NegotiationRejectTemplateID)); err != nil || rej.Code != codec.NegotiationRejectCodeCredentials {
 		t.Fatalf("long credentials: %+v, %v", rej, err)
 	}
 
@@ -422,7 +422,7 @@ func TestRetireUnestablished(t *testing.T) {
 	again := dialRaw(t, l)
 	again.id = r.id
 	var rej codec.NegotiationReject
-	if err := rej.Decode(again.negotiate(fixp.Unsequenced, "user:alice")); err != nil || rej.Code != codec.NegotiationRejectCodeDuplicateId {
+	if _, err := rej.Decode(again.negotiate(fixp.Unsequenced, "user:alice")); err != nil || rej.Code != codec.NegotiationRejectCodeDuplicateId {
 		t.Fatalf("Negotiate of a retired ID: %+v, %v", rej, err)
 	}
 }
@@ -463,7 +463,7 @@ func TestKeepaliveLapsed(t *testing.T) {
 	h.expect(t, "established")
 	start := time.Now()
 	var term codec.Terminate
-	if err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeUnspecifiedError || string(term.Reason) != "keepalive interval lapsed" {
+	if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeUnspecifiedError || string(term.Reason) != "keepalive interval lapsed" {
 		t.Fatalf("Terminate: %+v, %v", term, err)
 	}
 	if d := time.Since(start); d < 140*time.Millisecond || d > time.Second {
@@ -511,7 +511,7 @@ func TestProtocolViolations(t *testing.T) {
 			h.expect(t, "established")
 			tc.send(r)
 			var term codec.Terminate
-			if err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeUnspecifiedError || string(term.Reason) != tc.reason {
+			if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil || term.Code != codec.TerminationCodeUnspecifiedError || string(term.Reason) != tc.reason {
 				t.Fatalf("Terminate: %+v %q, %v", term, term.Reason, err)
 			}
 			r.closed()
@@ -540,7 +540,7 @@ func TestClientNegotiationRetries(t *testing.T) {
 	// First attempt: no answer.
 	r := acceptRaw(t, l)
 	var n1 codec.Negotiate
-	if err := n1.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
+	if _, err := n1.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	r.closed()
@@ -548,7 +548,7 @@ func TestClientNegotiationRetries(t *testing.T) {
 	// Second: a new ID; an answer of another request, then its own.
 	r = acceptRaw(t, l)
 	var n2 codec.Negotiate
-	if err := n2.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
+	if _, err := n2.Decode(r.readTemplate(codec.NegotiateTemplateID)); err != nil {
 		t.Fatal(err)
 	}
 	if n2.SessionId == n1.SessionId {
@@ -557,7 +557,7 @@ func TestClientNegotiationRetries(t *testing.T) {
 	r.send(&codec.NegotiationResponse{SessionId: n2.SessionId, RequestTimestamp: n2.Timestamp - 1, ServerFlow: codec.FlowTypeUnsequenced})
 	r.send(&codec.NegotiationResponse{SessionId: n2.SessionId, RequestTimestamp: n2.Timestamp, ServerFlow: codec.FlowTypeUnsequenced})
 	var est codec.Establish
-	if err := est.Decode(r.readTemplate(codec.EstablishTemplateID)); err != nil || est.SessionId != n2.SessionId || est.KeepaliveInterval != 50 || est.NextSeqNo.Valid {
+	if _, err := est.Decode(r.readTemplate(codec.EstablishTemplateID)); err != nil || est.SessionId != n2.SessionId || est.KeepaliveInterval != 50 || est.NextSeqNo.Valid {
 		t.Fatalf("Establish: %+v, %v", est, err)
 	}
 	r.send(&codec.EstablishmentAck{SessionId: est.SessionId, RequestTimestamp: est.Timestamp, KeepaliveInterval: 1000})

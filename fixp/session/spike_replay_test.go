@@ -115,7 +115,7 @@ func TestSpikeReplay(t *testing.T) {
 	r := dialRaw(t, l)
 
 	var neg codec.Negotiate
-	if err := neg.Decode(frames[0].msg); err != nil {
+	if _, err := neg.Decode(frames[0].msg); err != nil {
 		t.Fatal(err)
 	}
 	r.id = neg.SessionId
@@ -151,7 +151,7 @@ func TestSpikeReplay(t *testing.T) {
 	var want, got codec.NegotiationResponse
 	want.Decode(ans[0].msg)
 	_, msgs, _ := r.meaningful(t, 1)
-	if err := got.Decode(msgs[0]); err != nil || got.SessionId != want.SessionId || got.RequestTimestamp != want.RequestTimestamp || got.ServerFlow != want.ServerFlow {
+	if _, err := got.Decode(msgs[0]); err != nil || got.SessionId != want.SessionId || got.RequestTimestamp != want.RequestTimestamp || got.ServerFlow != want.ServerFlow {
 		t.Fatalf("NegotiationResponse: fix2 %+v, Silverflash %+v, %v", got, want, err)
 	}
 
@@ -161,7 +161,7 @@ func TestSpikeReplay(t *testing.T) {
 	var wantAck, gotAck codec.EstablishmentAck
 	wantAck.Decode(ans[0].msg)
 	_, msgs, _ = r.meaningful(t, 1)
-	if err := gotAck.Decode(msgs[0]); err != nil || gotAck.SessionId != wantAck.SessionId || gotAck.RequestTimestamp != wantAck.RequestTimestamp || gotAck.KeepaliveInterval != wantAck.KeepaliveInterval {
+	if _, err := gotAck.Decode(msgs[0]); err != nil || gotAck.SessionId != wantAck.SessionId || gotAck.RequestTimestamp != wantAck.RequestTimestamp || gotAck.KeepaliveInterval != wantAck.KeepaliveInterval {
 		t.Fatalf("EstablishmentAck: fix2 %+v, Silverflash %+v, %v", gotAck, wantAck, err)
 	}
 	// A difference recorded: fix2 announces its NextSeqNo, Silverflash not.
@@ -208,7 +208,7 @@ func TestSpikeReplay(t *testing.T) {
 	var wantTerm, gotTerm codec.Terminate
 	wantTerm.Decode(ans[0].msg)
 	_, msgs, _ = r.meaningful(t, 1)
-	if err := gotTerm.Decode(msgs[0]); err != nil || gotTerm.SessionId != wantTerm.SessionId || gotTerm.Code != wantTerm.Code {
+	if _, err := gotTerm.Decode(msgs[0]); err != nil || gotTerm.SessionId != wantTerm.SessionId || gotTerm.Code != wantTerm.Code {
 		t.Fatalf("Terminate: fix2 %+v, Silverflash %+v, %v", gotTerm, wantTerm, err)
 	}
 }

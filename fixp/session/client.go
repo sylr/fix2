@@ -267,7 +267,7 @@ func (c *Client) negotiate(ctx context.Context, t transport.Conn, r *sofh.Reader
 		switch h.TemplateId {
 		case codec.NegotiationResponseTemplateID:
 			var resp codec.NegotiationResponse
-			if err := resp.Decode(msg); err != nil {
+			if _, err := resp.Decode(msg); err != nil {
 				return retry(fmt.Errorf("fixp/session: NegotiationResponse: %w", err))
 			}
 			if resp.SessionId != id || resp.RequestTimestamp != nanos(ts) {
@@ -290,7 +290,7 @@ func (c *Client) negotiate(ctx context.Context, t transport.Conn, r *sofh.Reader
 			return nil
 		case codec.NegotiationRejectTemplateID:
 			var rej codec.NegotiationReject
-			if err := rej.Decode(msg); err != nil {
+			if _, err := rej.Decode(msg); err != nil {
 				return retry(fmt.Errorf("fixp/session: NegotiationReject: %w", err))
 			}
 			if rej.SessionId != id || rej.RequestTimestamp != nanos(ts) {
@@ -340,7 +340,7 @@ func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader
 		switch h.TemplateId {
 		case codec.EstablishmentAckTemplateID:
 			var ack codec.EstablishmentAck
-			if err := ack.Decode(msg); err != nil {
+			if _, err := ack.Decode(msg); err != nil {
 				return nil, retry(fmt.Errorf("fixp/session: EstablishmentAck: %w", err))
 			}
 			if ack.SessionId != id || ack.RequestTimestamp != nanos(ts) {
@@ -368,7 +368,7 @@ func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader
 			return cn, nil
 		case codec.EstablishmentRejectTemplateID:
 			var rej codec.EstablishmentReject
-			if err := rej.Decode(msg); err != nil {
+			if _, err := rej.Decode(msg); err != nil {
 				return nil, retry(fmt.Errorf("fixp/session: EstablishmentReject: %w", err))
 			}
 			if rej.SessionId != id || rej.RequestTimestamp != nanos(ts) {

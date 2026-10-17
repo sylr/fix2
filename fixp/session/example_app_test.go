@@ -50,8 +50,12 @@ func (x *exchange) OnMessage(ctx context.Context, s *session.Session, msg []byte
 	}
 	switch h.TemplateId {
 	case examples.NewOrderSingleTemplateID:
-		if err := c.order.DecodeBody(h, body); err != nil {
+		n, err := c.order.DecodeBody(h, body)
+		if err != nil {
 			return err
+		}
+		if n != len(body) {
+			return fmt.Errorf("%d bytes after the message", len(body)-n)
 		}
 	default:
 		return fmt.Errorf("template %d unexpected", h.TemplateId)
@@ -89,7 +93,7 @@ func (t *trader) OnEstablished(context.Context, *session.Session) {
 }
 
 func (t *trader) OnMessage(_ context.Context, _ *session.Session, msg []byte, in session.Inbound) error {
-	if err := t.report.Decode(msg); err != nil {
+	if _, err := t.report.Decode(msg); err != nil {
 		return err
 	}
 	fmt.Printf("seq %d: %s %s, %s, leaves %d\n", in.Seq, t.report.OrderIDString(), t.report.ExecType, t.report.OrdStatus, t.report.LeavesQty.Mantissa)
@@ -209,7 +213,7 @@ func (r *reports) OnEstablished(context.Context, *session.Session) {
 }
 
 func (r *reports) OnMessage(_ context.Context, _ *session.Session, msg []byte, _ session.Inbound) error {
-	if err := r.report.Decode(msg); err != nil {
+	if _, err := r.report.Decode(msg); err != nil {
 		return err
 	}
 	r.n++

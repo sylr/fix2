@@ -79,8 +79,12 @@ func (x *exchange) OnMessage(ctx context.Context, s *session.Session, msg []byte
 	c := x.codecsOf(s) // this session's structs (see Allocation)
 	switch h.TemplateId {
 	case orders.NewOrderSingleTemplateID:
-		if err := c.order.DecodeBody(h, body); err != nil {
+		n, err := c.order.DecodeBody(h, body)
+		if err != nil {
 			return err
+		}
+		if n != len(body) {
+			return fmt.Errorf("%d bytes after the message", len(body)-n)
 		}
 		...
 	default:
@@ -89,8 +93,15 @@ func (x *exchange) OnMessage(ctx context.Context, s *session.Session, msg []byte
 }
 ```
 
-`Decode(msg)` does both at once, for a handler expecting one message
-only. An error from `OnMessage` terminates the connection
+`DecodeBody` returns the length of the body it read, the header
+excluded: compared with `len(body)`, it tells whether the frame holds
+bytes after the message, which it does not read. The handler above
+refuses them; another may accept them, SBE not saying
+([docs/sbe.md](sbe.md#decoding)). `Decode(msg)` reads the header and
+the body at once, for a handler expecting one message only, and returns
+their length, the header included: it compares with `len(msg)`.
+
+An error from `OnMessage` terminates the connection
 (UnspecifiedError) and the message does not count as delivered: on a
 Recoverable flow it is asked for again on the next establishment, on an
 Idempotent one it was admitted, and is not delivered again (see [Delivery

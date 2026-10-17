@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -103,7 +104,7 @@ func TestRoundTrip(t *testing.T) {
 	want := full()
 	b := encode(t, want)
 	var got Order
-	if err := got.Decode(b); err != nil {
+	if _, err := got.Decode(b); err != nil {
 		t.Fatal(err)
 	}
 	if !same(&got, want) {
@@ -150,7 +151,7 @@ func TestNulls(t *testing.T) {
 		t.Errorf("OptFloat: %v, want NaN", f)
 	}
 	var got Order
-	if err := got.Decode(b); err != nil {
+	if _, err := got.Decode(b); err != nil {
 		t.Fatal(err)
 	}
 	if got.Level.Valid || got.Price.Mantissa.Valid || got.Tagged.Price.Mantissa.Valid || got.OptU8.Valid || got.OptI16.Valid ||
@@ -191,13 +192,16 @@ func TestEarlierVersions(t *testing.T) {
 		h := bytes.Clone(header)
 		binary.LittleEndian.PutUint16(h[0:], uint16(c.blockLen))
 		binary.LittleEndian.PutUint16(h[6:], uint16(c.version))
+		// The version's counts: Late, since version 2, absent.
+		binary.LittleEndian.PutUint16(h[8:], uint16(len(c.groups)))
+		binary.LittleEndian.PutUint16(h[10:], 1)
 		msg := append(h, block[:c.blockLen]...)
 		for _, gr := range c.groups {
 			msg = append(msg, gr...)
 		}
 		msg = append(msg, text...)
 		var got Order
-		if err := got.Decode(msg); err != nil {
+		if _, err := got.Decode(msg); err != nil {
 			t.Fatalf("version %d: %v", c.version, err)
 		}
 		if got.Id != m.Id || got.Code != m.Code || !reflect.DeepEqual(normalize(&Order{Legs: got.Legs}).Legs, normalize(&Order{Legs: m.Legs}).Legs) ||
@@ -212,17 +216,103 @@ func TestEarlierVersions(t *testing.T) {
 		}
 		// Decoding again into the same struct clears what the version lacks.
 		full := full()
-		if err := full.Decode(msg); err != nil || full.Late != nil || full.OptDouble.Valid {
+		if _, err := full.Decode(msg); err != nil || full.Late != nil || full.OptDouble.Valid {
 			t.Errorf("version %d into a full Order: %v, Late %q, OptDouble %v", c.version, err, full.Late, full.OptDouble)
 		}
 	}
 	// A version promising a field its block lacks is malformed.
 	h := bytes.Clone(header)
 	binary.LittleEndian.PutUint16(h[0:], 69)
+	binary.LittleEndian.PutUint16(h[8:], 1)
+	binary.LittleEndian.PutUint16(h[10:], 1)
 	msg := append(append(append(h, block[:69]...), legs...), text...)
 	var got Order
-	if err := got.Decode(msg); !errors.Is(err, ErrMalformed) {
+	if _, err := got.Decode(msg); !errors.Is(err, ErrMalformed) {
 		t.Errorf("version 2 in a version 0 block: %v", err)
+	}
+}
+
+// Decode and DecodeBody return the length of the message, groups and data
+// included, whatever follows it; a root block longer than the schema's, of
+// padding or of a newer version's fields, is counted whole.
+func TestConsumedLength(t *testing.T) {
+	b := encode(t, full())
+	var got Order
+	trailing := append(bytes.Clone(b), 1, 2, 3)
+	if n, err := got.Decode(trailing); err != nil || n != len(b) {
+		t.Errorf("Decode: %d of %d bytes, %v", n, len(b), err)
+	}
+	h, body, _ := ReadHeader(trailing)
+	if n, err := got.DecodeBody(h, body); err != nil || n != len(b)-HeaderSize {
+		t.Errorf("DecodeBody: %d of %d bytes, %v", n, len(b)-HeaderSize, err)
+	}
+	// Version 3 too, its counts the schema's: Legs empty, whose entries'
+	// Fees, uncounted, could hide a newer version's groups and data.
+	noLegs := full()
+	noLegs.Legs = nil
+	for _, version := range []uint16{2, 3} {
+		b := encode(t, noLegs)
+		longer := slices.Concat(b[:HeaderSize+88], []byte{0xAA, 0xBB, 0xCC, 0xDD}, b[HeaderSize+88:])
+		binary.LittleEndian.PutUint16(longer[0:], 92)
+		binary.LittleEndian.PutUint16(longer[6:], version)
+		if n, err := got.Decode(append(longer, 9)); err != nil || n != len(longer) || !same(&got, noLegs) {
+			t.Errorf("version %d, a block of 92 bytes: %d of %d bytes, %v", version, n, len(longer), err)
+		}
+	}
+	if n, err := got.Decode(b[:len(b)-1]); err == nil || n != 0 {
+		t.Errorf("truncated: %d bytes, %v", n, err)
+	}
+}
+
+// Strictly, a message of a newer version is ErrNewer if its counts tell of
+// groups or data the schema does not know, or contradict the schema, or
+// if, uncounted, they could be where the decoder reads.
+func TestNewerVersionStrict(t *testing.T) {
+	m := full()
+	m.Legs = nil
+	b := encode(t, m)
+	tail := len(b) - (2 + len("free text") + 1 + len("late")) // the data, after the groups
+	newer := func(groups, data uint16, middle, end []byte) []byte {
+		m := slices.Concat(b[:tail], middle, b[tail:], end)
+		binary.LittleEndian.PutUint16(m[6:], 3)
+		binary.LittleEndian.PutUint16(m[8:], groups)
+		binary.LittleEndian.PutUint16(m[10:], data)
+		return m
+	}
+	group := []byte{2, 0, 1, 0, 0, 0, 0, 0, 0xEE, 0xEE} // one 2-byte entry
+	var got Order
+	for _, c := range []struct {
+		name string
+		msg  []byte
+		n    int
+		err  error
+	}{
+		{"its counts", newer(2, 2, nil, []byte{0xFF}), len(b), nil},
+		{"a group", newer(3, 2, group, nil), 0, ErrNewer},
+		{"data", newer(2, 3, nil, []byte{1, 0, 'x'}), 0, ErrNewer},
+		{"counts left zero", newer(0, 0, nil, nil), 0, ErrMalformed},
+		{"Fees' entries, uncounted", slices.Concat(encode(t, full())[:6], []byte{3, 0}, encode(t, full())[8:]), 0, ErrNewer},
+	} {
+		n, err := got.Decode(c.msg)
+		if n != c.n || !errors.Is(err, c.err) || err == nil && !same(&got, m) {
+			t.Errorf("%s: %d bytes, %v; want %d, %v", c.name, n, err, c.n, c.err)
+		}
+	}
+	// A message holding no data: counts of 0 agree with the schema, and
+	// what follows is not read.
+	p, err := (&Ping{}).AppendTo(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p = append(p, group...)
+	binary.LittleEndian.PutUint16(p[6:], 3)
+	var ping Ping
+	if n, err := ping.Decode(p); err != nil || n != HeaderSize {
+		t.Errorf("Ping: %d bytes, %v; want %d", n, err, HeaderSize)
+	}
+	binary.LittleEndian.PutUint16(p[8:], 1)
+	if _, err := ping.Decode(p); !errors.Is(err, ErrNewer) {
+		t.Errorf("Ping and a group: %v", err)
 	}
 }
 
@@ -253,12 +343,12 @@ func TestBounds(t *testing.T) {
 	zero := bytes.Clone(b)
 	zero[countAt] = 0
 	var got Order
-	if err := got.Decode(zero); !errors.Is(err, ErrEntries) {
+	if _, err := got.Decode(zero); !errors.Is(err, ErrEntries) {
 		t.Errorf("no fee on the wire: %v", err)
 	}
 	long := bytes.Clone(b)
 	long[countAt+1+8] = 11
-	if err := got.Decode(long); !errors.Is(err, ErrMalformed) {
+	if _, err := got.Decode(long); !errors.Is(err, ErrMalformed) {
 		t.Errorf("an 11-byte memo on the wire: %v", err)
 	}
 }
@@ -271,11 +361,11 @@ func TestMaxEntries(t *testing.T) {
 	}
 	b := encode(t, m)
 	var got Order
-	if err := got.Decode(b); !errors.Is(err, ErrEntries) {
+	if _, err := got.Decode(b); !errors.Is(err, ErrEntries) {
 		t.Errorf("%d entries: %v", 2*len(m.Legs), err)
 	}
 	m.Legs = m.Legs[:MaxEntries/2]
-	if err := got.Decode(encode(t, m)); err != nil {
+	if _, err := got.Decode(encode(t, m)); err != nil {
 		t.Errorf("%d entries: %v", 2*len(m.Legs), err)
 	}
 }
@@ -284,7 +374,7 @@ func TestTruncation(t *testing.T) {
 	b := encode(t, full())
 	var got Order
 	for n := range len(b) {
-		if err := got.Decode(b[:n]); err == nil {
+		if _, err := got.Decode(b[:n]); err == nil {
 			t.Fatalf("decoded %d of %d bytes", n, len(b))
 		}
 	}
@@ -296,7 +386,7 @@ func TestEmptyMessage(t *testing.T) {
 		t.Fatalf("%x, %v", b, err)
 	}
 	var p Ping
-	if err := p.Decode(b); err != nil {
+	if _, err := p.Decode(b); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -313,11 +403,11 @@ func TestEnums(t *testing.T) {
 func TestDecodeDoesNotAllocate(t *testing.T) {
 	b := encode(t, full())
 	var got Order
-	if err := got.Decode(b); err != nil {
+	if _, err := got.Decode(b); err != nil {
 		t.Fatal(err)
 	}
 	if allocs := testing.AllocsPerRun(100, func() {
-		if err := got.Decode(b); err != nil {
+		if _, err := got.Decode(b); err != nil {
 			t.Fatal(err)
 		}
 	}); allocs != 0 {
@@ -330,8 +420,12 @@ func FuzzDecode(f *testing.F) {
 	f.Add(encode(f, &Order{}))
 	f.Fuzz(func(t *testing.T, b []byte) {
 		var m Order
-		if m.Decode(b) != nil {
+		n, err := m.Decode(b)
+		if err != nil {
 			return
+		}
+		if n < HeaderSize || n > len(b) {
+			t.Fatalf("read %d of %d bytes", n, len(b))
 		}
 		enc, err := m.AppendTo(nil)
 		if (len(m.Legs) == 65535 || len(m.Extras) == 65535) && errors.Is(err, ErrEntries) {
@@ -341,7 +435,7 @@ func FuzzDecode(f *testing.F) {
 			t.Fatalf("decoded but does not encode: %v", err)
 		}
 		var again Order
-		if err := again.Decode(enc); err != nil {
+		if _, err := again.Decode(enc); err != nil {
 			t.Fatalf("its encoding does not decode: %v", err)
 		}
 		if !bytes.Equal(encodeNoErr(&again), enc) {
