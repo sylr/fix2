@@ -16,6 +16,13 @@ import (
 	"github.com/sylr/fix2/fix/dictionary/xmldict"
 )
 
+// unknownTags select, of the checks Validate runs, those of tags a message
+// does not define: the tests of what ValidateWith always checks (MsgType,
+// required tags, allowed tags, enumerated values) run them alone, the
+// structure of their messages, repeated tags or group counts, beside the
+// point.
+const unknownTags = dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags
+
 const testDictXML = `<?xml version="1.0" encoding="UTF-8"?>
 <fix type="FIX" major="4" minor="4" servicepack="0">
   <header>
@@ -291,7 +298,7 @@ func testMultipleValueEnum(t *testing.T, typ string) {
 	}
 	for _, tt := range tests {
 		msg := parseMsg(t, buildFIXMsg("35=D\x01"+tt.field+"\x01"))
-		err := d.Validate(&msg)
+		err := d.ValidateWith(&msg, unknownTags)
 		if tt.ok && err != nil {
 			t.Errorf("%q: unexpected error: %v", tt.field, err)
 		}
@@ -495,7 +502,7 @@ func TestValidate_OptionalComponentScopes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		msg := parseMsg(t, buildFIXMsg(tt.body))
-		err := d.Validate(&msg)
+		err := d.ValidateWith(&msg, unknownTags)
 		if tt.missing == 0 {
 			if err != nil {
 				t.Errorf("%s: unexpected error: %v", tt.name, err)
@@ -641,7 +648,7 @@ func TestValidate_RequiredTagGroupShapes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		msg := parseMsg(t, buildFIXMsg(tt.body))
-		err := d.Validate(&msg)
+		err := d.ValidateWith(&msg, unknownTags)
 		if tt.missing == 0 {
 			if err != nil {
 				t.Errorf("%s: unexpected error: %v", tt.name, err)
@@ -762,13 +769,13 @@ func TestValidate_MalformedCounts(t *testing.T) {
 	}
 	for _, count := range []string{"0", "-1", "x", "99999999999999999999"} {
 		msg := parseMsg(t, buildFIXMsg("35=M\x01101="+count+"\x01102=d\x01100=f\x01"))
-		if err := d.Validate(&msg); !isGroupFieldOutside(err, 102) {
+		if err := d.ValidateWith(&msg, unknownTags); !isGroupFieldOutside(err, 102) {
 			t.Errorf("count %s: %v, want D not allowed outside entries", count, err)
 		}
 	}
 	// Undercounted: the second entry's F is top level.
 	msg := parseMsg(t, buildFIXMsg("35=M\x01101=1\x01102=a\x01100=in\x01102=b\x01100=f\x01"))
-	if err := d.Validate(&msg); !isGroupFieldOutside(err, 102) {
+	if err := d.ValidateWith(&msg, unknownTags); !isGroupFieldOutside(err, 102) {
 		t.Errorf("undercounted: %v, want D not allowed outside entries", err)
 	}
 }
@@ -857,14 +864,16 @@ func TestRejectReason_String(t *testing.T) {
 	}
 }
 
+// The checks against the dictionary's compiled tables do not allocate; those
+// of the message's structure, which Validate runs too, may.
 func TestValidate_DoesNotAllocate(t *testing.T) {
 	d := loadTestDict(t)
 	const header = "35=D\x0149=SENDER\x0156=TARGET\x0134=1\x0152=20231001-12:00:00\x01"
 	const order = "11=ORD1\x0154=1\x0160=20231001-12:00:00\x0140=1\x0155=AAPL\x01"
 	for _, body := range []string{header + order, header + order + "78=2\x0179=A\x0179=B\x01"} {
 		msg := parseMsg(t, buildFIXMsg(body))
-		if allocs := testing.AllocsPerRun(100, func() { _ = d.Validate(&msg) }); allocs != 0 {
-			t.Errorf("Validate allocated %v times for %q", allocs, body)
+		if allocs := testing.AllocsPerRun(100, func() { _ = d.ValidateWith(&msg, unknownTags) }); allocs != 0 {
+			t.Errorf("ValidateWith(unknownTags) allocated %v times for %q", allocs, body)
 		}
 	}
 }
@@ -900,9 +909,9 @@ func TestValidate_SlotBoundaries(t *testing.T) {
 		if err := d.Validate(&msg); err != nil {
 			t.Errorf("%d slots, all present: %v", n+1, err)
 		}
-		allocs := testing.AllocsPerRun(10, func() { _ = d.Validate(&msg) })
+		allocs := testing.AllocsPerRun(10, func() { _ = d.ValidateWith(&msg, unknownTags) })
 		if n+1 <= 256 && allocs != 0 {
-			t.Errorf("%d slots: Validate allocated %v times", n+1, allocs)
+			t.Errorf("%d slots: ValidateWith(unknownTags) allocated %v times", n+1, allocs)
 		}
 		// The last slot missing.
 		short := strings.Replace(body.String(), fmt.Sprintf("%d=x\x01", 50000+n-1), "", 1)
@@ -954,7 +963,7 @@ func TestValidate_CompiledEdgeCases(t *testing.T) {
 		{"35=M\x0149=s\x01100=Q\x01999=x\x01", dictionary.ErrInvalidEnumValue, 100},
 	} {
 		msg := parseMsg(t, buildFIXMsg(tc.body))
-		err := d.Validate(&msg)
+		err := d.ValidateWith(&msg, unknownTags)
 		var ve *dictionary.ValidationError
 		if tc.err == nil && err != nil || tc.err != nil && (!errors.Is(err, tc.err) || !errors.As(err, &ve) || ve.Tag != tc.tag) {
 			t.Errorf("%q: got %v, want %v for tag %d", tc.body, err, tc.err, tc.tag)
@@ -963,7 +972,7 @@ func TestValidate_CompiledEdgeCases(t *testing.T) {
 	// Changing the loaded dictionary does not change validation.
 	d.Fields[100].Enums["LONGER"] = "added"
 	msg := parseMsg(t, buildFIXMsg("35=M\x0149=s\x01100=LONGER\x01"))
-	if err := d.Validate(&msg); !errors.Is(err, dictionary.ErrInvalidEnumValue) {
+	if err := d.ValidateWith(&msg, unknownTags); !errors.Is(err, dictionary.ErrInvalidEnumValue) {
 		t.Errorf("after editing the enums: got %v, want the compiled result", err)
 	}
 }
@@ -1167,7 +1176,7 @@ func TestValidate_ManyGroupsIsLinear(t *testing.T) {
 		best := time.Duration(math.MaxInt64)
 		for range 5 {
 			start := time.Now()
-			if err := d.Validate(&msg); err != nil {
+			if err := d.ValidateWith(&msg, unknownTags); err != nil {
 				t.Fatal(err)
 			}
 			best = min(best, time.Since(start))

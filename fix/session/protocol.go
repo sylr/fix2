@@ -356,7 +356,7 @@ func (s *Session) profileFor(raw []byte, inbound bool) *fix.Profile {
 // validation and delivery to use in turn.
 func (s *Session) parseInbound(m *fix.Message, frame []byte) (string, error) {
 	if !s.prof.fixt {
-		return "", fix.ParseInto(m, frame, s.dicts.parse)
+		return "", s.cfg.parseOptions().ParseInto(m, frame, s.dicts.parse)
 	}
 	s.mu.Lock()
 	peer := s.peerApplVerID
@@ -374,10 +374,10 @@ func (s *Session) parseInbound(m *fix.Message, frame []byte) (string, error) {
 // validation rejects it.
 func (s *Session) parseApp(m *fix.Message, frame []byte, peer string) (string, error) {
 	if !s.prof.fixt {
-		return "", fix.ParseInto(m, frame, s.dicts.parse)
+		return "", s.cfg.parseOptions().ParseInto(m, frame, s.dicts.parse)
 	}
 	first := s.dicts.appProfile(peer)
-	err := fix.ParseInto(m, frame, first)
+	err := s.cfg.parseOptions().ParseInto(m, frame, first)
 	var v []byte
 	var ok bool
 	if err == nil {
@@ -390,7 +390,7 @@ func (s *Session) parseApp(m *fix.Message, frame []byte, peer string) (string, e
 	}
 	version := s.dicts.version(v)
 	if p := s.dicts.parseApps[version]; p != nil && p != first {
-		err = fix.ParseInto(m, frame, p)
+		err = s.cfg.parseOptions().ParseInto(m, frame, p)
 	}
 	return version, err
 }

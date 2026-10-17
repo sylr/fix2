@@ -30,15 +30,38 @@ const (
 // its input is already in memory.
 const MaxBodyLength = 1 << 20
 
+// ParseOptions are the departures from the FIX TagValue encoding a parser
+// may tolerate, as some counterparties need, each off unless set: the zero
+// value parses as Parse, ParseInto and ParseFromReader do, strictly. Its
+// methods parse as those functions, with the departures it enables:
+//
+//	err := fix.ParseOptions{TolerateTagLeadingZeros: true}.ParseInto(&m, data, p)
+type ParseOptions struct {
+	// TolerateTagLeadingZeros accepts tag numbers with leading zeros, "035=D"
+	// read as MsgType (35). FIX TagValue requires a tag number without them:
+	// such a tag is otherwise an ErrInvalidTag, as is, whatever the options,
+	// tag number 0, FIX requiring it positive.
+	TolerateTagLeadingZeros bool
+}
+
 // Parse parses a FIX message from data with the default profile (see
 // DefaultProfile). All field values are zero-copy slices into data. The
 // caller must not modify data while the returned Message is in use.
 // With SIMD, the checksum is one vector sum over the message after parsing
 // it, while its bytes are in cache; otherwise it is summed field by field as
 // the parser goes (see bulkChecksum).
+//
+// data must hold one message exactly: bytes after its CheckSum (10) field
+// are an ErrBodyLenMismatch, FIX ending a message with that field. A tag
+// number must be positive and without leading zeros (see ParseOptions).
 func Parse(data []byte) (Message, error) {
+	return ParseOptions{}.Parse(data)
+}
+
+// Parse parses data as Parse does, with the departures o enables.
+func (o ParseOptions) Parse(data []byte) (Message, error) {
 	var msg Message
-	err := parseInto(&msg, data, defaultProfile.kinds)
+	err := parseInto(&msg, data, defaultProfile.kinds, o)
 	return msg, err
 }
 
@@ -48,17 +71,24 @@ func Parse(data []byte) (Message, error) {
 // allocate. Field values are zero-copy slices into data, valid while data is
 // not modified and until m is parsed into again. A copy of m shares its field
 // storage, so parsing into m changes what the copy reads: use Clone to keep a
-// message. On error, m holds the fields parsed so far.
+// message. On error, m holds the fields parsed so far. data is read as Parse
+// reads it: one message exactly, its tag numbers well formed.
 func ParseInto(m *Message, data []byte, p *Profile) error {
+	return ParseOptions{}.ParseInto(m, data, p)
+}
+
+// ParseInto parses data into m as ParseInto does, with the departures o
+// enables.
+func (o ParseOptions) ParseInto(m *Message, data []byte, p *Profile) error {
 	if p == nil {
 		p = defaultProfile
 	}
-	return parseInto(m, data, p.kinds)
+	return parseInto(m, data, p.kinds, o)
 }
 
 // parseInto parses data into msg, classifying DATA fields with kinds (see
-// Profile).
-func parseInto(msg *Message, data []byte, kinds []int32) error {
+// Profile), with the departures o enables.
+func parseInto(msg *Message, data []byte, kinds []int32, o ParseOptions) error {
 	msg.reset()
 
 	if len(data) < minMsgLen {
@@ -123,7 +153,7 @@ func parseInto(msg *Message, data []byte, kinds []int32) error {
 	// --- Parse body fields ---
 	var next dataField // DATA field announced by the previous LENGTH field
 	for cursor < bodyEnd {
-		tag, eqPos, err = parseNextTag(data, cursor)
+		tag, eqPos, err = parseNextTag(data, cursor, o.TolerateTagLeadingZeros)
 		if err != nil {
 			return err
 		}
@@ -185,6 +215,11 @@ func parseInto(msg *Message, data []byte, kinds []int32) error {
 		return &ParseError{Err: fmt.Errorf("%w: %w: expected 000 to 255", ErrInvalidCheckSum, ErrInvalidTag), Offset: cursor}
 	}
 	msg.append(Field{Tag: tagCheckSum, Value: csVal})
+	// The message ends with its CheckSum field: what follows is not part of
+	// it, nor a message the caller would know of.
+	if extra := len(data) - (sohPos + 1); extra > 0 {
+		return &ParseError{Err: fmt.Errorf("%w: %d bytes after the CheckSum", ErrBodyLenMismatch, extra), Offset: sohPos + 1}
+	}
 
 	// Validate the checksum, accumulated field by field or summed at once.
 	if bulkChecksum {
@@ -211,8 +246,15 @@ func checksumRange(data []byte, from, to int) uint32 {
 // It reads the header byte-by-byte to determine BodyLength without
 // over-reading, then uses io.ReadFull for the remaining body and trailer.
 // Parsing is done inline from the two buffers (header, rest), each
-// checksummed separately — no full-message buffer is assembled.
+// checksummed separately — no full-message buffer is assembled. Tag numbers
+// are read as Parse reads them.
 func ParseFromReader(r io.Reader) (Message, error) {
+	return ParseOptions{}.ParseFromReader(r)
+}
+
+// ParseFromReader reads and parses a message from r as ParseFromReader does,
+// with the departures o enables.
+func (o ParseOptions) ParseFromReader(r io.Reader) (Message, error) {
 	// Read tags 8 and 9 (terminated by SOH each) byte by byte so we
 	// never consume bytes belonging to the next message on a stream.
 	header := make([]byte, 0, 32)
@@ -288,7 +330,7 @@ func ParseFromReader(r io.Reader) (Message, error) {
 	bodyEnd := bodyLen
 	var next dataField // DATA field announced by the previous LENGTH field
 	for cursor < bodyEnd {
-		tag, eqPos, err = parseNextTag(rest, cursor)
+		tag, eqPos, err = parseNextTag(rest, cursor, o.TolerateTagLeadingZeros)
 		if err != nil {
 			return msg, withOffset(err, len(header))
 		}
@@ -424,8 +466,10 @@ func withOffset(err error, delta int) error {
 }
 
 // parseNextTag parses a tag number at data[cursor:] up to '='.
-// Returns the tag number and the index of '=' in data.
-func parseNextTag(data []byte, cursor int) (int, int, error) {
+// Returns the tag number and the index of '=' in data. FIX TagValue's
+// TagNum is positive, without leading zeros: one with leading zeros is
+// accepted only if leadingZeros is set, 0 never.
+func parseNextTag(data []byte, cursor int, leadingZeros bool) (int, int, error) {
 	// Fast path for tags of 1-4 digits, only when all four probes are in bounds.
 	var eqPos int
 	switch {
@@ -446,7 +490,7 @@ func parseNextTag(data []byte, cursor int) (int, int, error) {
 		return 0, 0, &ParseError{Err: ErrInvalidTag, Offset: cursor}
 	}
 	tag, ok := parseUint(data[cursor:eqPos])
-	if !ok {
+	if !ok || tag == 0 || data[cursor] == '0' && !leadingZeros {
 		return 0, 0, &ParseError{Err: ErrInvalidTag, Offset: cursor}
 	}
 	return tag, eqPos, nil

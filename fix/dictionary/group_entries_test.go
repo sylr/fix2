@@ -58,7 +58,7 @@ const groupEntriesXML = `<fix type="FIX" major="4" minor="4">
 // CheckGroupRequired and CheckGroupOrder validate each group entry against
 // its group's definition, as QuickFIX does: its required fields, nested
 // groups and those of an optional component it holds, and its order.
-// Validate does not, nor does CheckAll without them.
+// The unknown tags' checks alone do not, nor does CheckAll without them.
 func TestValidate_GroupEntries(t *testing.T) {
 	d, err := xmldict.Load(strings.NewReader(groupEntriesXML))
 	if err != nil {
@@ -101,8 +101,8 @@ func TestValidate_GroupEntries(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := parseMsg(t, buildFIXMsg(strings.ReplaceAll(tc.body, "|", "\x01")))
-			if err := d.Validate(&m); err != nil {
-				t.Errorf("Validate: %v, want nil", err)
+			if err := d.ValidateWith(&m, unknownTags); err != nil {
+				t.Errorf("ValidateWith(unknownTags): %v, want nil", err)
 			}
 			err := d.ValidateWith(&m, dictionary.CheckAll)
 			if tc.tag == 0 {

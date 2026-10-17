@@ -107,19 +107,21 @@ func FuzzValidate(f *testing.F) {
 		}
 		verr := d.Validate(&msg)
 		checkValidationError(t, verr)
-		// Validate's checks: ValidateWith adds the others to them.
+		if e := d.ValidateWith(&msg, dictionary.CheckAll); fmt.Sprint(e) != fmt.Sprint(verr) {
+			t.Fatalf("Validate = %v, ValidateWith(CheckAll) = %v", verr, e)
+		}
+		// The unknown tags' checks: ValidateWith adds the others to them.
 		const unknown = dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags
+		uerr := d.ValidateWith(&msg, unknown)
+		checkValidationError(t, uerr)
 		cs := dictionary.Checks(checks)&dictionary.CheckAll | unknown
 		werr := d.ValidateWith(&msg, cs)
 		checkValidationError(t, werr)
-		if verr != nil && werr == nil {
-			t.Fatalf("Validate = %v, but ValidateWith(%d) = nil", verr, cs)
+		if uerr != nil && werr == nil {
+			t.Fatalf("ValidateWith(%d) = %v, but ValidateWith(%d) = nil", unknown, uerr, cs)
 		}
-		if werr := d.ValidateWith(&msg, dictionary.CheckAll); werr == nil && verr != nil {
-			t.Fatalf("Validate = %v, but ValidateWith(CheckAll) = nil", verr)
-		}
-		if e := d.ValidateWith(&msg, unknown); fmt.Sprint(e) != fmt.Sprint(verr) {
-			t.Fatalf("Validate = %v, ValidateWith(%d) = %v", verr, unknown, e)
+		if uerr != nil && verr == nil {
+			t.Fatalf("ValidateWith(%d) = %v, but Validate = nil", unknown, uerr)
 		}
 		if e := d.ValidateWith(&msg, cs&^unknown); errors.Is(e, dictionary.ErrUnexpectedTag) || errors.Is(e, dictionary.ErrTagOutsideGroup) {
 			t.Fatalf("ValidateWith(%d) = %v, though it accepts unknown tags", cs&^unknown, e)

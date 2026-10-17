@@ -38,7 +38,8 @@ func BenchmarkValidate(b *testing.B) {
 }
 
 // A QuickFIX FIX 4.4 NewOrderSingle with nested groups, validated as a
-// session does by default.
+// session does by default, every check run (Validate), and with the checks
+// against the dictionary's tables alone (UnknownTags), which do not allocate.
 func BenchmarkValidate_FIX44Groups(b *testing.B) {
 	d, err := xmldict.LoadFile("../tests/benchmarks/spec/FIX44.xml")
 	if err != nil {
@@ -57,7 +58,7 @@ func BenchmarkValidate_FIX44Groups(b *testing.B) {
 		checks dictionary.Checks
 	}{
 		{"Validate", 0},
-		{"CheckAll", dictionary.CheckAll},
+		{"UnknownTags", dictionary.CheckUnknownTags | dictionary.CheckUserDefinedTags},
 	} {
 		validate := func() error { return d.ValidateWith(&msg, bc.checks) }
 		if bc.checks == 0 {

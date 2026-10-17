@@ -95,6 +95,14 @@ type Tolerations struct {
 	// TestRequest awaits its answer, as QuickFIX does and its acceptance
 	// tests expect; FIX requires one in every idle interval.
 	TolerateNoHeartbeatAwaitingTestRequest bool
+	// TolerateTagLeadingZeros parses received messages whose tag numbers
+	// have leading zeros, "035=D" read as MsgType (35), as
+	// fix.ParseOptions.TolerateTagLeadingZeros does. FIX requires tag
+	// numbers without them: such a message is otherwise rejected, as any
+	// malformed tag number (SessionRejectReason 0), or disregarded as
+	// garbled if received before logon or ahead of its MsgType or
+	// MsgSeqNum.
+	TolerateTagLeadingZeros bool
 	// TolerateValidationFailures turns off validations the dictionaries
 	// would run: all run by default (see dictionary.Checks). Tolerating
 	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
@@ -384,6 +392,12 @@ func (c *Config) logoutTimeout(hb time.Duration) time.Duration {
 		return 2 * hb
 	}
 	return 2 * time.Second
+}
+
+// parseOptions returns the options the session parses messages with, those
+// received and those it stored.
+func (c *Config) parseOptions() fix.ParseOptions {
+	return fix.ParseOptions{TolerateTagLeadingZeros: c.TolerateTagLeadingZeros}
 }
 
 // precision returns the timestamp precision for version p.

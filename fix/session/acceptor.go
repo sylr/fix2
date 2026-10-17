@@ -414,7 +414,9 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		refuse("no valid first message", slog.Any("error", err))
 		return
 	}
-	if err := fix.ParseInto(&m, frame, fix.DefaultProfile()); err != nil {
+	// Parsed to find its session, leading zeros in tag numbers tolerated:
+	// the session parses the frame again, as its Tolerations say.
+	if err := (fix.ParseOptions{TolerateTagLeadingZeros: true}).ParseInto(&m, frame, fix.DefaultProfile()); err != nil {
 		refuse("first message does not parse", slog.Any("error", err))
 		return
 	}
@@ -445,6 +447,13 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	s, err := a.route(ctx, wire, req, deadline)
 	if err != nil {
 		refuse(err.Error(), slog.String("logon_for", withhold(&m, noTag, wire.reversed().String(), "withheld")))
+		return
+	}
+	// A first message the session's own Tolerations do not let parse is no
+	// valid Logon: the connection is closed (FIX Session Layer §4.3.1).
+	var strict fix.Message
+	if err := s.cfg.parseOptions().ParseInto(&strict, frame, fix.DefaultProfile()); err != nil {
+		refuse("first message does not parse for session "+s.id.String(), slog.String("session", s.id.String()), slog.Any("error", err))
 		return
 	}
 	// The session owns the connection from here: it closes it when stopped.

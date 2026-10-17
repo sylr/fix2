@@ -3,6 +3,7 @@ package session
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -35,6 +36,15 @@ func TestRedact(t *testing.T) {
 	m2, _ := fix.Parse(Redact(nil, raw, nil, 553))
 	if string(m2.Get(553)) != "***" || string(m2.Get(554)) != "s3cr3t" {
 		t.Error("Redact with tags did not redact those alone")
+	}
+	// A tag number with leading zeros, which a session tolerating them
+	// receives, is redacted as its number says, and written without them.
+	const body = "35=A\x0149=S\x010554=s3cr3t\x01"
+	lz := fmt.Appendf(nil, "8=FIX.4.4\x019=%d\x01%s", len(body), body)
+	lz = fmt.Appendf(lz, "10=%03d\x01", fix.CheckSum(lz))
+	out = Redact(nil, lz, nil)
+	if m, err := fix.Parse(out); err != nil || string(m.Get(554)) != "***" || bytes.Contains(out, []byte("s3cr3t")) {
+		t.Errorf("Redact of a tag with leading zeros = %q, %v", out, err)
 	}
 }
 

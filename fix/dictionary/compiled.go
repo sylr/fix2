@@ -10,7 +10,9 @@ import (
 )
 
 // Validate runs on tables compiled once by New, so that validating a message
-// neither builds maps nor allocates:
+// against the dictionary, without the checks of its structure (repeated tags,
+// field and group order, group counts and required fields, which may), neither
+// builds maps nor allocates:
 //
 //   - tagTable lookups tell whether a tag is allowed and which presence slot,
 //     if any, records it. The header and trailer have one table, shared by

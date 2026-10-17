@@ -30,8 +30,9 @@ var SensitiveTags = []int{554, 925, 1402, 1404, 96, 91}
 // Redact appends raw to dst with the values of tags (SensitiveTags if
 // none) replaced by "***", keeping the message valid: BodyLength, CheckSum
 // and the LENGTH fields of DATA fields are recomputed. raw is parsed with p
-// (the default profile if nil); a message that does not parse is appended
-// as "<unparsable message>".
+// (the default profile if nil), tag numbers with leading zeros accepted, as
+// a session tolerating them receives them, and written without; a message
+// that does not parse is appended as "<unparsable message>".
 func Redact(dst, raw []byte, p *fix.Profile, tags ...int) []byte {
 	if len(tags) == 0 {
 		tags = SensitiveTags
@@ -40,7 +41,7 @@ func Redact(dst, raw []byte, p *fix.Profile, tags ...int) []byte {
 		p = fix.DefaultProfile()
 	}
 	var m fix.Message
-	if err := fix.ParseInto(&m, raw, p); err != nil {
+	if err := (fix.ParseOptions{TolerateTagLeadingZeros: true}).ParseInto(&m, raw, p); err != nil {
 		return append(dst, "<unparsable message>"...)
 	}
 	fields := m.Fields()

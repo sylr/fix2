@@ -338,7 +338,7 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 	s := d.s
 	m := &d.msg
 	// The profile it was received with (see parseApp): it parses.
-	if err := fix.ParseInto(m, it.frame, s.dicts.appProfile(it.in.ApplVerID)); err != nil {
+	if err := s.cfg.parseOptions().ParseInto(m, it.frame, s.dicts.appProfile(it.in.ApplVerID)); err != nil {
 		s.log.LogAttrs(context.Background(), slog.LevelError, "received message does not parse again: not delivered",
 			slog.Uint64("seq", it.seq), slog.Any("error", err))
 		return

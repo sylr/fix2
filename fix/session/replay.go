@@ -172,7 +172,7 @@ func (c *conn) runReplay(job *replayJob) {
 		case isAdmin(msgTypeOf(raw)):
 			skip = true
 		default:
-			if fix.ParseInto(&c.rmsg, raw, p) != nil || !s.handler.OnResend(s.callbackCtx(), s, seq, &c.rmsg) {
+			if s.cfg.parseOptions().ParseInto(&c.rmsg, raw, p) != nil || !s.handler.OnResend(s.callbackCtx(), s, seq, &c.rmsg) {
 				skip = true
 			}
 		}

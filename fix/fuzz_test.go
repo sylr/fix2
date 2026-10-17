@@ -29,6 +29,8 @@ func FuzzParseBody(f *testing.F) {
 		"35=D\x0195=-1\x0196=x\x01",
 		"35=D\x0196=x\x0195=1\x01",
 		"35=\x01=5\x01abc\x01",
+		"35=D\x01049=SENDER\x0156=TARGET\x01",
+		"035=D\x0149=SENDER\x010=x\x01",
 	} {
 		f.Add(byte(2), []byte(body), []byte{95, 96})
 	}
@@ -49,6 +51,22 @@ func FuzzParseBody(f *testing.F) {
 			t.Fatalf("Parse: %v, ParseFromReader a byte at a time: %v", err, errOne)
 		}
 		_, _ = ParseFromReader(iotest.DataErrReader(bytes.NewReader(frame)))
+		// Tag numbers with leading zeros tolerated, the parsers agree too, and
+		// read what they read strictly alike.
+		lenient := ParseOptions{TolerateTagLeadingZeros: true}
+		ml, errL := lenient.Parse(frame)
+		var intoL Message
+		errIntoL := lenient.ParseInto(&intoL, frame, nil)
+		mrl, errReaderL := lenient.ParseFromReader(bytes.NewReader(frame))
+		if (errL == nil) != (errIntoL == nil) || (errL == nil) != (errReaderL == nil) {
+			t.Fatalf("tolerant Parse: %v, ParseInto: %v, ParseFromReader: %v", errL, errIntoL, errReaderL)
+		}
+		if errL == nil && (!slices.EqualFunc(ml.Fields(), intoL.Fields(), fieldEqual) || !slices.EqualFunc(ml.Fields(), mrl.Fields(), fieldEqual)) {
+			t.Fatalf("tolerant parsers disagree:\n%v\n%v\n%v", ml.Fields(), intoL.Fields(), mrl.Fields())
+		}
+		if err == nil && (errL != nil || !slices.EqualFunc(m.Fields(), ml.Fields(), fieldEqual)) {
+			t.Fatalf("Parse: %v, tolerant Parse: %v, %v", m.Fields(), ml.Fields(), errL)
+		}
 		if err == nil {
 			if !slices.EqualFunc(m.Fields(), into.Fields(), fieldEqual) || !slices.EqualFunc(m.Fields(), mr.Fields(), fieldEqual) || !slices.EqualFunc(m.Fields(), mo.Fields(), fieldEqual) {
 				t.Fatalf("parsers disagree:\n%v\n%v\n%v\n%v", m.Fields(), into.Fields(), mr.Fields(), mo.Fields())

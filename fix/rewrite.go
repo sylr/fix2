@@ -55,10 +55,6 @@ func RewriteForResend(dst, raw []byte, p *Profile, sendingTime []byte) ([]byte, 
 	}
 	fields := m.Fields()
 	last := len(fields) - 1 // CheckSum
-	// The frame must end with its CheckSum: ParseInto ignores what follows.
-	if n := 2 + len(fields[0].Value) + 1 + 2 + len(fields[1].Value) + 1 + bodyLength(fields) + trailerLen; n != len(raw) {
-		return dst, fmt.Errorf("fix2: RewriteForResend: %w: %d bytes after the CheckSum", ErrBodyLenMismatch, len(raw)-n)
-	}
 	orig, hasOrig, hasPossDup := []byte(nil), false, false
 	headerEnd := last // index of the first field after the header
 	for i, f := range fields[3:last] {
@@ -145,26 +141,6 @@ func RewriteForResend(dst, raw []byte, p *Profile, sendingTime []byte) ([]byte, 
 	copy(dst[lenPos+len(n)+1:], dst[bodyStart:])
 	dst = dst[:len(dst)-(10-len(n))]
 	return AppendTrailer(dst, start), nil
-}
-
-// bodyLength returns the BodyLength of parsed fields: the length of every
-// field from MsgType to the one before CheckSum.
-func bodyLength(fields []Field) int {
-	n := 0
-	for _, f := range fields[2 : len(fields)-1] {
-		n += tagLen(f.Tag) + 1 + len(f.Value) + 1
-	}
-	return n
-}
-
-// tagLen returns the number of decimal digits of tag.
-func tagLen(tag int) int {
-	n := 1
-	for tag >= 10 {
-		tag /= 10
-		n++
-	}
-	return n
 }
 
 // appendUint appends v in decimal to dst.

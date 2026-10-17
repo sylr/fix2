@@ -149,6 +149,89 @@ func TestParseBodyLenMismatch(t *testing.T) {
 	}
 }
 
+// A tag number with leading zeros, or 0, is malformed: FIX TagValue's TagNum
+// is positive and "may not contain leading zeros". Every parser refuses it
+// with ErrInvalidTag at the tag; ParseOptions.TolerateTagLeadingZeros
+// accepts leading zeros, the tag read as its number, but never tag 0.
+func TestParseTagLeadingZeros(t *testing.T) {
+	lenient := ParseOptions{TolerateTagLeadingZeros: true}
+	for _, tc := range []struct {
+		name, body string
+		tag        int // the tag the lenient parsers read, 0 if they refuse it too
+		value      string
+	}{
+		{"body tag", "35=D\x0149=S\x01056=T\x01", 56, "T"},
+		{"several zeros", "35=D\x0149=S\x01000056=T\x01", 56, "T"},
+		{"MsgType", "035=D\x0149=S\x0156=T\x01", 35, "D"},
+		{"tag 0", "35=D\x0149=S\x010=x\x01", 0, ""},
+		{"tag 00", "35=D\x0149=S\x0100=x\x01", 0, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := buildMsg("FIX.4.4", tc.body)
+			at := len("8=FIX.4.4\x019=XX\x01") + strings.Index(tc.body, "\x010") + 1
+			if strings.HasPrefix(tc.body, "0") {
+				at = len("8=FIX.4.4\x019=XX\x01")
+			}
+			var into Message
+			strict := map[string]error{
+				"Parse":           second(Parse(raw)),
+				"ParseInto":       ParseInto(&into, raw, nil),
+				"ParseFromReader": second(ParseFromReader(bytes.NewReader(raw))),
+			}
+			for name, err := range strict {
+				var pe *ParseError
+				if !errors.Is(err, ErrInvalidTag) || !errors.As(err, &pe) || pe.Offset != at {
+					t.Errorf("%s: %v (%+v), want ErrInvalidTag at %d", name, err, pe, at)
+				}
+			}
+			m, err := lenient.Parse(raw)
+			var lm Message
+			intoErr := lenient.ParseInto(&lm, raw, nil)
+			mr, readerErr := lenient.ParseFromReader(bytes.NewReader(raw))
+			for name, c := range map[string]struct {
+				m   Message
+				err error
+			}{"Parse": {m, err}, "ParseInto": {lm, intoErr}, "ParseFromReader": {mr, readerErr}} {
+				switch {
+				case tc.tag == 0 && !errors.Is(c.err, ErrInvalidTag):
+					t.Errorf("tolerant %s: %v, want ErrInvalidTag", name, c.err)
+				case tc.tag != 0 && c.err != nil:
+					t.Errorf("tolerant %s: %v", name, c.err)
+				case tc.tag != 0 && string(c.m.Get(tc.tag)) != tc.value:
+					t.Errorf("tolerant %s: tag %d = %q, want %q", name, tc.tag, c.m.Get(tc.tag), tc.value)
+				}
+			}
+		})
+	}
+}
+
+// A message ends with its CheckSum field: Parse and ParseInto refuse bytes
+// after it, another message's or not, whatever the options.
+func TestParseBytesAfterCheckSum(t *testing.T) {
+	raw := buildMsg("FIX.4.4", "35=0\x0149=S\x0156=T\x01")
+	for name, extra := range map[string]string{
+		"a byte":        "x",
+		"an SOH":        "\x01",
+		"a new message": string(raw),
+	} {
+		data := append(slices.Clone(raw), extra...)
+		var m Message
+		for parser, err := range map[string]error{
+			"Parse":              second(Parse(data)),
+			"ParseInto":          ParseInto(&m, data, nil),
+			"ParseOptions.Parse": second(ParseOptions{TolerateTagLeadingZeros: true}.Parse(data)),
+		} {
+			var pe *ParseError
+			if !errors.Is(err, ErrBodyLenMismatch) || !errors.As(err, &pe) || pe.Offset != len(raw) {
+				t.Errorf("%s with %s after the CheckSum: %v, want ErrBodyLenMismatch at %d", parser, name, err, len(raw))
+			}
+		}
+	}
+	if _, err := Parse(raw); err != nil {
+		t.Errorf("Parse of the message alone: %v", err)
+	}
+}
+
 func TestZeroCopy(t *testing.T) {
 	body := "35=D\x0149=SENDER\x01"
 	raw := buildMsg("FIX.4.4", body)

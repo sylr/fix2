@@ -356,3 +356,57 @@ func TestTolerateLogonWithoutEncryptMethodDictionary(t *testing.T) {
 		})
 	}
 }
+
+// A received tag number with leading zeros is malformed: a TestRequest
+// whose TestReqID is written "0112" is rejected, SessionRejectReason 0, and
+// counted; one whose MsgType is written "035", its type unknown, is
+// disregarded as garbled. With TolerateTagLeadingZeros, both are read as
+// their tag numbers say, and answered.
+// A first Logon whose tag numbers have leading zeros is no valid Logon to an
+// acceptor's strict session, which closes the connection (rather than
+// waiting for another first message), and logs on a tolerating one.
+func TestTolerateTagLeadingZerosFirstLogon(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tolerate bool
+	}{{"strict", false}, {"tolerated", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, rec, p := acceptorPeer(t, func(c *session.Config) { c.TolerateTagLeadingZeros = tc.tolerate })
+			p.writeRaw(rawFrame("35=A|49=INI|56=ACC|34=1|52="+sendingTime()+"|98=0|0108=30|", ""))
+			if !tc.tolerate {
+				refused(t, rec, p)
+				return
+			}
+			p.expect("A", "34", "1")
+			rec.wait(t, func() bool { return rec.logons == 1 })
+		})
+	}
+}
+
+func TestTolerateTagLeadingZeros(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tolerate bool
+	}{{"strict", false}, {"tolerated", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, p := loggedOn(t, func(c *session.Config) { c.TolerateTagLeadingZeros = tc.tolerate })
+			p.writeRaw(rawFrame("35=1|49=ACC|56=INI|34=2|52="+sendingTime()+"|0112=BODY|", ""))
+			if tc.tolerate {
+				p.expect("0", "112", "BODY")
+			} else {
+				p.expect("3", "45", "2", "371", "112", "373", "0", "58", "Invalid tag number")
+			}
+			p.writeRaw(rawFrame("035=1|49=ACC|56=INI|34=3|52="+sendingTime()+"|112=TYPE|", ""))
+			next := 3
+			if tc.tolerate {
+				p.expect("0", "112", "TYPE")
+				next = 4
+			}
+			p.write(from(session.FIX44, next), "1", "112", "AFTER")
+			p.expect("0", "112", "AFTER")
+			if got, want := s.NextTargetSeqNum(), uint64(next+1); got != want {
+				t.Errorf("NextTargetSeqNum = %d, want %d", got, want)
+			}
+		})
+	}
+}

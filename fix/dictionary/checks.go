@@ -10,9 +10,10 @@ import (
 	"github.com/sylr/fix2/fix"
 )
 
-// Checks selects the validations ValidateWith runs besides those Validate
-// always does. Validate runs CheckUnknownTags and CheckUserDefinedTags too.
-// A session enables them all by default, as QuickFIX does.
+// Checks selects the validations ValidateWith runs besides those it always
+// does: MsgType known, required tags present, enumerated values valid.
+// Validate runs them all, CheckAll, as does a session by default: FIX
+// requires received messages to be validated (Session Layer §4.5).
 type Checks uint
 
 const (
@@ -59,8 +60,8 @@ const (
 	// CheckAll enables every check.
 	CheckAll = CheckEmptyValues | CheckFormats | CheckRepeatedTags | CheckOrder | CheckGroupCounts | CheckUnknownTags | CheckUserDefinedTags | CheckGroupRequired | CheckGroupOrder
 
-	// checksValidate are the checks Validate runs.
-	checksValidate = CheckUnknownTags | CheckUserDefinedTags
+	// checksUnknown are the checks of tags a message does not define.
+	checksUnknown = CheckUnknownTags | CheckUserDefinedTags
 	// checksValue are the checks of a field's value.
 	checksValue = CheckEmptyValues | CheckFormats
 )
@@ -69,15 +70,16 @@ const (
 const userDefinedTagMin = 5000
 
 // ValidateWith checks msg as Validate does, with the checks selected rather
-// than CheckUnknownTags and CheckUserDefinedTags. A repeated tag or a field
+// than all of them. A repeated tag or a field
 // out of order, a group entry's included, is reported first, as QuickFIX
 // engines find them while parsing; then missing required tags; then field
 // errors in message order; then group counts and group entries missing
 // required fields, in message order; then a tag held only in group entries
 // outside them, if
 // its tag's check, CheckUnknownTags or CheckUserDefinedTags, is selected.
-// Unlike Validate, the extra checks may allocate. To reject unknown tags as
-// Validate does, select their checks too:
+// Checks other than CheckUnknownTags and CheckUserDefinedTags may allocate.
+// Tags the message does not define are accepted unless their checks are
+// selected:
 //
 //	d.ValidateWith(msg, dictionary.CheckFormats|dictionary.CheckUnknownTags|dictionary.CheckUserDefinedTags)
 //

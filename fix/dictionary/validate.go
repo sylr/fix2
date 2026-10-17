@@ -63,16 +63,18 @@ func (e *ValidationError) Unwrap() error {
 // entries as its counter says, and the fields after them are the message's
 // own, one sharing a tag with the group's delimiter included. Required tags
 // (2-4) must be present outside group entries: a tag a group entry holds
-// does not stand for the message's own. Validate is ValidateWith with
-// CheckUnknownTags and CheckUserDefinedTags, which 5 is.
+// does not stand for the message's own. A tag an entry holds twice ends it,
+// as GroupsOf reads it: the second is rejected only where the message does
+// not allow it.
 //
-// Entries are validated against their group's definition only with
-// CheckGroupRequired and CheckGroupOrder (see ValidateWith): Validate lets
-// an entry lack its required fields and hold them in any order. A tag an
-// entry holds twice ends it, as GroupsOf reads it: the second is rejected
-// only where the message does not allow it.
+// Validate is ValidateWith with CheckAll: besides 1 to 6, which
+// CheckUnknownTags and CheckUserDefinedTags are 5 of, it checks empty
+// values, value formats, repeated tags, field order, group counts, and
+// group entries' required fields and order (see Checks), as FIX requires a
+// received message to be validated. ValidateWith runs fewer, for a
+// counterparty that needs some tolerated.
 func (d *Dict) Validate(msg *fix.Message) error {
-	return d.validate(msg, checksValidate)
+	return d.validate(msg, CheckAll)
 }
 
 // Defines reports whether messages of type msgType may hold tag: one of
@@ -109,7 +111,7 @@ func (d *Dict) validate(msg *fix.Message, checks Checks) error {
 	// Repeated tags and fields out of order first: QuickFIX engines find
 	// them while parsing, before validating against the dictionary.
 	if structure := checks & (CheckRepeatedTags | CheckOrder | CheckGroupOrder); structure != 0 {
-		if err := d.checkStructure(msg, mdef, structure|checks&checksValidate); err != nil {
+		if err := d.checkStructure(msg, mdef, structure|checks&checksUnknown); err != nil {
 			return err
 		}
 	}

@@ -70,12 +70,29 @@ func TestValidateWith(t *testing.T) {
 			}
 		})
 	}
-	// Validate runs none of the extra checks.
+	// Validate runs every check, as FIX requires: a repeated tag is
+	// rejected, which the unknown tags' checks alone accept.
 	msg := parseMsg(t, buildFIXMsg("35=D\x01"+header+body+"55=A\x0155=B\x01"))
-	if err := d.Validate(&msg); err != nil {
-		t.Errorf("Validate with a repeated tag: %v", err)
+	if err := d.Validate(&msg); !errors.Is(err, dictionary.ErrRepeatedTag) {
+		t.Errorf("Validate with a repeated tag: %v, want ErrRepeatedTag", err)
 	}
-	// But it rejects unknown tags.
+	if err := d.ValidateWith(&msg, unknownTags); err != nil {
+		t.Errorf("ValidateWith(unknownTags) with a repeated tag: %v", err)
+	}
+	// So is a value in the wrong format, or a group count.
+	for name, b := range map[string]string{
+		"format":      "11=ORD\x0154=1\x0160=20231001\x0140=1\x0155=A\x01",
+		"group count": body + "55=A\x0178=2\x0179=A\x01",
+	} {
+		msg := parseMsg(t, buildFIXMsg("35=D\x01"+header+b))
+		if err := d.Validate(&msg); err == nil {
+			t.Errorf("Validate with a wrong %s: nil", name)
+		}
+		if err := d.ValidateWith(&msg, unknownTags); err != nil {
+			t.Errorf("ValidateWith(unknownTags) with a wrong %s: %v", name, err)
+		}
+	}
+	// And unknown tags.
 	for _, tag := range []string{"4999", "9001"} {
 		msg := parseMsg(t, buildFIXMsg("35=D\x01"+header+body+"55=A\x01"+tag+"=x\x01"))
 		if err := d.Validate(&msg); !errors.Is(err, dictionary.ErrUnexpectedTag) {
@@ -378,8 +395,8 @@ func TestValidate_GroupBoundaries(t *testing.T) {
 			if got := string(m.GetTopLevel(101, spec)); got != tc.top {
 				t.Errorf("GetTopLevel(101) = %q, want %q", got, tc.top)
 			}
-			if err := d.Validate(&m); err != nil {
-				t.Errorf("Validate: %v", err)
+			if err := d.ValidateWith(&m, unknownTags); err != nil {
+				t.Errorf("ValidateWith(unknownTags): %v", err)
 			}
 			if err := d.ValidateWith(&m, dictionary.CheckAll&^tc.skip); err != nil {
 				t.Errorf("ValidateWith(CheckAll&^%d): %v", tc.skip, err)
@@ -388,7 +405,7 @@ func TestValidate_GroupBoundaries(t *testing.T) {
 	}
 	// A group entry's delimiter does not stand for the message's own.
 	m := parseMsg(t, buildFIXMsg("35=R\x01100=1\x01101=A\x01102=R\x01"))
-	for name, err := range map[string]error{"Validate": d.Validate(&m), "CheckAll": d.ValidateWith(&m, dictionary.CheckAll)} {
+	for name, err := range map[string]error{"unknown tags": d.ValidateWith(&m, unknownTags), "CheckAll": d.ValidateWith(&m, dictionary.CheckAll)} {
 		var ve *dictionary.ValidationError
 		if !errors.As(err, &ve) || ve.Tag != 101 || ve.Reason != dictionary.ReasonRequiredTagMissing {
 			t.Errorf("%s without the top-level delimiter: %v, want required tag 101 missing", name, err)
@@ -413,9 +430,9 @@ func TestValidate_GroupFieldOutsideEntries(t *testing.T) {
 		reason dictionary.RejectReason
 	}
 	for _, tc := range []struct {
-		name                      string
-		body                      string
-		validate, all, acceptTags verdict // by Validate, CheckAll, and CheckAll accepting unknown tags
+		name                     string
+		body                     string
+		unknown, all, acceptTags verdict // by the unknown tags' checks alone, CheckAll (Validate), and CheckAll accepting unknown tags
 	}{
 		{"group field without its counter", "35=P|102=R|", verdict{102, 2}, verdict{102, 2}, verdict{}},
 		{"group field without its counter beside D", "35=M|102=R|", verdict{102, 2}, verdict{102, 2}, verdict{}},
@@ -446,7 +463,7 @@ func TestValidate_GroupFieldOutsideEntries(t *testing.T) {
 				err  error
 				want verdict
 			}{
-				{"Validate", d.Validate(&m), tc.validate},
+				{"unknown tags", d.ValidateWith(&m, unknownTags), tc.unknown},
 				{"CheckAll", d.ValidateWith(&m, dictionary.CheckAll), tc.all},
 				{"CheckAll accepting unknown tags", d.ValidateWith(&m, accept), tc.acceptTags},
 			} {
@@ -525,7 +542,7 @@ func TestValidate_NestedGroupBoundaries(t *testing.T) {
 			name string
 			err  error
 		}{
-			{"Validate", d.Validate(msg)},
+			{"unknown tags", d.ValidateWith(msg, unknownTags)},
 			{"counts", d.ValidateWith(msg, counts)},
 			{"CheckAll", d.ValidateWith(msg, dictionary.CheckAll)},
 		} {
@@ -536,14 +553,14 @@ func TestValidate_NestedGroupBoundaries(t *testing.T) {
 	}
 
 	// The parent entry holds Text already: the next Text is another entry
-	// of the nested group, which Validate finds outside it.
+	// of the nested group, which the unknown tags' checks find outside it.
 	m3 := parse("35=U3|5000=1|5001=p|58=pt|5002=1|58=g|58=extra|")
 	var ve *dictionary.ValidationError
 	if err := d.ValidateWith(&m3, counts); !errors.As(err, &ve) || ve.Tag != 5002 || ve.Reason != dictionary.ReasonIncorrectNumInGroupCount {
 		t.Errorf("U3: counts: %v, want an incorrect NumInGroup for 5002", err)
 	}
-	if err := d.Validate(&m3); !errors.As(err, &ve) || ve.Tag != 58 || ve.Reason != dictionary.ReasonTagNotDefinedForMessageType {
-		t.Errorf("U3: Validate: %v, want 58 not defined for the message type", err)
+	if err := d.ValidateWith(&m3, unknownTags); !errors.As(err, &ve) || ve.Tag != 58 || ve.Reason != dictionary.ReasonTagNotDefinedForMessageType {
+		t.Errorf("U3: unknown tags: %v, want 58 not defined for the message type", err)
 	}
 	// Without it, the next Text is the parent entry's, out of its order.
 	m4 := parse("35=U3|5000=1|5001=p|5002=1|58=g|58=pt|")

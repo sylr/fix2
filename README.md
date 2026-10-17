@@ -18,9 +18,11 @@ need: [docs/conformance.md](docs/conformance.md) lists the editions
 followed and what each toleration relaxes.
 
 - **Parsing** (`fix`): `Parse` and `ParseInto` read messages without copying their
-  values (SIMD checksums with `GOEXPERIMENT=simd`); `Framer` reads them off a
-  stream, resynchronising after garbage; `Profile` holds the DATA fields of a
-  dictionary.
+  values (SIMD checksums with `GOEXPERIMENT=simd`), strictly: one message
+  exactly, tag numbers without leading zeros; `ParseOptions` holds what a
+  parser may tolerate, its methods parsing as those functions; `Framer`
+  reads messages off a stream, resynchronising after garbage; `Profile`
+  holds the DATA fields of a dictionary.
 - **Building** (`fix`): `Builder` encodes messages into reusable buffers without
   allocating; `RewriteForResend` turns a stored message into its
   retransmission.
@@ -203,7 +205,9 @@ establishes, exchanges thousands of messages paced and terminates
 ## Performance
 
 On an Apple M4: parsing a 24-field message into a reused `Message` takes
-280 ns and no allocation; validating it 85 ns; sending an order between an
+280 ns and no allocation; validating a NewOrderSingle 390 ns and 3
+allocations, every check run, 85 ns and none against the dictionary alone,
+without the checks of its structure; sending an order between an
 initiator and an acceptor in memory, 730 ns and one allocation. A FIXP
 session message decodes in 2 to 5 ns, a generated SBE codec's order in 5
 ns, neither allocating; a FIXP `Send` over TCP takes 165 to 385 ns
