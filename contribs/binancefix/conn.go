@@ -77,10 +77,13 @@ type adminFrame struct {
 	test  string // an adminTest's TestReqID
 }
 
-// pending is a request to write.
+// pending is a request to write: a Receipt's, or a subscription's
+// request or unsubscribe.
 type pending struct {
 	frame []byte
 	r     *Receipt
+	s     *Subscription
+	unsub bool
 }
 
 // conn is a connection and its session.
@@ -106,6 +109,15 @@ type conn struct {
 	testSent bool                // it was written: its answer is awaited
 	answers  int                 // adminAnswer frames queued
 	tests    int                 // TestRequests sent
+
+	// The subscriptions, which outlive their requests' writing and
+	// Unsubscribe: until the connection ends, an MDReqID and a stream
+	// stay taken.
+	subs    map[string]*Subscription // by MDReqID
+	streams map[Stream]*Subscription
+	subSeqs map[uint32]subRef // their requests and unsubscribes, by seqNum
+	subList []*Subscription   // in the order made
+	rate    *rateBudget       // market data's message budget, nil for order entry
 
 	signal chan struct{} // wakes the writer
 
@@ -137,10 +149,18 @@ func newConn(c *Client, tc transport.Conn, epoch uint64) *conn {
 	if interval == 0 {
 		interval = c.cfg.HeartBtInt
 	}
+	var rate *rateBudget
+	if c.rateLimit > 0 {
+		rate = newRateBudget(c.rateLimit, c.rateReserve, c.rateWindow)
+	}
 	return &conn{
 		c: c, tc: tc, epoch: epoch, interval: interval, start: time.Now(),
 		ids:           map[string]*Receipt{},
 		inflight:      map[uint32]*Receipt{},
+		subs:          map[string]*Subscription{},
+		streams:       map[Stream]*Subscription{},
+		subSeqs:       map[uint32]subRef{},
+		rate:          rate,
 		signal:        make(chan struct{}, 1),
 		ended:         make(chan struct{}),
 		loggedOn:      make(chan struct{}),
@@ -239,6 +259,12 @@ func (k *conn) run(ctx context.Context) result {
 		return res
 	}
 	k.lastSent.Store(int64(k.now()))
+	if k.rate != nil {
+		k.mu.Lock()
+		k.rate.sending(1)
+		k.rate.wrote(time.Now(), 0, 1)
+		k.mu.Unlock()
+	}
 	k.nextOut = 2
 	if c.nextOutAfterLogon != 0 {
 		k.nextOut = c.nextOutAfterLogon
@@ -392,11 +418,20 @@ func (k *conn) finish(log *slog.Logger, err error) {
 	}
 	never := k.unsent
 	k.ids, k.inflight, k.unsent = nil, nil, nil
+	subs := k.subList
+	k.subs, k.streams, k.subSeqs, k.subList = nil, nil, nil, nil
 	k.mu.Unlock()
 	for _, p := range queued {
+		if p.s != nil {
+			p.s.unsent(p.unsub)
+			continue
+		}
 		if p.r.end(reason, true) {
 			never = append(never, p.r)
 		}
+	}
+	for _, s := range subs {
+		s.end(reason)
 	}
 	slices.SortFunc(never, func(a, b *Receipt) int { return cmp.Compare(a.queued, b.queued) })
 	slices.SortFunc(sent, func(a, b *Receipt) int { return cmp.Compare(a.order, b.order) })
@@ -406,15 +441,24 @@ func (k *conn) finish(log *slog.Logger, err error) {
 			possibly = append(possibly, r)
 		}
 	}
-	ev := &LogoutEvent{Epoch: k.epoch, Err: err, NeverWritten: never, PossiblyTransmitted: possibly}
+	ev := &LogoutEvent{Epoch: k.epoch, Err: err, NeverWritten: never, PossiblyTransmitted: possibly, Subscriptions: subs}
 	select {
 	case <-k.logoutWritten:
 		ev.Clean = true
 	default:
 	}
 	log.LogAttrs(context.Background(), slog.LevelInfo, "logged out", slog.Any("reason", err), slog.Bool("clean", ev.Clean),
-		slog.Int("never_written", len(never)), slog.Int("possibly_transmitted", len(possibly)))
-	c.events <- event{msg: ev}
+		slog.Int("never_written", len(never)), slog.Int("possibly_transmitted", len(possibly)), slog.Int("subscriptions", len(subs)))
+	// Its error may retain Binance's Logout text: charged, as a message
+	// is. Waiting for room cannot deadlock: the dispatcher frees it as the
+	// Handler returns, and the Handler waits for nothing of Run's. Run
+	// does not reconnect meanwhile, and Stop's effect waits too.
+	size := 0
+	if err != nil {
+		size = len(err.Error())
+	}
+	c.room.take(size)
+	c.events <- event{msg: ev, size: size}
 }
 
 // enqueue queues request frame, of template tid and legs legs.
@@ -433,6 +477,10 @@ func (k *conn) enqueue(frame []byte, tid uint16, legs []Leg, stop bool) (*Receip
 			k.mu.Unlock()
 			return nil, fmt.Errorf("%w: %q", ErrDuplicateID, l.ID)
 		}
+	}
+	if k.rate != nil && !k.rate.admit(time.Now()) {
+		k.mu.Unlock()
+		return nil, ErrRateLimited
 	}
 	r := newReceipt(k.epoch, tid, legs, stop)
 	k.queued++
@@ -486,12 +534,22 @@ func (k *conn) logout(text string, reason error) {
 	dropped := k.app
 	k.app = nil
 	for _, p := range dropped {
+		if p.r == nil {
+			continue
+		}
 		for _, id := range p.r.ids {
 			delete(k.ids, id)
 		}
 	}
+	if k.rate != nil {
+		k.rate.dropped(len(dropped))
+	}
 	k.mu.Unlock()
 	for _, p := range dropped {
+		if p.s != nil {
+			p.s.unsent(p.unsub)
+			continue
+		}
 		if p.r.end(reason, true) {
 			k.mu.Lock()
 			k.unsent = append(k.unsent, p.r)
@@ -509,8 +567,10 @@ func stamp(frame []byte, seq uint32, t time.Time) {
 
 // span is a request's place in a batch.
 type span struct {
-	start int
-	r     *Receipt
+	start, end int
+	r          *Receipt
+	s          *Subscription
+	unsub      bool
 }
 
 // writeLoop writes the session messages first, then the requests, each
@@ -546,10 +606,11 @@ func (k *conn) writeLoop() {
 			}
 			now := time.Now()
 			buf, spans = buf[:0], spans[:0]
-			hb, test := false, ""
+			hb, test, written := false, "", 0
 			for _, a := range admin {
 				stamp(a.frame, k.nextOut, now)
 				k.nextOut++
+				written++
 				buf = append(buf, a.frame...)
 				switch a.kind {
 				case adminHeartbeat:
@@ -565,26 +626,51 @@ func (k *conn) writeLoop() {
 			}
 			for _, p := range batch {
 				stamp(p.frame, k.nextOut, now)
-				k.order++
-				p.r.sending(k.nextOut, k.order)
-				k.inflight[k.nextOut] = p.r
+				if p.s != nil {
+					p.s.sending(p.unsub)
+					k.subSeqs[k.nextOut] = subRef{s: p.s, unsub: p.unsub}
+				} else {
+					k.order++
+					p.r.sending(k.nextOut, k.order)
+					k.inflight[k.nextOut] = p.r
+				}
 				k.nextOut++
-				spans = append(spans, span{start: len(buf), r: p.r})
+				spans = append(spans, span{start: len(buf), end: len(buf) + len(p.frame), r: p.r, s: p.s, unsub: p.unsub})
 				buf = append(buf, p.frame...)
 			}
 			if hb {
 				k.hbQueued = false
+			}
+			if k.rate != nil {
+				// Counted as in flight until the write returns: Binance may
+				// read them any time until then.
+				k.rate.sending(written)
 			}
 			k.mu.Unlock()
 
 			k.tc.SetWriteDeadline(now.Add(k.c.cfg.WriteTimeout))
 			n, err := k.tc.Write(buf)
 			k.lastSent.Store(int64(k.now()))
+			if k.rate != nil {
+				k.mu.Lock()
+				k.rate.wrote(time.Now(), len(batch), written)
+				k.mu.Unlock()
+			}
 			if err != nil {
-				// What lies wholly past n never reached the connection.
+				// What lies wholly before n was written; what lies wholly
+				// past it never reached the connection.
 				k.mu.Lock()
 				var unsent []*Receipt
 				for _, s := range spans {
+					if s.s != nil {
+						switch {
+						case s.end <= n:
+							s.s.written(s.unsub)
+						case s.start >= n:
+							s.s.unsent(s.unsub)
+						}
+						continue
+					}
 					if s.start >= n {
 						seq, _ := s.r.SeqNum()
 						delete(k.inflight, seq)
@@ -607,7 +693,11 @@ func (k *conn) writeLoop() {
 				return
 			}
 			for _, s := range spans {
-				s.r.written()
+				if s.s != nil {
+					s.s.written(s.unsub)
+				} else {
+					s.r.written()
+				}
 			}
 			if test != "" {
 				// Its answer is awaited from now: the time it waited to be
@@ -710,15 +800,20 @@ func (k *conn) readLoop() {
 	}
 }
 
-// emit hands e to the dispatcher, waiting for room: reading waits for the
-// Handler, the monitor knows.
+// emit hands e to the dispatcher, waiting for room, in events and in
+// bytes: reading waits for the Handler, the monitor knows.
 func (k *conn) emit(e event) {
-	select {
-	case k.c.events <- e:
-		return
-	default:
+	if k.c.room.tryTake(e.size) {
+		select {
+		case k.c.events <- e:
+			return
+		default:
+		}
+		k.stalled.Store(true)
+	} else {
+		k.stalled.Store(true)
+		k.c.room.take(e.size)
 	}
-	k.stalled.Store(true)
 	k.c.events <- e
 	// The time waited is not the peer's: our TestRequest's answer may be
 	// unread yet.
@@ -825,6 +920,14 @@ func (k *conn) handle(msg []byte, received time.Time) error {
 
 	// What follows reaches the Handler: decoded from a copy of its own.
 	body = bytes.Clone(body)
+	if k.c.cfg.Kind == MarketData {
+		if err := checkHeader(h); err != nil {
+			return &ProtocolError{Err: err}
+		}
+		if ok, err := k.handleMarketData(h, body, in); ok {
+			return err
+		}
+	}
 	var m any
 	var refSeq Optional[uint32]
 	var code Optional[int32]
@@ -843,7 +946,7 @@ func (k *conn) handle(msg []byte, received time.Time) error {
 				k.c.log.LogAttrs(context.Background(), slog.LevelWarn, "Binance news without its required Headline", slog.Uint64("epoch", k.epoch))
 			}
 			k.c.log.LogAttrs(context.Background(), slog.LevelWarn, "Binance news", slog.Uint64("epoch", k.epoch), slog.String("headline", headline))
-			k.emit(event{msg: &NewsEvent{Inbound: in, Headline: headline, Remaining: remaining(headline)}})
+			k.emit(event{msg: &NewsEvent{Inbound: in, Headline: headline, Remaining: remaining(headline)}, size: len(headline)})
 			return nil
 		}
 		m = x
@@ -884,18 +987,47 @@ func (k *conn) handle(msg []byte, received time.Time) error {
 		_, err = x.DecodeBody(h, body)
 		m = x
 	default:
-		k.emit(event{in: in, body: body})
+		k.emit(event{in: in, body: body, size: len(body)})
 		return nil
 	}
 	if err != nil {
 		k.c.log.LogAttrs(context.Background(), slog.LevelWarn, "message not decoded", slog.Uint64("epoch", k.epoch),
 			slog.Int("template_id", int(h.TemplateId)), slog.Any("error", err))
-		k.emit(event{in: in, body: body, err: err})
+		k.emit(event{in: in, body: body, err: err, size: len(body)})
 		return nil
 	}
 	in.Receipt = k.correlate(m, refSeq, answerOf(h, code))
-	k.emit(event{in: in, msg: m})
+	if x, ok := m.(*fixsbe.Reject); ok && in.Receipt == nil {
+		in.Subscription = k.rejectedBySeq(x, in)
+	}
+	k.emit(event{in: in, msg: m, size: len(body)})
 	return nil
+}
+
+// handleMarketData hands market data message h, body to the Handler, with
+// the request it answers or the subscription it belongs to. It reports
+// false for a template that is not market data. A market data message
+// decodeMarketData refuses ends the connection, after our Logout: a
+// corrupted update would silently desynchronise a book, and a new
+// connection is a clean boundary.
+func (k *conn) handleMarketData(h MessageHeader, body []byte, in Inbound) (bool, error) {
+	m, symbol, ok, err := decodeMarketData(h, body)
+	if !ok {
+		return false, nil
+	}
+	if err != nil {
+		return true, &ProtocolError{Err: err}
+	}
+	switch x := m.(type) {
+	case *fixsbe.InstrumentList:
+		in.Receipt = k.correlate(x, Optional[uint32]{}, answerOf(h, Optional[int32]{}))
+	case *fixsbe.MarketDataRequestReject:
+		in.Subscription = k.rejectedByID(x, in)
+	default:
+		in.Subscription = k.route(h.TemplateId, string(symbol), in)
+	}
+	k.emit(event{in: in, msg: m, size: len(body)})
+	return true, nil
 }
 
 // correlate returns the request message m answers a leg of, nil if none:
@@ -980,6 +1112,6 @@ func (k *conn) onLogon(m *fixsbe.LogonAck) error {
 	if ev.SchemaDeprecated {
 		log.LogAttrs(context.Background(), slog.LevelWarn, "Binance deprecated the SBE schema in use", slog.Int("schema_id", fixsbe.SchemaID), slog.Int("schema_version", fixsbe.SchemaVersion))
 	}
-	k.emit(event{msg: ev})
+	k.emit(event{msg: ev, size: len(ev.UUID)})
 	return nil
 }

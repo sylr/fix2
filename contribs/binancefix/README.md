@@ -2,13 +2,16 @@
 
 A Go client of Binance Spot's
 [FIX SBE](https://developers.binance.com/docs/binance-spot-api-docs/fix-api#fix-sbe)
-order entry API: SBE requests and answers over TLS, on port 9002 of
-`fix-oe.binance.com` (`fix-oe.testnet.binance.vision` for the testnet).
+API: SBE requests and answers over TLS, on port 9002 of
+`fix-oe.binance.com` for order entry and of `fix-md.binance.com` for
+[market data](#market-data) (`fix-oe.testnet.binance.vision` and
+`fix-md.testnet.binance.vision` for the testnet).
 A library, and a command, [`binancefix`](cmd/binancefix), that checks
-against the Spot testnet what the library relies on where Binance's
-documentation is silent: all of it [settled](#settled-on-the-testnet) on
-2026-10-17, the command [stays](#checking-against-the-testnet) as the
-regression check.
+against the Spot testnet what the order entry client relies on where
+Binance's documentation is silent: all of it
+[settled](#settled-on-the-testnet) on 2026-10-17, the command
+[stays](#checking-against-the-testnet) as the regression check. Market
+data's assumptions are yet to settle (MD3).
 
 FIX SBE is Binance's own protocol: its documentation is the specification
 here, out of the scope of fix2's strictness rule
@@ -61,7 +64,8 @@ state, err := r.Wait(ctx) // Answered, StatusUnknown, NeverWritten or PossiblyTr
   queue never delays a Heartbeat or a Logout.
 
 Run reconnects with a doubling backoff, at most 15 attempts in 30 seconds
-(Binance's order entry limit), and waits twice HeartBtInt after a session
+(Binance's order entry limit; 300 in 300 seconds for market data), and
+waits twice HeartBtInt after a session
 that ended without our Logout (Binance refuses its SenderCompID that
 long, ours possibly logged on unseen included). A refused Logon is
 retried after twice HeartBtInt, `MaxRefusals` (3) times in a row at most:
@@ -101,11 +105,107 @@ answered when all its legs are; a -1007 on any makes it `StatusUnknown`.
 
 One goroutine calls the Handler, in order: a connection's `OnLogon`, its
 messages, its `OnLogout`, then the next connection's. Its methods may call
-`Send`, `Stop` and `Reconnect`; they must not wait for `Run`, nor for a
-`Receipt` (its answer may be queued behind the call). The messages
-they get are valid during the call only. Up to `MaxEvents` received
-messages wait for a slow Handler; beyond, reading waits, and Binance's
-TestRequests with it. Our heartbeats never wait for the Handler.
+`Send`, `Subscribe`, `Unsubscribe`, `Stop` and `Reconnect`; they must not
+wait for `Run`, nor for a `Receipt` (its answer may be queued behind the
+call). The messages they get are valid during the call only. Up to
+`MaxEvents` received messages, and `MaxEventBytes` bytes of them, wait for
+a slow Handler; beyond, reading waits, and Binance's TestRequests with it.
+Our heartbeats never wait for the Handler.
+
+## Market data
+
+```go
+c, err := binancefix.New(binancefix.Config{
+	Kind:         binancefix.MarketData,
+	Endpoint:     binancefix.TestnetMarketDataEndpoint,
+	APIKey:       os.Getenv("BINANCE_API_KEY"), // FIX_API or FIX_API_READ_ONLY
+	PrivateKey:   key,
+	SenderCompID: "MD1",
+	Handler:      handler, // OnMarketDataSnapshot, OnMarketDataIncrementalDepth...
+})
+go c.Run(ctx)
+// Once OnLogon was called:
+s, err := c.Subscribe(&binancefix.MarketDataRequest{
+	SubscriptionRequestType: binancefix.SubscriptionRequestTypeSubscribe,
+	MarketDepth:             binancefix.Some[uint16](100), // 1: book ticker, 2 to 5000: depth
+	RelatedSym:              []binancefix.MarketDataRequestRelatedSym{{Symbol: []byte("BTCUSDT")}},
+	MDEntryTypes:            []binancefix.MDEntryTypes{{MDEntryType: binancefix.MdEntryTypeBid}, {MDEntryType: binancefix.MdEntryTypeOffer}},
+	MDReqID:                 []byte("depth-1"),
+})
+// In the Handler: in.Subscription == s; prices with binancefix.FormatDecimal.
+err = s.Unsubscribe()
+```
+
+A market data session (`Kind: MarketData`, endpoints `MarketDataEndpoint`
+and `TestnetMarketDataEndpoint`) logs on as order entry does and places no
+orders: `Send` takes `InstrumentListRequest` (answered by the first
+`InstrumentList` of its `InstrumentReqID`; a long list may come in several
+messages, the others without `Receipt`) and `LimitQuery`, and refuses
+orders with `ErrSessionKind`, as order entry refuses market data, before
+anything is written. [doc.go](doc.go) has the details.
+
+**Limits** (Binance's, shared between FIX and FIX SBE): 300 connection
+attempts per 300 seconds (Run's pacing), 100 connections per account,
+1000 streams per connection (beyond, Binance's MarketDataRequestReject
+TOO_MANY_SUBSCRIPTIONS), and 2000 messages per 60 seconds per session.
+The client owns the last: it counts every message it writes (Logon,
+heartbeats, TestRequests and their answers, requests, Logout) and those
+queued, over a sliding window, and `Send`, `Subscribe` and `Unsubscribe`
+refuse a request (`ErrRateLimited`, nothing written) that would leave
+less than 100 for session messages, which are never refused.
+
+**Subscriptions** are not requests: Binance answers none, and a
+`Subscription` never claims one accepted. Its `Status` tells:
+
+| | |
+|---|---|
+| `Request`, `Unsubscribe` | where each stands: `PhaseQueued`, `PhaseWritten`, `PhaseNeverWritten`, `PhasePartlyWritten` (`PhaseNone`: no unsubscribe yet) |
+| `Rejects` | Binance's rejects, in order, late ones included: a MarketDataRequestReject of its MDReqID (`Unsubscribe` set once the unsubscribe's writing began: it may refuse either), or a Reject of either's seqNum |
+| `Streams` | per (symbol, stream), the first data seen: book streams get a snapshot on activation; a quiet trade stream is not told from a refused one |
+| `Ended`, `Err` | its connection ended: it is not carried over (`LogoutEvent.Subscriptions`, apart from the requests); subscribing again is the application's call |
+
+A stream is a symbol's trades (`TRADE`), book ticker (`BID` and `OFFER`,
+`MarketDepth` 1) or depth (`BID` and `OFFER`, `MarketDepth` 2 to 5000);
+`Subscribe` refuses what cannot be told (`ErrInvalidSubscription`).
+Binance's data carry no MDReqID: the client gives each to the
+subscription of its symbol and template (`Inbound.Subscription`, nil if
+none). Hence **no overlap**: on a connection, a stream belongs to one
+subscription and, once subscribed, unsubscribed or not, is never
+subscribed again, nor is a symbol's book ticker with its depth (they share
+the snapshot): `ErrStreamTaken`. `Reconnect` gives a clean connection.
+MDReqIDs are unique per connection, through the unsubscribe. An
+unsubscribe expects no answer and proves nothing: data after it are still
+the subscription's.
+
+**Validation**: the codecs check structure only. Before the Handler, the
+client checks required fields not null nor empty (exponents: any int8 but
+the null), enums of the schema's values, a depth update's first update ID
+up to its last, the message as long as its frame, and, for any message
+the Handler gets on a market data session, the header's required fields
+(a null `sendingTime`...). A message that fails ends the connection,
+after our Logout (`ProtocolError`: `ErrMissingRequired`,
+`ErrInvalidMarketData` or the codec's error): a corrupted depth update
+would silently desynchronise a book, and a new connection is a clean
+boundary. Optional fields reach the Handler as they are: a snapshot's
+`LastBookUpdateID` may be null, which a book kept from depth updates
+cannot synchronise from (binancemd will require it). `FormatDecimal`
+writes a mantissa and its exponent exactly (no float), exponents changing
+from message to message.
+
+**Budgets**: a 5000-level snapshot takes 160,063 bytes framed, beyond
+order entry's 64 KiB frames; market data's `MaxFrameLength` is 1 MiB by
+default, which also holds an instrument list of about 10,000 symbols, and
+its events waiting for the Handler are bounded by 16,384 messages and
+32 MiB (order entry: 4096 and 16 MiB).
+
+Documented by Binance, and relied on: the endpoints and limits, the
+templates, matching by symbol and template, snapshots on activation of
+book streams, a level without size deleted. **To settle on the testnet
+(MD3)**: whether trades get a snapshot, how long data flow after an
+unsubscribe, which reject refuses a malformed request, whether an
+unsubscribe needs more than its MDReqID (the client sends its type,
+MDReqID and MarketDepth), whether unsubscribed streams count against the
+1000, and that required strings are never empty.
 
 ## Settled on the testnet
 
@@ -366,6 +466,26 @@ Binance over in-memory connections: Logon and signature (each
 TestRequests, gaps, Logouts both ways, Reject and News, receipts at every
 phase of a connection, framing, a stalled Handler, Send from the Handler,
 sequence number rollover, reconnection pacing. Nothing reaches the network.
+
+Market data: subscriptions quiet then unsubscribed, activated for some of
+their symbols only, refused locally when their streams overlap (by the
+same or another MDReqID) or cannot be told, subscribed again only after
+`Reconnect`; data after the unsubscribe, rejects after data and after the
+unsubscribe; a 5000-level snapshot through the default frame limit;
+exponents changing between messages, any but the null; a snapshot without
+update ID delivered; each malformed message (a null required field, of
+the body or of the header, an unknown enum, a depth update's IDs
+reversed, bytes after the message, a truncated one) ending the
+connection; subscriptions written, cut and never written by one failed
+write; the message budget's refusals, reserve and window, and a write
+held up past the window; the event queue's byte bound, News included;
+refusals by session kind; the subscriptions listed at the connection's
+end, apart from its requests; `FormatDecimal` by table and fuzzing. Real
+Logic's market data messages go through a market data Client, and
+`internal/fakebinance`, as a market data endpoint (snapshots on
+activation for book streams, none for trades, Binance's refusals, data
+lingering after an unsubscribe, a split instrument list), is played by a
+Client end to end.
 
 Conformance: frames split in two reads at every byte boundary, and many in
 one read; malformed frames (encodingType, lengths short, long or beyond

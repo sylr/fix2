@@ -10,18 +10,22 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sylr/fix2/contribs/binancefix/internal/fixsbe"
 	"github.com/sylr/fix2/contribs/binancefix/internal/lesofh"
 )
 
 var (
-	// ErrNotLoggedOn is Send's error without a logged-on connection, or
-	// once its Logout is under way.
+	// ErrNotLoggedOn is the error of Send, Subscribe and Unsubscribe
+	// without a logged-on connection, or once its Logout is under way.
 	ErrNotLoggedOn = errors.New("binancefix: not logged on")
-	// ErrQueueFull is Send's error once Config.MaxQueued requests wait to
-	// be written: the request was not queued.
+	// ErrQueueFull is the error of Send, Subscribe and Unsubscribe once
+	// Config.MaxQueued requests wait to be written: the request was not
+	// queued.
 	ErrQueueFull = errors.New("binancefix: queue full")
 	// ErrDuplicateID is Send's error for a request of an ID (ClOrdID,
-	// ClListID, ReqID) another request awaiting an answer has.
+	// ClListID, ReqID, InstrumentReqID) another request awaiting an
+	// answer has, and Subscribe's for an MDReqID another subscription of
+	// the connection has.
 	ErrDuplicateID = errors.New("binancefix: ID of a request awaiting an answer")
 	// ErrInvalidID is Send's error for a request whose ID is missing or
 	// not 1 to 36 letters, digits, - or _.
@@ -61,14 +65,14 @@ func (e *PeerLogoutError) Error() string {
 	return fmt.Sprintf("binancefix: logged out by Binance: %q", e.Text)
 }
 
-// ErrMissingRequired tells of a session message the client acts on whose
-// required field is null, the null value of its integer or enum, which
-// SBE forbids a producer to send (§4.4.2), or empty, a string the schema
-// does not make optional (Binance's optional strings are those whose
-// emptiness means null): a LogonAck's HeartBtInt,
+// ErrMissingRequired tells of a session message the client acts on, or of
+// a market data message, whose required field is null, the null value of
+// its integer or enum, which SBE forbids a producer to send (§4.4.2), or
+// empty, a string the schema does not make optional (Binance's optional
+// strings are those whose emptiness means null): a LogonAck's HeartBtInt,
 // SbeSchemaIdVersionDeprecated or UUID, a TestRequest's TestReqID, a
-// News's Headline. The codecs decode such values as they are; the client
-// refuses them.
+// News's Headline, a market data message's (see doc.go). The codecs decode
+// such values as they are; the client refuses them.
 var ErrMissingRequired = errors.New("binancefix: required field null or empty")
 
 // ErrInvalidLogonAck tells of a LogonAck the client refuses: a required
@@ -107,14 +111,16 @@ type ProtocolError struct{ Err error }
 func (e *ProtocolError) Error() string { return "binancefix: protocol error: " + e.Err.Error() }
 func (e *ProtocolError) Unwrap() error { return e.Err }
 
-// Client is a FIX SBE order entry client: one connection at a time,
-// reconnected by Run, its requests sent with Send.
+// Client is a FIX SBE client of order entry, or of market data
+// (Config.Kind): one connection at a time, reconnected by Run, its
+// requests sent with Send, its subscriptions made with Subscribe.
 type Client struct {
 	cfg Config
 	log *slog.Logger
 	h   Handler
 
 	events  chan event
+	room    *eventBudget
 	stop    chan struct{}
 	stopped sync.Once
 	recon   chan uint64 // the epoch a Reconnect asked to leave
@@ -123,6 +129,12 @@ type Client struct {
 	mu    sync.Mutex
 	cur   *conn // the logged-on connection, nil if none
 	epoch uint64
+
+	// A market data connection's message budget: MarketDataMessageLimit
+	// in MarketDataMessageWindow, MarketDataMessageReserve kept for
+	// session messages; none if rateLimit is 0. Tests change them.
+	rateLimit, rateReserve int
+	rateWindow             time.Duration
 
 	// For tests: the heartbeat interval timers run on, HeartBtInt if 0,
 	// and the first sequence numbers after the Logon's.
@@ -137,14 +149,19 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{
+	c := &Client{
 		cfg:    cfg,
 		log:    cfg.Logger,
 		h:      cfg.Handler,
 		events: make(chan event, cfg.MaxEvents),
+		room:   newEventBudget(cfg.MaxEventBytes),
 		stop:   make(chan struct{}),
 		recon:  make(chan uint64, 16),
-	}, nil
+	}
+	if cfg.Kind == MarketData {
+		c.rateLimit, c.rateReserve, c.rateWindow = MarketDataMessageLimit, MarketDataMessageReserve, MarketDataMessageWindow
+	}
+	return c, nil
 }
 
 // Stop asks Run to log out and return. It does not wait: Run returns once
@@ -184,9 +201,11 @@ func (c *Client) LoggedOn() bool {
 	return k.state == stateActive
 }
 
-// Request is a request Send takes: *NewOrderSingle, *OrderCancelRequest,
+// Request is a request Send takes: on an order entry session,
+// *NewOrderSingle, *OrderCancelRequest,
 // *OrderCancelRequestAndNewOrderSingle, *NewOrderList,
-// *OrderAmendKeepPriorityRequest, *OrderMassCancelRequest or *LimitQuery.
+// *OrderAmendKeepPriorityRequest, *OrderMassCancelRequest or *LimitQuery;
+// on a market data session, *InstrumentListRequest or *LimitQuery.
 type Request interface {
 	AppendWithHeader(dst []byte, h MessageHeader) ([]byte, error)
 }
@@ -195,11 +214,53 @@ var idPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,36}$`)
 
 // Send queues request m on the logged-on connection, and returns its
 // Receipt. It encodes m at once: m may be reused when Send returns. It
-// never waits: without room in the queue, it fails with ErrQueueFull.
-// Requests are never carried over to another connection, nor resent: see
-// Receipt and State.
+// never waits: without room in the queue, it fails with ErrQueueFull, and,
+// on a market data session, without room in the message budget, with
+// ErrRateLimited. A request the session's Kind does not take fails with
+// ErrSessionKind. Requests are never carried over to another connection,
+// nor resent: see Receipt and State.
 func (c *Client) Send(m Request) (*Receipt, error) {
 	tid, legs, stop, err := requestLegs(m)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case tid == fixsbe.LimitQueryTemplateID:
+	case tid == fixsbe.InstrumentListRequestTemplateID && c.cfg.Kind != MarketData,
+		tid != fixsbe.InstrumentListRequestTemplateID && c.cfg.Kind == MarketData:
+		return nil, fmt.Errorf("%w: %T on a session of %v", ErrSessionKind, m, c.cfg.Kind)
+	}
+	frame, err := encode(m)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	k := c.cur
+	c.mu.Unlock()
+	if k == nil {
+		return nil, ErrNotLoggedOn
+	}
+	return k.enqueue(frame, tid, legs, stop)
+}
+
+// Subscribe queues subscription m, a MarketDataRequest of
+// SubscriptionRequestType SUBSCRIBE, on the logged-on market data
+// connection, and returns its Subscription. It encodes m at once: m may be
+// reused when Subscribe returns. It never waits. It refuses (nothing
+// written): on an order entry session, ErrSessionKind; a request whose
+// streams cannot be told (see StreamKind), ErrInvalidSubscription; an
+// MDReqID not 1 to 36 letters, digits, - or _, ErrInvalidID, or another
+// subscription's of the connection, unsubscribed or not, ErrDuplicateID;
+// a stream subscribed on the connection already, unsubscribed or not,
+// ErrStreamTaken: data carry no MDReqID, an old subscription's and a new
+// one's could not be told apart, and Reconnect gives a clean connection;
+// beyond the queue or the message budget, ErrQueueFull or
+// ErrRateLimited.
+func (c *Client) Subscribe(m *MarketDataRequest) (*Subscription, error) {
+	if c.cfg.Kind != MarketData {
+		return nil, fmt.Errorf("%w: a subscription on a session of %v", ErrSessionKind, c.cfg.Kind)
+	}
+	streams, err := requestStreams(m)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +274,7 @@ func (c *Client) Send(m Request) (*Receipt, error) {
 	if k == nil {
 		return nil, ErrNotLoggedOn
 	}
-	return k.enqueue(frame, tid, legs, stop)
+	return k.subscribe(frame, m, streams)
 }
 
 // encode returns the frame of m, its header's seqNum and sendingTime zero:
@@ -354,37 +415,106 @@ type event struct {
 	msg  any // *ExecutionReport, ..., *Reject, *LogonEvent, *LogoutEvent, *NewsEvent
 	body []byte
 	err  error
+	size int // the bytes it holds of eventBudget's
+}
+
+// eventBudget bounds the bytes of the events waiting for the Handler, one
+// at least being admitted whatever its size.
+type eventBudget struct {
+	mu   sync.Mutex
+	cond *sync.Cond
+	used int
+	max  int
+}
+
+func newEventBudget(max int) *eventBudget {
+	b := &eventBudget{max: max}
+	b.cond = sync.NewCond(&b.mu)
+	return b
+}
+
+// fits reports whether n bytes fit. b's lock is held.
+func (b *eventBudget) fits(n int) bool { return b.used == 0 || b.used+n <= b.max }
+
+// tryTake takes n bytes if they fit, and reports whether it did.
+func (b *eventBudget) tryTake(n int) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.fits(n) {
+		return false
+	}
+	b.used += n
+	return true
+}
+
+// take takes n bytes once they fit.
+func (b *eventBudget) take(n int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for !b.fits(n) {
+		b.cond.Wait()
+	}
+	b.used += n
+}
+
+// give gives n bytes back.
+func (b *eventBudget) give(n int) {
+	if n == 0 {
+		return
+	}
+	b.mu.Lock()
+	b.used -= n
+	b.mu.Unlock()
+	b.cond.Broadcast()
 }
 
 // dispatch hands the events to the Handler, in order, until Run ends.
 func (c *Client) dispatch() {
 	for e := range c.events {
-		switch m := e.msg.(type) {
-		case *LogonEvent:
-			c.h.OnLogon(*m)
-		case *LogoutEvent:
-			c.h.OnLogout(*m)
-		case *NewsEvent:
-			c.h.OnNews(*m)
-		case *Reject:
-			c.h.OnReject(e.in, m)
-		case *ExecutionReport:
-			c.h.OnExecutionReport(e.in, m)
-		case *ExecutionReportAck:
-			c.h.OnExecutionReportAck(e.in, m)
-		case *OrderCancelReject:
-			c.h.OnOrderCancelReject(e.in, m)
-		case *OrderAmendReject:
-			c.h.OnOrderAmendReject(e.in, m)
-		case *ListStatus:
-			c.h.OnListStatus(e.in, m)
-		case *OrderMassCancelReport:
-			c.h.OnOrderMassCancelReport(e.in, m)
-		case *LimitResponse:
-			c.h.OnLimitResponse(e.in, m)
-		default:
-			c.h.OnUnknown(e.in, e.body, e.err)
-		}
+		c.handle(e)
+		c.room.give(e.size)
+	}
+}
+
+// handle hands e to the Handler.
+func (c *Client) handle(e event) {
+	switch m := e.msg.(type) {
+	case *LogonEvent:
+		c.h.OnLogon(*m)
+	case *LogoutEvent:
+		c.h.OnLogout(*m)
+	case *NewsEvent:
+		c.h.OnNews(*m)
+	case *Reject:
+		c.h.OnReject(e.in, m)
+	case *ExecutionReport:
+		c.h.OnExecutionReport(e.in, m)
+	case *ExecutionReportAck:
+		c.h.OnExecutionReportAck(e.in, m)
+	case *OrderCancelReject:
+		c.h.OnOrderCancelReject(e.in, m)
+	case *OrderAmendReject:
+		c.h.OnOrderAmendReject(e.in, m)
+	case *ListStatus:
+		c.h.OnListStatus(e.in, m)
+	case *OrderMassCancelReport:
+		c.h.OnOrderMassCancelReport(e.in, m)
+	case *LimitResponse:
+		c.h.OnLimitResponse(e.in, m)
+	case *InstrumentList:
+		c.h.OnInstrumentList(e.in, m)
+	case *MarketDataRequestReject:
+		c.h.OnMarketDataRequestReject(e.in, m)
+	case *MarketDataSnapshot:
+		c.h.OnMarketDataSnapshot(e.in, m)
+	case *MarketDataIncrementalTrade:
+		c.h.OnMarketDataIncrementalTrade(e.in, m)
+	case *MarketDataIncrementalBookTicker:
+		c.h.OnMarketDataIncrementalBookTicker(e.in, m)
+	case *MarketDataIncrementalDepth:
+		c.h.OnMarketDataIncrementalDepth(e.in, m)
+	default:
+		c.h.OnUnknown(e.in, e.body, e.err)
 	}
 }
 

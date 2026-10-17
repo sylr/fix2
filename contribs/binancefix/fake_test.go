@@ -278,9 +278,10 @@ func checkLogonAs(t *testing.T, m msg, cfg *Config, f SignatureTime) *fixsbe.Log
 type rec struct {
 	kind string // "logon", "logout", "news", "reject", "er", ...
 	in   Inbound
-	id   string // ClOrdID, ClListID or ReqID
+	id   string // ClOrdID, ClListID, ReqID, InstrumentReqID, MDReqID or Symbol
 	ev   any    // LogonEvent, LogoutEvent, NewsEvent
 	code int32
+	text string // market data: its values, as mdText tells them
 }
 
 // recorder is a Handler recording what it receives, its hooks called
@@ -333,6 +334,80 @@ func (r *recorder) OnLimitResponse(in Inbound, m *LimitResponse) {
 }
 func (r *recorder) OnUnknown(in Inbound, body []byte, err error) {
 	r.recs <- rec{kind: "unknown", in: in}
+}
+func (r *recorder) OnInstrumentList(in Inbound, m *InstrumentList) {
+	r.recs <- rec{kind: "instruments", in: in, id: string(m.InstrumentReqID), text: mdText(m)}
+}
+func (r *recorder) OnMarketDataRequestReject(in Inbound, m *MarketDataRequestReject) {
+	r.recs <- rec{kind: "mdreject", in: in, id: string(m.MDReqID), code: m.ErrorCode.Value, text: string(m.Text)}
+}
+func (r *recorder) OnMarketDataSnapshot(in Inbound, m *MarketDataSnapshot) {
+	r.recs <- rec{kind: "snapshot", in: in, id: string(m.Symbol), text: mdText(m)}
+}
+func (r *recorder) OnMarketDataIncrementalTrade(in Inbound, m *MarketDataIncrementalTrade) {
+	r.recs <- rec{kind: "trade", in: in, id: string(m.Symbol), text: mdText(m)}
+}
+func (r *recorder) OnMarketDataIncrementalBookTicker(in Inbound, m *MarketDataIncrementalBookTicker) {
+	r.recs <- rec{kind: "ticker", in: in, id: string(m.Symbol), text: mdText(m)}
+}
+func (r *recorder) OnMarketDataIncrementalDepth(in Inbound, m *MarketDataIncrementalDepth) {
+	r.recs <- rec{kind: "depth", in: in, id: string(m.Symbol), text: mdText(m)}
+}
+
+// mdText tells market data message m's values, its decimals formatted:
+// "qty@price" per trade or level, "-" for a level's missing size, bids
+// before asks, "|" between them.
+func mdText(m any) string {
+	var b strings.Builder
+	level := func(px int64, size Optional[int64], pe, qe int8) {
+		if b.Len() > 0 && !strings.HasSuffix(b.String(), "|") {
+			b.WriteByte(' ')
+		}
+		if size.Valid {
+			b.WriteString(FormatDecimal(size.Value, qe))
+		} else {
+			b.WriteByte('-')
+		}
+		b.WriteString("@" + FormatDecimal(px, pe))
+	}
+	switch m := m.(type) {
+	case *MarketDataIncrementalTrade:
+		for _, e := range m.MDEntries {
+			level(e.MDEntryPx, Some(e.MDEntrySize), m.PriceExponent, m.QtyExponent)
+		}
+	case *MarketDataSnapshot:
+		for _, e := range m.MDEntriesBids {
+			level(e.MDEntryPx, Some(e.MDEntrySize), m.PriceExponent, m.QtyExponent)
+		}
+		b.WriteString("|")
+		for _, e := range m.MDEntriesAsks {
+			level(e.MDEntryPx, Some(e.MDEntrySize), m.PriceExponent, m.QtyExponent)
+		}
+	case *MarketDataIncrementalBookTicker:
+		for _, e := range m.MDEntriesBids {
+			level(e.MDEntryPx, e.MDEntrySize, m.PriceExponent, m.QtyExponent)
+		}
+		b.WriteString("|")
+		for _, e := range m.MDEntriesAsks {
+			level(e.MDEntryPx, e.MDEntrySize, m.PriceExponent, m.QtyExponent)
+		}
+	case *MarketDataIncrementalDepth:
+		for _, e := range m.MDEntriesBids {
+			level(e.MDEntryPx, e.MDEntrySize, m.PriceExponent, m.QtyExponent)
+		}
+		b.WriteString("|")
+		for _, e := range m.MDEntriesAsks {
+			level(e.MDEntryPx, e.MDEntrySize, m.PriceExponent, m.QtyExponent)
+		}
+	case *InstrumentList:
+		for _, e := range m.RelatedSym {
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(string(e.Symbol))
+		}
+	}
+	return b.String()
 }
 
 // next returns the next record of kind, skipping others.

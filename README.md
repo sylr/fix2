@@ -121,7 +121,10 @@ on with an Ed25519-signed Logon, heartbeats, ends the connection on a gap
 in Binance's numbers (Binance resends nothing), and reconnects within
 Binance's connection limits. It keeps no store and resends nothing: each
 request's receipt tells whether Binance answered it, never saw it (safe to
-send again), or may have seen it (to reconcile). Its command, `binancefix`,
+send again), or may have seen it (to reconcile). It also runs market data
+sessions (`Kind: MarketData`, `fix-md`, port 9002): subscriptions matched
+to their streams, checked before the Handler, within Binance's message
+budget. Its command, `binancefix`,
 checks against the Spot testnet, and only it, what the client relies on
 where Binance's documentation is silent, all of it settled on 2026-10-17:
 `logon` checks the Logon (its signed SendingTime's form, microseconds,

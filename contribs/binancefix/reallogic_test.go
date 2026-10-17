@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -89,6 +90,24 @@ func (h *rlHandler) OnOrderMassCancelReport(in Inbound, m *OrderMassCancelReport
 	h.put("OrderMassCancelReport", in, m)
 }
 func (h *rlHandler) OnLimitResponse(in Inbound, m *LimitResponse) { h.put("LimitResponse", in, m) }
+func (h *rlHandler) OnInstrumentList(in Inbound, m *InstrumentList) {
+	h.put("InstrumentList", in, m)
+}
+func (h *rlHandler) OnMarketDataRequestReject(in Inbound, m *MarketDataRequestReject) {
+	h.put("MarketDataRequestReject", in, m)
+}
+func (h *rlHandler) OnMarketDataSnapshot(in Inbound, m *MarketDataSnapshot) {
+	h.put("MarketDataSnapshot", in, m)
+}
+func (h *rlHandler) OnMarketDataIncrementalTrade(in Inbound, m *MarketDataIncrementalTrade) {
+	h.put("MarketDataIncrementalTrade", in, m)
+}
+func (h *rlHandler) OnMarketDataIncrementalBookTicker(in Inbound, m *MarketDataIncrementalBookTicker) {
+	h.put("MarketDataIncrementalBookTicker", in, m)
+}
+func (h *rlHandler) OnMarketDataIncrementalDepth(in Inbound, m *MarketDataIncrementalDepth) {
+	h.put("MarketDataIncrementalDepth", in, m)
+}
 func (h *rlHandler) OnUnknown(in Inbound, body []byte, err error) {
 	h.evs <- rlEvent{kind: "unknown", in: in, b: bytes.Clone(body), err: err}
 }
@@ -263,6 +282,124 @@ func TestRealLogicPeer(t *testing.T) {
 		describe(le.PossiblyTransmitted) != describe([]*Receipt{receipts["OrderCancelRequestAndNewOrderSingle"]}) || len(le.NeverWritten) != 0 {
 		t.Errorf("LogoutEvent %+v", e)
 	}
+	if err := runErr(t, done); !errors.As(err, &pl) {
+		t.Errorf("Run: %v", err)
+	}
+}
+
+// The same on a market data session: the client's subscription and
+// InstrumentListRequest, of the values Real Logic encoded, are Real
+// Logic's bytes but for the seqNum and sendingTime it stamps; the data
+// reach the Handler with Real Logic's values, each with its stream's
+// subscription (the depth of BTCUSDT and ETHBTC: the trade and the book
+// ticker are of none), the InstrumentList answering the request, the
+// rejects by MDReqID; the snapshot of a null LastBookUpdateID, optional,
+// too. Binance's Logout ends the connection.
+func TestRealLogicMarketData(t *testing.T) {
+	frames := rlFrames(t)
+	f, h := newFake(t), &rlHandler{evs: make(chan rlEvent, 256)}
+	cfg := testConfig(f, h)
+	cfg.Kind = MarketData
+	cfg.Reconnect.Disabled = true
+	c, done := start(t, cfg, time.Hour)
+	p := f.accept()
+	checkLogon(t, p.expect(t, fixsbe.LogonTemplateID), &c.cfg)
+	serve := func(name string) []byte {
+		t.Helper()
+		fr := bytes.Clone(frames[name])
+		if fr == nil {
+			t.Fatalf("no fixture %s", name)
+		}
+		binary.LittleEndian.PutUint32(fr[seqNumOffset:], p.seq)
+		p.seq++
+		p.write(t, fr)
+		return fr[lesofh.HeaderLen:]
+	}
+	serve("LogonAck")
+	if e := h.next(t); e.kind != "logon" {
+		t.Fatalf("event %+v", e)
+	}
+
+	same := func(name string) {
+		t.Helper()
+		want := frames[name][lesofh.HeaderLen:]
+		m := p.next(t)
+		wh, _, _ := fixsbe.ReadHeader(want)
+		if m.h.BlockLength != wh.BlockLength || m.h.TemplateId != wh.TemplateId || m.h.SchemaId != wh.SchemaId ||
+			m.h.Version != wh.Version || !bytes.Equal(m.body, want[fixsbe.HeaderSize:]) {
+			t.Errorf("%s: header %+v, body\n%x\nReal Logic: header %+v, body\n%x", name, m.h, m.body, wh, want[fixsbe.HeaderSize:])
+		}
+	}
+	var mdr MarketDataRequest
+	if _, err := mdr.Decode(frames["MarketDataRequest"][lesofh.HeaderLen:]); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Subscribe(&mdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same("MarketDataRequest")
+	var ilr InstrumentListRequest
+	if _, err := ilr.Decode(frames["InstrumentListRequest"][lesofh.HeaderLen:]); err != nil {
+		t.Fatal(err)
+	}
+	r, err := c.Send(&ilr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same("InstrumentListRequest")
+	waitState(t, r, Written)
+	waitSub(t, s, written)
+	if got := s.Streams(); !slices.Equal(got, []Stream{{"BTCUSDT", StreamDepth}, {"ETHBTC", StreamDepth}}) {
+		t.Errorf("streams %v", got)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		receipt *Receipt
+		sub     *Subscription
+	}{
+		{"InstrumentList", r, nil},
+		{"MarketDataSnapshot", nil, s},
+		{"MarketDataIncrementalDepth", nil, s},
+		{"MarketDataIncrementalDepthAsks", nil, s},
+		{"MarketDataIncrementalTrade", nil, nil},
+		{"MarketDataIncrementalBookTicker", nil, nil},
+		{"MarketDataIncrementalBookTickerSides", nil, nil},
+		{"MarketDataRequestReject", nil, s},
+		{"MarketDataRequestRejectNulls", nil, nil},
+		{"MarketDataSnapshotEmpty", nil, s},
+	} {
+		want := serve(tc.name)
+		e := h.next(t)
+		if !strings.HasPrefix(tc.name, e.kind) || e.err != nil || !bytes.Equal(e.b, want) {
+			t.Errorf("%s: %s, %v\n%x\nwant\n%x", tc.name, e.kind, e.err, e.b, want)
+		}
+		if e.in.Receipt != tc.receipt || e.in.Subscription != tc.sub {
+			t.Errorf("%s: receipt %v, subscription %v", tc.name, e.in.Receipt, e.in.Subscription)
+		}
+	}
+	if r.State() != Answered {
+		t.Errorf("InstrumentListRequest %v", r.State())
+	}
+	st := s.Status()
+	if b := st.Streams[0]; !b.Seen || b.FirstTemplate != MarketDataSnapshotTemplateID {
+		t.Errorf("BTCUSDT %+v", b)
+	}
+	if e := st.Streams[1]; !e.Seen || e.FirstTemplate != MarketDataSnapshotTemplateID {
+		t.Errorf("ETHBTC %+v", e)
+	}
+	if len(st.Rejects) != 1 || st.Rejects[0].Reason != Some(fixsbe.MdReqRejReasonDuplicateMdReqID) ||
+		st.Rejects[0].ErrorCode != Some[int32](-1110) || st.Rejects[0].Text != "Duplicate MDReqID." {
+		t.Errorf("rejects %+v", st.Rejects)
+	}
+
+	serve("Logout")
+	p.expect(t, fixsbe.LogoutTemplateID)
+	if e := h.next(t); e.kind != "logout" || !slices.Equal(e.ev.(LogoutEvent).Subscriptions, []*Subscription{s}) {
+		t.Errorf("event %+v", e)
+	}
+	var pl *PeerLogoutError
 	if err := runErr(t, done); !errors.As(err, &pl) {
 		t.Errorf("Run: %v", err)
 	}

@@ -7,6 +7,13 @@
 // It keeps its orders across connections, in a book of its own: what a
 // test placed and did not cancel is still there for the next connection,
 // as on Binance. Nothing is matched; a market order fills at once.
+//
+// Of Kind binancefix.MarketData, it is the market data endpoint instead:
+// it takes subscriptions (a snapshot on activation for the book ticker
+// and depth, nothing for trades), refuses those Binance documents it
+// refuses (a duplicate MDReqID, too many streams, an unknown symbol),
+// publishes data when told (Publish), still for a while after an
+// unsubscribe, and lists instruments, in several messages if told.
 package fakebinance
 
 import (
@@ -122,7 +129,36 @@ type Options struct {
 	SignatureTimes []binancefix.SignatureTime
 	// LogonAckSeq is the LogonAck's sequence number, 1 if 0.
 	LogonAckSeq uint32
+	// Kind is the endpoint's: order entry, or market data, which refuses
+	// orders with a Reject, as order entry refuses market data requests.
+	Kind binancefix.Kind
 	Behaviour
+	MarketData MarketData
+}
+
+// MarketData tells how the market data endpoint answers.
+type MarketData struct {
+	// Symbols are the instruments listed, BTCUSDT, ETHUSDT and ETHBTC if
+	// none: a subscription to another is refused whole, with a
+	// MarketDataRequestReject of error -1121.
+	Symbols []string
+	// MaxStreams bounds a connection's streams, binancefix.MaxStreams if
+	// 0: a subscription beyond is refused whole, with a
+	// MarketDataRequestReject TOO_MANY_SUBSCRIPTIONS.
+	MaxStreams int
+	// BookLevels is the levels per side of each symbol's book,
+	// binancefix.MaxMarketDepth if 0: a depth subscription's snapshot
+	// takes MarketDepth of them at most.
+	BookLevels int
+	// InstrumentsPerMessage splits an InstrumentList into messages of as
+	// many instruments, one message if 0.
+	InstrumentsPerMessage int
+	// Linger is how many publications still reach a subscription after
+	// its unsubscribe, Binance's data possibly flowing for a while.
+	Linger int
+	// RejectUnsubscribe answers an unsubscribe with a
+	// MarketDataRequestReject of its MDReqID, unsubscribing all the same.
+	RejectUnsubscribe bool
 }
 
 // Request is a request the exchange received.
@@ -181,6 +217,11 @@ type Exchange struct {
 	// withheld are the TRADE reports DelaySellTrade withholds, by
 	// OrderID.
 	withheld map[int64]*fixsbe.ExecutionReport
+	// The market data endpoint's: its logged-on connections, its trades'
+	// and book updates' numbers.
+	mdConns  []*conn
+	tradeID  int64
+	updateID int64
 }
 
 // Net returns the base asset the market orders bought minus what they
@@ -209,7 +250,17 @@ func New(o Options) *Exchange {
 	if o.LogonAckSeq == 0 {
 		o.LogonAckSeq = 1
 	}
-	return &Exchange{o: o, nextID: 1000}
+	md := &o.MarketData
+	if len(md.Symbols) == 0 {
+		md.Symbols = []string{"BTCUSDT", "ETHUSDT", "ETHBTC"}
+	}
+	if md.MaxStreams == 0 {
+		md.MaxStreams = binancefix.MaxStreams
+	}
+	if md.BookLevels == 0 {
+		md.BookLevels = binancefix.MaxMarketDepth
+	}
+	return &Exchange{o: o, nextID: 1000, updateID: 1_000_000}
 }
 
 // Dial opens a connection to the exchange.
@@ -265,6 +316,7 @@ type conn struct {
 	c      transport.Conn
 	seq    uint32
 	sender string
+	subs   []*subscription // market data's, unsubscribed ones lingering
 }
 
 func (s *conn) send(m interface {
@@ -334,8 +386,18 @@ func (x *Exchange) serve(c transport.Conn) {
 		return
 	}
 	s.seq = x.o.LogonAckSeq
+	x.mu.Lock()
 	s.send(&fixsbe.LogonAck{EncryptMethod: fixsbe.Some[uint8](0), HeartBtInt: l.HeartBtInt,
 		SbeSchemaIdVersionDeprecated: fixsbe.BoolEnumFalse, UUID: []byte("fake-" + s.sender)})
+	if x.o.Kind == binancefix.MarketData {
+		x.mdConns = append(x.mdConns, s)
+		defer func() {
+			x.mu.Lock()
+			x.mdConns = slices.DeleteFunc(x.mdConns, func(o *conn) bool { return o == s })
+			x.mu.Unlock()
+		}()
+	}
+	x.mu.Unlock()
 	for {
 		b, err := fr.Next()
 		if err != nil {
@@ -377,7 +439,27 @@ func (s *conn) handle(h fixsbe.MessageHeader, body []byte) bool {
 	defer x.mu.Unlock()
 	req := Request{SenderCompID: s.sender, At: time.Now()}
 	var answer func()
+	md := h.TemplateId == fixsbe.MarketDataRequestTemplateID || h.TemplateId == fixsbe.InstrumentListRequestTemplateID
+	if md != (x.o.Kind == binancefix.MarketData) && h.TemplateId != fixsbe.LimitQueryTemplateID {
+		// A request of the other endpoint.
+		s.send(&fixsbe.Reject{RefSeqNum: fixsbe.Some(h.SeqNum), ErrorCode: fixsbe.Some[int32](-1221), Text: []byte("Invalid/missing field(s) in SBE message.")})
+		return true
+	}
 	switch h.TemplateId {
+	case fixsbe.MarketDataRequestTemplateID:
+		var m fixsbe.MarketDataRequest
+		if _, err := m.DecodeBody(h, body); err != nil {
+			return false
+		}
+		req.Name, req.IDs = "MarketDataRequest", []string{string(m.MDReqID)}
+		answer = func() { s.marketData(&m) }
+	case fixsbe.InstrumentListRequestTemplateID:
+		var m fixsbe.InstrumentListRequest
+		if _, err := m.DecodeBody(h, body); err != nil {
+			return false
+		}
+		req.Name, req.IDs = "InstrumentListRequest", []string{string(m.InstrumentReqID)}
+		answer = func() { s.instruments(h.SeqNum, &m) }
 	case fixsbe.NewOrderSingleTemplateID:
 		var m fixsbe.NewOrderSingle
 		if _, err := m.DecodeBody(h, body); err != nil {
@@ -845,6 +927,20 @@ func (s *conn) limits(m *fixsbe.LimitQuery) {
 		id = []byte("other")
 	}
 	sec, day := fixsbe.Some(fixsbe.LimitResetIntervalResolutionSecond), fixsbe.Some(fixsbe.LimitResetIntervalResolutionDay)
+	if s.x.o.Kind == binancefix.MarketData {
+		streams := 0
+		for _, sub := range s.subs {
+			if !sub.unsubscribed {
+				streams += len(sub.streams)
+			}
+		}
+		s.send(&fixsbe.LimitResponse{ReqID: id, LimitIndicators: []fixsbe.LimitIndicators{
+			{LimitType: fixsbe.LimitTypeMessageLimit, LimitCount: uint64(len(s.x.requests)), LimitMax: binancefix.MarketDataMessageLimit,
+				LimitResetInterval: fixsbe.Some[uint32](60), LimitResetIntervalResolution: sec},
+			{LimitType: fixsbe.LimitTypeSubscriptionLimit, LimitCount: uint64(streams), LimitMax: uint64(s.x.o.MarketData.MaxStreams)},
+		}})
+		return
+	}
 	s.send(&fixsbe.LimitResponse{ReqID: id, LimitIndicators: []fixsbe.LimitIndicators{
 		{LimitType: fixsbe.LimitTypeMessageLimit, LimitCount: uint64(len(s.x.requests)), LimitMax: 10000, LimitResetInterval: fixsbe.Some[uint32](10), LimitResetIntervalResolution: sec},
 		{LimitType: fixsbe.LimitTypeOrderLimit, LimitCount: uint64(len(s.x.orders)), LimitMax: 50, LimitResetInterval: fixsbe.Some[uint32](10), LimitResetIntervalResolution: sec},

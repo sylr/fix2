@@ -40,6 +40,10 @@ const (
 	LegMassCancel
 	// LegLimits is a LimitQuery: its LimitResponse answers it.
 	LegLimits
+	// LegInstruments is an InstrumentListRequest: the first InstrumentList
+	// carrying its InstrumentReqID answers it. A long list may come in
+	// several: the others reach the Handler without Receipt.
+	LegInstruments
 )
 
 func (k LegKind) String() string {
@@ -56,6 +60,8 @@ func (k LegKind) String() string {
 		return "mass cancel"
 	case LegLimits:
 		return "limits"
+	case LegInstruments:
+		return "instruments"
 	}
 	return "invalid"
 }
@@ -143,6 +149,11 @@ func requestLegs(m Request) (uint16, []Leg, bool, error) {
 	case *LimitQuery:
 		tid = fixsbe.LimitQueryTemplateID
 		leg(LegLimits, m.ReqID)
+	case *InstrumentListRequest:
+		tid = fixsbe.InstrumentListRequestTemplateID
+		leg(LegInstruments, m.InstrumentReqID)
+	case *MarketDataRequest:
+		return 0, nil, false, fmt.Errorf("%w: %T: Subscribe sends it", ErrNotRequest, m)
 	default:
 		return 0, nil, false, fmt.Errorf("%w: %T", ErrNotRequest, m)
 	}
@@ -190,6 +201,8 @@ func answerIDs(m any) [][]byte {
 		return [][]byte{m.ClOrdID}
 	case *fixsbe.LimitResponse:
 		return [][]byte{m.ReqID}
+	case *fixsbe.InstrumentList:
+		return [][]byte{m.InstrumentReqID}
 	}
 	return nil
 }
@@ -325,6 +338,10 @@ func (r *Receipt) apply(m any, a Answer) bool {
 		}
 	case *fixsbe.LimitResponse:
 		if i := find(LegLimits, m.ReqID); i >= 0 {
+			return set(i, Accepted)
+		}
+	case *fixsbe.InstrumentList:
+		if i := find(LegInstruments, m.InstrumentReqID); i >= 0 {
 			return set(i, Accepted)
 		}
 	case *fixsbe.Reject:

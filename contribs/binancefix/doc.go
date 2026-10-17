@@ -1,6 +1,9 @@
-// Package binancefix is a client of Binance Spot's "FIX SBE" order entry
-// API: SBE requests and answers, over TLS, on port 9002 of
-// fix-oe.binance.com (fix-oe.testnet.binance.vision for the testnet).
+// Package binancefix is a client of Binance Spot's "FIX SBE" API: SBE
+// requests and answers, over TLS, on port 9002 of fix-oe.binance.com for
+// order entry, of fix-md.binance.com for market data
+// (fix-oe.testnet.binance.vision and fix-md.testnet.binance.vision for the
+// testnet). Config.Kind tells which a Client is; market data sessions are
+// described under "Market data" below, what precedes holds for both.
 //
 // FIX SBE is Binance's own protocol, not a FIX Trading Community standard:
 // Binance's documentation is its specification, and fix2's strictness rule
@@ -51,8 +54,9 @@
 //
 // Without a Logout of ours written, Binance refuses the SenderCompID for
 // twice HeartBtInt: Run waits that long before reconnecting. It also makes
-// at most 15 attempts in 30 seconds, Binance's limit for order entry, and
-// backs off, doubling, while attempts fail. A refused Logon is retried
+// at most 15 attempts in 30 seconds, Binance's limit for order entry (300
+// in 300 seconds for market data), and backs off, doubling, while attempts
+// fail. A refused Logon is retried
 // after twice HeartBtInt (the refusal may be the SenderCompID's cooldown, or
 // a connection limit), Reconnect.MaxRefusals times in a row at most.
 //
@@ -137,20 +141,124 @@
 //
 // The Handler receives, on one goroutine, in order: a connection's
 // OnLogon, its messages, its OnLogout, then the next connection's. Its
-// methods may call Send, Stop and Reconnect, which never wait, and must
-// not wait for Run, nor for a Receipt: the answer may be queued behind the
-// call. Messages passed to it are valid during the call only.
-// Reading does not wait for the Handler until Config.MaxEvents messages
-// wait for it; heartbeats go on regardless. News (Binance's maintenance
-// countdown) reaches OnNews: Reconnect(e.Epoch) moves the session to another
-// server
-// with a clean Logout. LogonEvent.SchemaDeprecated tells that Binance
-// deprecated the schema the codecs were generated from.
+// methods may call Send, Subscribe, Unsubscribe, Stop and Reconnect, which
+// never wait, and must not wait for Run, nor for a Receipt: the answer may
+// be queued behind the call. Messages passed to it are valid during the
+// call only. Reading does not wait for the Handler until Config.MaxEvents
+// messages, or Config.MaxEventBytes bytes of them, wait for it; heartbeats
+// go on regardless. News (Binance's maintenance countdown) reaches OnNews:
+// Reconnect(e.Epoch) moves the session to another server with a clean
+// Logout. LogonEvent.SchemaDeprecated tells that Binance deprecated the
+// schema the codecs were generated from.
+//
+// # Market data
+//
+// A Client of Kind MarketData dials MarketDataEndpoint
+// (TestnetMarketDataEndpoint for the testnet) and logs on as order entry
+// does, its API key needing FIX_API or FIX_API_READ_ONLY. It places no
+// orders: Send takes InstrumentListRequest and LimitQuery, and refuses
+// orders with ErrSessionKind, as an order entry Client refuses
+// InstrumentListRequest and Subscribe; nothing is written. An
+// InstrumentListRequest's Receipt is answered by the first InstrumentList
+// carrying its InstrumentReqID: a long list may come in several messages,
+// the next ones reaching the Handler without Receipt.
+//
+// Binance's limits, shared between FIX and FIX SBE: 300 connection
+// attempts per 300 seconds (Run's default pacing), 100 concurrent
+// connections per account, MaxStreams (1000) streams per connection
+// (beyond, a MarketDataRequestReject TOO_MANY_SUBSCRIPTIONS, left to
+// Binance), and MarketDataMessageLimit (2000) messages per
+// MarketDataMessageWindow (60 seconds) per session, ours of every kind
+// counted. The client owns that budget: it counts the messages it writes,
+// Logon, Heartbeats, TestRequests and their answers, requests, Logout, and
+// the requests queued, over a sliding window, and Send, Subscribe and
+// Unsubscribe refuse a request (ErrRateLimited, nothing written) that
+// would leave less than MarketDataMessageReserve (100) for session
+// messages, which are never refused.
+//
+// Subscriptions are not requests: Binance answers none. Subscribe queues a
+// MarketDataRequest and returns its Subscription, which tells, never that
+// Binance accepted it:
+//
+//   - whether its request, and its unsubscribe, were written (Phase);
+//   - Binance's rejects of it, in the order read, late ones included: a
+//     MarketDataRequestReject naming its MDReqID, which may refuse the
+//     request or, once the unsubscribe's writing began, the unsubscribe
+//     (SubscriptionReject.Unsubscribe), or a Reject naming either's
+//     seqNum;
+//   - per stream, the first data seen (StreamStatus): a book stream gets a
+//     snapshot on activation, as Binance documents; a trade stream gets
+//     nothing before its first trade, so a quiet stream is not told from a
+//     refused one;
+//   - once its connection ended, that it did (Ended, Err, Done): it is
+//     never carried over, and LogoutEvent.Subscriptions lists the
+//     connection's, apart from its requests (never PossiblyTransmitted).
+//     Subscribing again, once logged on again, is the application's call.
+//
+// A stream is a symbol's trades, book ticker or depth (StreamKind), told
+// by the request's MDEntryTypes and MarketDepth, as binancemd sends them:
+// TRADE for trades; BID and OFFER, together, of MarketDepth 1 for the book
+// ticker, 2 to MaxMarketDepth (5000) for depth. Subscribe refuses what
+// cannot be told (ErrInvalidSubscription): one side of a book, a book
+// without MarketDepth, an unknown entry type, a symbol twice. Binance's
+// market data carry no MDReqID: the client matches them to a subscription
+// by their Symbol and template (MarketDataIncrementalTrade,
+// MarketDataIncrementalBookTicker, MarketDataIncrementalDepth; a
+// MarketDataSnapshot to the symbol's book ticker or depth, whichever is
+// subscribed) and hands them to the Handler with it (Inbound.Subscription),
+// nil when no stream of the connection is theirs. Hence the rule of no
+// overlap: on a connection, a stream belongs to one subscription, and once
+// subscribed it is never subscribed again, unsubscribed or not, nor is a
+// symbol's book ticker with its depth, which share the snapshot
+// (ErrStreamTaken): an old subscription's data and a new one's could not
+// be told apart. Reconnect gives a clean connection. MDReqIDs are unique
+// per connection, kept through the unsubscribe (ErrDuplicateID).
+// Unsubscribe expects no answer and proves neither that Binance took it
+// nor that data stop: data read after it are still the subscription's.
+//
+// The data are checked before the Handler sees them, the codecs checking
+// structure only: required fields not null (int64's math.MinInt64, an
+// exponent's -128) nor empty (Symbol, MDReqID, InstrumentReqID, Currency),
+// enums of the schema's values, a depth update's FirstBookUpdateID up to
+// its LastBookUpdateID, and the message as long as its frame; on a market
+// data session, every message for the Handler has its required header
+// fields checked too (sendingTime, blockLength, templateId, version not
+// null). A message that fails, or a market data message the codec cannot
+// decode, ends the connection after our Logout (ProtocolError, wrapping
+// ErrMissingRequired, ErrInvalidMarketData or the codec's error): a
+// corrupted depth update would silently desynchronise a book, and a new
+// connection is a clean boundary. What the schema makes optional reaches
+// the Handler as it is: a snapshot's LastBookUpdateID may be null, which
+// a book kept from depth updates cannot synchronise from (binancemd will
+// require it). Prices and quantities are mantissas with their message's
+// (an InstrumentList's: their entry's) exponents, any int8 but the null,
+// which may change from one message to the next: FormatDecimal writes
+// them exactly. Book updates carry no update action:
+// a level without MDEntrySize is deleted; otherwise it changes if the book
+// has it, and is new if not. Depth updates come every 20ms; book ticker
+// updates are culled under load, only a symbol's newest sent.
+//
+// A snapshot of MaxMarketDepth levels per side takes 160,063 bytes framed,
+// beyond order entry's 64 KiB: a market data session's frames are bounded
+// by DefaultMarketDataMaxFrameLength (1 MiB), which holds an instrument
+// list of about 10,000 symbols, and its events waiting for the Handler by
+// DefaultMarketDataMaxEvents and DefaultMarketDataMaxEventBytes (16,384
+// messages, 32 MiB).
+//
+// Documented by Binance, and relied on: the endpoints and limits, the
+// templates, matching by symbol and template, snapshots on activation of
+// book streams, levels deleted by a missing size. To settle on the testnet
+// (MD3): whether trades get a snapshot, how a stream's data end after an
+// unsubscribe, which reject (MarketDataRequestReject or Reject) refuses a
+// malformed request, whether an unsubscribe needs more than its MDReqID
+// (the client sends its SubscriptionRequestType, MDReqID and MarketDepth),
+// whether unsubscribed streams count against MaxStreams, and that
+// required strings are never empty.
 //
 // # Settled on the testnet
 //
-// Where Binance's documentation is silent, the client relied on
-// assumptions, all settled against the Spot testnet on 2026-10-17 by
+// Where Binance's documentation is silent, the order entry client relied
+// on assumptions, all settled against the Spot testnet on 2026-10-17 by
 // cmd/binancefix (logon, probe: 8 confirmed, 0 contradicted, 0
 // inconclusive; README.md, "Settled on the testnet", records the messages
 // seen): the signed SendingTime's microsecond form, the LogonAck numbered
