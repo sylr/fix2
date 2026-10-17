@@ -209,24 +209,34 @@ func (c *Client) writeHandshake(t transport.Conn, f []byte) error {
 }
 
 // readHandshake reads the next session message of the handshake, before
-// deadline.
+// deadline. A MessageTemplate, which "may be sent at any time" (§3.6), is
+// checked well-formed and ignored, the deadline unchanged.
 func (c *Client) readHandshake(t transport.Conn, r *sofh.Reader, deadline time.Time) (codec.MessageHeader, []byte, error) {
 	t.SetReadDeadline(deadline)
-	enc, msg, err := r.Next()
-	if err != nil {
-		if isTimeout(err) {
-			return codec.MessageHeader{}, nil, retry(errors.New("fixp/session: no answer in time"))
+	for {
+		enc, msg, err := r.Next()
+		if err != nil {
+			if isTimeout(err) {
+				return codec.MessageHeader{}, nil, retry(errors.New("fixp/session: no answer in time"))
+			}
+			return codec.MessageHeader{}, nil, retry(fmt.Errorf("fixp/session: reading: %w", err))
 		}
-		return codec.MessageHeader{}, nil, retry(fmt.Errorf("fixp/session: reading: %w", err))
+		kind, h, body, err := codec.Classify(enc, msg)
+		if err == nil && kind == codec.Ignored {
+			var mt codec.MessageTemplate
+			if err := c.s.cfg.decodeBody(&mt, h, body); err != nil {
+				return h, nil, retry(fmt.Errorf("fixp/session: MessageTemplate: %w", err))
+			}
+			continue
+		}
+		if err == nil && kind != codec.Session {
+			err = fmt.Errorf("template %d of schema %d", h.TemplateId, h.SchemaId)
+		}
+		if err != nil {
+			return h, nil, retry(fmt.Errorf("fixp/session: unexpected message in the handshake: %w", err))
+		}
+		return h, msg, nil
 	}
-	kind, h, _, err := codec.Classify(enc, msg)
-	if err == nil && kind != codec.Session {
-		err = fmt.Errorf("template %d of schema %d", h.TemplateId, h.SchemaId)
-	}
-	if err != nil {
-		return h, nil, retry(fmt.Errorf("fixp/session: unexpected message in the handshake: %w", err))
-	}
-	return h, msg, nil
 }
 
 // negotiate negotiates the session on t (§4.2). An attempt that fails
@@ -267,7 +277,7 @@ func (c *Client) negotiate(ctx context.Context, t transport.Conn, r *sofh.Reader
 		switch h.TemplateId {
 		case codec.NegotiationResponseTemplateID:
 			var resp codec.NegotiationResponse
-			if _, err := resp.Decode(msg); err != nil {
+			if err := s.cfg.decode(&resp, msg); err != nil {
 				return retry(fmt.Errorf("fixp/session: NegotiationResponse: %w", err))
 			}
 			if resp.SessionId != id || resp.RequestTimestamp != nanos(ts) {
@@ -290,7 +300,7 @@ func (c *Client) negotiate(ctx context.Context, t transport.Conn, r *sofh.Reader
 			return nil
 		case codec.NegotiationRejectTemplateID:
 			var rej codec.NegotiationReject
-			if _, err := rej.Decode(msg); err != nil {
+			if err := s.cfg.decode(&rej, msg); err != nil {
 				return retry(fmt.Errorf("fixp/session: NegotiationReject: %w", err))
 			}
 			if rej.SessionId != id || rej.RequestTimestamp != nanos(ts) {
@@ -312,7 +322,7 @@ func (c *Client) negotiate(ctx context.Context, t transport.Conn, r *sofh.Reader
 func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader) (*conn, error) {
 	s := c.s
 	s.mu.Lock()
-	id, out := s.id, s.out
+	id, out, st := s.id, s.out, s.st
 	s.state = StateEstablishing
 	s.mu.Unlock()
 	ts := time.Now()
@@ -321,7 +331,12 @@ func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader
 		return nil, err
 	}
 	est := codec.Establish{SessionId: id, Timestamp: nanos(ts), KeepaliveInterval: millis(s.cfg.KeepaliveInterval), Credentials: creds}
-	if out.Sequenced() {
+	// "For re-establishment of a recoverable ... flow only" (§4.3.1), the
+	// flow our own, whose numbers the value gives (docs/fixp.md): an
+	// Idempotent flow starts with a Sequence (§4.8), as does a first
+	// establishment, our writer sending one before the first message on
+	// every connection.
+	if out == fixp.Recoverable && !st.State().EstablishedAt.IsZero() {
 		// The next written: messages queued go out after the Establish.
 		est.NextSeqNo = codec.Some(s.q.nextToWrite())
 	}
@@ -340,7 +355,7 @@ func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader
 		switch h.TemplateId {
 		case codec.EstablishmentAckTemplateID:
 			var ack codec.EstablishmentAck
-			if _, err := ack.Decode(msg); err != nil {
+			if err := s.cfg.decode(&ack, msg); err != nil {
 				return nil, retry(fmt.Errorf("fixp/session: EstablishmentAck: %w", err))
 			}
 			if ack.SessionId != id || ack.RequestTimestamp != nanos(ts) {
@@ -349,7 +364,16 @@ func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader
 			if ack.KeepaliveInterval == 0 {
 				return nil, retry(errors.New("fixp/session: EstablishmentAck with a keepalive interval of 0"))
 			}
-			cn := newConn(s, t, r, time.Duration(ack.KeepaliveInterval)*time.Millisecond)
+			keepalive := time.Duration(ack.KeepaliveInterval) * time.Millisecond
+			if keepalive < s.cfg.MinKeepalive || keepalive > s.cfg.MaxKeepalive {
+				// Established on the server's side: tell it why we go. The
+				// server would answer the same again: Run ends, as on
+				// EstablishmentReject KeepaliveInterval.
+				reason := fmt.Sprintf("keepalive interval %v, not between %v and %v", keepalive, s.cfg.MinKeepalive, s.cfg.MaxKeepalive)
+				c.writeHandshake(t, terminateFrame(id, fixp.TerminationUnspecifiedError, truncate(reason, s.cfg.MaxReasonLength)))
+				return nil, fmt.Errorf("fixp/session: the server's %s", reason)
+			}
+			cn := newConn(s, t, r, keepalive)
 			if ack.NextSeqNo.Valid {
 				if err := cn.checkNextSeqNo(ack.NextSeqNo.Value); err != nil {
 					// Established on the server's side: tell it why we go.
@@ -368,7 +392,7 @@ func (c *Client) establish(ctx context.Context, t transport.Conn, r *sofh.Reader
 			return cn, nil
 		case codec.EstablishmentRejectTemplateID:
 			var rej codec.EstablishmentReject
-			if _, err := rej.Decode(msg); err != nil {
+			if err := s.cfg.decode(&rej, msg); err != nil {
 				return nil, retry(fmt.Errorf("fixp/session: EstablishmentReject: %w", err))
 			}
 			if rej.SessionId != id || rej.RequestTimestamp != nanos(ts) {

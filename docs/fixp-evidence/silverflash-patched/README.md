@@ -50,8 +50,11 @@ the failure (`<case>.test.log`, `<case>.server.log`):
   Silverflash's read boundaries are not instrumented; its
   `AbstractTcpChannel.readyToRead` clears the read buffer before each
   read, which drops what a read leaves of a frame.
-- No heartbeat when idle (the spike's finding): the tests raise the
-  client's leniency to 30 keepalive intervals.
+- No heartbeat when idle (the spike's finding), and 4 to 6 zero bytes
+  after its session messages: the tests set the client's
+  `ToleratePeerWithoutKeepalives` and `TolerateTrailingBytes`. The runs
+  recorded here predate both (S4): the client then had a leniency of 30
+  keepalive intervals, and ignored the padding.
 
 Not exercised: a Recoverable server flow (it crashes Silverflash, the
 spike's finding), re-establishment of a live session, retransmission and

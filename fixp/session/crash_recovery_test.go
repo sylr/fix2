@@ -187,6 +187,7 @@ func crashGap(t *testing.T, serverFlow fixp.FlowType, commit bool) {
 		{
 			crashRecovery(t, commit, fixp.Idempotent, serverFlow,
 				func(r *raw) {
+					r.send(&codec.Sequence{NextSeqNo: 1}) // §4.8
 					r.send(appMsg{1, "1"})
 					r.send(&codec.Sequence{NextSeqNo: 4})
 					r.send(appMsg{1, "4"})

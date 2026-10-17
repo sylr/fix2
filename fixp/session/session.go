@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync"
 	"sync/atomic"
 
@@ -33,6 +34,9 @@ var (
 	// ErrTooLarge is a Send of a message whose frame is longer than
 	// Config.MaxPendingBytes: it would never fit the queue.
 	ErrTooLarge = errors.New("fixp/session: message too large")
+	// ErrInvalidApplied is a SendApplied whose FromSeqNo or Count is its
+	// field's null, which a required field cannot hold (SBE §4.15).
+	ErrInvalidApplied = errors.New("fixp/session: Applied's FromSeqNo or Count null")
 )
 
 // State is a session's state, as Session.State reports it.
@@ -279,10 +283,14 @@ func (s *Session) SendRaw(ctx context.Context, msg []byte) (uint64, error) {
 
 // SendApplied sends Applied (§4.8.1), telling the peer its messages from
 // to from+count-1 were applied: an application message of our flow, which
-// must be sequenced.
+// must be sequenced. from and count are required fields: their nulls,
+// 2^64-1 and 2^32-1, are refused (ErrInvalidApplied).
 func (s *Session) SendApplied(ctx context.Context, from uint64, count uint32) (uint64, error) {
 	if out, _ := s.Flows(); !out.Sequenced() {
 		return 0, fmt.Errorf("%w: Applied on an %s flow", fixp.ErrNoFlow, out)
+	}
+	if from == math.MaxUint64 || count == math.MaxUint32 {
+		return 0, fmt.Errorf("%w: FromSeqNo %d, Count %d", ErrInvalidApplied, from, count)
 	}
 	return s.send(ctx, mustFrame(&codec.Applied{FromSeqNo: from, Count: count}))
 }

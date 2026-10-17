@@ -27,11 +27,20 @@ type Config struct {
 	Handler Handler
 	// KeepaliveInterval is ours, sent in Establish by a client, in
 	// EstablishmentAck by a server: we send a heartbeat in every interval
-	// in which we sent nothing else (§4.5). 1s if 0.
+	// in which we sent nothing else (§4.5). 1s if 0; 1ms to 2^32-2 ms, the
+	// wire's uint32 of milliseconds but its null.
 	KeepaliveInterval time.Duration
-	// Leniency multiplies the peer's keepalive interval: silence beyond it
-	// ends the connection. 1.5 if 0.
-	Leniency float64
+	// KeepaliveLeniency multiplies the peer's keepalive interval: silence
+	// beyond it ends the connection (§4.4 recommends "some leniency", and
+	// sets none). 1.5 if 0; at least 1, finite, and its product with
+	// MaxKeepalive a time.Duration.
+	KeepaliveLeniency float64
+	// MinKeepalive and MaxKeepalive bound the peer's keepalive interval,
+	// 100ms and 1m if 0, 2^32-2 ms at most (§4.3.1: "Counterparties may agree on a valid range
+	// for KeepaliveInterval"): a server rejects an Establish outside with
+	// KeepaliveInterval; a client terminates on an EstablishmentAck
+	// outside, and Run returns an error.
+	MinKeepalive, MaxKeepalive time.Duration
 	// HandshakeTimeout bounds the wait for NegotiationResponse and
 	// EstablishmentAck on a client, for Negotiate and Establish on a
 	// server's new connection: the keepalive interval if 0 (§7.1.7.6,
@@ -57,7 +66,8 @@ type Config struct {
 	MaxHeldMessages, MaxHeldBytes int
 	// RetransmitBatch bounds the messages of a Retransmission we send, and
 	// of a RetransmitRequest we ask, 1000 if 0: a longer request is
-	// answered in part, the peer asking for the rest (§4.6.2.2). (M6)
+	// answered in part, the peer asking for the rest (§4.6.2.2). (M6) At
+	// most 2^32-2: a count's uint32 but its null.
 	RetransmitBatch int
 	// MaxReasonLength bounds the reasons we send, longer ones truncated,
 	// and those we log, 256 bytes if 0.
@@ -68,11 +78,41 @@ type Config struct {
 	// answered RetransmitReject OutOfRange "no longer available". Messages
 	// queued and not written yet are never evicted. 0 keeps every message.
 	MaxStoredMessages int
+	// RejectRetransmitRequestBeyondSent answers a RetransmitRequest for
+	// sequence numbers we never sent with RetransmitReject OutOfRange, as
+	// FIXP's examples do (§7.4.5.1, §7.4.5.2); by default it terminates the
+	// connection, ReRequestOutOfBounds, the request being a protocol
+	// violation (§6.3, whose "should be immediately terminated" leaves the
+	// choice).
+	RejectRetransmitRequestBeyondSent bool
 	// Observer, if set, sees every frame of an established connection.
 	Observer Observer
 	// Logger receives the session's events, never credentials; nothing is
 	// logged if nil.
 	Logger *slog.Logger
+	// Tolerations, all off by default, depart from FIXP, SOFH and SBE as
+	// some peers need (docs/conformance.md).
+	Tolerations
+}
+
+// Tolerations depart from what FIXP 1.0, SOFH and SBE require, as some
+// peers need: a session follows them strictly unless told otherwise, each
+// departure its own field, all off by default. docs/conformance.md gives
+// the rule each relaxes.
+type Tolerations struct {
+	// ToleratePeerWithoutKeepalives keeps the connection however long the
+	// peer stays silent, as Silverflash, which sends no heartbeat, needs;
+	// FIXP §4.5: "Each peer must send a heartbeat message during each
+	// interval in which no application messages were sent." A dead peer is
+	// then found by the transport only.
+	ToleratePeerWithoutKeepalives bool
+	// TolerateTrailingBytes accepts bytes after a session message within
+	// its frame, beyond what its decoder consumed, when the message
+	// header's version is not above the schema's, as Silverflash pads its
+	// session messages. By default they make the message malformed, and
+	// the connection terminates (§4.4); bytes after a newer version's
+	// message may be its groups or data, and are refused either way.
+	TolerateTrailingBytes bool
 }
 
 // ClientConfig configures a Client.
@@ -135,9 +175,6 @@ type ServerConfig struct {
 	// *fixp.EstablishmentRejectedError with its code and reason, any other
 	// with Credentials and no reason, the error only logged. Required.
 	Authenticate func(ctx context.Context, req *AuthRequest) (owner string, err error)
-	// MinKeepalive and MaxKeepalive bound the keepalive interval a client
-	// may ask for: 100ms and 1m if 0. Others get KeepaliveInterval.
-	MinKeepalive, MaxKeepalive time.Duration
 	// MaxClockSkew bounds the gap between a request's Timestamp and the
 	// server's clock, 1m if 0 (§7.1.7.4).
 	MaxClockSkew time.Duration

@@ -3,7 +3,6 @@ package session
 import (
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -102,7 +101,7 @@ func (c *conn) recover() error {
 	if r.limit == 0 {
 		r.limit = uint64(s.cfg.RetransmitBatch)
 	}
-	count := min(to-from+1, r.limit, math.MaxUint32)
+	count := min(to-from+1, r.limit, maxCount) // never the null count
 	ts := max(nanos(time.Now()), r.lastTS+1)
 	r.lastTS = ts
 	r.req = &request{ts: ts, from: from, count: count}
@@ -215,7 +214,7 @@ func (c *conn) onRetransmission(h codec.MessageHeader, body []byte) error {
 		return protocolf("Retransmission on an %s flow", in)
 	}
 	var rt codec.Retransmission
-	if _, err := rt.DecodeBody(h, body); err != nil {
+	if err := c.s.cfg.decodeBody(&rt, h, body); err != nil {
 		return protocolf("Retransmission: %v", err)
 	}
 	if r.req == nil || r.batch || rt.RequestTimestamp != r.req.ts {
@@ -241,7 +240,7 @@ func (c *conn) onRetransmitReject(h codec.MessageHeader, body []byte) error {
 		return protocolf("RetransmitReject on an %s flow", in)
 	}
 	var rj codec.RestransmitReject
-	if _, err := rj.DecodeBody(h, body); err != nil {
+	if err := s.cfg.decodeBody(&rj, h, body); err != nil {
 		return protocolf("RetransmitReject: %v", err)
 	}
 	if r.req == nil || r.batch || rj.RequestTimestamp != r.req.ts || rj.SessionId != s.ID() {
@@ -283,7 +282,9 @@ func (c *conn) onRetransmitReject(h codec.MessageHeader, body []byte) error {
 func (c *conn) notApplied(from, to uint64) error {
 	s := c.s
 	// One NotApplied reports a gap: one it cannot is no peer's mistake.
-	if to-from+1 > math.MaxUint32 {
+	// Refused before anything is sent or recorded: its count would be the
+	// null 2^32-1 or wrap.
+	if to-from+1 > maxCount {
 		return protocolf("a gap of %d messages, from %d", to-from+1, from)
 	}
 	// Our flow finishing, no application message follows its
@@ -318,7 +319,7 @@ func (c *conn) onRetransmitRequest(h codec.MessageHeader, body []byte) error {
 		return protocolf("RetransmitRequest on an %s flow", out)
 	}
 	var rr codec.RetransmitRequest
-	if _, err := rr.DecodeBody(h, body); err != nil {
+	if err := s.cfg.decodeBody(&rr, h, body); err != nil {
 		return protocolf("RetransmitRequest: %v", err)
 	}
 	// The answers wait for the writer: a peer asking faster than it reads
@@ -342,10 +343,22 @@ func (c *conn) onRetransmitRequest(h codec.MessageHeader, body []byte) error {
 		return &terminateError{fixp.TerminationReRequestInProgress, "RetransmitRequest while one is in progress"}
 	}
 	written := s.written.Load()
-	// A request reaching beyond what was sent, in part even, is refused
-	// whole (§7.4.5.1, §7.4.5.2).
-	if rr.Count == 0 || rr.FromSeqNo == 0 || rr.FromSeqNo > written || uint64(rr.Count)-1 > written-rr.FromSeqNo {
+	if rr.Count == 0 {
 		c.retransmitting.CompareAndSwap(id, 0)
+		return reject(fixp.RetransmitOutOfRange, "no message requested")
+	}
+	// A request reaching beyond what was sent, in part even (0 never is):
+	// "it is a violation to request a retransmission of a message with a
+	// sequence number that has not been sent yet", and of a violation "the
+	// session should be immediately terminated" (§6.3, §4.6.4); refused
+	// whole with RetransmitReject, as the examples do (§7.4.5.1,
+	// §7.4.5.2), if RejectRetransmitRequestBeyondSent. Messages sent and
+	// no longer kept are refused so (retransmit).
+	if rr.FromSeqNo == 0 || rr.FromSeqNo > written || uint64(rr.Count)-1 > written-rr.FromSeqNo {
+		c.retransmitting.CompareAndSwap(id, 0)
+		if !s.cfg.RejectRetransmitRequestBeyondSent {
+			return &terminateError{fixp.TerminationReRequestOutOfBounds, "RetransmitRequest beyond what was sent"}
+		}
 		return reject(fixp.RetransmitOutOfRange, "beyond what was sent")
 	}
 	count := min(uint64(rr.Count), written-rr.FromSeqNo+1, uint64(s.cfg.RetransmitBatch))

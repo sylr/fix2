@@ -100,7 +100,9 @@ func (r *raw) meaningful(t *testing.T, n int) ([]codec.MessageHeader, [][]byte, 
 
 // The spike's client, replayed against fix2's server: what fix2 answers,
 // field by field, is what Silverflash answered, but for the differences
-// docs/fixp.md records (EstablishmentAck's NextSeqNo, padding).
+// docs/fixp.md records (padding). Its Establish carries a NextSeqNo for an
+// Idempotent flow, which fix2 accepts and ignores, its Sequence numbering
+// the flow (§4.8).
 func TestSpikeReplay(t *testing.T) {
 	frames := readSpike(t, "../../docs/fixp-evidence/silverflash-spike/3-idempotent-server.wire.log")
 	gaps := make(chan [2]uint64, 10)
@@ -164,8 +166,9 @@ func TestSpikeReplay(t *testing.T) {
 	if _, err := gotAck.Decode(msgs[0]); err != nil || gotAck.SessionId != wantAck.SessionId || gotAck.RequestTimestamp != wantAck.RequestTimestamp || gotAck.KeepaliveInterval != wantAck.KeepaliveInterval {
 		t.Fatalf("EstablishmentAck: fix2 %+v, Silverflash %+v, %v", gotAck, wantAck, err)
 	}
-	// A difference recorded: fix2 announces its NextSeqNo, Silverflash not.
-	if wantAck.NextSeqNo.Valid || !gotAck.NextSeqNo.Valid || gotAck.NextSeqNo.Value != 1 {
+	// Neither announces the NextSeqNo of an Idempotent server flow, which
+	// starts with a Sequence (§4.3.2, §4.8).
+	if wantAck.NextSeqNo.Valid || gotAck.NextSeqNo.Valid {
 		t.Fatalf("EstablishmentAck NextSeqNo: fix2 %+v, Silverflash %+v", gotAck.NextSeqNo, wantAck.NextSeqNo)
 	}
 

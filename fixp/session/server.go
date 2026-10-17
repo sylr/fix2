@@ -403,7 +403,16 @@ func (srv *Server) serve(ctx context.Context, t transport.Conn) {
 		if err != nil {
 			break
 		}
-		kind, h, _, err := codec.Classify(enc, msg)
+		kind, h, body, err := codec.Classify(enc, msg)
+		if err == nil && kind == codec.Ignored {
+			// A MessageTemplate "may be sent at any time" (§3.6): checked
+			// well-formed and ignored, the deadline unchanged.
+			var mt codec.MessageTemplate
+			if srv.cfg.decodeBody(&mt, h, body) != nil {
+				break
+			}
+			continue
+		}
 		if err != nil || kind != codec.Session {
 			break
 		}
@@ -458,7 +467,7 @@ func (srv *Server) authenticate(ctx context.Context, req *AuthRequest) (string, 
 // is negotiated.
 func (srv *Server) negotiate(ctx context.Context, t transport.Conn, msg []byte) bool {
 	var n codec.Negotiate
-	if _, err := n.Decode(msg); err != nil {
+	if err := srv.cfg.decode(&n, msg); err != nil {
 		return false
 	}
 	id := fixp.SessionID(n.SessionId)
@@ -549,7 +558,7 @@ func (srv *Server) negotiate(ctx context.Context, t transport.Conn, msg []byte) 
 // connection to run it on, nil if rejected.
 func (srv *Server) establish(ctx context.Context, t transport.Conn, r *sofh.Reader, msg []byte) (*Session, *conn) {
 	var e codec.Establish
-	if _, err := e.Decode(msg); err != nil {
+	if err := srv.cfg.decode(&e, msg); err != nil {
 		return nil, nil
 	}
 	id := fixp.SessionID(e.SessionId)
@@ -645,7 +654,10 @@ func (srv *Server) establish(ctx context.Context, t transport.Conn, r *sofh.Read
 	}
 	srv.established(s)
 	ack := codec.EstablishmentAck{SessionId: e.SessionId, RequestTimestamp: e.Timestamp, KeepaliveInterval: millis(srv.cfg.KeepaliveInterval)}
-	if out.Sequenced() {
+	// "For a recoverable server flow only" (§4.3.2), the first
+	// establishment included; an Idempotent flow starts with a Sequence
+	// (§4.8), which our writer sends before its first message.
+	if out == fixp.Recoverable {
 		// The next written: messages queued go out after the ack.
 		ack.NextSeqNo = codec.Some(s.q.nextToWrite())
 	}

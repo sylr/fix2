@@ -197,10 +197,14 @@ func clientWith(t *testing.T, flow fixp.FlowType, fragment bool) (*session.Clien
 		Config: session.Config{
 			Handler:           h,
 			KeepaliveInterval: time.Second,
-			// Silverflash sends no heartbeat when idle (docs/fixp.md).
-			Leniency: 30,
-			Logger:   logger,
-			Observer: &h.wire,
+			Logger:            logger,
+			Observer:          &h.wire,
+			Tolerations: session.Tolerations{
+				// Silverflash sends no heartbeat when idle, and pads its
+				// session messages (docs/fixp.md).
+				ToleratePeerWithoutKeepalives: true,
+				TolerateTrailingBytes:         true,
+			},
 		},
 		Flow:  flow,
 		Store: memstore.New(),

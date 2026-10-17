@@ -52,11 +52,10 @@ func fuzzServer(t *testing.T, b []byte) {
 	l := mem.Listen("fuzz")
 	srv, err := NewServer(ServerConfig{
 		// Short timeouts: an incomplete handshake waits for nothing long.
-		Config:       Config{Handler: BaseHandler{}, KeepaliveInterval: 20 * time.Millisecond, HandshakeTimeout: 10 * time.Millisecond},
+		Config:       Config{Handler: BaseHandler{}, KeepaliveInterval: 20 * time.Millisecond, HandshakeTimeout: 10 * time.Millisecond, MinKeepalive: time.Millisecond},
 		Flow:         fixp.Recoverable,
 		Store:        memstore.New(),
 		Authenticate: authenticate,
-		MinKeepalive: time.Millisecond,
 		MaxClockSkew: 100 * 365 * 24 * time.Hour,
 	})
 	if err != nil {

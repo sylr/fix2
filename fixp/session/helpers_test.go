@@ -159,7 +159,7 @@ func init() {
 
 // fast is the timing of tests: short intervals.
 func fast(h Handler) Config {
-	return Config{Handler: h, KeepaliveInterval: 50 * time.Millisecond, HandshakeTimeout: time.Second, Logger: logger}
+	return Config{Handler: h, KeepaliveInterval: 50 * time.Millisecond, HandshakeTimeout: time.Second, MinKeepalive: 10 * time.Millisecond, Logger: logger}
 }
 
 // pair is a server and a client of it, over in-memory connections.
@@ -197,7 +197,7 @@ func credentials(name string) func(context.Context, CredentialsRequest) ([]byte,
 
 func newServer(t testing.TB, l transport.Listener, st store.Store, h Handler, flow fixp.FlowType, opt func(*ServerConfig)) (*Server, context.CancelFunc, chan error) {
 	t.Helper()
-	cfg := ServerConfig{Config: fast(h), Flow: flow, Store: st, Authenticate: authenticate, MinKeepalive: 10 * time.Millisecond}
+	cfg := ServerConfig{Config: fast(h), Flow: flow, Store: st, Authenticate: authenticate}
 	if opt != nil {
 		opt(&cfg)
 	}

@@ -544,9 +544,17 @@ func isTimeout(err error) bool {
 // readLoop reads and handles frames until the connection ends.
 func (c *conn) readLoop() {
 	s := c.s
-	lapse := time.Duration(float64(c.peerKeepalive) * s.cfg.Leniency)
+	// The peer's interval is within MaxKeepalive, whose product with the
+	// leniency the configuration bounds.
+	lapse := time.Duration(float64(c.peerKeepalive) * s.cfg.KeepaliveLeniency)
+	watch := !s.cfg.ToleratePeerWithoutKeepalives
+	if !watch {
+		c.t.SetReadDeadline(time.Time{}) // the handshake's
+	}
 	for {
-		c.t.SetReadDeadline(time.Now().Add(lapse))
+		if watch {
+			c.t.SetReadDeadline(time.Now().Add(lapse))
+		}
 		enc, msg, err := c.r.Next()
 		if c.isClosing() {
 			return
@@ -600,7 +608,7 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		// Waiting for the answer to our Terminate: the rest is ignored.
 		if kind == codec.Session && h.TemplateId == codec.TerminateTemplateID {
 			// The answer, if it is one: of this session, well-formed.
-			if _, err := c.term.DecodeBody(h, body); err != nil || c.term.SessionId != c.s.ID() {
+			if err := c.s.cfg.decodeBody(&c.term, h, body); err != nil || c.term.SessionId != c.s.ID() {
 				c.close(nil)
 				return errStop
 			}
@@ -620,11 +628,20 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		}
 		return nil
 	}
+	// A FIXP message, Applied and NotApplied included, whose header holds
+	// a null: malformed before anything acts on it, an Applied's sequence
+	// number admitted included. (Waiting for our Terminate's answer, the
+	// answer's decoding checks it.)
+	if h.SchemaId == codec.SchemaID {
+		if err := headerWellFormed(h); err != nil {
+			return protocolf("template %d: %v", h.TemplateId, err)
+		}
+	}
 	switch kind {
 	case codec.Ignored:
 		// MessageTemplate: well-formed, then ignored. A session message,
 		// it ends the numbering (§3.5.4).
-		if _, err := c.mt.DecodeBody(h, body); err != nil {
+		if err := c.s.cfg.decodeBody(&c.mt, h, body); err != nil {
 			return protocolf("MessageTemplate: %v", err)
 		}
 		c.inNext = 0
@@ -634,12 +651,12 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 	}
 	switch h.TemplateId {
 	case codec.SequenceTemplateID:
-		if _, err := c.seq.DecodeBody(h, body); err != nil {
+		if err := c.s.cfg.decodeBody(&c.seq, h, body); err != nil {
 			return protocolf("Sequence: %v", err)
 		}
 		return c.onSequence(c.seq.NextSeqNo)
 	case codec.UnsequencedHeartbeatTemplateID:
-		if _, err := c.hb.DecodeBody(h, body); err != nil {
+		if err := c.s.cfg.decodeBody(&c.hb, h, body); err != nil {
 			return protocolf("UnsequencedHeartbeat: %v", err)
 		}
 		// Any session message but those setting the numbering ends it
@@ -647,7 +664,9 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 		c.inNext = 0
 		return nil
 	case codec.TerminateTemplateID:
-		if _, err := c.term.DecodeBody(h, body); err != nil {
+		// One whose code is unknown is malformed (SBE §4.15): our
+		// Terminate, UnspecifiedError, never echoes that code.
+		if err := c.s.cfg.decodeBody(&c.term, h, body); err != nil {
 			return protocolf("Terminate: %v", err)
 		}
 		if c.term.SessionId != c.s.ID() {
@@ -682,7 +701,7 @@ func (c *conn) handle(enc sofh.Encoding, msg []byte, received time.Time) error {
 func (c *conn) onEstablish(h codec.MessageHeader, body []byte) error {
 	s := c.s
 	var e codec.Establish
-	_, err := e.DecodeBody(h, body)
+	err := s.cfg.decodeBody(&e, h, body)
 	clear(body) // its credentials, as they were read
 	if err != nil {
 		return protocolf("Establish: %v", err)
@@ -792,8 +811,19 @@ func (c *conn) deliver(h codec.MessageHeader, msg, body []byte, in Inbound) erro
 	var err error
 	switch {
 	case h.SchemaId == codec.SchemaID && h.TemplateId == codec.AppliedTemplateID:
-		if _, err := c.ap.DecodeBody(h, body); err != nil {
+		if err := s.cfg.decodeBody(&c.ap, h, body); err != nil {
 			return protocolf("Applied: %v", err)
+		}
+		// Applied is "an optional application response message to support
+		// an idempotent flow" (§4.8.1): FIXP makes no violation of one for
+		// another flow, or beyond what we sent, as it does of NotApplied
+		// (§4.8.2). The handler judges it; a warning tells.
+		if out, _ := s.Flows(); out != fixp.Idempotent {
+			s.logWarn("Applied of a flow not Idempotent", "flow", out.String(), "from", c.ap.FromSeqNo, "count", c.ap.Count)
+		} else if written := s.written.Load(); c.ap.FromSeqNo == 0 || c.ap.FromSeqNo > written || uint64(c.ap.Count) > written-c.ap.FromSeqNo+1 {
+			// Sent: out of the queue, the writer's watermark, as a
+			// RetransmitRequest is judged; assigned and queued is not.
+			s.logWarn("Applied beyond what was sent", "from", c.ap.FromSeqNo, "count", c.ap.Count, "written", written)
 		}
 		err = s.handler.OnApplied(s.cbCtx, s, c.ap.FromSeqNo, c.ap.Count, in)
 	case h.SchemaId == codec.SchemaID && h.TemplateId == codec.NotAppliedTemplateID:
@@ -801,7 +831,7 @@ func (c *conn) deliver(h codec.MessageHeader, msg, body []byte, in Inbound) erro
 		if out, _ := s.Flows(); out != fixp.Idempotent {
 			return protocolf("NotApplied of our %s flow", out)
 		}
-		if _, err := c.nap.DecodeBody(h, body); err != nil {
+		if err := s.cfg.decodeBody(&c.nap, h, body); err != nil {
 			return protocolf("NotApplied: %v", err)
 		}
 		err = s.handler.OnNotApplied(s.cbCtx, s, c.nap.FromSeqNo, c.nap.Count, in)
@@ -816,10 +846,14 @@ func (c *conn) deliver(h codec.MessageHeader, msg, body []byte, in Inbound) erro
 
 // checkNextSeqNo checks the NextSeqNo of the peer's Establish or
 // EstablishmentAck against what was received (§4.3.2, §7.3.3), and sets
-// the numbering of its next message.
+// the numbering of its next message. It numbers a Recoverable flow only
+// (§4.3.1, §4.3.2): on another, it is accepted and ignored, an Idempotent
+// flow starting with a Sequence (§4.8: "The start of an idempotent flow
+// must be initiated with a Sequence message"), its messages before one a
+// protocol violation.
 func (c *conn) checkNextSeqNo(next uint64) error {
 	s := c.s
-	if _, in := s.Flows(); !in.Sequenced() {
+	if _, in := s.Flows(); in != fixp.Recoverable {
 		return nil
 	}
 	expected := s.inbound + 1

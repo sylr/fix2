@@ -31,9 +31,9 @@ where the example gives one fix2 shares, not the sample numbers.
 
 | Example | Shows | fix2 | Tests |
 |---|---|---|---|
-| 7.2.1 | Establish and ack, Recoverable, `NextSeqNo` 1 both ways | as shown | `TestExample_7_1_and_7_2_Handshakes/7.1.1, 7.2.1` |
+| 7.2.1 | Establish and ack, Recoverable, `NextSeqNo` 1 both ways | as shown as server, the client's `NextSeqNo` accepted; as client, diverges: no `NextSeqNo` in a first Establish (row "Establish `NextSeqNo`") | `TestExample_7_1_and_7_2_Handshakes/7.1.1, 7.2.1`, `TestNextSeqNo` |
 | 7.2.2 | Unsequenced, no `NextSeqNo` | as shown | `TestExample_7_1_and_7_2_Handshakes/7.1.2, 7.2.2` |
-| 7.2.3 | Idempotent client, Recoverable server, `NextSeqNo` both ways | as shown (row "Establish `NextSeqNo`") | `TestExample_7_1_and_7_2_Handshakes/7.1.3, 7.2.3`, `TestSpikeReplay` |
+| 7.2.3 | Idempotent client, Recoverable server, `NextSeqNo` both ways | as server, the ack as shown, the client's `NextSeqNo` accepted and ignored, a Sequence numbering its flow (§4.8); as client, diverges: no `NextSeqNo` for an Idempotent flow (row "Establish `NextSeqNo`") | `TestExample_7_1_and_7_2_Handshakes/7.1.3, 7.2.3`, `TestNextSeqNo`, `TestSpikeReplay` |
 | 7.2.4 | a None/None session | diverges: refused at Negotiate (row "A None flow both ways") | `TestRejections/None both ways` |
 | 7.2.5.1 | Establish unnegotiated: `Unnegotiated` | as shown | `TestDuplicateAndAlreadyEstablished`, `TestRetire` |
 | 7.2.5.2 | Establish again: `AlreadyEstablished` | as shown, on the same connection or another | `TestExample_7_2_5_2_AlreadyEstablishedHere`, `TestDuplicateAndAlreadyEstablished` |
@@ -68,8 +68,8 @@ where the example gives one fix2 shares, not the sample numbers.
 | 7.4.4 | RetransmitRequest, Retransmission; later messages held | as shown | `TestRetransmitServed`, `TestRecoverableGapFilled` |
 | 7.4.4.1 | a request while one is outstanding: `ReRequestInProgress` | as shown | `TestReRequestInProgress`, `TestRetransmitOwnership` |
 | 7.4.4.2 | batches interleaved; a second batch for one request | diverges: one batch per request, the rest asked for (row "Batches answering one RetransmitRequest") | `TestExample_7_4_4_2_PartialBatch`, `TestRetransmitServed` |
-| 7.4.5.1 | `FromSeqNo` beyond what was sent: `OutOfRange` | as shown (row "RetransmitRequest beyond what was sent") | `TestRetransmitServed` |
-| 7.4.5.2 | a range partly beyond: `OutOfRange` | as shown, refused whole | `TestExample_7_4_5_2_PartlyBeyond` |
+| 7.4.5.1 | `FromSeqNo` beyond what was sent: `OutOfRange` | diverges: Terminate `ReRequestOutOfBounds`; as shown with `RejectRetransmitRequestBeyondSent` (row "RetransmitRequest beyond what was sent") | `TestExample_7_4_5_1_and_2_Beyond`, `TestRetransmitServed` |
+| 7.4.5.2 | a range partly beyond: `OutOfRange` | diverges as 7.4.5.1; with `RejectRetransmitRequestBeyondSent` as shown, refused whole | `TestExample_7_4_5_1_and_2_Beyond` |
 | 7.4.5.3 | another session: `InvalidSession` | as shown | `TestRetransmitServed` |
 | 7.4.5.4 | too many asked: `RequestLimitExceeded` | as receiver, asks for less; as sender, answers a partial batch instead | `TestRecoverableRequestLimit`, `TestRetransmitServed` |
 | 7.4.5.5 | messages no longer kept: `ReRequestOutOfBounds` | diverges: `OutOfRange`, "no longer available" (row "Messages no longer kept") | `TestRetransmitServed`, `TestRetention` |

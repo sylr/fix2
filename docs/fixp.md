@@ -81,7 +81,7 @@ Schema id 2748, version 0, little-endian. The SBE message header is four
 | 16 | FinishedReceiving | session |
 | 17 | Applied | application message: consumes a sequence number (§4.8.1) |
 | 18 | NotApplied | application message: consumes a sequence number (§4.8.2) |
-| 19 | MessageTemplate | out of scope: logged and ignored, it "may be sent at any time" (§3.6) |
+| 19 | MessageTemplate | out of scope: checked well-formed and ignored, it "may be sent at any time" (§3.6), in the handshake too, whose deadline it does not extend |
 
 A message is classified by its SOFH encoding type, then its schema id,
 then its template id: Applied and NotApplied share the session schema but
@@ -181,9 +181,17 @@ EstablishmentReject.
 
 - `NextSeqNo` is the sender's own: the next sequence number the client
   will send in Establish, the server's in EstablishmentAck (§4.3.1,
-  §4.3.2). The engine fills it whenever its flow is Recoverable or
-  Idempotent, on the first establishment too, as the examples do (§7.2.1,
-  §7.2.3, §7.4.1); it accepts its absence.
+  §4.3.2). The engine fills it in EstablishmentAck for a Recoverable server
+  flow, the first establishment included (§4.3.2: "For a recoverable
+  server flow only"), in Establish on re-establishment of a Recoverable
+  client flow only (§4.3.1, read as the schema words it: see [the
+  contradictions](#where-the-standard-contradicts-itself)); an Idempotent
+  flow starts with a Sequence (§4.8: "The start of an idempotent flow must
+  be initiated with a Sequence message"). Received, it numbers a
+  Recoverable flow, on a first establishment too, as the examples send it
+  (§7.2.1); for another flow it is accepted and ignored, an Idempotent
+  flow's messages before a Sequence a protocol violation. Its absence is
+  accepted.
 - A client compares the server's `NextSeqNo` with what it received, and
   asks for what it missed (Recoverable) at once (§4.3.2). A `NextSeqNo`
   below what it already received means the server lost messages it had
@@ -196,7 +204,11 @@ EstablishmentReject.
   gets `AlreadyEstablished` too, the binding staying (§4.3.3); one for
   another session there is a protocol violation. A keepalive
   interval outside the configured range gets `KeepaliveInterval`
-  (§7.2.5.4); a session ID that is not a version 4 UUID, a timestamp out
+  (§7.2.5.4); a client terminates on an EstablishmentAck whose interval
+  is outside its own range, and its `Run` ends: both roles bound the
+  peer's (`MinKeepalive`, `MaxKeepalive`: "Counterparties may agree on a
+  valid range for KeepaliveInterval", §4.3.1). A session ID that is not a
+  version 4 UUID, a timestamp out
   of range, or a `NextSeqNo` below what the server received, `Unspecified`
   (§7.2.5.5, §7.2.5.6, and §7.3.3 the other way). A session the
   application blocks, its `Authenticate` hook returning a
@@ -231,9 +243,10 @@ On a Recoverable or Idempotent flow:
 - Retransmitted messages follow their Retransmission directly; real-time
   messages after a batch follow a Sequence (§4.6.2, §4.6.2.2). The
   retransmission and real-time positions are tracked apart.
-- It accepts application messages right after the peer's EstablishmentAck
-  when it carries `NextSeqNo` (§7.4.1); without it, a Sequence has to come
-  first. After a retransmitted batch, it requires a Sequence before
+- It accepts application messages of a Recoverable flow right after the
+  peer's EstablishmentAck or Establish when it carries `NextSeqNo`
+  (§7.4.1); without it, and always on an Idempotent flow (§4.8), a
+  Sequence has to come first. After a retransmitted batch, it requires a Sequence before
   real-time messages: numbering them on would number them wrong.
 - A Sequence whose `NextSeqNo` is lower than expected ends the connection
   (§7.4.1.2). A higher one is a gap (§7.4.1.1).
@@ -253,9 +266,16 @@ Unsequenced or None flow, and FinishedSending while finalization waits
 for its answer (§4.5, §4.7.1).
 
 Each side watches the other's interval: silence beyond the peer's interval
-times a leniency factor (configured, 1.5 by default: the standard
-recommends "some leniency" and sets none, §4.4) ends the connection.
-TCP_NODELAY is set (§4.5).
+times a leniency factor (`KeepaliveLeniency`, 1.5 by default, at least 1
+and finite: the standard recommends "some leniency" and sets none, §4.4)
+ends the connection. Each bounds the peer's interval (`MinKeepalive`,
+`MaxKeepalive`, 100ms and 1m by default), and the configuration the
+product of the leniency and `MaxKeepalive`, which must fit a
+`time.Duration`. `ToleratePeerWithoutKeepalives` keeps the connection
+however long the peer is silent, as Silverflash, which sends no
+heartbeat, needs: a departure from §4.5, "Each peer must send a
+heartbeat message during each interval in which no application messages
+were sent". TCP_NODELAY is set (§4.5).
 
 ### Termination
 
@@ -270,8 +290,11 @@ Terminate unbinds the connection; the session lives on (§4.4).
 - After a Terminate, the connection is closed: a new Establish goes on a
   new connection (§4.4.2). Messages after a Terminate are ignored (§4.4).
 - Codes: `Finished` for a graceful unbinding, `ReRequestInProgress` for a
-  RetransmitRequest while one is outstanding (§4.6.4), `UnspecifiedError`
-  for everything else, with a reason.
+  RetransmitRequest while one is outstanding (§4.6.4),
+  `ReRequestOutOfBounds` for one beyond what was sent (§6.3),
+  `UnspecifiedError` for everything else, with a reason. A Terminate whose
+  code is not one of these is malformed (SBE §4.15): it is answered
+  `UnspecifiedError`, never with its code.
 
 ### Finalization
 
@@ -338,10 +361,16 @@ EstablishmentAck, and sends RetransmitRequest for it (§4.6.1):
 - Messages after a gap are kept, up to a configured bound, and delivered
   in order once the gap is filled (§4.6.1). Beyond the bound they are
   dropped and requested again: they are recoverable.
-- As sender, the engine answers a request beyond what was sent with
-  RetransmitReject `OutOfRange` (§7.4.5.1, §7.4.5.2), and so one for
-  messages no longer kept, with the reason "no longer available"
-  (§7.4.5.5); a request for another session with `InvalidSession`. It
+- As sender, the engine terminates on a request beyond what was sent,
+  wholly or in part, `ReRequestOutOfBounds`: "it is a violation to request
+  a retransmission of a message with a sequence number that has not been
+  sent yet" (§6.3). `RejectRetransmitRequestBeyondSent` answers it
+  RetransmitReject `OutOfRange` instead, as the examples do (§7.4.5.1,
+  §7.4.5.2), §6.3's "should be immediately terminated" leaving the
+  choice. A request for messages sent and no longer kept gets
+  RetransmitReject `OutOfRange`, reason "no longer available" (§7.4.5.5);
+  one for no message `OutOfRange` too; one for another session
+  `InvalidSession`. It
   never answers `RequestLimitExceeded`: it sends a partial batch instead.
   A second request while one is outstanding gets Terminate
   `ReRequestInProgress` (§4.6.4, §7.4.4.1). A RetransmitRequest on a flow
@@ -367,7 +396,10 @@ others, or nothing (§4.8.2).
 
 The engine sends Applied only when the application does: the standard
 prefers application-level acknowledgements, such as ExecutionReport, and
-keeps Applied for where none exists (§4.8.1).
+keeps Applied for where none exists (§4.8.1). An Applied received for our
+flow when it is not Idempotent, or beyond what we sent, goes to the
+handler, a warning logged: FIXP makes a violation of NotApplied on such a
+flow (§4.8.2), not of Applied.
 
 ## Delivery guarantees
 
@@ -443,21 +475,48 @@ retention target, the last N written (`MaxStoredMessages`), evicting the
 older by batches; a peer asking for them is told they are no longer
 available. Messages queued and not written are never evicted.
 
-A frame may hold bytes after the SBE message it carries: SBE lets a later
-schema version append fields, and Silverflash pads its session messages
-(see [the spike](#silverflash-spike)). The engine decodes what it knows,
-within the frame, and ignores the rest; the frame length bound applies to
-it all.
+A session message, Applied and NotApplied included, is malformed, and
+ends the connection (§4.4: "a transport should be terminated if an
+unrecoverable error occurs in message parsing or framing"), when:
+
+- its decoder refuses it, `codec.ErrNewer` among the errors: a newer
+  version's groups or data the decoder cannot bound, nor know the meaning
+  of (a FIXP message of a newer version holding data, as Terminate, is
+  one: [docs/sbe.md](sbe.md#decoding)). A newer version's fixed fields,
+  skipped by `blockLength`, are not;
+- its frame holds bytes after what the decoder consumed, block padding
+  counted. `TolerateTrailingBytes` accepts them when the header's version
+  is not above the schema's, as Silverflash pads its session messages
+  (see [the spike](#silverflash-spike)); after a newer version's message
+  they may be its groups or data, refused either way. SOFH bounds the
+  frame, not the message in it, and no SBE provision found forbids them:
+  a validation policy kept strict by default ([docs/conformance.md](conformance.md));
+- a required field holds its type's null, or an enumeration value is not
+  one the schema lists (SBE §4.15): the message header's four fields,
+  checked before anything acts on the message, codes, a Sequence's or a
+  RetransmitRequest's sequence numbers and counts, timestamps, keepalive
+  intervals. A `FlowType` is the negotiation's to answer
+  (`FlowTypeNotSupported`); an optional field's null is its absence.
+
+What the engine sends holds no null either: a keepalive interval is 2^32-2
+ms at most (`KeepaliveInterval`, `MaxKeepalive`), a count 2^32-2
+(`RetransmitBatch`; a gap one NotApplied cannot report terminates the
+connection before anything is sent or recorded), and `SendApplied`
+refuses its arguments' nulls (`ErrInvalidApplied`).
+
+A server closes the connection on a malformed Negotiate or Establish,
+unanswered; a client on a malformed answer, trying again; an established
+connection terminates `UnspecifiedError`, with the reason.
 
 ## Where the standard contradicts itself
 
 | Point | The text | The examples | fix2 |
 |---|---|---|---|
-| Establish `NextSeqNo` | re-establishment of a Recoverable flow only (§4.3.1) | sent on first establishment, for an Idempotent flow too (§7.2.3, §7.4.1) | sends it for Recoverable and Idempotent flows, always; accepts its absence |
+| Establish `NextSeqNo` | "for re-establishment of a recoverable server flow only, the next application sequence number to be produced by the client" (§4.3.1); the schema: "of a recoverable flow"; an Idempotent flow starts with a Sequence (§4.8) | sent on first establishment, for an Idempotent flow too (§7.2.3, §7.4.1) | the value is the client's, of its own flow, "server" read as a slip: sent on re-establishment of a Recoverable client flow only; received, numbers a Recoverable flow, on a first establishment too, ignored for another (an Idempotent flow's messages before a Sequence a protocol violation); its absence accepted |
 | Termination code on a lapsed keepalive | `Finished`, `UnspecifiedError`, `ReRequestOutOfBounds`, `ReRequestInProgress` (§4.4) | `Timed Out` (§7.3.1) | `UnspecifiedError`, reason "keepalive interval lapsed" |
 | Establishing again after Terminate | the transport is closed (§4.4.2) | Establish again on the same TCP connection (§7.3.1 to §7.3.3) | closes; establishes again on a new connection |
 | Reconnecting after a disconnection | the session outlives its transport, re-established under its ID (§3.4.3, §4.1) | negotiates a new session ID (§7.3.5) | re-establishes under the same ID |
-| RetransmitRequest beyond what was sent | a protocol violation, Terminate (§4.6.4, §6.3) | RetransmitReject `OutOfRange` (§7.4.5.1, §7.4.5.2) | RetransmitReject `OutOfRange` |
+| RetransmitRequest beyond what was sent | a protocol violation, Terminate (§4.6.4, §6.3) | RetransmitReject `OutOfRange` (§7.4.5.1, §7.4.5.2) | Terminate `ReRequestOutOfBounds`; RetransmitReject `OutOfRange` with `RejectRetransmitRequestBeyondSent`, §6.3's "should" leaving the choice |
 | Messages no longer kept | — | RetransmitReject with code `ReRequestOutOfBounds`, a termination code (§7.4.5.5) | RetransmitReject `OutOfRange`, reason "no longer available" |
 | Application messages after FinishedReceiving | forbidden to its sender (§6.3) | sent until the sender's own FinishedSending (§7.5.1, §7.5.6) | sends none; accepts them from a peer |
 | RetransmitRequest after one's own FinishedSending | allowed: the receiving flow is not finished (§4.7) | a protocol violation (§7.5.6) | sends it when its inbound flow needs it; accepts it from a peer |
@@ -561,7 +620,8 @@ consumer receives some hundreds of 2000 orders, then no more; it answers
 our FinishedSending with a Terminate, unfinalized, and our
 re-establishment kills its session thread, as does a Negotiate written in
 two parts 50ms apart, its read buffer cleared before each read; it sends
-no heartbeat. A Recoverable server flow, re-establishment of a live session,
+no heartbeat, and pads its session messages: the tests set
+`ToleratePeerWithoutKeepalives` and `TolerateTrailingBytes`. A Recoverable server flow, re-establishment of a live session,
 retransmission, NotApplied and fix2's server against its client are not
 exercised.
 

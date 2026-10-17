@@ -66,8 +66,10 @@ func rawClientWith(t *testing.T, clientFlow, serverFlow fixp.FlowType, keepalive
 	t.Cleanup(func() { cancel(); <-done })
 	r := dialRaw(t, l)
 	r.negotiate(clientFlow, "user:alice")
+	// A Recoverable flow may be numbered by the Establish, accepted on a
+	// first establishment too; an Idempotent one by a Sequence (§4.8).
 	var next codec.Optional[uint64]
-	if clientFlow.Sequenced() {
+	if clientFlow == fixp.Recoverable {
 		next = codec.Some(uint64(1))
 	}
 	var ack codec.EstablishmentAck
@@ -75,6 +77,9 @@ func rawClientWith(t *testing.T, clientFlow, serverFlow fixp.FlowType, keepalive
 		t.Fatal(err)
 	}
 	h.expect(t, "established")
+	if clientFlow == fixp.Idempotent {
+		r.send(&codec.Sequence{NextSeqNo: 1})
+	}
 	return r, h, srv, l
 }
 
@@ -82,12 +87,28 @@ func rawClientWith(t *testing.T, clientFlow, serverFlow fixp.FlowType, keepalive
 // timeout short.
 func clientOfRaw(t *testing.T, flow fixp.FlowType) (*Client, *recorder, *mem.Listener) {
 	t.Helper()
+	c, h, l, _ := clientOfRawWith(t, flow, nil)
+	return c, h, l
+}
+
+// clientOfRawWith is clientOfRaw, opt configuring the client; done gives
+// what Run returned.
+func clientOfRawWith(t *testing.T, flow fixp.FlowType, opt func(*ClientConfig)) (*Client, *recorder, *mem.Listener, chan error) {
+	t.Helper()
 	l := mem.Listen("server")
 	h := newRecorder()
-	c := newClient(t, l, memstore.New(), h, flow, func(c *ClientConfig) { c.HandshakeTimeout = 100 * time.Millisecond })
+	c := newClient(t, l, memstore.New(), h, flow, func(c *ClientConfig) {
+		c.HandshakeTimeout = 100 * time.Millisecond
+		if opt != nil {
+			opt(c)
+		}
+	})
 	cancel, done := runClient(c)
-	t.Cleanup(func() { cancel(); <-done })
-	return c, h, l
+	ran := make(chan error, 1)
+	stopped := make(chan struct{})
+	go func() { err := <-done; ran <- err; close(stopped) }()
+	t.Cleanup(func() { cancel(); <-stopped })
+	return c, h, l, ran
 }
 
 // answerNegotiate reads a Negotiate and accepts it, with serverFlow.
@@ -113,8 +134,10 @@ func (r *raw) readEstablish() codec.Establish {
 }
 
 // §7.1.1 to §7.1.6, §7.2.1 to §7.2.3: what a server answers, field by
-// field, for each pair of flows the examples negotiate and establish. A
-// sequenced flow's NextSeqNo is sent on the first establishment too.
+// field, for each pair of flows the examples negotiate and establish. The
+// raw client sends a sequenced flow's NextSeqNo on the first
+// establishment, as the examples do: accepted. The ack carries a
+// Recoverable server flow's, not an Idempotent one's (§4.3.2).
 func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 	for _, tc := range []struct {
 		example            string
@@ -123,6 +146,7 @@ func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 		{"7.1.1, 7.2.1", fixp.Recoverable, fixp.Recoverable},
 		{"7.1.2, 7.2.2", fixp.Unsequenced, fixp.Unsequenced},
 		{"7.1.3, 7.2.3", fixp.Idempotent, fixp.Recoverable},
+		{"Idempotent both ways", fixp.Idempotent, fixp.Idempotent},
 		{"7.1.4 as titled", fixp.None, fixp.Recoverable},
 		{"7.1.4 as shown, 7.1.6", fixp.None, fixp.Unsequenced},
 		{"7.1.5", fixp.Unsequenced, fixp.Recoverable},
@@ -148,8 +172,10 @@ func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 			if _, err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
 				t.Fatal(err)
 			}
+			// A Recoverable server flow's only, the first establishment
+			// included (§4.3.2).
 			wantNext := codec.Optional[uint64]{}
-			if tc.serverFlow.Sequenced() {
+			if tc.serverFlow == fixp.Recoverable {
 				wantNext = codec.Some(uint64(1))
 			}
 			if ack.SessionId != r.id || ack.RequestTimestamp != r.ts || ack.KeepaliveInterval != 50 || ack.NextSeqNo != wantNext {
@@ -368,10 +394,11 @@ func TestExample_7_3_1_and_7_3_2_EstablishAgain(t *testing.T) {
 			r2 := dialRaw(t, l)
 			r2.id = r.id
 			var ack codec.EstablishmentAck
-			if _, err := ack.Decode(r2.establish(1000, codec.Some(tc.next), "user:alice")); err != nil || ack.SessionId != r.id {
+			if _, err := ack.Decode(r2.establish(1000, codec.Optional[uint64]{}, "user:alice")); err != nil || ack.SessionId != r.id {
 				t.Fatalf("EstablishmentAck %+v, %v", ack, err)
 			}
 			h.expect(t, "established")
+			r2.send(&codec.Sequence{NextSeqNo: tc.next})
 			r2.send(appMsg{1, "again"})
 			if e := h.expect(t, "message"); e.seq != tc.next || e.body != "again" {
 				t.Fatalf("message %v", e)
@@ -518,24 +545,65 @@ func TestExample_7_4_4_2_PartialBatch(t *testing.T) {
 	r.terminated(fixp.TerminationUnspecifiedError, "Retransmission answering no request of ours")
 }
 
-// §7.4.5.2: a request reaching beyond what was sent, in part, is refused
-// whole.
-func TestExample_7_4_5_2_PartlyBeyond(t *testing.T) {
-	r, _, srv, _ := rawClient(t, fixp.Idempotent, fixp.Recoverable, 1000)
-	s := srv.Session(r.id)
-	for i := 1; i <= 5; i++ {
-		s.Send(bg, appMsg{1, fmt.Sprint(i)})
-	}
-	r.readApps(5)
-	ts := nanos(time.Now())
-	r.send(&codec.RetransmitRequest{SessionId: r.id, Timestamp: ts, FromSeqNo: 4, Count: 5})
-	// Heartbeats at most before it: nothing retransmitted.
-	var rj codec.RestransmitReject
-	if _, err := rj.Decode(r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil {
-		t.Fatal(err)
-	}
-	if rj.RequestTimestamp != ts || fixp.RetransmitRejectCode(rj.Code) != fixp.RetransmitOutOfRange || string(rj.Reason) != "beyond what was sent" {
-		t.Fatalf("RetransmitReject %+v %q", rj, rj.Reason)
+// §7.4.5.1, §7.4.5.2: a request reaching beyond what was sent, wholly or
+// in part, is a protocol violation (§6.3): Terminate ReRequestOutOfBounds,
+// nothing retransmitted. With RejectRetransmitRequestBeyondSent, the
+// examples' RetransmitReject OutOfRange, the request refused whole, the
+// session going on.
+func TestExample_7_4_5_1_and_2_Beyond(t *testing.T) {
+	for _, tc := range []struct {
+		example     string
+		from        uint64
+		count       uint32
+		reject      bool
+		retransmits bool
+	}{
+		{"7.4.5.1", 6, 1, false, false},
+		{"7.4.5.2", 4, 5, false, false},
+		{"7.4.5.1 RejectRetransmitRequestBeyondSent", 6, 1, true, false},
+		{"7.4.5.2 RejectRetransmitRequestBeyondSent", 4, 5, true, false},
+		{"from 0", 0, 2, false, false},
+		{"within", 4, 2, false, true},
+	} {
+		t.Run(tc.example, func(t *testing.T) {
+			r, _, srv, _ := rawClientWith(t, fixp.Idempotent, fixp.Recoverable, 1000, func(c *ServerConfig) { c.RejectRetransmitRequestBeyondSent = tc.reject })
+			s := srv.Session(r.id)
+			for i := 1; i <= 5; i++ {
+				s.Send(bg, appMsg{1, fmt.Sprint(i)})
+			}
+			r.readApps(5)
+			ts := nanos(time.Now())
+			r.send(&codec.RetransmitRequest{SessionId: r.id, Timestamp: ts, FromSeqNo: tc.from, Count: tc.count})
+			// Heartbeats at most before the answer: nothing retransmitted.
+			switch {
+			case tc.retransmits:
+				var rt codec.Retransmission
+				if _, err := rt.Decode(r.readTemplate(codec.RetransmissionTemplateID)); err != nil || rt.NextSeqNo != tc.from || rt.Count != tc.count {
+					t.Fatalf("Retransmission %+v, %v", rt, err)
+				}
+			case tc.reject:
+				var rj codec.RestransmitReject
+				if _, err := rj.Decode(r.readTemplate(codec.RestransmitRejectTemplateID)); err != nil {
+					t.Fatal(err)
+				}
+				if rj.RequestTimestamp != ts || fixp.RetransmitRejectCode(rj.Code) != fixp.RetransmitOutOfRange || string(rj.Reason) != "beyond what was sent" {
+					t.Fatalf("RetransmitReject %+v %q", rj, rj.Reason)
+				}
+				s.Send(bg, appMsg{1, "6"})
+				if got := r.readApps(1); fmt.Sprint(got) != "[seq=6 6]" {
+					t.Fatalf("after the reject: %q", got)
+				}
+			default:
+				var term codec.Terminate
+				if _, err := term.Decode(r.readTemplate(codec.TerminateTemplateID)); err != nil {
+					t.Fatal(err)
+				}
+				if fixp.TerminationCode(term.Code) != fixp.TerminationReRequestOutOfBounds || string(term.Reason) != "RetransmitRequest beyond what was sent" {
+					t.Fatalf("Terminate %v %q", fixp.TerminationCode(term.Code), term.Reason)
+				}
+				r.closed()
+			}
+		})
 	}
 }
 

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"math"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -36,8 +37,8 @@ const (
 )
 
 // maxKeepalive is the longest keepalive interval the wire holds: a uint32
-// of milliseconds.
-const maxKeepalive = time.Duration(1<<32-1) * time.Millisecond
+// of milliseconds, a required field whose 2^32-1 is null (SBE §4.15).
+const maxKeepalive = time.Duration(1<<32-2) * time.Millisecond
 
 func orDuration(d, def time.Duration) time.Duration {
 	if d == 0 {
@@ -60,13 +61,25 @@ func (c Config) resolve() (Config, error) {
 	}
 	c.KeepaliveInterval = orDuration(c.KeepaliveInterval, defaultKeepalive)
 	if c.KeepaliveInterval < time.Millisecond || c.KeepaliveInterval > maxKeepalive {
-		return c, &ConfigError{"KeepaliveInterval", "between 1ms and 2^32-1 ms"}
+		return c, &ConfigError{"KeepaliveInterval", "between 1ms and 2^32-2 ms (2^32-1 is null)"}
 	}
-	if c.Leniency == 0 {
-		c.Leniency = defaultLeniency
+	c.MinKeepalive = orDuration(c.MinKeepalive, defaultMinKeepalive)
+	c.MaxKeepalive = orDuration(c.MaxKeepalive, defaultMaxKeepalive)
+	if c.MinKeepalive < 0 || c.MaxKeepalive < c.MinKeepalive || c.MaxKeepalive > maxKeepalive {
+		return c, &ConfigError{"MaxKeepalive", "below MinKeepalive, or beyond 2^32-2 ms (2^32-1 is null)"}
 	}
-	if c.Leniency < 1 {
-		return c, &ConfigError{"Leniency", "at least 1"}
+	if c.KeepaliveLeniency == 0 {
+		c.KeepaliveLeniency = defaultLeniency
+	}
+	// NaN fails every comparison: !(>= 1) refuses it with what is below 1.
+	if !(c.KeepaliveLeniency >= 1) || math.IsInf(c.KeepaliveLeniency, 0) {
+		return c, &ConfigError{"KeepaliveLeniency", "at least 1, and finite"}
+	}
+	// The peer's interval is MaxKeepalive at most: the silence allowed
+	// fits a time.Duration whatever the peer asks. float64(MaxInt64) is
+	// 2^63, out of range itself.
+	if float64(c.MaxKeepalive)*c.KeepaliveLeniency >= math.MaxInt64 {
+		return c, &ConfigError{"KeepaliveLeniency", "its product with MaxKeepalive overflows a time.Duration"}
 	}
 	c.HandshakeTimeout = orDuration(c.HandshakeTimeout, c.KeepaliveInterval)
 	c.WriteTimeout = orDuration(c.WriteTimeout, defaultWriteTimeout)
@@ -108,8 +121,17 @@ func (c Config) resolve() (Config, error) {
 	if c.MaxReasonLength > 65534 {
 		return c, &ConfigError{"MaxReasonLength", "65534 bytes at most, what a reason's uint16 length holds"}
 	}
+	// A count is a required uint32, 2^32-1 its null.
+	if uint64(c.RetransmitBatch) > maxCount {
+		return c, &ConfigError{"RetransmitBatch", "2^32-2 at most, what a count's uint32 holds but null"}
+	}
 	return c, nil
 }
+
+// maxCount is the highest count a RetransmitRequest, a Retransmission, a
+// NotApplied or an Applied may carry: a required uint32, whose 2^32-1 is
+// null (SBE §4.15).
+const maxCount = math.MaxUint32 - 1
 
 func validFlow(f fixp.FlowType) bool { return f <= fixp.None }
 
@@ -162,11 +184,6 @@ func (c ServerConfig) resolve() (ServerConfig, error) {
 	}
 	if c.Authenticate == nil {
 		return c, &ConfigError{"Authenticate", "required"}
-	}
-	c.MinKeepalive = orDuration(c.MinKeepalive, defaultMinKeepalive)
-	c.MaxKeepalive = orDuration(c.MaxKeepalive, defaultMaxKeepalive)
-	if c.MinKeepalive < 0 || c.MaxKeepalive < c.MinKeepalive || c.MaxKeepalive > maxKeepalive {
-		return c, &ConfigError{"MaxKeepalive", "below MinKeepalive, or beyond 2^32-1 ms"}
 	}
 	c.MaxClockSkew = orDuration(c.MaxClockSkew, defaultMaxClockSkew)
 	c.Retention = orDuration(c.Retention, defaultRetention)

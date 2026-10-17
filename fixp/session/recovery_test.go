@@ -38,11 +38,21 @@ func newRawSession(t *testing.T, clientFlow, serverFlow fixp.FlowType, next code
 	t.Cleanup(func() { cancel(); <-done })
 	r := dialRaw(t, l)
 	r.negotiate(clientFlow, "user:alice")
+	// An Idempotent flow is numbered by a Sequence, not by the Establish
+	// (§4.8).
+	idempotent := clientFlow == fixp.Idempotent && next.Valid
+	est := next
+	if idempotent {
+		est = codec.Optional[uint64]{}
+	}
 	var ack codec.EstablishmentAck
-	if _, err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
+	if _, err := ack.Decode(r.establish(1000, est, "user:alice")); err != nil {
 		t.Fatalf("establishing: %v", err)
 	}
 	h.expect(t, "established")
+	if idempotent {
+		r.send(&codec.Sequence{NextSeqNo: next.Value})
+	}
 	return &rawSession{srv: srv, h: h, st: st, r: r}
 }
 
@@ -112,6 +122,7 @@ func TestRetransmitServed(t *testing.T) {
 	rs := newRawSession(t, fixp.Unsequenced, fixp.Recoverable, codec.Optional[uint64]{}, func(c *ServerConfig) {
 		c.RetransmitBatch = 3
 		c.KeepaliveInterval = time.Second
+		c.RejectRetransmitRequestBeyondSent = true // §7.4.5.1's answer
 	})
 	s := rs.session(t)
 	for i := 1; i <= 5; i++ {
@@ -771,7 +782,7 @@ func TestBatchAgeBounded(t *testing.T) {
 	cliH := newRecorder()
 	c := newClient(t, l, slowSyncStore{memstore.New(), 10 * time.Millisecond}, cliH, fixp.Recoverable, func(c *ClientConfig) {
 		c.KeepaliveInterval = 100 * time.Millisecond
-		c.Leniency = 1.5
+		c.KeepaliveLeniency = 1.5
 	})
 	cancelCli, cliDone := runClient(c)
 	defer func() { cancelCli(); <-cliDone }()
@@ -963,7 +974,9 @@ func TestRecoveryViolations(t *testing.T) {
 		}, "a gap of 1099511627775 messages, from 1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rs := newRawSession(t, tc.clientFlow, tc.serverFlow, codec.Optional[uint64]{}, nil)
+			// A request beyond what was sent answered, not terminated: the
+			// violation tested is the one after it.
+			rs := newRawSession(t, tc.clientFlow, tc.serverFlow, codec.Optional[uint64]{}, func(c *ServerConfig) { c.RejectRetransmitRequestBeyondSent = true })
 			tc.send(rs.r)
 			// The Terminate, maybe after the answer to a request.
 			var msg []byte

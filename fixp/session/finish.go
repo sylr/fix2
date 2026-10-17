@@ -152,7 +152,7 @@ func (c *conn) startFinish() error {
 func (c *conn) onFinishedSending(h codec.MessageHeader, body []byte) error {
 	s := c.s
 	var fs codec.FinishedSending
-	if _, err := fs.DecodeBody(h, body); err != nil {
+	if err := s.cfg.decodeBody(&fs, h, body); err != nil {
 		return protocolf("FinishedSending: %v", err)
 	}
 	if fs.SessionId != s.ID() {
@@ -252,7 +252,7 @@ func (c *conn) queueFinishedReceiving() {
 func (c *conn) onFinishedReceiving(h codec.MessageHeader, body []byte) error {
 	s := c.s
 	var fr codec.FinishedReceiving
-	if _, err := fr.DecodeBody(h, body); err != nil {
+	if err := s.cfg.decodeBody(&fr, h, body); err != nil {
 		return protocolf("FinishedReceiving: %v", err)
 	}
 	if fr.SessionId != s.ID() {
