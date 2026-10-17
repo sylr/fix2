@@ -11,12 +11,12 @@ import (
 //
 // RejectInvalidMessage=N, which turns field validation off, was honoured
 // for FIX 4.x messages but not for FIXT application messages, validated
-// regardless. fix2's SkipChecks must apply to them as well.
-func TestIssue520_SkipChecksAppliesToFIXT(t *testing.T) {
+// regardless. fix2's TolerateValidationFailures must apply to them as well.
+func TestIssue520_TolerateValidationFailuresAppliesToFIXT(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		skip dictionary.Checks
-	}{{"checks", 0}, {"SkipChecks", dictionary.CheckAll}} {
+	}{{"checks", 0}, {"tolerated", dictionary.CheckAll}} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, rec, l := startAcceptor(t, func(c *session.Config) {
 				c.ID = session.SessionID{BeginString: session.FIXT11, SenderCompID: "ACC", TargetCompID: "INI"}
@@ -25,7 +25,7 @@ func TestIssue520_SkipChecksAppliesToFIXT(t *testing.T) {
 					Apps:             map[string]*dictionary.Dict{"9": dict(t, "FIX50SP2")},
 					DefaultApplVerID: "9",
 				}
-				c.SkipChecks = tc.skip
+				c.TolerateValidationFailures = tc.skip
 			})
 			p := dialPeer(t, l)
 			p.beginString = session.FIXT11

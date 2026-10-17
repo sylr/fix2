@@ -243,8 +243,11 @@ func fuzzConfig(cfg uint32, id session.SessionID) (session.Config, *fuzzObserver
 		c.ResendChunkSize = 2
 	}
 	if cfg&fuzzStrict != 0 {
-		c.Compatibility = session.CompatStrict2020
-		c.Leniency.SequenceResetWithoutOrigSendingTime = true
+		c.TolerateSequenceResetWithoutOrigSendingTime = true
+	} else {
+		c.Tolerations = session.QuickFIXTolerations()
+		c.ServeResendRequestSeqTooLow = true
+		c.UnannouncedResetOnLogon = true
 	}
 	if cfg&fuzzNoLatency != 0 {
 		c.MaxLatency = -1

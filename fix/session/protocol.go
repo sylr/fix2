@@ -653,7 +653,7 @@ func (s *Session) origTimeOK(c *conn, m *fix.Message, inSequence bool) bool {
 	}
 	orig := m.Get(tagOrigSendingTime)
 	if orig == nil {
-		if s.cfg.Leniency.SequenceResetWithoutOrigSendingTime && bytes.Equal(m.MsgType(), []byte("4")) {
+		if s.cfg.TolerateSequenceResetWithoutOrigSendingTime && bytes.Equal(m.MsgType(), []byte("4")) {
 			return true
 		}
 		s.rejectLocked(m, dictionary.ReasonRequiredTagMissing, tagOrigSendingTime,
@@ -761,7 +761,7 @@ func (s *Session) refillLocked() {
 		s.recov.crawlWarned = true
 		text := "the counterparty's GapFills are unusable: the gap is recovered one message per ResendRequest"
 		if s.recov.noOrig {
-			text += ", its PossDup ones lacking OrigSendingTime (122): see Leniency.SequenceResetWithoutOrigSendingTime"
+			text += ", its PossDup ones lacking OrigSendingTime (122): see Config.TolerateSequenceResetWithoutOrigSendingTime"
 		}
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, text, slog.Uint64("expected", s.st.NextTarget))
 	}
@@ -1006,7 +1006,7 @@ func (s *Session) validateLocked(m *fix.Message, applVerID string) *dictionary.V
 	if d == nil {
 		return nil
 	}
-	err := d.ValidateWith(m, dictionary.CheckAll&^s.cfg.SkipChecks)
+	err := d.ValidateWith(m, dictionary.CheckAll&^s.cfg.TolerateValidationFailures)
 	var ve *dictionary.ValidationError
 	if errors.As(err, &ve) {
 		if errors.Is(ve, dictionary.ErrUnknownMsgType) {
@@ -1214,10 +1214,11 @@ func (s *Session) onLogoutLocked(c *conn, m *fix.Message, frame []byte, in Inbou
 	if !s.checkHeaderLocked(c, m, in.Seq, now) {
 		return
 	}
-	if in.Seq > s.st.NextTarget && s.cfg.Compatibility == CompatStrict2020 {
+	if in.Seq > s.st.NextTarget && !s.cfg.TolerateLogoutBeforeGapRecovery {
 		// Recover the messages before it first: it is answered when its
 		// turn comes, if the counterparty waits that long. QuickFIX
-		// answers at once, and its acceptance tests expect it.
+		// answers at once, and its acceptance tests expect it
+		// (TolerateLogoutBeforeGapRecovery).
 		s.tooHighLocked(c, m, in, frame)
 		return
 	}
@@ -1399,7 +1400,7 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix.Message, in Inbound, now
 		if s.prof.isInfinity(e) || e > last {
 			e = last
 		}
-		if s.cfg.Compatibility == CompatStrict2020 && in.Seq < s.st.NextTarget && !in.PossDup {
+		if !s.cfg.ServeResendRequestSeqTooLow && in.Seq < s.st.NextTarget && !in.PossDup {
 			// Handled below: too low without PossDup logs out.
 		} else if uint64(begin) <= e {
 			s.log.LogAttrs(context.Background(), slog.LevelInfo, "resending at the counterparty's request",

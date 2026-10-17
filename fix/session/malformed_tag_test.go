@@ -496,7 +496,7 @@ func TestUnusableGapFillsWarned(t *testing.T) {
 			if n := strings.Count(out, "GapFills are unusable"); n != 1 {
 				t.Errorf("warned %d times, want 1:\n%s", n, out)
 			}
-			if got := strings.Contains(out, "Leniency.SequenceResetWithoutOrigSendingTime"); got != tc.leniency {
+			if got := strings.Contains(out, "TolerateSequenceResetWithoutOrigSendingTime"); got != tc.leniency {
 				t.Errorf("leniency named: %v, want %v:\n%s", got, tc.leniency, out)
 			}
 		})

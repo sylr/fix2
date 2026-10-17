@@ -32,18 +32,18 @@ func benchPair(b *testing.B) (*session.Session, *counter) {
 	a := session.NewAcceptor(session.AcceptorOptions{})
 	recv := &counter{}
 	if _, err := a.Add(session.Config{
-		ID:              session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"},
-		Handler:         recv,
-		DeliveryQueue:   1 << 16,
-		MaxPendingAge:   0,
-		MaxLatency:      -1,
-		WriteTimeout:    time.Minute,
-		MaxStash:        1 << 16,
-		LogoutTimeout:   100 * time.Millisecond,
-		SkipChecks:      0,
-		AckProbe:        session.AckProbeNever,
-		HeartBtInt:      30 * time.Second,
-		MaxHeldMessages: 1 << 16,
+		ID:                         session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"},
+		Handler:                    recv,
+		DeliveryQueue:              1 << 16,
+		MaxPendingAge:              0,
+		MaxLatency:                 -1,
+		WriteTimeout:               time.Minute,
+		MaxStash:                   1 << 16,
+		LogoutTimeout:              100 * time.Millisecond,
+		TolerateValidationFailures: 0,
+		AckProbe:                   session.AckProbeNever,
+		HeartBtInt:                 30 * time.Second,
+		MaxHeldMessages:            1 << 16,
 	}); err != nil {
 		b.Fatal(err)
 	}

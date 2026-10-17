@@ -128,10 +128,10 @@ func TestHeldArrival_LogoutStopsHeld(t *testing.T) {
 	}
 }
 
-// Under CompatStrict2020, a Logout held ahead of a gap is answered when its
+// By default, a Logout held ahead of a gap is answered when its
 // turn comes: what is held after it is neither processed nor counted.
 func TestHeldArrival_HeldLogoutStopsHeld(t *testing.T) {
-	s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+	s, rec, p := loggedOn(t, nil)
 	p.write(from(session.FIX44, 3), "5")
 	p.expect("2", "7", "2", "16", "0")
 	p.write(from(session.FIX44, 4), "D", "11", "AFTER-LOGOUT")
@@ -149,12 +149,12 @@ func TestHeldArrival_HeldLogoutStopsHeld(t *testing.T) {
 	}
 }
 
-// Under CompatStrict2020, a Logout held ahead of a gap that a Reset-mode
+// By default, a Logout held ahead of a gap that a Reset-mode
 // SequenceReset moves past stops what is held after it, even when answering
 // it reaches the NewSeqNo: the order after it is neither processed nor
 // counted.
 func TestHeldArrival_HeldLogoutStopsResetPast(t *testing.T) {
-	s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+	s, rec, p := loggedOn(t, nil)
 	p.write(from(session.FIX44, 3), "5")
 	p.expect("2", "7", "2", "16", "0")
 	p.write(from(session.FIX44, 4), "D", "11", "AFTER-LOGOUT")
@@ -172,12 +172,11 @@ func TestHeldArrival_HeldLogoutStopsResetPast(t *testing.T) {
 	}
 }
 
-// Under CompatStrict2020, a Logout held ahead of a gap for longer than
+// By default, a Logout held ahead of a gap for longer than
 // MaxLatency is answered when its turn comes, not rejected for its
 // SendingTime.
 func TestHeldArrival_StaleLogout(t *testing.T) {
 	_, rec, p := loggedOn(t, func(c *session.Config) {
-		c.Compatibility = session.CompatStrict2020
 		c.MaxLatency = 500 * time.Millisecond
 	})
 	p.write(from(session.FIX44, 3), "5")
@@ -192,7 +191,6 @@ func TestHeldArrival_StaleLogout(t *testing.T) {
 // once answered: not the next chunk.
 func TestHeldArrival_LogoutEndsChunk(t *testing.T) {
 	_, _, p := loggedOn(t, func(c *session.Config) {
-		c.Compatibility = session.CompatStrict2020
 		c.ResendChunkSize = 2
 	})
 	p.write(from(session.FIX44, 4), "5")
@@ -216,7 +214,7 @@ func TestHeldArrival_LogoutEndsChunk(t *testing.T) {
 	}
 }
 
-// Under CompatStrict2020, a counterparty's Logout filling the gap ahead of a
+// By default, a counterparty's Logout filling the gap ahead of a
 // message held stops what is held after it, as a Logout itself held does,
 // the answer to ours too: the order after it is neither processed nor
 // counted. A Heartbeat filling it lets the order through.
@@ -235,7 +233,7 @@ func TestHeldArrival_InSequenceLogoutStopsHeld(t *testing.T) {
 		{"answer to ours, held", true, true, "0", nil, 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, rec, p := loggedOn(t, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+			s, rec, p := loggedOn(t, nil)
 			order := 3
 			if tc.held {
 				p.write(from(session.FIX44, 3), "5")
@@ -283,11 +281,10 @@ func TestHeldArrival_InSequenceLogoutStopsHeld(t *testing.T) {
 	}
 }
 
-// Under CompatStrict2020, a counterparty's Logout in sequence ending a chunk
+// By default, a counterparty's Logout in sequence ending a chunk
 // of a chunked ResendRequest is answered: the next chunk is not asked for.
 func TestHeldArrival_InSequenceLogoutEndsChunk(t *testing.T) {
 	_, _, p := loggedOn(t, func(c *session.Config) {
-		c.Compatibility = session.CompatStrict2020
 		c.ResendChunkSize = 2
 	})
 	p.write(from(session.FIX44, 5), "D", "11", "AFTER-LOGOUT")

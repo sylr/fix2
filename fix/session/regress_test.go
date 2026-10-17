@@ -453,7 +453,7 @@ func TestUnsupportedBusinessMessageRejectNotRejected(t *testing.T) {
 	}
 }
 
-// Tags the dictionary does not define are rejected unless SkipChecks lets
+// Tags the dictionary does not define are rejected unless TolerateValidationFailures lets
 // them through, as QuickFIX/J's AllowUnknownMsgFields and
 // ValidateUserDefinedFields do: below 5000 and from 5000 on apart. A group
 // entry keeps them, so the next entries are its group's still.
@@ -474,7 +474,7 @@ func TestSkipUnknownTags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, rec, p := loggedOn(t, func(c *session.Config) {
 				c.Dictionaries.Session = fix44.Dictionary()
-				c.SkipChecks = tc.skip
+				c.TolerateValidationFailures = tc.skip
 			})
 			p.send("D", 0, order...)
 			if tc.reject != nil {

@@ -168,17 +168,18 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 		return
 	}
 	if s.prof.fixt && s.dicts.apps != nil && s.dicts.apps[peerApplVerID] == nil {
-		// As QuickFIX: accepted, its messages validated with our own
-		// default version.
+		// TolerateUnsupportedDefaultApplVerID, as QuickFIX: accepted, its
+		// messages validated with our own default version.
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "counterparty's DefaultApplVerID has no dictionary: our default is used for its messages",
 			slog.String("default_appl_ver_id", withhold(m, tagDefaultApplVerID, peerApplVerID, "withheld")), slog.String("have", strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", ")))
 		peerApplVerID = s.cfg.Dictionaries.DefaultApplVerID
 	}
 
 	reset := s.prof.resetSeqNum && bytes.Equal(m.Get(tagResetSeqNumFlag), yes)
-	// announce tells an acceptor resetting for ResetOnLogon, unasked, under
-	// CompatStrict2020, that the reset moves its sequence numbers: its answer
-	// says so with ResetSeqNumFlag, and the counterparty, resetting in turn,
+	// announce tells an acceptor resetting for ResetOnLogon, unasked, unless
+	// UnannouncedResetOnLogon, that the reset moves its sequence numbers:
+	// its answer says so with ResetSeqNumFlag, and the counterparty,
+	// resetting in turn,
 	// restarts at 1, its Logon left in the sequence reset. One at the start
 	// of its sequence, facing a counterparty at the start of its own, has
 	// nothing to announce: its answer is that of any first Logon. A Logon
@@ -192,7 +193,7 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 		resetErr = s.resetStoreLocked("Logon with ResetSeqNumFlag")
 	case !s.initiator && s.cfg.ResetOnLogon:
 		next, _ := fix.ParseInt(m.Get(tagNextExpectedMsgSeqNum))
-		announce = s.cfg.Compatibility == CompatStrict2020 && s.prof.resetSeqNum &&
+		announce = !s.cfg.UnannouncedResetOnLogon && s.prof.resetSeqNum &&
 			(s.st.NextSender > 1 || s.st.NextTarget > 1 || in.Seq > 1 || next > 1)
 		resetErr = s.resetStoreLocked("ResetOnLogon")
 	case s.initiator && reset && !s.sentReset:
@@ -299,13 +300,13 @@ type logonProblem struct {
 // checkLogon checks the fields of Logon m the session relies on: CompIDs,
 // SendingTime, EncryptMethod, HeartBtInt and, for FIXT, DefaultApplVerID.
 // FIX requires EncryptMethod of every Logon: an acceptor requires it of the
-// counterparty's, as an initiator does of the Logon answer under
-// CompatStrict2020 only, as some venues leave it out (Binance's dictionary
-// has it optional); a reset Logon on an established session always needs it
-// (see resetLogonProblem). It returns the HeartBtInt and the
-// DefaultApplVerID, which may have no dictionary unless CompatStrict2020 is
-// set, or the problem, its text withheld if it may show a credential: it is
-// logged.
+// counterparty's, as an initiator does of the Logon answer unless
+// TolerateLogonWithoutEncryptMethod, as some venues leave it out (Binance's
+// dictionary has it optional); a reset Logon on an established session
+// always needs it (see resetLogonProblem). It returns the HeartBtInt and the
+// DefaultApplVerID, which may have no dictionary with
+// TolerateUnsupportedDefaultApplVerID, or the problem, its text withheld if
+// it may show a credential: it is logged.
 func (s *Session) checkLogon(m *fix.Message, now time.Time) (int, string, *logonProblem) {
 	problem := func(reason dictionary.RejectReason, tag int, format string, args ...any) (int, string, *logonProblem) {
 		return 0, "", newLogonProblem(m, reason, tag, rejectText(reason, fmt.Sprintf(format, args...)))
@@ -314,7 +315,7 @@ func (s *Session) checkLogon(m *fix.Message, now time.Time) (int, string, *logon
 		return 0, "", newLogonProblem(m, reason, tag, text)
 	}
 	switch v := m.Get(tagEncryptMethod); {
-	case v == nil && (!s.initiator || s.cfg.Compatibility == CompatStrict2020):
+	case v == nil && (!s.initiator || !s.cfg.TolerateLogonWithoutEncryptMethod):
 		return problem(dictionary.ReasonRequiredTagMissing, tagEncryptMethod, "%s", fieldDesc(nil, tagEncryptMethod))
 	case v != nil && string(v) != "0":
 		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))
@@ -338,7 +339,7 @@ func (s *Session) checkLogon(m *fix.Message, now time.Time) (int, string, *logon
 	switch {
 	case v == nil:
 		return problem(dictionary.ReasonRequiredTagMissing, tagDefaultApplVerID, "%s", fieldDesc(nil, tagDefaultApplVerID))
-	case s.dicts.apps != nil && s.dicts.apps[string(v)] == nil && s.cfg.Compatibility == CompatStrict2020:
+	case s.dicts.apps != nil && s.dicts.apps[string(v)] == nil && !s.cfg.TolerateUnsupportedDefaultApplVerID:
 		return problem(dictionary.ReasonValueIsIncorrect, tagDefaultApplVerID, "DefaultApplVerID (1137) %s not supported, have %s",
 			quoteValue(v), strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", "))
 	}

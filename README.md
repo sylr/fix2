@@ -11,6 +11,12 @@ The FIX tagvalue encoding and its session layer (FIX 4.x, FIXT 1.1) live
 under `fix/`; FIXP, the FIX Performance Session Layer, under `fixp/`; what
 both share, such as `transport`, lives at the root.
 
+fix2 follows the specifications strictly by default. What a counterparty
+needs beyond them is a `Tolerate…` option, each off unless set, and
+`session.QuickFIXTolerations()` gathers those QuickFIX's acceptance tests
+need: [docs/conformance.md](docs/conformance.md) lists the editions
+followed and what each toleration relaxes.
+
 - **Parsing** (`fix`): `Parse` and `ParseInto` read messages without copying their
   values (SIMD checksums with `GOEXPERIMENT=simd`); `Framer` reads them off a
   stream, resynchronising after garbage; `Profile` holds the DATA fields of a
@@ -176,7 +182,11 @@ every push, 3 minutes every night.
 
 The session engine passes the 505 session acceptance test scripts of
 QuickFIX (FIX 4.0 to 5.0 SP2, NextExpectedMsgSeqNum, LastMsgSeqNumProcessed,
-ResendRequest chunking). Run them with a quickfix-go checkout:
+ResendRequest chunking), configured as QuickFIX behaves: with
+`session.QuickFIXTolerations()`, where QuickFIX departs from the 2020 Session
+Layer, and `ServeResendRequestSeqTooLow` and `UnannouncedResetOnLogon`,
+where it makes choices the Session Layer leaves open. Run them with a
+quickfix-go checkout:
 
     FIX2_QUICKFIX_TESTS=/path/to/quickfix-go/_test go test -run TestConformance ./fix/session/
 

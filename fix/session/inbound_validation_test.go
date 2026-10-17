@@ -130,10 +130,9 @@ func established(t *testing.T, begin string, change func(*session.Config)) (*ses
 	return s, rec, p, r
 }
 
-// strictApps makes a FIXT session refuse a DefaultApplVerID it has no
-// dictionary for.
+// strictApps gives a FIXT session one application dictionary: by default it
+// refuses a DefaultApplVerID it has no dictionary for.
 func strictApps(c *session.Config) {
-	c.Compatibility = session.CompatStrict2020
 	c.Dictionaries = session.Dictionaries{Session: fixt11.Dictionary(), DefaultApplVerID: "9",
 		Apps: map[string]*dictionary.Dict{"9": fix50sp2.Dictionary()}}
 }
@@ -276,9 +275,9 @@ func TestLogonWithoutEncryptMethod(t *testing.T) {
 			t.Error("logged on")
 		}
 	})
-	t.Run("initiator", func(t *testing.T) {
+	t.Run("initiator, TolerateLogonWithoutEncryptMethod", func(t *testing.T) {
 		l := mem.Listen("acceptor")
-		_, rec := startInitiator(t, l, nil)
+		_, rec := startInitiator(t, l, func(c *session.Config) { c.TolerateLogonWithoutEncryptMethod = true })
 		p := acceptPeer(t, l)
 		p.expect("A")
 		p.write(from(session.FIX44, 1), "A", "108", "30")
@@ -287,9 +286,9 @@ func TestLogonWithoutEncryptMethod(t *testing.T) {
 		p.expect("0", "112", "PING")
 	})
 	// The 2020 Session Layer requires it of the answer too.
-	t.Run("initiator, CompatStrict2020", func(t *testing.T) {
+	t.Run("initiator", func(t *testing.T) {
 		l := mem.Listen("acceptor")
-		_, rec := startInitiator(t, l, func(c *session.Config) { c.Compatibility = session.CompatStrict2020 })
+		_, rec := startInitiator(t, l, nil)
 		p := acceptPeer(t, l)
 		p.expect("A")
 		p.write(from(session.FIX44, 1), "A", "108", "30")
@@ -475,7 +474,7 @@ func fixtApps(c *session.Config) {
 	c.ID.BeginString = session.FIXT11
 	c.Dictionaries = session.Dictionaries{Session: fixt11.Dictionary(), DefaultApplVerID: "9",
 		Apps: map[string]*dictionary.Dict{"9": fix50sp2.Dictionary(), "10": fixlatest.Dictionary()}}
-	c.SkipChecks = dictionary.CheckAll
+	c.TolerateValidationFailures = dictionary.CheckAll
 }
 
 // dataRecorder records the EncryptedPassword (1402) and ApplVerID of the
@@ -840,7 +839,7 @@ func TestGroupEntryOutOfOrder(t *testing.T) {
 	t.Run("skipped", func(t *testing.T) {
 		_, rec, p := loggedOn(t, func(c *session.Config) {
 			c.Dictionaries = session.Dictionaries{Session: fix44.Dictionary()}
-			c.SkipChecks = dictionary.CheckGroupOrder
+			c.TolerateValidationFailures = dictionary.CheckGroupOrder
 		})
 		p.send("D", 0, order...)
 		rec.wait(t, func() bool { return len(rec.apps) == 1 })

@@ -154,9 +154,9 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		Timestamps: session.MillisecondTimestamps,
 		// Venues do not all keep their dictionary's order within group
 		// entries (Binance does not): an entry out of it is not rejected.
-		SkipChecks: dictionary.CheckGroupOrder,
-		Logger:     log,
-		Handler:    c,
+		TolerateValidationFailures: dictionary.CheckGroupOrder,
+		Logger:                     log,
+		Handler:                    c,
 	}
 	if o.trace {
 		// Every message, field by field; Password (554) and the signature

@@ -56,10 +56,11 @@ func (o *logonsSeen) first(t *testing.T) *fix.Message {
 }
 
 // resetOnLogonPair logs a fix2 initiator, which does not ask for a reset, on
-// to a fix2 acceptor with ResetOnLogon and compat, each starting at the
-// sequence numbers given. It returns once the initiator received the Logon
+// to a fix2 acceptor with ResetOnLogon, each starting at the
+// sequence numbers given, UnannouncedResetOnLogon if unannounced. It
+// returns once the initiator received the Logon
 // answer, which seen holds.
-func resetOnLogonPair(t *testing.T, begin string, compat session.Compatibility, accAt, iniAt uint64) (ini, acc *session.Session, ir, ar *recorder, seen *logonsSeen) {
+func resetOnLogonPair(t *testing.T, begin string, unannounced bool, accAt, iniAt uint64) (ini, acc *session.Session, ir, ar *recorder, seen *logonsSeen) {
 	t.Helper()
 	dicts := session.Dictionaries{}
 	if begin == session.FIXT11 {
@@ -69,11 +70,11 @@ func resetOnLogonPair(t *testing.T, begin string, compat session.Compatibility, 
 	a := session.NewAcceptor(session.AcceptorOptions{})
 	ar = newRecorder()
 	acc, err := a.Add(session.Config{
-		ID:            session.SessionID{BeginString: begin, SenderCompID: "ACC", TargetCompID: "INI"},
-		Handler:       ar,
-		Dictionaries:  dicts,
-		ResetOnLogon:  true,
-		Compatibility: compat,
+		ID:                      session.SessionID{BeginString: begin, SenderCompID: "ACC", TargetCompID: "INI"},
+		Handler:                 ar,
+		Dictionaries:            dicts,
+		ResetOnLogon:            true,
+		UnannouncedResetOnLogon: unannounced,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -148,14 +149,14 @@ func exchange(t *testing.T, begin string, ini, acc *session.Session, ir, ar *rec
 	}
 }
 
-// Under CompatStrict2020, an acceptor with ResetOnLogon whose sequence
+// By default, an acceptor with ResetOnLogon whose sequence
 // numbers had moved announces the reset it makes, though the initiator did
 // not ask for one: the initiator resets too, and both restart at 1.
 func TestResetOnLogon_StrictAnnouncedWhenSequenceMoved(t *testing.T) {
 	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
 		for _, iniAt := range []uint64{1, 5} {
 			t.Run(fmt.Sprintf("%s/initiator at %d", begin, iniAt), func(t *testing.T) {
-				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, session.CompatStrict2020, 5, iniAt)
+				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, false, 5, iniAt)
 				answer := seen.first(t)
 				if got := string(answer.Get(34)); got != "1" {
 					t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
@@ -171,13 +172,13 @@ func TestResetOnLogon_StrictAnnouncedWhenSequenceMoved(t *testing.T) {
 	}
 }
 
-// Under CompatStrict2020, an acceptor with ResetOnLogon at the start of its
+// By default, an acceptor with ResetOnLogon at the start of its
 // sequence still announces the reset to an initiator whose Logon shows it
 // expects the sequences to go on: both restart at 1.
 func TestResetOnLogon_StrictAnnouncedToStaleInitiator(t *testing.T) {
 	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
 		t.Run(begin, func(t *testing.T) {
-			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, session.CompatStrict2020, 1, 5)
+			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, false, 1, 5)
 			answer := seen.first(t)
 			if got := string(answer.Get(34)); got != "1" {
 				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
@@ -190,14 +191,15 @@ func TestResetOnLogon_StrictAnnouncedToStaleInitiator(t *testing.T) {
 	}
 }
 
-// By default, an acceptor with ResetOnLogon answers as QuickFIX does, without
+// With UnannouncedResetOnLogon, an acceptor with ResetOnLogon
+// answers as QuickFIX does, without
 // ResetSeqNumFlag, whatever its sequence numbers were: an initiator at the
 // start of its sequence goes on, its Logon counted; one that expected the
 // acceptor's sequence to go on logs out, MsgSeqNum too low.
-func TestResetOnLogon_DefaultNotAnnounced(t *testing.T) {
+func TestResetOnLogon_UnannouncedNotAnnounced(t *testing.T) {
 	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
 		t.Run(begin+"/initiator at 1", func(t *testing.T) {
-			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, session.CompatQuickFIX, 5, 1)
+			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, true, 5, 1)
 			answer := seen.first(t)
 			if got := string(answer.Get(34)); got != "1" {
 				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
@@ -208,7 +210,7 @@ func TestResetOnLogon_DefaultNotAnnounced(t *testing.T) {
 			exchange(t, begin, ini, acc, ir, ar, 3, 3)
 		})
 		t.Run(begin+"/initiator at 5", func(t *testing.T) {
-			_, _, ir, _, seen := resetOnLogonPair(t, begin, session.CompatQuickFIX, 5, 5)
+			_, _, ir, _, seen := resetOnLogonPair(t, begin, true, 5, 5)
 			if v := seen.first(t).Get(141); v != nil {
 				t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
 			}
@@ -225,10 +227,10 @@ func TestResetOnLogon_DefaultNotAnnounced(t *testing.T) {
 // An acceptor with ResetOnLogon at the start of its sequence has nothing to
 // announce, in either mode: its Logon answer carries no ResetSeqNumFlag.
 func TestResetOnLogon_FreshNotAnnounced(t *testing.T) {
-	for _, compat := range []session.Compatibility{session.CompatQuickFIX, session.CompatStrict2020} {
+	for _, mode := range resetModes {
 		for _, begin := range []string{session.FIX40, session.FIX42, session.FIX44, session.FIXT11} {
-			t.Run(fmt.Sprintf("compat %d/%s", compat, begin), func(t *testing.T) {
-				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, compat, 1, 1)
+			t.Run(mode.name+"/"+begin, func(t *testing.T) {
+				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, mode.unannounced, 1, 1)
 				if v := seen.first(t).Get(141); v != nil {
 					t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
 				}
@@ -242,9 +244,9 @@ func TestResetOnLogon_FreshNotAnnounced(t *testing.T) {
 // FIX 4.0 has no ResetSeqNumFlag to announce a reset with: an acceptor with
 // ResetOnLogon answers at 1 without it, and its Logon counts, in either mode.
 func TestResetOnLogon_FIX40CannotAnnounce(t *testing.T) {
-	for _, compat := range []session.Compatibility{session.CompatQuickFIX, session.CompatStrict2020} {
-		t.Run(fmt.Sprintf("compat %d", compat), func(t *testing.T) {
-			ini, acc, ir, ar, seen := resetOnLogonPair(t, session.FIX40, compat, 5, 1)
+	for _, mode := range resetModes {
+		t.Run(mode.name, func(t *testing.T) {
+			ini, acc, ir, ar, seen := resetOnLogonPair(t, session.FIX40, mode.unannounced, 5, 1)
 			answer := seen.first(t)
 			if got := string(answer.Get(34)); got != "1" {
 				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
@@ -255,4 +257,14 @@ func TestResetOnLogon_FIX40CannotAnnounce(t *testing.T) {
 			exchange(t, session.FIX40, ini, acc, ir, ar, 3, 3)
 		})
 	}
+}
+
+// resetModes are the ways an acceptor with ResetOnLogon may answer: by
+// default, or as QuickFIX's acceptance tests expect.
+var resetModes = []struct {
+	name        string
+	unannounced bool
+}{
+	{"announced", false},
+	{"unannounced", true},
 }

@@ -122,9 +122,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		// Binance writes entry fields out of its dictionary's order: a
 		// trade's MDEntryType before MDEntryPx, TradeID before
 		// TransactTime.
-		SkipChecks: dictionary.CheckGroupOrder,
-		Logger:     log,
-		Handler:    c,
+		TolerateValidationFailures: dictionary.CheckGroupOrder,
+		// Binance's dictionary makes EncryptMethod (98) optional, and its
+		// Logon answer leaves it out.
+		TolerateLogonWithoutEncryptMethod: true,
+		Logger:                            log,
+		Handler:                           c,
 	}
 	if o.trace {
 		// Every message, field by field; Username (553) holds the API key.

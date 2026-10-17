@@ -54,7 +54,7 @@ type Handler interface {
 	// only logged, so as not to tell an unauthenticated peer why, and, for a
 	// first Logon, is the Err of the LogoutError OnLogout gets; it must not
 	// hold credentials. A Logon
-	// with ResetSeqNumFlag the session refuses anyway (see Compatibility) is
+	// with ResetSeqNumFlag the session refuses anyway (see Tolerations) is
 	// not authenticated. It runs on the connection's reader goroutine.
 	Authenticate(ctx context.Context, req *LogonRequest) error
 

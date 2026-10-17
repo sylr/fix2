@@ -47,38 +47,59 @@ const (
 	NanosecondTimestamps
 )
 
-// Compatibility selects how the session behaves where the FIX specification
-// changed or counterparties differ.
+// Tolerations depart from the FIX specifications, as some counterparties
+// need: a session follows them strictly unless told otherwise, each
+// departure its own field, all off by default. docs/conformance.md gives
+// the rule each relaxes. QuickFIXTolerations returns those QuickFIX's
+// acceptance tests need.
 //
-// In every mode, a Logon with ResetSeqNumFlag (141=Y) received while logged
-// on is checked as an acceptor checks a first Logon (CompIDs, SendingTime,
-// EncryptMethod, HeartBtInt, DefaultApplVerID), and its MsgSeqNum must be 1:
-// an invalid one is rejected and logs out, resetting nothing. One received
-// while logging out is ignored: FIX lets the session send nothing then but
-// what a ResendRequest asks for. An acceptor refuses a first Logon without
-// EncryptMethod (98) in every mode.
-type Compatibility int
+// Whatever the tolerations, a Logon with ResetSeqNumFlag (141=Y) received
+// while logged on is checked as an acceptor checks a first Logon (CompIDs,
+// SendingTime, EncryptMethod, HeartBtInt, DefaultApplVerID), and its
+// MsgSeqNum must be 1: an invalid one is rejected and logs out, resetting
+// nothing. One received while logging out is ignored: FIX lets the session
+// send nothing then but what a ResendRequest asks for. An acceptor refuses a
+// first Logon without EncryptMethod (98).
+type Tolerations struct {
+	// TolerateLogonWithoutEncryptMethod lets an initiator accept a Logon
+	// answer without EncryptMethod (98), which FIX requires of every Logon,
+	// as venues whose dictionaries make it optional send (Binance's).
+	TolerateLogonWithoutEncryptMethod bool
+	// TolerateUnsupportedDefaultApplVerID accepts, for FIXT 1.1, a Logon
+	// whose DefaultApplVerID (1137) has no dictionary in Dictionaries.Apps:
+	// the counterparty's messages without ApplVerID (1128) are then
+	// validated with our own default version. Refused otherwise.
+	TolerateUnsupportedDefaultApplVerID bool
+	// TolerateLogoutBeforeGapRecovery answers at once a Logout received
+	// ahead of a gap, as QuickFIX does; FIX first recovers the gap, then
+	// answers.
+	TolerateLogoutBeforeGapRecovery bool
+	// TolerateSequenceResetWithoutOrigSendingTime accepts a PossDup
+	// SequenceReset without OrigSendingTime (122), which FIX requires of
+	// every PossDup message, as some venues send.
+	TolerateSequenceResetWithoutOrigSendingTime bool
+	// TolerateValidationFailures turns off validations the dictionaries
+	// would run: all run by default (see dictionary.Checks). Tolerating
+	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
+	// accepts tags the dictionaries do not define, as QuickFIX/J's
+	// AllowUnknownMsgFields=Y and ValidateUserDefinedFields=N do;
+	// dictionary.CheckGroupOrder, group entries whose fields are not in
+	// their dictionary's order, as some counterparties send them, as
+	// QuickFIX/J's ValidateUnorderedGroupFields=N does.
+	TolerateValidationFailures dictionary.Checks
+}
 
-const (
-	// CompatQuickFIX behaves as QuickFIX engines and their acceptance
-	// tests expect, the most common counterparty behaviour. An acceptor
-	// with ResetOnLogon answers a Logon without ResetSeqNumFlag without one,
-	// even when the reset moved its sequence numbers: a counterparty that
-	// did not reset logs out with "MsgSeqNum too low". An initiator accepts
-	// a Logon answer without EncryptMethod (98), as venues whose
-	// dictionaries make it optional send.
-	CompatQuickFIX Compatibility = iota
-	// CompatStrict2020 follows the 2020 FIX Session Layer specification
-	// where it differs, and refuses what QuickFIX lets through: a
-	// ResendRequest for messages already processed, without PossDup, logs
-	// out; a Logout received ahead of a gap is answered once the gap is
-	// recovered; a Logon whose DefaultApplVerID has no dictionary is
-	// refused; an acceptor with ResetOnLogon announces a reset that moved
-	// its sequence numbers (see Config.ResetOnLogon); an initiator refuses a
-	// Logon answer without EncryptMethod (98), which the 2020 Session Layer
-	// requires of every Logon.
-	CompatStrict2020
-)
+// QuickFIXTolerations returns the tolerations the session acceptance tests
+// of QuickFIX (quickfix-go's _test directory) need, some of them failing
+// without each: TolerateUnsupportedDefaultApplVerID and
+// TolerateLogoutBeforeGapRecovery. They also need ServeResendRequestSeqTooLow
+// and UnannouncedResetOnLogon, choices the specifications leave open.
+func QuickFIXTolerations() Tolerations {
+	return Tolerations{
+		TolerateUnsupportedDefaultApplVerID: true,
+		TolerateLogoutBeforeGapRecovery:     true,
+	}
+}
 
 // AckProbe selects when a session probes its counterparty to acknowledge
 // sent messages (see Receipt).
@@ -137,13 +158,6 @@ type Retention struct {
 	Max int
 }
 
-// Leniency relaxes checks some counterparties fail.
-type Leniency struct {
-	// SequenceResetWithoutOrigSendingTime accepts a PossDup SequenceReset
-	// without OrigSendingTime (122), which some venues send.
-	SequenceResetWithoutOrigSendingTime bool
-}
-
 // Config configures a session. The zero value of each field is a sensible
 // default, except ID and Handler, which are required.
 type Config struct {
@@ -187,18 +201,21 @@ type Config struct {
 	// ResetOnLogon resets sequence numbers at every logon: an initiator
 	// sends ResetSeqNumFlag (141=Y), an acceptor resets on any Logon.
 	//
-	// By default (CompatQuickFIX) an acceptor answers ResetSeqNumFlag only
-	// when the Logon carries it, as QuickFIX's acceptance tests expect: one
-	// whose sequence numbers had moved answers at MsgSeqNum 1 unannounced,
-	// and a counterparty that did not reset logs out with "MsgSeqNum too
-	// low". Under CompatStrict2020 it answers a Logon without
-	// ResetSeqNumFlag with one, at MsgSeqNum 1, when the reset moved its
-	// sequence numbers, either being past 1: the counterparty, which may
-	// expect them to go on, resets in turn, its Logon left behind, and its
-	// next message is 1. At the start of its sequence an acceptor has
-	// nothing to announce: it answers as to any first Logon, and the Logon
-	// counts. FIX 4.0, without ResetSeqNumFlag, never announces.
+	// An acceptor answers a Logon without ResetSeqNumFlag with one, at
+	// MsgSeqNum 1, when the reset moved its sequence numbers, either being
+	// past 1: the counterparty, which may expect them to go on, resets in
+	// turn, its Logon left behind, and its next message is 1. At the start
+	// of its sequence an acceptor has nothing to announce: it answers as to
+	// any first Logon, and the Logon counts. FIX 4.0, without
+	// ResetSeqNumFlag, never announces.
 	ResetOnLogon bool
+	// UnannouncedResetOnLogon makes an acceptor with ResetOnLogon answer
+	// ResetSeqNumFlag only when the Logon carries it, as QuickFIX's
+	// acceptance tests expect: one whose sequence numbers had moved answers
+	// at MsgSeqNum 1 unannounced, and a counterparty that did not reset logs
+	// out with "MsgSeqNum too low". FIX leaves it to the counterparties'
+	// agreement.
+	UnannouncedResetOnLogon bool
 	// ResetOnLogout and ResetOnDisconnect reset sequence numbers after a
 	// logout, or any disconnection.
 	ResetOnLogout, ResetOnDisconnect bool
@@ -211,22 +228,15 @@ type Config struct {
 	// ResendChunkSize asks for missing messages this many at a time, all at
 	// once if 0.
 	ResendChunkSize int
-	// Compatibility selects behaviours where specifications differ or
-	// counterparties do: CompatQuickFIX by default, which, among others,
-	// accepts a Logon answer without EncryptMethod (98); CompatStrict2020
-	// refuses it.
-	Compatibility Compatibility
-	// SkipChecks disables validations the dictionaries would run: all run
-	// by default (see dictionary.Checks). Skipping
-	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
-	// accepts tags the dictionaries do not define, as QuickFIX/J's
-	// AllowUnknownMsgFields=Y and ValidateUserDefinedFields=N do. Skipping
-	// dictionary.CheckGroupOrder accepts group entries whose fields are not
-	// in their dictionary's order, as some counterparties send them, as
-	// QuickFIX/J's ValidateUnorderedGroupFields=N does.
-	SkipChecks dictionary.Checks
-	// Leniency relaxes checks.
-	Leniency Leniency
+	// ServeResendRequestSeqTooLow serves a ResendRequest whose MsgSeqNum is
+	// lower than expected, without PossDupFlag, before logging out, as
+	// QuickFIX does and its acceptance tests expect; by default it logs out
+	// unserved, as FIX recommends.
+	ServeResendRequestSeqTooLow bool
+	// Tolerations, all off by default, depart from the FIX specifications
+	// as some counterparties need: QuickFIXTolerations for those QuickFIX's
+	// acceptance tests need.
+	Tolerations
 
 	// LogonTimeout is how long to wait for the counterparty's Logon, 10s if
 	// 0. LogoutTimeout is how long to wait for its Logout reply, 2s if 0,

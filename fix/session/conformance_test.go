@@ -92,8 +92,12 @@ func loadDict(t *testing.T, path string) *dictionary.Dict {
 // server for version dir v ("fix44", "fix50sp2"...).
 func conformanceConfig(t *testing.T, spec, v string) session.Config {
 	cfg := session.Config{
-		ID:      session.SessionID{SenderCompID: "ISLD", TargetCompID: "TW"},
-		Handler: &echo{orders: map[string]bool{}},
+		ID:          session.SessionID{SenderCompID: "ISLD", TargetCompID: "TW"},
+		Handler:     &echo{orders: map[string]bool{}},
+		Tolerations: session.QuickFIXTolerations(),
+		// Choices FIX leaves open, made as QuickFIX makes them.
+		ServeResendRequestSeqTooLow: true,
+		UnannouncedResetOnLogon:     true,
 	}
 	if os.Getenv("FIX2_CONFORMANCE_LOG") != "" {
 		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))

@@ -18,7 +18,7 @@ import (
 func TestIssue365_FXCMTradingSessionStatusDelivered(t *testing.T) {
 	_, rec, p := loggedOn(t, func(c *session.Config) {
 		c.Dictionaries = session.Dictionaries{Session: dictXML(t, i365Dict)}
-		c.SkipChecks = dictionary.CheckGroupOrder
+		c.TolerateValidationFailures = dictionary.CheckGroupOrder
 	})
 	// The first three instruments of the issue's message.
 	p.send("h", 0, "58", "Market is closed. Trading operations are disabled.Not in use for now",
