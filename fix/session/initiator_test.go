@@ -657,3 +657,22 @@ func TestLogoutIsLastHandled(t *testing.T) {
 		})
 	}
 }
+
+// LogoutTimeout, if 0, is twice the heartbeat interval in effect, as FIX
+// recommends: our Logout unanswered, the session waits that long.
+func TestLogoutTimeoutDefault(t *testing.T) {
+	s, rec, p := loggedOn(t, func(c *session.Config) { c.HeartBtInt, c.LogoutTimeout = 2*time.Second, 0 })
+	start := time.Now()
+	go s.Logout(context.Background(), "bye")
+	p.expect("5", "58", "bye")
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	rec.mu.Lock()
+	err := rec.logouts[0]
+	rec.mu.Unlock()
+	if !strings.Contains(err.Error(), "no Logout reply within 4s") {
+		t.Errorf("logged out with %v, want no Logout reply within 4s", err)
+	}
+	if d := time.Since(start); d < 4*time.Second {
+		t.Errorf("disconnected after %v, want 4s", d)
+	}
+}

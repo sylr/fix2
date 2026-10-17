@@ -185,8 +185,8 @@ func badTagNumber(frame []byte, m *fix.Message, err error) (int, bool) {
 // BeginString, its header and its MsgSeqNum are checked, then it is rejected
 // and counted as received if it is the one expected. Only the fields before
 // tag are known: the header fields after it, if it is within the header,
-// are not judged (see unseen), and a SequenceReset's NewSeqNo is not
-// trusted.
+// are not judged missing (see unseen), but for PossDupFlag, which one too
+// low must show, and a SequenceReset's NewSeqNo is not trusted.
 func (s *Session) invalidTagLocked(c *conn, m *fix.Message, tag int, now time.Time) {
 	s.partial, s.headerCut = m, s.cutInHeader(m)
 	defer func() { s.partial, s.headerCut = nil, false }()
@@ -216,7 +216,7 @@ func (s *Session) invalidTagLocked(c *conn, m *fix.Message, tag int, now time.Ti
 	case seqIgnore, seqDone:
 		return
 	}
-	s.lastProcessedLocked(m, in)
+	// Rejected, it acknowledges nothing of ours.
 	s.rejectLocked(m, dictionary.ReasonInvalidTagNumber, tag, text)
 	s.markLocked(seq)
 	s.advanceLocked(c, seq+1)
@@ -434,21 +434,57 @@ func (s *Session) onMessageLocked(c *conn, m *fix.Message, frame []byte, applVer
 		return in, s.c == c
 	}
 
+	// A session message rejected, as an invalid one, does not reach
+	// FromAdmin: neither do the others onRegularLocked rejects.
+	var handle func()
 	switch string(msgType) {
 	case "A":
-		s.onLogonLocked(c, m, in, now)
-		return in, true
+		handle = func() { s.onLogonLocked(c, m, in, now) }
 	case "5":
-		s.onLogoutLocked(c, m, frame, in, now)
-		return in, true
+		handle = func() { s.onLogoutLocked(c, m, frame, in, now) }
 	case "2":
-		s.onResendRequestLocked(c, m, in, now)
-		return in, true
+		handle = func() { s.onResendRequestLocked(c, m, in, now) }
 	case "4":
-		s.onSequenceResetLocked(c, m, frame, in, now)
-		return in, true
+		handle = func() { s.onSequenceResetLocked(c, m, frame, in, now) }
+	default:
+		return s.onRegularLocked(c, m, frame, in, now)
 	}
-	return s.onRegularLocked(c, m, frame, in, now)
+	return in, !s.handledRejected(m, in.Seq, handle)
+}
+
+// rejection identifies a message rejected: m, which a message held ahead of
+// a gap may reuse, and its MsgSeqNum.
+type rejection struct {
+	m   *fix.Message
+	seq uint64
+}
+
+// handledRejected runs handle, which handles message m, seq, and reports
+// whether m was rejected meanwhile: before, or after, the messages held
+// ahead of a gap that handling it may handle in turn, and reject.
+func (s *Session) handledRejected(m *fix.Message, seq uint64, handle func()) bool {
+	n := len(s.rejected)
+	s.watchRejects++
+	handle()
+	s.watchRejects--
+	rejected := slices.Contains(s.rejected[n:], rejection{m, seq})
+	s.rejected = s.rejected[:n]
+	return rejected
+}
+
+// rejectedLocked records that m was rejected, for handledRejected, while
+// one watches.
+func (s *Session) rejectedLocked(m *fix.Message) {
+	if s.watchRejects == 0 {
+		return
+	}
+	// As msgSeqNumLocked numbers it: 0 for a Reset-mode SequenceReset
+	// without a valid one.
+	seq, err := fix.ParseInt(m.Get(tagMsgSeqNum))
+	if err != nil || seq < 0 {
+		seq = 0
+	}
+	s.rejected = append(s.rejected, rejection{m, uint64(seq)})
 }
 
 // msgSeqNumLocked checks m's BeginString and MsgSeqNum, received on c, and
@@ -608,8 +644,8 @@ const (
 )
 
 // checkSeqLocked compares in.Seq with the one expected, handling messages
-// received too low: a retransmission (PossDupFlag) whose OrigSendingTime is
-// consistent is ignored, otherwise FIX requires a Reject or a Logout.
+// received too low: a retransmission (PossDupFlag = Y) whose OrigSendingTime
+// is consistent is ignored, otherwise FIX requires a Reject or a Logout.
 func (s *Session) checkSeqLocked(c *conn, m *fix.Message, in Inbound) seqVerdict {
 	switch {
 	case in.Seq == s.st.NextTarget:
@@ -621,11 +657,9 @@ func (s *Session) checkSeqLocked(c *conn, m *fix.Message, in Inbound) seqVerdict
 		return seqTooHigh
 	}
 	if !in.PossDup {
-		if s.unseen(m, tagPossDupFlag) {
-			// A retransmission maybe, whose PossDupFlag follows the
-			// malformed tag: ignored as one.
-			return seqIgnore
-		}
+		// One whose PossDupFlag may follow a malformed tag too: a message
+		// with a malformed tag is not garbled, which FIX would have us
+		// disregard, and it does not show PossDupFlag = Y.
 		s.logoutLocked(c, s.seqTooLowText(m, s.st.NextTarget, in.Seq))
 		return seqDone
 	}
@@ -936,7 +970,6 @@ func (s *Session) onRegularLocked(c *conn, m *fix.Message, frame []byte, in Inbo
 	case seqIgnore, seqDone:
 		return in, false
 	}
-	s.lastProcessedLocked(m, in)
 	msgType := m.MsgType()
 	admin := isAdmin(msgType)
 	if verr := s.validateLocked(m, in.ApplVerID); verr != nil {
@@ -967,6 +1000,8 @@ func (s *Session) onRegularLocked(c *conn, m *fix.Message, frame []byte, in Inbo
 			s.receipts.rejected(s.st.Generation, uint64(ref), s.st.NextSender, rejectInfo(m))
 		}
 	}
+	// Past every check: a rejected message acknowledges nothing of ours.
+	s.lastProcessedLocked(m, in)
 	if admin {
 		s.markLocked(in.Seq)
 	} else {
@@ -992,20 +1027,118 @@ func (s *Session) markLocked(seq uint64) {
 }
 
 // validateLocked validates m against the session's dictionaries: for a FIXT
-// application message, that of applVerID, the version it was parsed as.
+// application message, that of applVerID, the version it was parsed as; for
+// a session message, the session dictionary (see validateAdmin).
 func (s *Session) validateLocked(m *fix.Message, applVerID string) *dictionary.ValidationError {
+	if isAdmin(m.MsgType()) {
+		return s.validateAdmin(m)
+	}
 	d := s.dicts.session
-	if s.prof.fixt && !isAdmin(m.MsgType()) {
-		if s.dicts.apps != nil {
-			if d = s.dicts.apps[applVerID]; d == nil {
-				return &dictionary.ValidationError{Err: dictionary.ErrValidation, Tag: tagApplVerID, Reason: dictionary.ReasonInvalidApplVerID,
-					Msg: fmt.Sprintf("no dictionary for ApplVerID %q", applVerID)}
-			}
+	if s.prof.fixt && s.dicts.apps != nil {
+		if d = s.dicts.apps[applVerID]; d == nil {
+			return &dictionary.ValidationError{Err: dictionary.ErrValidation, Tag: tagApplVerID, Reason: dictionary.ReasonInvalidApplVerID,
+				Msg: fmt.Sprintf("no dictionary for ApplVerID %q", applVerID)}
 		}
 	}
 	if d == nil {
 		return nil
 	}
+	return s.validateWith(d, m)
+}
+
+// validateAdmin validates session message m against the session dictionary,
+// if there is one, but for what a toleration accepts and the dictionary may
+// refuse: a Logon answer without EncryptMethod (98), with
+// TolerateLogonWithoutEncryptMethod, which a reset Logon on an established
+// session is not spared (see resetLogonProblem); a malformed
+// NextExpectedMsgSeqNum (789), with TolerateMalformedNextExpectedMsgSeqNum; a
+// PossDup SequenceReset without OrigSendingTime (122), with
+// TolerateSequenceResetWithoutOrigSendingTime. A copy of m, the field mended,
+// is validated again for anything else wrong. It needs no lock.
+func (s *Session) validateAdmin(m *fix.Message) *dictionary.ValidationError {
+	d := s.dicts.session
+	if d == nil {
+		return nil
+	}
+	verr := s.validateWith(d, m)
+	// Each toleration mends one field: three at most.
+	for range 3 {
+		if verr == nil {
+			return nil
+		}
+		tag, v, ok := s.toleratedField(m, verr)
+		if !ok {
+			return verr
+		}
+		mended, err := mend(d, m, tag, v)
+		if err != nil {
+			return verr
+		}
+		m = mended
+		verr = s.validateWith(d, m)
+	}
+	return verr
+}
+
+// toleratedField tells whether verr, about session message m, is one a
+// toleration accepts (see validateAdmin), and how to mend m: field tag set
+// to v, or removed if v is nil.
+func (s *Session) toleratedField(m *fix.Message, verr *dictionary.ValidationError) (int, []byte, bool) {
+	switch string(m.MsgType()) {
+	case "A":
+		switch {
+		case verr.Tag == tagEncryptMethod && verr.Reason == dictionary.ReasonRequiredTagMissing &&
+			s.initiator && s.cfg.TolerateLogonWithoutEncryptMethod:
+			return tagEncryptMethod, []byte("0"), true
+		case verr.Tag == tagNextExpectedMsgSeqNum && s.cfg.TolerateMalformedNextExpectedMsgSeqNum && m.Get(tagNextExpectedMsgSeqNum) != nil:
+			switch verr.Reason {
+			case dictionary.ReasonIncorrectDataFormat, dictionary.ReasonValueIsIncorrect, dictionary.ReasonTagSpecifiedWithoutAValue:
+				// Kept present, valid, for a dictionary requiring it: the
+				// copy is only validated.
+				return tagNextExpectedMsgSeqNum, []byte("1"), true
+			}
+		}
+	case "4":
+		if verr.Tag == tagOrigSendingTime && verr.Reason == dictionary.ReasonRequiredTagMissing && m.Get(tagSendingTime) != nil &&
+			bytes.Equal(m.Get(tagPossDupFlag), yes) && s.cfg.TolerateSequenceResetWithoutOrigSendingTime {
+			return tagOrigSendingTime, m.Get(tagSendingTime), true
+		}
+	}
+	return 0, nil, false
+}
+
+// mend returns a copy of m, field tag set to v, or removed if v is nil,
+// parsed again with d's profile. A field m lacks is added where its standard
+// header ends: there, a header field and a body one are both in order.
+func mend(d *dictionary.Dict, m *fix.Message, tag int, v []byte) (*fix.Message, error) {
+	sections := d.Sections(m)
+	add := v != nil && m.Get(tag) == nil
+	var body []byte
+	for i, f := range m.Fields() {
+		if add && sections[i] != dictionary.SectionHeader {
+			body = fix.AppendTagValue(body, tag, v)
+			add = false
+		}
+		switch {
+		case f.Tag == 8 || f.Tag == 9 || f.Tag == 10:
+		case f.Tag != tag:
+			body = fix.AppendTagValue(body, f.Tag, f.Value)
+		case v != nil:
+			body = fix.AppendTagValue(body, tag, v)
+		}
+	}
+	if add {
+		body = fix.AppendTagValue(body, tag, v)
+	}
+	frame := fix.AppendTagValue(nil, 8, m.BeginString())
+	frame = fix.AppendTagInt(frame, 9, int64(len(body)))
+	frame = fix.AppendTrailer(append(frame, body...), 0)
+	c := new(fix.Message)
+	return c, fix.ParseInto(c, frame, d.Profile())
+}
+
+// validateWith validates m against d, but for the checks tolerated.
+func (s *Session) validateWith(d *dictionary.Dict, m *fix.Message) *dictionary.ValidationError {
 	err := d.ValidateWith(m, dictionary.CheckAll&^s.cfg.TolerateValidationFailures)
 	var ve *dictionary.ValidationError
 	if errors.As(err, &ve) {
@@ -1029,6 +1162,7 @@ func (s *Session) validateLocked(m *fix.Message, applVerID string) *dictionary.V
 // not: a counterparty whose dictionaries do not define ours either would
 // reject it in turn, and the two would loop.
 func (s *Session) rejectValidationLocked(m *fix.Message, verr *dictionary.ValidationError) {
+	s.rejectedLocked(m)
 	if isReject(m.MsgType()) && (verr.Reason == -1 || verr.Reason == dictionary.ReasonInvalidMsgType) {
 		s.logUnanswered(m, verr.Tag, verr.Msg)
 		return
@@ -1057,6 +1191,7 @@ func (s *Session) logUnanswered(m *fix.Message, tag int, text string) {
 
 // rejectLocked sends a Reject (35=3) of m about tag, noTag for none.
 func (s *Session) rejectLocked(m *fix.Message, reason dictionary.RejectReason, tag int, text string) {
+	s.rejectedLocked(m)
 	if s.c == nil {
 		return
 	}
@@ -1164,7 +1299,7 @@ func (s *Session) logoutLocked(c *conn, text string) {
 	s.sendLogoutLocked(c, text)
 	s.phase = phaseLogoutSent
 	c.logoutText = text
-	c.logoutDeadline = time.Now().Add(s.cfg.LogoutTimeout)
+	c.logoutDeadline = time.Now().Add(s.logoutTimeout())
 	s.armLocked(c)
 }
 
@@ -1222,6 +1357,22 @@ func (s *Session) onLogoutLocked(c *conn, m *fix.Message, frame []byte, in Inbou
 		s.tooHighLocked(c, m, in, frame)
 		return
 	}
+	if verr := s.validateAdmin(m); verr != nil {
+		// Not processed, as no message FIX rejects is: rejected, and
+		// counted if it is the one expected, but not answered. One ahead of
+		// a gap, answered at once with TolerateLogoutBeforeGapRecovery, is
+		// rejected in its turn.
+		if in.Seq > s.st.NextTarget {
+			s.tooHighLocked(c, m, in, frame)
+			return
+		}
+		s.rejectValidationLocked(m, verr)
+		if in.Seq == s.st.NextTarget {
+			s.markLocked(in.Seq)
+			s.advanceLocked(c, in.Seq+1)
+		}
+		return
+	}
 	s.lastProcessedLocked(m, in)
 	s.log.LogAttrs(context.Background(), slog.LevelInfo, "counterparty logged out", slog.String("text", text))
 	// Marked before it is answered, for the answer's
@@ -1266,6 +1417,17 @@ func (s *Session) onSequenceResetLocked(c *conn, m *fix.Message, frame []byte, i
 		} else {
 			s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagNewSeqNo, rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagNewSeqNo)+" is "+quoteValue(m.Get(tagNewSeqNo))))
 		}
+		if gapFill {
+			s.markLocked(in.Seq)
+			s.advanceLocked(c, in.Seq+1)
+			s.gapFillCountedLocked(c, m)
+		}
+		return
+	}
+	if verr := s.validateAdmin(m); verr != nil {
+		// As a NewSeqNo that cannot be used: nothing reset, a GapFill
+		// counted.
+		s.rejectValidationLocked(m, verr)
 		if gapFill {
 			s.markLocked(in.Seq)
 			s.advanceLocked(c, in.Seq+1)
@@ -1381,6 +1543,10 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix.Message, in Inbound, now
 	}
 	begin, err1 := fix.ParseInt(m.Get(tagBeginSeqNo))
 	end, err2 := fix.ParseInt(m.Get(tagEndSeqNo))
+	// Rejected, and not served, for its range or, after, for anything else
+	// the session dictionary refuses: its MsgSeqNum is evaluated all the
+	// same.
+	verr := s.validateAdmin(m)
 	switch {
 	case m.Get(tagBeginSeqNo) == nil:
 		s.rejectLocked(m, dictionary.ReasonRequiredTagMissing, tagBeginSeqNo, rejectText(dictionary.ReasonRequiredTagMissing, fieldDesc(nil, tagBeginSeqNo)))
@@ -1390,6 +1556,8 @@ func (s *Session) onResendRequestLocked(c *conn, m *fix.Message, in Inbound, now
 		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagBeginSeqNo, rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagBeginSeqNo)+" is "+quoteValue(m.Get(tagBeginSeqNo))))
 	case err2 != nil || end < 0:
 		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagEndSeqNo, rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagEndSeqNo)+" is "+quoteValue(m.Get(tagEndSeqNo))))
+	case verr != nil:
+		s.rejectValidationLocked(m, verr)
 	default:
 		// The counterparty has our messages up to the one before begin,
 		// and none after: what it asks for is not to be evicted.

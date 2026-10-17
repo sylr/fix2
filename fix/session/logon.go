@@ -218,6 +218,8 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 		if v, err := fix.ParseInt(m.Get(tagNextExpectedMsgSeqNum)); err == nil && v > 0 {
 			peerNext = uint64(v)
 		} else if m.Get(tagNextExpectedMsgSeqNum) != nil {
+			// TolerateMalformedNextExpectedMsgSeqNum: checkLogon refuses it
+			// otherwise.
 			s.log.LogAttrs(context.Background(), slog.LevelWarn, "malformed NextExpectedMsgSeqNum ignored",
 				slog.String("value", withhold(m, tagNextExpectedMsgSeqNum, quoteValue(m.Get(tagNextExpectedMsgSeqNum)), "withheld")))
 		}
@@ -244,9 +246,9 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 	}
 
 	if s.initiator {
-		s.heartBt = s.cfg.HeartBtInt
+		s.setHeartBtLocked(s.cfg.HeartBtInt)
 	} else {
-		s.heartBt = time.Duration(hb) * time.Second
+		s.setHeartBtLocked(time.Duration(hb) * time.Second)
 	}
 	s.peerApplVerID = peerApplVerID
 	if !s.initiator {
@@ -298,7 +300,10 @@ type logonProblem struct {
 }
 
 // checkLogon checks the fields of Logon m the session relies on: CompIDs,
-// SendingTime, EncryptMethod, HeartBtInt and, for FIXT, DefaultApplVerID.
+// SendingTime, EncryptMethod, HeartBtInt, for FIXT DefaultApplVerID,
+// NextExpectedMsgSeqNum if the session honours it, and a MsgSeqNum of 1 with
+// ResetSeqNumFlag; then the rest of m against the session dictionary (see
+// validateAdmin), after the checks whose texts say more.
 // FIX requires EncryptMethod of every Logon: an acceptor requires it of the
 // counterparty's, as an initiator does of the Logon answer unless
 // TolerateLogonWithoutEncryptMethod, as some venues leave it out (Binance's
@@ -332,23 +337,39 @@ func (s *Session) checkLogon(m *fix.Message, now time.Time) (int, string, *logon
 	case !s.initiator && hb != 0 && (time.Duration(hb)*time.Second < s.cfg.MinHeartBtInt || time.Duration(hb)*time.Second > s.cfg.MaxHeartBtInt):
 		return problem(dictionary.ReasonValueIsIncorrect, tagHeartBtInt, "HeartBtInt (108) %ds outside the accepted %s to %s", hb, s.cfg.MinHeartBtInt, s.cfg.MaxHeartBtInt)
 	}
-	if !s.prof.fixt {
-		return hb, "", nil
+	var peerApplVerID string
+	if s.prof.fixt {
+		v = m.Get(tagDefaultApplVerID)
+		switch {
+		case v == nil:
+			return problem(dictionary.ReasonRequiredTagMissing, tagDefaultApplVerID, "%s", fieldDesc(nil, tagDefaultApplVerID))
+		case s.dicts.apps != nil && s.dicts.apps[string(v)] == nil && !s.cfg.TolerateUnsupportedDefaultApplVerID:
+			return problem(dictionary.ReasonValueIsIncorrect, tagDefaultApplVerID, "DefaultApplVerID (1137) %s not supported, have %s",
+				quoteValue(v), strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", "))
+		}
+		peerApplVerID = string(v)
 	}
-	v = m.Get(tagDefaultApplVerID)
-	switch {
-	case v == nil:
-		return problem(dictionary.ReasonRequiredTagMissing, tagDefaultApplVerID, "%s", fieldDesc(nil, tagDefaultApplVerID))
-	case s.dicts.apps != nil && s.dicts.apps[string(v)] == nil && !s.cfg.TolerateUnsupportedDefaultApplVerID:
-		return problem(dictionary.ReasonValueIsIncorrect, tagDefaultApplVerID, "DefaultApplVerID (1137) %s not supported, have %s",
-			quoteValue(v), strings.Join(slices.Sorted(maps.Keys(s.dicts.apps)), ", "))
+	if next := m.Get(tagNextExpectedMsgSeqNum); next != nil && s.cfg.NextExpectedMsgSeqNum && s.prof.nextExpected &&
+		!s.cfg.TolerateMalformedNextExpectedMsgSeqNum {
+		if n, err := fix.ParseInt(next); err != nil || n <= 0 {
+			return problem(dictionary.ReasonIncorrectDataFormat, tagNextExpectedMsgSeqNum, "NextExpectedMsgSeqNum (789) %s is not a positive integer", quoteValue(next))
+		}
 	}
-	return hb, string(v), nil
+	if s.prof.resetSeqNum && !s.cfg.TolerateResetLogonSeqNumNotOne {
+		if p := resetSeqNumProblem(m); p != nil {
+			return 0, "", p
+		}
+	}
+	if verr := s.validateAdmin(m); verr != nil {
+		return 0, "", newLogonProblem(m, verr.Reason, verr.Tag, rejectText(verr.Reason, verr.Msg))
+	}
+	return hb, peerApplVerID, nil
 }
 
 // resetLogonProblem checks Logon m with ResetSeqNumFlag, received on an
 // established session, as an acceptor checks a first Logon, EncryptMethod
-// required, and its MsgSeqNum: FIX requires 1, both sides restarting there.
+// required, and its MsgSeqNum: FIX requires 1, both sides restarting there,
+// whatever TolerateResetLogonSeqNumNotOne.
 func (s *Session) resetLogonProblem(m *fix.Message, now time.Time) *logonProblem {
 	if _, _, p := s.checkLogon(m, now); p != nil {
 		return p
@@ -356,6 +377,16 @@ func (s *Session) resetLogonProblem(m *fix.Message, now time.Time) *logonProblem
 	if m.Get(tagEncryptMethod) == nil {
 		return newLogonProblem(m, dictionary.ReasonRequiredTagMissing, tagEncryptMethod,
 			rejectText(dictionary.ReasonRequiredTagMissing, fieldDesc(nil, tagEncryptMethod)))
+	}
+	return resetSeqNumProblem(m)
+}
+
+// resetSeqNumProblem returns the problem of Logon m if it has ResetSeqNumFlag
+// (141) Y and a MsgSeqNum other than 1: a reset starts a new FIX session, and
+// FIX starts one at 1.
+func resetSeqNumProblem(m *fix.Message) *logonProblem {
+	if !bytes.Equal(m.Get(tagResetSeqNumFlag), yes) {
+		return nil
 	}
 	v := m.Get(tagMsgSeqNum)
 	if seq, err := fix.ParseInt(v); err != nil || seq != 1 {

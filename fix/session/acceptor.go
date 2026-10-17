@@ -324,7 +324,9 @@ func shutdown(sessions []*Session) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), s.cfg.LogoutTimeout+time.Second)
+			// Read without the lock, which a store write that hangs holds:
+			// stop knows how not to wait for it.
+			ctx, cancel := context.WithTimeout(context.Background(), s.logoutTimeout()+time.Second)
 			defer cancel()
 			s.stop(ctx, "shutting down")
 		}()

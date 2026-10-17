@@ -167,3 +167,33 @@ func TestStoreHalt_WakesReceiptsWhileDisconnected(t *testing.T) {
 		t.Fatal("Wait still blocked after the halt")
 	}
 }
+
+// The shutdown of an Initiator's or Acceptor's Run returns while a store
+// write that hangs holds a session's lock, once the write is found stuck:
+// the LogoutTimeout bounding the session's Stop is read without the lock.
+func TestStoreHalt_Shutdown(t *testing.T) {
+	s, err := New(Config{ID: SessionID{BeginString: FIX44, SenderCompID: "INI", TargetCompID: "ACC"}, Handler: BaseHandler{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As a store write that hangs, found stuck.
+	s.mu.Lock()
+	s.storeStuck()
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			s.mu.Unlock()
+		}
+	}
+	defer release()
+	done := make(chan struct{})
+	go func() { defer close(done); shutdown([]*Session{s}) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		release()
+		<-done
+		t.Fatal("shutdown waited for the session's lock")
+	}
+}

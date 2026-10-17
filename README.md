@@ -184,8 +184,9 @@ The session engine passes the 505 session acceptance test scripts of
 QuickFIX (FIX 4.0 to 5.0 SP2, NextExpectedMsgSeqNum, LastMsgSeqNumProcessed,
 ResendRequest chunking), configured as QuickFIX behaves: with
 `session.QuickFIXTolerations()`, where QuickFIX departs from the 2020 Session
-Layer, and `ServeResendRequestSeqTooLow` and `UnannouncedResetOnLogon`,
-where it makes choices the Session Layer leaves open. Run them with a
+Layer, and `ServeResendRequestSeqTooLow`, `UnannouncedResetOnLogon` and a
+`LogoutTimeout` of 2s, where it makes choices the Session Layer leaves
+open. Run them with a
 quickfix-go checkout:
 
     FIX2_QUICKFIX_TESTS=/path/to/quickfix-go/_test go test -run TestConformance ./fix/session/

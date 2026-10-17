@@ -78,6 +78,23 @@ type Tolerations struct {
 	// SequenceReset without OrigSendingTime (122), which FIX requires of
 	// every PossDup message, as some venues send.
 	TolerateSequenceResetWithoutOrigSendingTime bool
+	// TolerateResetLogonSeqNumNotOne accepts a first Logon, or Logon answer,
+	// with ResetSeqNumFlag (141=Y) whose MsgSeqNum is not 1: the sequence
+	// numbers reset, the messages before it are asked for as after any
+	// Logon received too high. FIX starts a reset session at 1: refused
+	// otherwise, as is, whatever the tolerations, a reset Logon on an
+	// established session.
+	TolerateResetLogonSeqNumNotOne bool
+	// TolerateMalformedNextExpectedMsgSeqNum ignores, with a warning, a
+	// NextExpectedMsgSeqNum (789) on Logon that is not a positive integer,
+	// when the session honours 789 (see Config.NextExpectedMsgSeqNum), and
+	// lets the session dictionary's checks pass it; the Logon is refused
+	// otherwise.
+	TolerateMalformedNextExpectedMsgSeqNum bool
+	// TolerateNoHeartbeatAwaitingTestRequest sends no Heartbeat while our
+	// TestRequest awaits its answer, as QuickFIX does and its acceptance
+	// tests expect; FIX requires one in every idle interval.
+	TolerateNoHeartbeatAwaitingTestRequest bool
 	// TolerateValidationFailures turns off validations the dictionaries
 	// would run: all run by default (see dictionary.Checks). Tolerating
 	// dictionary.CheckUnknownTags and dictionary.CheckUserDefinedTags
@@ -91,13 +108,15 @@ type Tolerations struct {
 
 // QuickFIXTolerations returns the tolerations the session acceptance tests
 // of QuickFIX (quickfix-go's _test directory) need, some of them failing
-// without each: TolerateUnsupportedDefaultApplVerID and
-// TolerateLogoutBeforeGapRecovery. They also need ServeResendRequestSeqTooLow
-// and UnannouncedResetOnLogon, choices the specifications leave open.
+// without each: TolerateUnsupportedDefaultApplVerID,
+// TolerateLogoutBeforeGapRecovery and TolerateNoHeartbeatAwaitingTestRequest.
+// They also need ServeResendRequestSeqTooLow and UnannouncedResetOnLogon,
+// choices the specifications leave open.
 func QuickFIXTolerations() Tolerations {
 	return Tolerations{
-		TolerateUnsupportedDefaultApplVerID: true,
-		TolerateLogoutBeforeGapRecovery:     true,
+		TolerateUnsupportedDefaultApplVerID:    true,
+		TolerateLogoutBeforeGapRecovery:        true,
+		TolerateNoHeartbeatAwaitingTestRequest: true,
 	}
 }
 
@@ -239,10 +258,11 @@ type Config struct {
 	Tolerations
 
 	// LogonTimeout is how long to wait for the counterparty's Logon, 10s if
-	// 0. LogoutTimeout is how long to wait for its Logout reply, 2s if 0,
-	// and how long a resend under way may hold back our last Logout, once
-	// nothing more is awaited: the resend is then cut short and the
-	// connection closed.
+	// 0. LogoutTimeout is how long to wait for its Logout reply and how long
+	// a resend under way may hold back our last Logout, once nothing more is
+	// awaited: the resend is then cut short and the connection closed. If 0,
+	// it is twice the heartbeat interval in effect, as FIX recommends: the
+	// one agreed at logon, HeartBtInt before; 2s when that is 0.
 	LogonTimeout, LogoutTimeout time.Duration
 	// WriteTimeout bounds each write, 10s if 0: a counterparty not reading
 	// is disconnected.
@@ -329,7 +349,6 @@ func (c Config) withDefaults() Config {
 	def(&c.MaxHeartBtInt, 300*time.Second)
 	def(&c.MaxLatency, 120*time.Second)
 	def(&c.LogonTimeout, 10*time.Second)
-	def(&c.LogoutTimeout, 2*time.Second)
 	def(&c.WriteTimeout, 10*time.Second)
 	def(&c.StoreTimeout, 30*time.Second)
 	def(&c.ResetDrainTimeout, 5*time.Second)
@@ -353,6 +372,18 @@ func (c *Config) deliveryStall(hb time.Duration) time.Duration {
 		return c.MaxDeliveryStall
 	}
 	return max(30*time.Second, 2*hb)
+}
+
+// logoutTimeout returns LogoutTimeout for heartbeat interval hb: twice hb if
+// 0, 2s if both are.
+func (c *Config) logoutTimeout(hb time.Duration) time.Duration {
+	switch {
+	case c.LogoutTimeout > 0:
+		return c.LogoutTimeout
+	case hb > 0:
+		return 2 * hb
+	}
+	return 2 * time.Second
 }
 
 // precision returns the timestamp precision for version p.

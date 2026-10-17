@@ -744,9 +744,10 @@ func TestStoreResetAcceptorFails(t *testing.T) {
 			rec := newRecorder()
 			// Named as the peer's counterparty: the peer sends as ACC.
 			s, err := a.Add(session.Config{
-				ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
-				Handler: rec,
-				Store:   fs,
+				ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+				Handler:       rec,
+				Store:         fs,
+				LogoutTimeout: 200 * time.Millisecond,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -1047,9 +1048,10 @@ func TestStoreLogonAnswerNotStored(t *testing.T) {
 	a := session.NewAcceptor(session.AcceptorOptions{})
 	rec := newRecorder()
 	s, err := a.Add(session.Config{
-		ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
-		Handler: rec,
-		Store:   fs,
+		ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+		Handler:       rec,
+		Store:         fs,
+		LogoutTimeout: 200 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatal(err)

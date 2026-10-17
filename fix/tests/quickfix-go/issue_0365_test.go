@@ -48,6 +48,8 @@ func TestIssue365_FXCMTradingSessionStatusDelivered(t *testing.T) {
 // i365Dict is FXCM's FIX 4.4 TradingSessionStatus as its dictionary may have
 // it: NoRelatedSym lists the Instrument component in FIX order, then
 // Currency, RoundLot and FXCM's fields, an order the message does not follow.
+// It defines the session messages the test exchanges too: Logon and
+// Heartbeat are validated against it, as any message.
 const i365Dict = `<fix type="FIX" major="4" minor="4" servicepack="0">
   <header>
     <field name="BeginString" required="Y"/>
@@ -68,6 +70,10 @@ const i365Dict = `<fix type="FIX" major="4" minor="4" servicepack="0">
   <messages>
     <message name="Heartbeat" msgtype="0" msgcat="admin">
       <field name="TestReqID" required="N"/>
+    </message>
+    <message name="Logon" msgtype="A" msgcat="admin">
+      <field name="EncryptMethod" required="Y"/>
+      <field name="HeartBtInt" required="Y"/>
     </message>
     <message name="TradingSessionStatus" msgtype="h" msgcat="app">
       <field name="TradSesReqID" required="N"/>
@@ -130,6 +136,8 @@ const i365Dict = `<fix type="FIX" major="4" minor="4" servicepack="0">
     <field number="57" name="TargetSubID" type="STRING"/>
     <field number="58" name="Text" type="STRING"/>
     <field number="60" name="TransactTime" type="UTCTIMESTAMP"/>
+    <field number="98" name="EncryptMethod" type="INT"/>
+    <field number="108" name="HeartBtInt" type="INT"/>
     <field number="112" name="TestReqID" type="STRING"/>
     <field number="122" name="OrigSendingTime" type="UTCTIMESTAMP"/>
     <field number="146" name="NoRelatedSym" type="NUMINGROUP"/>

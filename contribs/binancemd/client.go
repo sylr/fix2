@@ -126,8 +126,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		// Binance's dictionary makes EncryptMethod (98) optional, and its
 		// Logon answer leaves it out.
 		TolerateLogonWithoutEncryptMethod: true,
-		Logger:                            log,
-		Handler:                           c,
+		// A command asked to stop waits 2s for Binance's Logout answer,
+		// not the twice HeartBtInt FIX recommends by default: what it
+		// received is delivered meanwhile, and nothing is resent.
+		LogoutTimeout: 2 * time.Second,
+		Logger:        log,
+		Handler:       c,
 	}
 	if o.trace {
 		// Every message, field by field; Username (553) holds the API key.

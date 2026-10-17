@@ -29,7 +29,7 @@ func TestLogonWhileAdding(t *testing.T) {
 			added := make(chan error, 1)
 			add := func() {
 				go func() {
-					_, err := a.Add(session.Config{ID: id, Handler: h, Store: st})
+					_, err := a.Add(session.Config{ID: id, Handler: h, Store: st, LogoutTimeout: 200 * time.Millisecond})
 					added <- err
 				}()
 				select {
@@ -43,7 +43,7 @@ func TestLogonWhileAdding(t *testing.T) {
 			if tc.resolve {
 				opts.Resolve = func(ctx context.Context, req *session.LogonRequest) (*session.Config, error) {
 					add()
-					return &session.Config{ID: req.ID, Handler: newRecorder(), Store: resolved}, nil
+					return &session.Config{ID: req.ID, Handler: newRecorder(), Store: resolved, LogoutTimeout: 200 * time.Millisecond}, nil
 				}
 			}
 			a, l, _ := runAcceptor(t, opts)

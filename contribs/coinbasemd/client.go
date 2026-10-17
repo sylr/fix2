@@ -155,8 +155,12 @@ func streamWith(ctx context.Context, o *options, cmd command, symbols []string, 
 		// Venues do not all keep their dictionary's order within group
 		// entries (Binance does not): an entry out of it is not rejected.
 		TolerateValidationFailures: dictionary.CheckGroupOrder,
-		Logger:                     log,
-		Handler:                    c,
+		// A command asked to stop waits 2s for Coinbase's Logout answer,
+		// not the twice HeartBtInt FIX recommends by default: what it
+		// received is delivered meanwhile, and nothing is resent.
+		LogoutTimeout: 2 * time.Second,
+		Logger:        log,
+		Handler:       c,
 	}
 	if o.trace {
 		// Every message, field by field; Password (554) and the signature

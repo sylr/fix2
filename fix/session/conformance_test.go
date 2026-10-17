@@ -98,6 +98,10 @@ func conformanceConfig(t *testing.T, spec, v string) session.Config {
 		// Choices FIX leaves open, made as QuickFIX makes them.
 		ServeResendRequestSeqTooLow: true,
 		UnannouncedResetOnLogon:     true,
+		// QuickFIX's default, which the scripts' 20s wait for a
+		// disconnection after our Logout needs: twice their HeartBtInt of
+		// 30s, FIX's recommendation, is longer.
+		LogoutTimeout: 2 * time.Second,
 	}
 	if os.Getenv("FIX2_CONFORMANCE_LOG") != "" {
 		cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))

@@ -130,6 +130,10 @@ type Session struct {
 	stalled   bool   // a handler callback is stuck, see Config.MaxDeliveryStall
 	resetting bool
 	heartBt   time.Duration
+	// logoutWait is the LogoutTimeout of heartBt (see setHeartBtLocked),
+	// for a shutdown, which must not wait for mu: a store write that hangs
+	// holds it.
+	logoutWait atomic.Int64
 	// peerApplVerID is the counterparty's DefaultApplVerID (FIXT).
 	peerApplVerID string
 	// sentReset is set when our Logon carried ResetSeqNumFlag=Y.
@@ -155,6 +159,11 @@ type Session struct {
 	// unseen).
 	partial   *fix.Message
 	headerCut bool
+	// rejected lists the messages rejected (see rejectLocked) while session
+	// messages are handled: one rejected does not reach Handler.FromAdmin.
+	// Those held ahead of a gap, handled meanwhile, are listed after it.
+	rejected     []rejection
+	watchRejects int
 	// gapFilling is set while a GapFill moves the expected MsgSeqNum.
 	gapFilling bool
 	// draining is set while advanceLocked handles messages kept ahead.
@@ -208,10 +217,10 @@ func New(cfg Config) (*Session, error) {
 		prec:    cfg.precision(p),
 		handler: cfg.Handler,
 		store:   cfg.Store,
-		heartBt: cfg.HeartBtInt,
 		done:    make(chan struct{}),
 		stuckCh: make(chan struct{}),
 	}
+	s.setHeartBtLocked(cfg.HeartBtInt)
 	s.log = cfg.Logger.With(slog.String("session", cfg.ID.String()))
 	s.cbCtx = context.WithValue(context.Background(), callbackKey{}, s)
 	s.handler = trackCallbacks(s, cfg.Handler)
@@ -294,6 +303,18 @@ func (s *Session) Err() error {
 		}
 	}
 	return s.halted
+}
+
+// setHeartBtLocked sets the heartbeat interval in effect, and the
+// LogoutTimeout it gives.
+func (s *Session) setHeartBtLocked(hb time.Duration) {
+	s.heartBt = hb
+	s.logoutWait.Store(int64(s.cfg.logoutTimeout(hb)))
+}
+
+// logoutTimeout returns the LogoutTimeout in effect, without mu.
+func (s *Session) logoutTimeout() time.Duration {
+	return time.Duration(s.logoutWait.Load())
 }
 
 // lockUnlessStuck takes mu and reports true, or reports false once the

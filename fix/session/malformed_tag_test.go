@@ -154,22 +154,31 @@ func origSendingTime() string {
 	return string(fix.AppendUTCTimestamp(nil, time.Now().Add(-time.Second), fix.Milliseconds))
 }
 
-// One received too low without PossDupFlag logs out, as any other; one
-// whose PossDupFlag may follow a malformed tag within its header is
-// ignored, as a retransmission would be.
+// One received too low without PossDupFlag logs out, as any other, one
+// whose PossDupFlag may follow a malformed tag within its header too: it is
+// not garbled, which FIX would have disregarded, and it does not show
+// PossDupFlag = Y. One showing it before the tag is ignored, as a
+// retransmission is.
 func TestMalformedTagTooLow(t *testing.T) {
 	now := sendingTime()
-	t.Run("PossDupFlag missing", func(t *testing.T) {
+	for _, tc := range []struct {
+		name, header string
+	}{
+		{"PossDupFlag missing", "34=1|52=" + now + "|11=O1|abc=1|"},
+		{"PossDupFlag after the tag", "34=1|52=" + now + "|abc=1|43=Y|122=" + now + "|11=O1|"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, p := loggedOn(t, nil)
+			p.writeRaw(rawFrame("35=D|49=ACC|56=INI|"+tc.header, ""))
+			p.expect("5", "58", "MsgSeqNum too low")
+			if got := s.NextTargetSeqNum(); got != 2 {
+				t.Errorf("NextTargetSeqNum = %d, want 2", got)
+			}
+		})
+	}
+	t.Run("PossDupFlag before the tag", func(t *testing.T) {
 		s, _, p := loggedOn(t, nil)
-		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=1|52="+now+"|11=O1|abc=1|", ""))
-		p.expect("5", "58", "MsgSeqNum too low")
-		if got := s.NextTargetSeqNum(); got != 2 {
-			t.Errorf("NextTargetSeqNum = %d, want 2", got)
-		}
-	})
-	t.Run("PossDupFlag after the tag", func(t *testing.T) {
-		s, _, p := loggedOn(t, nil)
-		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=1|52="+now+"|abc=1|43=Y|122="+now+"|11=O1|", ""))
+		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=1|43=Y|52="+sendingTime()+"|122="+origSendingTime()+"|abc=1|11=O1|", ""))
 		// Nothing answers it: the TestRequest is answered first.
 		p.write(from(session.FIX44, 2), "1", "112", "AFTER")
 		p.expect("0", "112", "AFTER")
@@ -567,17 +576,26 @@ func TestMalformedTagLogoutAnswer(t *testing.T) {
 	}
 }
 
-// The LastMsgSeqNumProcessed of one rejected in sequence acknowledges our
-// messages, as a well-formed message's does.
+// The LastMsgSeqNumProcessed of one rejected in sequence acknowledges none
+// of our messages: a rejected message is not acted upon. A well-formed one
+// after it is.
 func TestMalformedTagLastMsgSeqNumProcessed(t *testing.T) {
 	buf := &logBuffer{}
 	_, _, p := loggedOn(t, func(c *session.Config) {
 		c.Retention.Interval = time.Hour
 		c.Logger = slog.New(slog.NewTextHandler(buf, nil))
 	})
+	const never = "counterparty acknowledges messages we never sent"
 	p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|369=99|11=O1|abc=1|", ""))
 	p.expect("3", "45", "2", "373", "0")
-	waitFor(t, func() bool { return strings.Contains(buf.String(), "counterparty acknowledges messages we never sent") })
+	p.write(from(session.FIX44, 3), "1", "112", "AFTER")
+	p.expect("0", "112", "AFTER")
+	if strings.Contains(buf.String(), never) {
+		t.Errorf("the rejected message's LastMsgSeqNumProcessed was taken:\n%s", buf.String())
+	}
+	p.write(from(session.FIX44, 4), "1", "112", "AGAIN", "369", "99")
+	p.expect("0", "112", "AGAIN")
+	waitFor(t, func() bool { return strings.Contains(buf.String(), never) })
 }
 
 // Our Logout sent, one is still checked and rejected; why the session

@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -844,4 +845,217 @@ func TestGroupEntryOutOfOrder(t *testing.T) {
 		p.send("D", 0, order...)
 		rec.wait(t, func() bool { return len(rec.apps) == 1 })
 	})
+}
+
+// Session messages are validated against the session dictionary, as
+// application messages are: an established session rejects an invalid one,
+// here holding Symbol (55), which no session message defines, counts it if
+// it is the one expected, and does not act on it; a SequenceReset moves
+// nothing, a ResendRequest is not served, a Logout not answered, a Logon
+// with ResetSeqNumFlag logs out, resetting nothing.
+func TestSessionMessagesValidated(t *testing.T) {
+	dict := func(c *session.Config) { c.Dictionaries.Session = fix44.Dictionary() }
+	// alive checks the session expects seq next, the peer's TestRequest
+	// seq answered.
+	alive := func(t *testing.T, s *session.Session, p *peer, seq int) {
+		t.Helper()
+		p.send("1", seq, "112", "ALIVE")
+		p.expect("0", "112", "ALIVE")
+		if got := s.NextTargetSeqNum(); got != uint64(seq)+1 {
+			t.Errorf("NextTargetSeqNum = %d, want %d", got, seq+1)
+		}
+	}
+	rejected := func(p *peer, seq, msgType string) {
+		p.t.Helper()
+		p.expect("3", "45", seq, "371", "55", "372", msgType, "373", "2")
+	}
+	t.Run("Logout", func(t *testing.T) {
+		s, _, p := loggedOn(t, dict)
+		p.send("5", 2, "55", "X")
+		rejected(p, "2", "5")
+		alive(t, s, p, 3)
+		p.send("5", 4)
+		p.expect("5")
+	})
+	t.Run("ResendRequest", func(t *testing.T) {
+		s, _, p := loggedOn(t, dict)
+		if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "O1")); err != nil {
+			t.Fatal(err)
+		}
+		p.expect("D", "34", "2")
+		p.send("2", 2, "7", "1", "16", "0", "55", "X")
+		rejected(p, "2", "2")
+		alive(t, s, p, 3)
+	})
+	t.Run("SequenceReset GapFill", func(t *testing.T) {
+		s, _, p := loggedOn(t, dict)
+		p.send("4", 2, "123", "Y", "36", "10", "55", "X")
+		rejected(p, "2", "4")
+		alive(t, s, p, 3)
+	})
+	t.Run("SequenceReset Reset", func(t *testing.T) {
+		s, _, p := loggedOn(t, dict)
+		p.send("4", 2, "36", "10", "55", "X")
+		rejected(p, "2", "4")
+		alive(t, s, p, 2)
+	})
+	t.Run("Logon with ResetSeqNumFlag", func(t *testing.T) {
+		s, _, p := loggedOn(t, dict)
+		p.send("A", 1, "98", "0", "108", "30", "141", "Y", "55", "X")
+		rejected(p, "1", "A")
+		p.expect("5")
+		if got := s.NextTargetSeqNum(); got != 2 {
+			t.Errorf("NextTargetSeqNum = %d, want 2", got)
+		}
+	})
+	t.Run("Heartbeat", func(t *testing.T) {
+		s, _, p := loggedOn(t, dict)
+		p.send("0", 2, "55", "X")
+		rejected(p, "2", "0")
+		alive(t, s, p, 3)
+	})
+}
+
+// adminSpy records the MsgSeqNum of the session messages FromAdmin gets.
+type adminSpy struct {
+	session.Handler
+	mu   sync.Mutex
+	seqs []string
+}
+
+func (a *adminSpy) FromAdmin(ctx context.Context, s *session.Session, m *fix.Message, in session.Inbound) {
+	a.mu.Lock()
+	a.seqs = append(a.seqs, string(m.MsgType())+"/"+string(m.Get(34)))
+	a.mu.Unlock()
+	a.Handler.FromAdmin(ctx, s, m, in)
+}
+
+func (a *adminSpy) got() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.seqs)
+}
+
+// A session message rejected as invalid does not reach FromAdmin; the valid
+// one after it does.
+func TestRejectedSessionMessagesNotFromAdmin(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		send   func(p *peer)
+		reject string // the rejected message, MsgType/MsgSeqNum
+	}{
+		{"Logout", func(p *peer) { p.send("5", 2, "55", "X") }, "5/2"},
+		{"ResendRequest", func(p *peer) { p.send("2", 2, "7", "1", "16", "0", "55", "X") }, "2/2"},
+		{"SequenceReset GapFill", func(p *peer) { p.send("4", 2, "123", "Y", "36", "3", "55", "X") }, "4/2"},
+		{"Heartbeat", func(p *peer) { p.send("0", 2, "55", "X") }, "0/2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spy := &adminSpy{}
+			_, _, p := loggedOn(t, func(c *session.Config) {
+				c.Dictionaries.Session = fix44.Dictionary()
+				spy.Handler = c.Handler
+				c.Handler = spy
+			})
+			tc.send(p)
+			p.expect("3", "45", "2", "371", "55")
+			p.send("1", 3, "112", "AFTER")
+			p.expect("0", "112", "AFTER")
+			waitFor(t, func() bool { return slices.Contains(spy.got(), "1/3") })
+			if got := spy.got(); slices.Contains(got, tc.reject) {
+				t.Errorf("FromAdmin got the rejected %s: %q", tc.reject, got)
+			}
+		})
+	}
+}
+
+// A Logout rejected as invalid does not reach FromAdmin though the message
+// held after it, handled in turn, is rejected too.
+func TestRejectedLogoutHeldMessageRejected(t *testing.T) {
+	spy := &adminSpy{}
+	_, _, p := loggedOn(t, func(c *session.Config) {
+		c.Dictionaries.Session = fix44.Dictionary()
+		spy.Handler = c.Handler
+		c.Handler = spy
+	})
+	p.send("0", 3, "55", "X")
+	p.expect("2", "7", "2")
+	p.send("5", 2, "55", "X")
+	p.expect("3", "45", "2", "371", "55")
+	p.expect("3", "45", "3", "371", "55")
+	p.send("1", 4, "112", "AFTER")
+	p.expect("0", "112", "AFTER")
+	waitFor(t, func() bool { return slices.Contains(spy.got(), "1/4") })
+	if got := spy.got(); slices.Contains(got, "5/2") || slices.Contains(got, "0/3") {
+		t.Errorf("FromAdmin got a rejected message: %q", got)
+	}
+}
+
+// A Reset-mode SequenceReset whose MsgSeqNum is invalid, numbered 0, does not
+// reach FromAdmin once rejected.
+func TestRejectedResetInvalidSeqNotFromAdmin(t *testing.T) {
+	spy := &adminSpy{}
+	_, _, p := loggedOn(t, func(c *session.Config) {
+		spy.Handler = c.Handler
+		c.Handler = spy
+	})
+	p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=-1|52="+sendingTime()+"|", ""))
+	p.expect("3", "371", "36")
+	p.send("1", 2, "112", "AFTER")
+	p.expect("0", "112", "AFTER")
+	waitFor(t, func() bool { return slices.Contains(spy.got(), "1/2") })
+	if got := spy.got(); slices.Contains(got, "4/-1") {
+		t.Errorf("FromAdmin got the rejected SequenceReset: %q", got)
+	}
+}
+
+// A message rejected acknowledges none of our messages: its
+// LastMsgSeqNumProcessed (369) evicts nothing, whether the dictionary or the
+// session's own checks reject it.
+func TestRejectedMessageAcknowledgesNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*session.Config)
+		send   []string // MsgType, then fields
+		reject string   // the Reject's RefTagID
+	}{
+		{"dictionary", func(c *session.Config) { c.Dictionaries.Session = fix44.Dictionary() }, []string{"0", "369", "8", "55", "X"}, "55"},
+		{"session check", nil, []string{"1", "369", "8"}, "112"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := session.Retention{Interval: 10 * time.Millisecond}
+			s, _, p := retained(t, r, 10, tc.change)
+			p.send(tc.send[0], 0, tc.send[1:]...)
+			p.expect("3", "371", tc.reject)
+			settle(t, s)
+			if n := s.Stats().Evicted.Load(); n != 0 {
+				t.Fatalf("Evicted = %d after a rejected message, want 0", n)
+			}
+			p.send("0", 0, "369", "8")
+			waitFor(t, func() bool { return s.Stats().Evicted.Load() == 8 })
+		})
+	}
+}
+
+// A first Logon the session dictionary refuses is refused, the connection
+// closed without a word, unless TolerateValidationFailures skips the check
+// that refuses it.
+func TestFirstLogonValidated(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tolerate dictionary.Checks
+	}{{"strict", 0}, {"tolerated", dictionary.CheckUnknownTags}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, rec, p := acceptorPeer(t, func(c *session.Config) {
+				c.Dictionaries.Session = fix44.Dictionary()
+				c.TolerateValidationFailures = tc.tolerate
+			})
+			p.write(fromInitiator(1), "A", "98", "0", "108", "30", "55", "X")
+			if tc.tolerate == 0 {
+				refused(t, rec, p)
+				return
+			}
+			p.expect("A")
+			rec.wait(t, func() bool { return rec.logons == 1 })
+		})
+	}
 }

@@ -350,7 +350,7 @@ func (s *Session) closeAfterFlushLocked(c *conn, reason error) {
 	}
 	c.closing = true
 	c.reason = reason
-	c.closeDeadline = time.Now().Add(s.cfg.LogoutTimeout)
+	c.closeDeadline = time.Now().Add(s.logoutTimeout())
 	s.armLocked(c)
 	c.wakeWriter()
 }
@@ -566,7 +566,7 @@ func (s *Session) onTimer(c *conn) {
 		// for the store as long as a resource is held: the connection
 		// ending cancels it, and the replays queued after it. Otherwise the writer writes what is queued,
 		// our Logout last, which WriteTimeout bounds: not cut short.
-		reason := &LogoutError{Err: errors.New("our Logout, held back behind a resend, not written within " + s.cfg.LogoutTimeout.String())}
+		reason := &LogoutError{Err: errors.New("our Logout, held back behind a resend, not written within " + s.logoutTimeout().String())}
 		if le, ok := c.reason.(*LogoutError); ok {
 			reason.ByCounterparty, reason.Text = le.ByCounterparty, le.Text
 		}
@@ -583,7 +583,7 @@ func (s *Session) onTimer(c *conn) {
 	case phaseLogoutSent:
 		// Closing, no Logout reply is awaited: see closeAfterFlushLocked.
 		if !c.closing && !now.Before(c.logoutDeadline) {
-			s.disconnectLocked(c, &LogoutError{Text: "no Logout reply within " + s.cfg.LogoutTimeout.String()})
+			s.disconnectLocked(c, &LogoutError{Text: "no Logout reply within " + s.logoutTimeout().String()})
 			return
 		}
 	}
@@ -611,9 +611,12 @@ func (s *Session) onTimer(c *conn) {
 				c.testReqSent = now
 				s.sendAdminLocked(&header{msgType: "1"}, adminBody(nil).str(tagTestReqID, c.testReqID))
 			}
-			// No heartbeat while our TestRequest waits for its answer, as
-			// QuickFIX: the disconnection follows.
-			if c.testReqID == "" && now.Sub(c.lastWrite) >= hb && len(c.pending) == 0 && !c.replaying() {
+			// A heartbeat in every idle interval, our TestRequest awaiting
+			// its answer or not, as FIX requires; none meanwhile with
+			// TolerateNoHeartbeatAwaitingTestRequest, as QuickFIX: the
+			// disconnection follows.
+			awaiting := c.testReqID != "" && s.cfg.TolerateNoHeartbeatAwaitingTestRequest
+			if !awaiting && now.Sub(c.lastWrite) >= hb && len(c.pending) == 0 && !c.replaying() {
 				s.sendAdminLocked(&header{msgType: "0"}, nil)
 			}
 		}
