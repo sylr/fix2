@@ -6,15 +6,37 @@
 
 (def faults
   "The faults --nemesis takes."
-  #{:kill :pause})
+  #{:kill :pause :partition :packet})
+
+(def packet-behaviors
+  "What the packet nemesis does to the traffic of the nodes it targets:
+  delays (TCP hides reordering and duplication from fix2, not their
+  delay), loss, corruption TCP's checksum should catch, and a slow link."
+  [{:delay {}}
+   {:delay {:time :200ms :jitter :100ms}}
+   {:loss {:percent :20%}}
+   {:loss {:percent :60%}}
+   {:corrupt {:percent :10%}}
+   {:duplicate {:percent :20%}}
+   {:reorder {:percent :20%}}
+   {:rate {:rate :100kbit}}
+   {:delay {} :loss {:percent :10%} :duplicate {:percent :10%}}])
 
 (defn package
   "The nemesis package for opts: :faults, a set of faults; :interval,
-  seconds between faults; :db."
+  mean seconds between nemesis operations; :db. The network's packages
+  come first: their final generators heal it before the nodes are
+  started again."
   [opts]
-  (let [opts (merge {:kill  {:targets [:one :all]}
-                     :pause {:targets [:one :all]}}
-                    opts)]
+  (let [opts (merge {:kill      {:targets [:one :all]}
+                     :pause     {:targets [:one :all]}
+                     ; Two nodes: isolating one isolates both.
+                     :partition {:targets [:one]}
+                     :packet    {:targets [:one :all] :behaviors packet-behaviors}}
+                    opts)
+        faults (:faults opts)]
     (nc/compose-packages
       (cond-> []
-        (some #{:kill :pause} (:faults opts)) (conj (nc/db-package opts))))))
+        (faults :partition)                (conj (nc/partition-package opts))
+        (faults :packet)                   (conj (nc/packet-package opts))
+        (some #{:kill :pause} faults)      (conj (nc/db-package opts))))))

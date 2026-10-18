@@ -6,6 +6,7 @@
             [jepsen [checker :as checker]
                     [cli :as cli]
                     [generator :as gen]
+                    [net :as net]
                     [os :as os]
                     [tests :as tests]]
             [jepsen.checker.timeline :as timeline]
@@ -30,6 +31,10 @@
            opts
            {:name      (str "fix2" (when (seq (:nemesis opts)) (str "-" (str/join "," (map name (sort (:nemesis opts)))))))
             :os        os/noop
+            ;; The interface named: jepsen.net shapes the first one `ip link`
+            ;; lists, and Docker Desktop's kernel puts tunnel devices (tunl0,
+            ;; gre0, sit0...) before eth0 in every container.
+            :net       (net/iptables-with-dev "eth0")
             :db        db
             :client    (client/client)
             :nemesis   (:nemesis pkg)
@@ -61,7 +66,7 @@
     :default 1
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
-   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause."
+   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause, partition, packet."
     :default #{}
     :parse-fn (fn [s] (set (map keyword (remove str/blank? (str/split s #",")))))
     :validate [#(every? nemesis/faults %) (str "Must be among " (str/join ", " (map name (sort nemesis/faults))))]]
