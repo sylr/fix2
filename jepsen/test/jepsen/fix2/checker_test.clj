@@ -1,6 +1,7 @@
 (ns jepsen.fix2.checker-test
   "The checks, fed a clean run and runs that break each of them."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [jepsen.fix2 [checker :as c]
                          [events :as events]]))
 
@@ -134,6 +135,97 @@
                  {:type :ok :f :quiesce :process 1 :value {:markers {"n1" m1 "n2" m2 "n1/s1" m1 "n2/s1" m2}}}]]
     {:history (vec (concat (acked "O1" 2) (acked "O2" 3) (acked "O3" 4) h1 quiesce))
      :evs (merge-with (comp vec concat) s0 s1)}))
+
+(defn- reset-run
+  "n1 sends O1 in its generation 1, resets, sends O2 and its marker in 2;
+  n2 numbers the same 5 and 6. Frames carry their hashes. drop-o1 leaves
+  out n2 reading O1 (:read) or delivering it (:deliver); past has n2
+  deliver O1b after O1, in generation 5; gap leaves out n2 reading n1's
+  Logon, O1 then read ahead of a gap; probe has n1 send a TestRequest
+  after O1, which n2 answers."
+  [{:keys [drop-o1 past gap probe]}]
+  (let [out (fn [inc g s h & kvs] (apply ev inc "out" :msgtype (if (str/starts-with? h "a") "A" "D") :gen g :seq s :hash h kvs))
+        in  (fn [inc g s h & kvs] (apply ev inc "in" :msgtype (if (str/starts-with? h "a") "A" "D") :gen g :seq s :hash h kvs))
+        order (fn [inc g s id h] [(ev inc "store" :call "append" :phase "begin" :gen g :seq s :clordid id :digest (digest id))
+                                  (ev inc "store" :call "append" :phase "end" :gen g :seq s :clordid id :digest (digest id))
+                                  (out inc g s h :clordid id :digest (digest id))])
+        ;; n2 started before n1 read anything of it.
+        n2-start [(ev "n2-1" "start" :life "L2")
+                  (ev "n2-1" "store" :call "open" :phase "end" :gen 5 :next 1 :target 1)]
+        n1 (vec (concat [(ev "n1-1" "start" :life "L1")
+                         (ev "n1-1" "store" :call "open" :phase "end" :gen 1 :next 1 :target 1)
+                         (out "n1-1" 1 1 "a1") (in "n1-1" 1 1 "a1-back")]
+                        (order "n1-1" 1 2 "O1" "o1")
+                        (when past (order "n1-1" 1 3 "O1b" "o1b"))
+                        (when probe [(out "n1-1" 1 4 "t1" :msgtype "1" :testreqid "T1")])
+                        [(ev "n1-1" "store" :call "reset" :phase "end" :gen 1 :newgen 2)
+                         (ev "n1-1" "store" :call "open" :phase "end" :gen 2 :next 1 :target 1)
+                         (out "n1-1" 2 1 "a2") (in "n1-1" 2 1 "a2-back")]
+                        (order "n1-1" 2 2 "O2" "o2")
+                        [(ev "n1-1" "send" :phase "begin" :clordid m1)]
+                        (order "n1-1" 2 3 m1 "m1h")))
+        n2 (vec (concat n2-start
+                        (when-not gap [(in "n2-1" 5 1 "a1")])
+                        [(out "n2-1" 5 1 "a1-back")]
+                        (when-not (= :read drop-o1) [(in "n2-1" 5 2 "o1" :clordid "O1" :digest (digest "O1"))])
+                        (when-not drop-o1 [(delivered "n2-1" "O1" 2)])
+                        (when past [(in "n2-1" 5 3 "o1b" :clordid "O1b" :digest (digest "O1b"))
+                                    (assoc (delivered "n2-1" "O1b" 3) :gen 5)])
+                        (when probe [(in "n2-1" 5 4 "t1" :msgtype "1" :testreqid "T1")
+                                     (out "n2-1" 5 2 "h1" :msgtype "0" :testreqid "T1")])
+                        [(ev "n2-1" "store" :call "reset" :phase "end" :gen 5 :newgen 6)
+                         (ev "n2-1" "store" :call "open" :phase "end" :gen 6 :next 1 :target 1)
+                         (in "n2-1" 6 1 "a2") (out "n2-1" 6 1 "a2-back")
+                         (in "n2-1" 6 2 "o2" :clordid "O2" :digest (digest "O2"))
+                         (assoc (delivered "n2-1" "O2" 2) :gen 6)
+                         (ev "n2-1" "send" :phase "begin" :clordid m2)]
+                        (order "n2-1" 6 2 m2 "m2h")
+                        [(in "n2-1" 6 3 "m1h" :clordid m1 :digest (digest m1))
+                         (assoc (delivered "n2-1" m1 3) :gen 6)]))
+        n2 (mapv #(if (and (= "deliver" (:kind %)) (= "O1" (:clordid %))) (assoc % :gen 5) %) n2)
+        n1 (into n1 [(in "n1-1" 2 2 "m2h" :clordid m2 :digest (digest m2)) (assoc (delivered "n1-1" m2 2) :gen 2)])]
+    {"n1" n1 "n2" n2}))
+
+(defn- reset-history
+  [o1]
+  (vec (concat [{:type :invoke :f :send :value "O1" :process 0}
+                (assoc o1 :f :send :value "O1" :process 0 :node "n1" :gen 1 :seq 2)]
+               (acked "O2" 2)
+               [(assoc (second (acked "O2" 2)) :gen 2)]
+               quiesced)))
+
+(deftest resets
+  (let [t (assoc test-map :reset :disconnect)
+        run (fn [opts o1] (c/analyze t (reset-history o1) (reset-run opts)))]
+    (testing "generations out of step, matched by the frames' bytes"
+      (let [res (run {} {:type :ok})]
+        (is (true? (:valid? res)) (pr-str res))))
+    (testing "an order a reset abandoned before b read it"
+      (let [res (run {:drop-o1 :read} {:type :info})]
+        (is (true? (valid res :silent-loss)) (pr-str (:silent-loss res)))
+        (is (= 1 (get-in res [:silent-loss "n1->n2" :reset-abandoned])))))
+    (testing "acknowledged, so read: a reset abandoning it unread is not"
+      (is (false? (valid (run {:drop-o1 :read} {:type :ok}) :acked))))
+    (testing "a probe after it answered, b's process delivering what it read after: queued, owed across the reset"
+      (is (false? (valid (run {:drop-o1 :deliver :probe true} {:type :ok}) :acked)))
+      (is (false? (valid (run {:drop-o1 :deliver :probe true} {:type :info}) :silent-loss))))
+    (testing "a reply to a TestRequest sent before, on another connection, proves nothing of a later one"
+      (let [evs (update (reset-run {:drop-o1 :deliver :probe true}) "n2"
+                        (fn [es] (mapv #(if (and (= "out" (:kind %)) (= "0" (:msgtype %))) (assoc % :epoch 9) %) es)))]
+        (is (true? (valid (c/analyze t (reset-history {:type :info}) evs) :silent-loss)))))
+    (testing "read, no probe after it: not known queued rather than held, the reset may drop it"
+      (is (true? (valid (run {:drop-o1 :deliver} {:type :info}) :silent-loss))))
+    (testing "read ahead of a gap, held, the reset dropping it: excused"
+      (let [res (run {:drop-o1 :deliver :gap true} {:type :info})]
+        (is (true? (valid res :silent-loss)) (pr-str (:silent-loss res)))
+        (is (= 1 (get-in res [:silent-loss "n1->n2" :reset-abandoned])))))
+    (testing "acknowledged, never read, a loss told of it: still not excused"
+      (let [evs (update (reset-run {:drop-o1 :read}) "n1" conj
+                        (ev "n1-1" "recovery-loss" :gen 1 :begin 2 :end 2 :ours true :err "session: our message is missing from the store"))]
+        (is (false? (valid (c/analyze t (reset-history {:type :ok}) evs) :acked)))))
+    (testing "read, b processed past it: no reset excuses it"
+      (let [res (run {:drop-o1 :deliver :past true} {:type :info})]
+        (is (false? (valid res :silent-loss)) (pr-str (:silent-loss res)))))))
 
 (deftest session-files
   (is (= 0 (events/session-number "n1" "events-n1-3.jsonl")))

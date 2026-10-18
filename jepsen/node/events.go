@@ -66,7 +66,7 @@ type Event struct {
 	// counterparty's it reset past
 	Begin uint64 `json:"begin,omitempty"`
 	End   uint64 `json:"end,omitempty"`
-	Ours  bool   `json:"ours,omitempty"`
+	Ours  *bool  `json:"ours,omitempty"` // set on every recovery-loss
 
 	// send: Level the receipt reached, Type the Jepsen outcome
 	Level string `json:"level,omitempty"`

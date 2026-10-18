@@ -4,10 +4,12 @@
   application messages are NewOrderSingles (35=D); a message is known by
   its ClOrdID and its digest, which a resend keeps.
 
-  Sequence numbers are taken within a generation, each side's as its store
-  numbers them: the base runs never reset, both sides stay at generation 1.
-  Recovery losses carry no generation: they cover a sequence number in
-  every generation, which runs that reset (J11) will have to refine."
+  Sequence numbers are taken within the sender's epochs, [store lifetime,
+  generation] (see normalize): each side numbers its generations apart,
+  and what the receiver read and did is matched to the sender's by the
+  frames' bytes. An order in an epoch a reset ended, never processed past,
+  was abandoned by it: excused, and counted. A run that does not reset
+  keeps one lifetime a node: a memstore started again must carry on."
   (:require [clojure.string :as str]
             [jepsen.checker :as checker]
             [jepsen.history :as h]
@@ -191,10 +193,12 @@
   kill may forestall."
   [a-evs b-evs]
   (let [truncations (filter #(and (= "store" (:kind %)) (= "truncate" (:call %)) (= "begin" (:phase %))) a-evs)
+        ;; [epoch lo hi]; a loss logged before OnLoss told its
+        ;; generation, of any epoch.
         ranges (concat
                  (for [ev (concat (filter #(and ((kind? "recovery-loss") %) (not (re-find #"reset" (str (:err %))))) a-evs)
                                   (filter #(and ((kind? "recovery-loss") %) (re-find #"reset" (str (:err %)))) b-evs))]
-                   [(:begin ev) (:end ev)])
+                   [(when (some? (:ours ev)) (:gen ev)) (:begin ev) (:end ev)])
                  (for [gf (concat (filter (kind? "out") a-evs) (filter (kind? "in") b-evs))
                        :when (and (= "4" (:msgtype gf)) (:gapfill gf) (:newseqno gf))
                        tr truncations
@@ -202,21 +206,133 @@
                        :when (not (.isAfter (instant (:t tr)) (instant (:t gf))))
                        :let [hi (dec (min (:newseqno gf) (:begin tr 0)))]
                        :when (<= (:seq gf) hi)]
-                   [(:seq gf) hi]))]
-    (fn [s] (some (fn [[lo hi]] (<= lo s hi)) ranges))))
+                   [(:gen gf) (:seq gf) hi]))]
+    (fn [[g s]] (some (fn [[lg lo hi]] (and (or (nil? lg) (= lg g)) (<= lo s hi))) ranges))))
+
+;; Epochs
+
+(defn- lives
+  "Each process's store lifetime, from its start event: one for the whole
+  node in a run that does not reset, a memstore started again then having
+  to carry on, which the checks fail when it does not."
+  [test evs]
+  (into {} (for [inc-evs (incarnations evs)
+                 :let [start (first (filter (kind? "start") inc-evs))]]
+             [(:inc (first inc-evs)) (if (:reset test) (or (:life start) "") "")])))
+
+(defn normalize
+  "a's and b's events, for the messages from a to b: their generations
+  replaced by a's epochs, [lifetime generation]. Each side numbers its
+  generations apart, and a kill amid a reset puts them out of step. a's
+  events by a's store lifetime; b's frames read by the frame a wrote with
+  the same bytes, else by the one read before at the same sequence
+  number in b's generation, else the last; what b did with a message
+  (delivered, rejected, processed past it) by the frame read at its
+  sequence number. b's own messages are b's: [:b lifetime generation].
+  b's generation stays as :bgen."
+  [test a-evs b-evs]
+  (let [a-life (lives test a-evs)
+        a-evs (mapv (fn [ev] (cond-> ev (:gen ev) (assoc :gen [(a-life (:inc ev)) (:gen ev)]))) a-evs)
+        by-hash (into {} (for [ev a-evs :when (and ((kind? "out") ev) (:hash ev))] [(:hash ev) (:gen ev)]))
+        b-life (lives test b-evs)
+        step (fn [[segs out] ev]
+               (if-let [g (:gen ev)]
+                 (let [k [(b-life (:inc ev)) g]
+                       {:keys [by-seq last]} (get segs k {:by-seq (sorted-map)})
+                       own [:b (first k) g]
+                       ;; Without resets both sides are at generation 1.
+                       guess (if (:reset test) own ["" g])
+                       at #(when % (get by-seq %))
+                       below #(some-> (rsubseq by-seq < %) first val)
+                       above #(some-> (subseq by-seq > %) first val)
+                       e (case (:kind ev)
+                           "in"            (or (by-hash (:hash ev)) (at (:seq ev)) last guess)
+                           ("deliver" "rejected" "admin") (or (at (:seq ev)) last guess)
+                           "out"           (if (:refseqnum ev) (or (at (:refseqnum ev)) last guess) own)
+                           "recovery-loss" (if (:ours ev) own (or (above (:end ev)) (below (:begin ev)) last guess))
+                           "store"         (if (and (#{"set-next-target" "open"} (:call ev)) (:target ev))
+                                             (or (at (dec (:target ev))) (below (:target ev)) last guess)
+                                             own)
+                           own)
+                       segs (if (and ((kind? "in") ev) (not= e own))
+                              (assoc segs k {:by-seq (assoc by-seq (:seq ev) e) :last e})
+                              segs)]
+                   [segs (conj out (assoc ev :gen e :bgen g))])
+                 [segs (conj out ev)]))]
+    {:a a-evs :b (second (reduce step [{} []] b-evs))}))
+
+(defn- probed
+  "Whether one of b's processes owed delivering a slot ([epoch seq]) it
+  read, a reset or not: it answered a TestRequest sent after it, which it
+  does once it processed what came before in sequence (one behind a gap is
+  held), then delivered a message it read after answering. Delivery is in
+  order: the slot came first. A slot read with no such probe after it is
+  not known accepted rather than held ahead of a gap, which a reset may
+  drop."
+  [b-incs]
+  (let [proofs (for [inc-evs b-incs
+                     :let [v (map-indexed vector inc-evs)
+                           ;; Each reply paired with the request it answers:
+                           ;; the last before it of its TestReqID on its
+                           ;; connection (the liveness probes share one).
+                           ;; The slots read before it.
+                           [replies _ _] (reduce (fn [[out pending reads] [i ev]]
+                                                   (cond
+                                                     (and ((kind? "in") ev) (= "1" (:msgtype ev)) (:testreqid ev))
+                                                     [out (assoc pending [(:epoch ev) (:testreqid ev)] ev) (conj reads [(:gen ev) (:seq ev)])]
+                                                     ((kind? "in") ev)
+                                                     [out pending (conj reads [(:gen ev) (:seq ev)])]
+                                                     (and ((kind? "out") ev) (= "0" (:msgtype ev)) (:testreqid ev))
+                                                     (let [pk [(:epoch ev) (:testreqid ev)]]
+                                                       (if-let [tr (pending pk)]
+                                                         [(conj out {:at i :gen (:gen tr) :below (:seq tr) :reads reads}) (dissoc pending pk) reads]
+                                                         [out pending reads]))
+                                                     :else [out pending reads]))
+                                                 [[] {} #{}] v)
+                           ;; The position of the first read of the last message
+                           ;; it delivered: a later read is a duplicate.
+                           last-read (first (reduce (fn [[lr first-in] [i ev]]
+                                                      (let [k [(:gen ev) (:seq ev)]]
+                                                        (cond ((kind? "in") ev) [lr (if (contains? first-in k) first-in (assoc first-in k i))]
+                                                              ((kind? "deliver") ev) [(max lr (get first-in k -1)) first-in]
+                                                              :else [lr first-in])))
+                                                    [-1 {}] v))]
+                     r replies
+                     :when (< (:at r) last-read)]
+                 r)]
+    (fn [[g s :as k]] (some #(and (= g (:gen %)) (< s (:below %)) (contains? (:reads %) k)) proofs))))
+
+(defn- epochs
+  "a's epochs, in the order a's events first show them."
+  [a-evs]
+  (distinct (keep (fn [ev] (let [g (:gen ev)] (when (vector? g) g))) a-evs)))
 
 ;; One direction
 
 (defn- direction
   "The checks of the messages from a to b."
   [test history evs a b markers]
-  (let [a-evs (evs a)
-        b-evs (evs b)
+  (let [{a-evs :a b-evs :b} (normalize test (evs a) (evs b))
         b-incs (incarnations b-evs)
         deliveries (filter (kind? "deliver") b-evs)
+        ;; An op's epoch, by its order's Append, or out frame.
+        op-epoch (into {} (for [ev a-evs
+                                :when (or (and (= "store" (:kind ev)) (= "append" (:call ev))) ((kind? "out") ev))
+                                :when (:clordid ev)]
+                            [(:clordid ev) (:gen ev)]))
+        op-key (fn [op] [(or (op-epoch (:value op)) [(if (:reset test) :unknown "") (:gen op)]) (:seq op)])
+        ;; The marker closes its epoch below it; the epochs before it a
+        ;; reset ended.
         marker (get markers a)
-        marker-seq (some #(when (= marker (:clordid %)) (:seq %)) deliveries)
-        below? (fn [s] (or (nil? marker-seq) (< s marker-seq)))
+        [marker-gen marker-seq] (some #(when (= marker (:clordid %)) [(:gen %) (:seq %)]) deliveries)
+        order (into {} (map-indexed (fn [i e] [e i]) (epochs a-evs)))
+        ended? (fn [g] (when-let [i (order g)] (some #(< i %) (vals order))))
+        owed? (fn [[g s]] (cond (nil? marker-seq)  true
+                                (= g marker-gen)   (< s marker-seq)
+                                :else (and (order g) (order marker-gen) (< (order g) (order marker-gen)))))
+        read (set (for [ev b-evs :when ((kind? "in") ev)] [(:gen ev) (:seq ev)]))
+        ;; A reset does not drop what b queued.
+        owed-by-b? (probed b-incs)
         ;; Delivered before b delivered a's marker: what checks 4 and 5 ask of.
         closed (->> deliveries
                     (take-while #(not= marker (:clordid %)))
@@ -283,8 +399,11 @@
                              :when (not-any? #(and ((kind? "rejected") %) (= [(:gen ev) (:seq ev)] [(:gen %) (:seq %)]))
                                              after)]
                          [(:gen ev) (:seq ev)]))
-        excused (fn [[_ s :as k]]
-                  (cond (recovery s)                     :lost
+        excused (fn [[g _ :as k]]
+                  (cond (recovery k)                     :lost
+                        ;; Abandoned by a reset that ended its epoch,
+                        ;; before b processed past it, or queued it.
+                        (and (ended? g) (not (processed-past? k)) (not (owed-by-b? k))) :reset
                         (not (processed-past? k))        nil
                         (some :counted (notes k))        :lost
                         ;; A rejection with no word of it: b killed in
@@ -292,14 +411,15 @@
                         (or (< (count (notes k)) (times-rejected k 0))
                             (cut-short k))               :unknown))
 
-        ;; 1. Order and duplicates, within each of b's processes.
+        ;; 1. Order and duplicates, within each of b's processes and
+        ;; generations: b reset, a may resend what it delivered.
         disorder (for [inc-evs b-incs
                        :let [ds (filter (kind? "deliver") inc-evs)]
                        [x y] (partition 2 1 ds)
-                       :when (and (= (:gen x) (:gen y)) (<= (:seq y) (:seq x)))]
+                       :when (and (= (:bgen x) (:bgen y)) (<= (:seq y) (:seq x)))]
                    {:inc (:inc y) :after (select-keys x [:seq :clordid]) :delivered (select-keys y [:seq :clordid])})
         duplicates (for [inc-evs b-incs
-                         [id n] (frequencies (map :clordid (filter (kind? "deliver") inc-evs)))
+                         [[_ id] n] (frequencies (map (juxt :bgen :clordid) (filter (kind? "deliver") inc-evs)))
                          :when (< 1 n)]
                      {:inc (:inc (first inc-evs)) :clordid id :times n})
 
@@ -308,7 +428,7 @@
         ;; excused only perhaps makes a gap over it :unknown.
         pending (reduce (fn [m [[g s :as k] id]]
                           (let [why (excused k)]
-                            (if (= :lost why)
+                            (if (#{:lost :reset} why)
                               m
                               (update m g (fnil assoc (sorted-map)) s {:clordid (first id) :unknown (= :unknown why)}))))
                         {} written)
@@ -320,7 +440,9 @@
                      (if-let [inc-evs (first incs)]
                        (let [ds (filter (kind? "deliver") inc-evs)
                              d0 (first ds)
-                             m (get highest (:gen d0) 0)
+                             ;; The highest delivered of its epoch, in b's
+                             ;; generation: b reset, a resends from 1.
+                             m (get highest [(:gen d0) (:bgen d0)] 0)
                              problems (concat
                                         (for [d ds
                                               :let [k [(:gen d) (:seq d)] id [(:clordid d) (:digest d)]]
@@ -338,7 +460,7 @@
                                           [{:inc (:inc d0) :problem :redelivered-too-much :from (:seq d0) :highest m}]))]
                          (recur (rest incs)
                                 (into before (for [d ds] [[(:gen d) (:seq d)] [(:clordid d) (:digest d)]]))
-                                (reduce (fn [h d] (bump h [(:gen d) (:seq d)])) highest ds)
+                                (reduce (fn [h d] (bump h [[(:gen d) (:bgen d)] (:seq d)])) highest ds)
                                 (into out problems)))
                        out))
 
@@ -351,10 +473,14 @@
 
         ;; 4. Acknowledged implies delivered.
         acked (filter #(and (= :send (:f %)) (= :ok (:type %)) (= a (sender test %))) history)
+        ;; Acknowledged, b's engine read it: one it did not is not
+        ;; excused, whatever lost it after.
         undelivered (for [op acked
-                          :let [k [(:gen op) (:seq op)]]
+                          :let [k (op-key op)]
                           :when (not (some #(= (:value op) (first %)) (get closed k)))]
-                      (assoc (select-keys op [:value :gen :seq :process]) :excused (excused k)))
+                      (assoc (select-keys op [:value :gen :seq :process])
+                             :excused (when (read k) (excused k))
+                             :read (boolean (read k))))
 
         ;; 5. Nothing lost silently.
         durable-orders (into {} (filter val (:durable stores)))
@@ -362,7 +488,7 @@
                     durable-orders
                     written)
         silent (for [[[g s :as k] id] owed
-                     :when (below? s)
+                     :when (owed? k)
                      :when (not (marker? (first id)))
                      :when (not (delivered? k id))]
                  {:gen g :seq s :clordid (first id) :durable (contains? durable-orders k) :excused (excused k)})
@@ -375,18 +501,20 @@
         skipped-unfilled (for [op history
                                :when (and (= :send (:f op)) (= :info (:type op)) (= a (sender test op)))
                                :when (str/includes? (str (:error op)) skipped-error)
-                               :when (not (covered? (:gen op) (:seq op)))]
+                               :when (not (apply covered? (op-key op)))]
                            (select-keys op [:value :gen :seq]))
 
         ;; 10. A loss told ErrBeyondRetention is of messages a's store
         ;; was asked to truncate before, failed or not (a failed Truncate
-        ;; may have dropped them): a resend must not give up on what it
-        ;; still has. OnRecoveryLoss gives no generation: any of them.
+        ;; may have dropped them), of its epoch: a resend must not give up
+        ;; on what it still has. A loss logged before OnLoss told its
+        ;; generation, of any.
         truncations (filter #(and (= "store" (:kind %)) (= "truncate" (:call %)) (= "begin" (:phase %))) a-evs)
         unevicted (for [ev a-evs
                         :when ((kind? "recovery-loss") ev)
                         :when (str/includes? (str (:err ev)) retention-error)
                         :when (not-any? #(and (< (:end ev) (:begin % 0))
+                                              (or (nil? (:gen ev)) (= (:gen ev) (:gen %)))
                                               (not (.isAfter (instant (:t %)) (instant (:t ev)))))
                                         truncations)]
                     (select-keys ev [:inc :begin :end]))
@@ -463,10 +591,12 @@
      :identity    {:valid? (empty? conflicts) :conflicts (take 16 conflicts)}
      :acked       (let [lost (remove :excused undelivered)]
                     {:valid? (worst lost (filter #(= :unknown (:excused %)) undelivered))
-                     :acknowledged (count acked) :undelivered-count (count lost) :undelivered (take 16 lost)})
+                     :acknowledged (count acked) :undelivered-count (count lost) :undelivered (take 16 lost)
+                     :reset-abandoned (count (filter #(= :reset (:excused %)) undelivered))})
      :silent-loss (let [lost (remove :excused silent)]
                     {:valid? (worst lost (filter #(= :unknown (:excused %)) silent))
                      :owed (count owed) :lost-count (count lost) :lost (take 16 lost)
+                     :reset-abandoned (count (filter #(= :reset (:excused %)) silent))
                      :unknown (take 16 (filter #(= :unknown (:excused %)) silent))})
      :skipped     {:valid? (empty? skipped-unfilled) :unfilled (take 16 skipped-unfilled)}
      :retention   {:valid? (empty? unevicted) :unevicted (take 16 unevicted)}

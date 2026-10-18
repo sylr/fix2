@@ -49,6 +49,13 @@ RESULTS ?= $(shell ls -td store/fix2*/latest 2>/dev/null | head -1)/results.edn
 verdicts:
 	$(COMPOSE) exec control lein run -m jepsen.fix2.verdicts $(RESULTS)
 
+# reanalyze checks the last test, or RUN (a test's directory), again with
+# the current checker.
+RUN ?= $(shell ls -td store/fix2*/latest 2>/dev/null | head -1)
+.PHONY: reanalyze
+reanalyze:
+	$(COMPOSE) exec control lein run -m jepsen.fix2.reanalyze $(RUN)
+
 # web serves the results on http://localhost:8080.
 web:
 	$(COMPOSE) exec -d control lein run serve --host 0.0.0.0 --port 8080

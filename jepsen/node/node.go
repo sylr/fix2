@@ -570,7 +570,7 @@ func (h *handler) OnLogout(_ context.Context, _ *session.Session, reason error) 
 // OnLoss logs a recovery loss with its generation, which OnRecoveryLoss
 // does not give.
 func (h *handler) OnLoss(_ context.Context, _ *session.Session, l session.RecoveryLoss) {
-	ev := Event{Kind: "recovery-loss", Gen: l.Generation, Begin: l.Begin, End: l.End, Ours: l.Ours}
+	ev := Event{Kind: "recovery-loss", Gen: l.Generation, Begin: l.Begin, End: l.End, Ours: &l.Ours}
 	if l.Cause != nil {
 		ev.Err = l.Cause.Error()
 	}
