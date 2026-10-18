@@ -42,6 +42,7 @@ func run(ctx context.Context, args []string) error {
 	fs.DurationVar(&opts.StoreTimeout, "store-timeout", 0, "StoreTimeout, the session's default if 0")
 	fs.DurationVar(&opts.WriteTimeout, "write-timeout", 0, "WriteTimeout, the session's default if 0")
 	fs.IntVar(&opts.MaxWorkers, "max-workers", 256, "sends running at once")
+	fs.DurationVar(&opts.FromAppDelay, "fromapp-delay", 0, "how long FromApp takes for each message")
 	fs.StringVar(&httpAddr, "http", ":8080", "the control API's address")
 	fs.StringVar(&mutants, "mutant", "", "comma-separated: no-sync, drop-deliver, redeliver")
 	fs.StringVar(&level, "log-level", "info", "debug, info, warn or error")

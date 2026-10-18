@@ -35,6 +35,10 @@ type Options struct {
 	StoreTimeout time.Duration
 	WriteTimeout time.Duration
 	MaxWorkers   int // sends running at once, beyond which a send fails
+	// FromAppDelay makes the application slow: the delivery queue fills,
+	// and the session records how far it processed 64 messages at a time
+	// rather than at each, so a kill has messages to deliver again.
+	FromAppDelay time.Duration
 
 	Logger *slog.Logger
 
@@ -392,6 +396,9 @@ type handler struct {
 
 func (h *handler) FromApp(_ context.Context, _ *session.Session, m *fix.Message, in session.Inbound) error {
 	n := h.n
+	if d := n.opts.FromAppDelay; d > 0 {
+		time.Sleep(d)
+	}
 	id := string(m.Get(tagClOrdID))
 	ev := Event{Kind: "deliver", Gen: in.Generation, Seq: in.Seq, ClOrdID: id, PossDup: in.PossDup, Digest: digest(m)}
 	times := 1

@@ -31,8 +31,17 @@
   "Counts the processes started, to name their event logs."
   (atom 0))
 
+(declare start-new!)
+
 (defn start!
-  "Starts the node, with a new incarnation."
+  "Starts the node, with a new incarnation, unless it is running: the
+  nemesis starts all nodes, those it did not kill too."
+  [test node]
+  (if (c/su (cu/daemon-running? pid-file))
+    :already-running
+    (start-new! test node)))
+
+(defn- start-new!
   [test node]
   (let [incarnation (str node "-" (swap! incarnations inc))]
     (info "Starting fix2-jepsen-node" incarnation)
@@ -48,7 +57,8 @@
         :-events events-dir
         :-incarnation incarnation
         :-heartbeat (str (:heartbeat test 1) "s")
-        :-mutant (or (:mutant test) "")))
+        :-mutant (or (:mutant test) "")
+        :-fromapp-delay (str (:fromapp-delay test 0) "ms")))
     (cu/await-tcp-port http-port {:timeout 10000})))
 
 (defn kill!

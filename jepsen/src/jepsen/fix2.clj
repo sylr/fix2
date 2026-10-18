@@ -2,7 +2,8 @@
   "Jepsen tests of fix2's FIX session layer: an initiator and an acceptor,
   each on its SQLite store, sending orders to each other. See
   docs/jepsen.md."
-  (:require [jepsen [checker :as checker]
+  (:require [clojure.string :as str]
+            [jepsen [checker :as checker]
                     [cli :as cli]
                     [generator :as gen]
                     [os :as os]
@@ -10,7 +11,8 @@
             [jepsen.checker.timeline :as timeline]
             [jepsen.fix2 [checker :as fix2-checker]
                          [client :as client]
-                         [db :as db]]))
+                         [db :as db]
+                         [nemesis :as nemesis]]))
 
 (defn sends
   "Orders with unique ClOrdIDs."
@@ -22,25 +24,32 @@
   [opts]
   (when (not= 2 (count (:nodes opts)))
     (throw (ex-info "fix2 runs on two nodes: the initiator, then the acceptor" {:nodes (:nodes opts)})))
-  (merge tests/noop-test
-         opts
-         {:name      "fix2"
-          :os        os/noop
-          :db        (db/db)
-          :client    (client/client)
-          :checker   (checker/compose
-                       {:perf       (checker/perf)
-                        :stats      (checker/stats)
-                        :exceptions (checker/unhandled-exceptions)
-                        :panics     (checker/log-file-pattern #"panic:" "node.log")
-                        :timeline   (timeline/html)
-                        :fix2       (fix2-checker/checker)})
-          :generator (gen/phases
-                       (->> (sends)
-                            (gen/stagger (/ (:rate opts)))
-                            (gen/time-limit (:time-limit opts))
-                            gen/clients)
-                       (gen/clients (gen/once {:f :quiesce})))}))
+  (let [db  (db/db)
+        pkg (nemesis/package {:db db :faults (:nemesis opts) :interval (:nemesis-interval opts)})]
+    (merge tests/noop-test
+           opts
+           {:name      (str "fix2" (when (seq (:nemesis opts)) (str "-" (str/join "," (map name (sort (:nemesis opts)))))))
+            :os        os/noop
+            :db        db
+            :client    (client/client)
+            :nemesis   (:nemesis pkg)
+            :checker   (checker/compose
+                         {:perf       (checker/perf {:nemeses (:perf pkg)})
+                          :stats      (checker/stats)
+                          :exceptions (checker/unhandled-exceptions)
+                          :panics     (checker/log-file-pattern #"panic:" "node.log")
+                          :timeline   (timeline/html)
+                          :fix2       (fix2-checker/checker)})
+            :generator (gen/phases
+                         (->> (sends)
+                              (gen/stagger (/ (:rate opts)))
+                              (gen/nemesis (:generator pkg))
+                              (gen/time-limit (:time-limit opts)))
+                         ;; Heal: resume what is paused, start what is down,
+                         ;; and give the sessions time to log on again.
+                         (gen/nemesis (:final-generator pkg))
+                         (gen/sleep (:heal-time opts))
+                         (gen/clients (gen/once {:f :quiesce})))})))
 
 (def cli-opts
   "Options beyond Jepsen's."
@@ -52,10 +61,26 @@
     :default 1
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
+   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause."
+    :default #{}
+    :parse-fn (fn [s] (set (map keyword (remove str/blank? (str/split s #",")))))
+    :validate [#(every? nemesis/faults %) (str "Must be among " (str/join ", " (map name (sort nemesis/faults))))]]
+   [nil "--nemesis-interval SECONDS" "Mean seconds between nemesis operations, starts and resumes included."
+    :default 10
+    :parse-fn parse-double
+    :validate [#(and % (pos? %)) "Must be a positive number"]]
+   [nil "--heal-time SECONDS" "Seconds between healing and the quiesce phase."
+    :default 5
+    :parse-fn parse-double
+    :validate [#(and % (not (neg? %))) "Must not be negative"]]
    [nil "--quiesce-timeout SECONDS" "How long the final phase waits for the markers: more than MaxLatency and the largest clock skew."
     :default 150
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
+   [nil "--fromapp-delay MS" "How long, in whole milliseconds, the nodes' application takes for each message: a slow one keeps the delivery queue full, and a kill then has messages to deliver again."
+    :default 0
+    :parse-fn parse-long
+    :validate [#(and % (not (neg? %))) "Must be a whole number of milliseconds, not negative"]]
    [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]])
 
 (defn -main
