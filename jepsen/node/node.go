@@ -36,6 +36,10 @@ type Options struct {
 	StoreTimeout time.Duration
 	WriteTimeout time.Duration
 	AckProbe     session.AckProbe
+	Retention    session.Retention
+	// LastProcessed sends LastMsgSeqNumProcessed (369), which retention
+	// takes for acknowledgements.
+	LastProcessed bool
 	MaxWorkers   int // sends running at once, beyond which a send fails
 	// FromAppDelay makes the application slow: the delivery queue fills,
 	// and the session records how far it processed 64 messages at a time
@@ -166,6 +170,9 @@ func NewNode(opts Options) (*Node, error) {
 		StoreTimeout: opts.StoreTimeout,
 		WriteTimeout: opts.WriteTimeout,
 		AckProbe:     opts.AckProbe,
+		Retention:    opts.Retention,
+
+		LastMsgSeqNumProcessed: opts.LastProcessed,
 		Now:          n.now,
 	}
 	switch opts.Role {

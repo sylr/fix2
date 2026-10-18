@@ -25,6 +25,10 @@
   "The text of session.ErrSkipped."
   "gap-filled before the counterparty acknowledged it")
 
+(def retention-error
+  "The text of session.ErrBeyondRetention."
+  "messages evicted from the store gap-filled")
+
 (defn- marker? [id] (and id (str/starts-with? id marker-prefix)))
 
 (defn- other [test node] (first (remove #{node} (:nodes test))))
@@ -180,11 +184,24 @@
 
 (defn- recovery-losses
   "Whether an OnRecoveryLoss reported A's message at a sequence number:
-  A's own (evicted, missing from its store), and those B was reset past."
+  A's own (evicted, missing from its store), and those B was reset past.
+  Or would have: a GapFill A wrote or B read over messages A's store was
+  asked to truncate before, the callback queued after the GapFill, which a
+  kill may forestall."
   [a-evs b-evs]
-  (let [ranges (for [ev (concat (filter #(and ((kind? "recovery-loss") %) (not (re-find #"reset" (str (:err %))))) a-evs)
-                                (filter #(and ((kind? "recovery-loss") %) (re-find #"reset" (str (:err %)))) b-evs))]
-                 [(:begin ev) (:end ev)])]
+  (let [truncations (filter #(and (= "store" (:kind %)) (= "truncate" (:call %)) (= "begin" (:phase %))) a-evs)
+        ranges (concat
+                 (for [ev (concat (filter #(and ((kind? "recovery-loss") %) (not (re-find #"reset" (str (:err %))))) a-evs)
+                                  (filter #(and ((kind? "recovery-loss") %) (re-find #"reset" (str (:err %)))) b-evs))]
+                   [(:begin ev) (:end ev)])
+                 (for [gf (concat (filter (kind? "out") a-evs) (filter (kind? "in") b-evs))
+                       :when (and (= "4" (:msgtype gf)) (:gapfill gf) (:newseqno gf))
+                       tr truncations
+                       :when (= (:gen tr) (:gen gf))
+                       :when (not (.isAfter (instant (:t tr)) (instant (:t gf))))
+                       :let [hi (dec (min (:newseqno gf) (:begin tr 0)))]
+                       :when (<= (:seq gf) hi)]
+                   [(:seq gf) hi]))]
     (fn [s] (some (fn [[lo hi]] (<= lo s hi)) ranges))))
 
 ;; One direction
@@ -360,6 +377,19 @@
                                :when (not (covered? (:gen op) (:seq op)))]
                            (select-keys op [:value :gen :seq]))
 
+        ;; 10. A loss told ErrBeyondRetention is of messages a's store
+        ;; was asked to truncate before, failed or not (a failed Truncate
+        ;; may have dropped them): a resend must not give up on what it
+        ;; still has. OnRecoveryLoss gives no generation: any of them.
+        truncations (filter #(and (= "store" (:kind %)) (= "truncate" (:call %)) (= "begin" (:phase %))) a-evs)
+        unevicted (for [ev a-evs
+                        :when ((kind? "recovery-loss") ev)
+                        :when (str/includes? (str (:err ev)) retention-error)
+                        :when (not-any? #(and (< (:end ev) (:begin % 0))
+                                              (not (.isAfter (instant (:t %)) (instant (:t ev)))))
+                                        truncations)]
+                    (select-keys ev [:inc :begin :end]))
+
         ;; 7. Sequence numbers survive: every Append, session messages
         ;; included, without power loss; what was durable with it; and
         ;; whatever b read before.
@@ -438,6 +468,7 @@
                      :owed (count owed) :lost-count (count lost) :lost (take 16 lost)
                      :unknown (take 16 (filter #(= :unknown (:excused %)) silent))})
      :skipped     {:valid? (empty? skipped-unfilled) :unfilled (take 16 skipped-unfilled)}
+     :retention   {:valid? (empty? unevicted) :unevicted (take 16 unevicted)}
      :durability  (let [all (concat forgotten prefix-forgotten)]
                     {:valid? (empty? all) :forgotten (take 16 all)})
      :halts       (let [all (concat halts unhalted)]
@@ -473,7 +504,7 @@
               (str n2 "->" n1) (direction test history evs n2 n1 markers)}
         checks (into {:live {:valid? live :quiesce quiesce}
                       :phantoms (phantoms test history evs)}
-                     (for [check [:order :redelivery :identity :acked :silent-loss :skipped :durability :halts :rejects]]
+                     (for [check [:order :redelivery :identity :acked :silent-loss :skipped :retention :durability :halts :rejects]]
                        [check (let [by-dir (into {} (for [[d r] dirs] [d (r check)]))]
                                 (assoc by-dir :valid? (checker/merge-valid (map :valid? (vals by-dir)))))]))]
     (assoc checks :valid? (checker/merge-valid (map :valid? (vals checks))))))

@@ -256,6 +256,26 @@
                                      (ev "n2-1" "store" :call "set-next-target" :phase "begin" :target 5)]))]
       (is (= :unknown (valid (check evs) :silent-loss))))))
 
+(deftest retention
+  (let [lost (fn [evs] (-> evs (remove-ev "n2" (delivery? "O1"))
+                           (update "n1" conj (ev "n1-1" "recovery-loss" :begin 2 :end 2 :err "session: messages evicted from the store gap-filled"))))]
+    (testing "a loss told ErrBeyondRetention, the store never truncated"
+      (is (false? (valid (check (lost (clean))) :retention))))
+    (testing "truncated below it"
+      (is (false? (valid (check (lost (update (clean) "n1" into [(ev "n1-1" "store" :call "truncate" :phase "begin" :begin 2)]))) :retention))))
+    (testing "truncated past it"
+      (is (true? (valid (check (lost (update (clean) "n1" into [(ev "n1-1" "store" :call "truncate" :phase "begin" :begin 3)]))) :retention))))
+    (testing "gap-filled over messages truncated, the sender killed before telling: excused"
+      (let [evs (-> (clean) (remove-ev "n2" (delivery? "O1"))
+                    (update "n1" into [(ev "n1-1" "store" :call "truncate" :phase "begin" :begin 3)
+                                       (ev "n1-1" "out" :msgtype "4" :seq 2 :gapfill true :newseqno 3)]))]
+        (is (true? (valid (check evs) :acked)))
+        (is (true? (valid (check evs) :silent-loss)))
+        (testing "not truncated: lost"
+          (is (false? (valid (check (update evs "n1" (fn [es] (vec (remove #(= "truncate" (:call %)) es))))) :acked))))))
+    (testing "truncated past it, but after the loss"
+      (is (false? (valid (check (update (lost (clean)) "n1" conj (ev "n1-1" "store" :call "truncate" :phase "begin" :begin 3))) :retention))))))
+
 (deftest rejects
   (testing "a Reject of a valid order, but for its SendingTime"
     (is (false? (valid (check (update (clean) "n2" conj (rejected "n2-1" 3 "5"))) :rejects))))

@@ -40,6 +40,8 @@
            {:name      (str "fix2"
                             (when (= :memstore (:session-store opts)) "-memstore")
                             (when (not= :lazy (:ack-probe opts)) (str "-probe-" (name (:ack-probe opts))))
+                            (when (pos? (+ (:retention-keep opts) (:retention-max opts))) "-retention")
+                            (when (:last-processed opts) "-369")
                             (when (seq faults) (str "-" (str/join "," (map name (sort faults))))))
             ;; The store on LazyFS, for a power loss or a hung disk; the
             ;; checkers told what a power loss may take, and that a disk
@@ -127,6 +129,15 @@
     :default :lazy
     :parse-fn keyword
     :validate [#{:lazy :eager} "Must be lazy or eager"]]
+   [nil "--retention-keep N" "Retention on, every 500 ms: the last N sequence numbers kept, acknowledged or not."
+    :default 0
+    :parse-fn parse-long
+    :validate [#(and % (not (neg? %))) "Must be a whole number, not negative"]]
+   [nil "--retention-max N" "Retention on, every 500 ms: at most N sequence numbers kept, acknowledged or not."
+    :default 0
+    :parse-fn parse-long
+    :validate [#(and % (not (neg? %))) "Must be a whole number, not negative"]]
+   [nil "--last-processed" "The sessions send LastMsgSeqNumProcessed (369): the processed prefix, which retention takes for acknowledgements, and Keep the margin for a counterparty forgetting part of it."]
    [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]])
 
 (defn -main
