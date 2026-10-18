@@ -49,6 +49,8 @@ func run(ctx context.Context, args []string) error {
 	fs.DurationVar(&opts.Retention.MinAge, "retention-min-age", 0, "Retention.MinAge")
 	fs.IntVar(&opts.Retention.Max, "retention-max", 0, "Retention.Max, 0 for no bound")
 	fs.BoolVar(&opts.LastProcessed, "last-processed", false, "send LastMsgSeqNumProcessed (369)")
+	fs.BoolVar(&opts.ResetOnLogon, "reset-on-logon", false, "ResetOnLogon")
+	fs.BoolVar(&opts.ResetOnDisconnect, "reset-on-disconnect", false, "ResetOnDisconnect")
 	fs.IntVar(&opts.Sessions, "sessions", 1, "sessions run, the k-th INI<k>/ACC<k> (the first INI/ACC), its store's file with -s<k> before the extension")
 	fs.IntVar(&opts.MaxWorkers, "max-workers", 256, "sends running at once")
 	fs.DurationVar(&opts.FromAppDelay, "fromapp-delay", 0, "how long FromApp takes for each message")

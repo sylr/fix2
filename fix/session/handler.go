@@ -176,6 +176,27 @@ type MessageObserver interface {
 	OnOutbound(s *Session, f Frame)
 }
 
+// RecoveryLossHandler, implemented by a Handler, is told of recovery losses
+// by OnLoss in place of OnRecoveryLoss, with the generation they belong to:
+// a loss is told after the messages before it were (the counterparty's
+// reset past, in sequence with those around it), and a reset may have
+// started another generation since.
+type RecoveryLossHandler interface {
+	OnLoss(ctx context.Context, s *Session, l RecoveryLoss)
+}
+
+// RecoveryLoss is a range of messages that may never be delivered (see
+// Handler.OnRecoveryLoss).
+type RecoveryLoss struct {
+	// Generation is the generation of the sequence numbers Begin to End.
+	Generation uint64
+	Begin, End uint64
+	// Ours reports messages of ours we could not resend, else the
+	// counterparty's it reset its sequence numbers past.
+	Ours  bool
+	Cause error
+}
+
 // RejectObserver, implemented by a MessageObserver, is told of each Reject
 // (35=3) the session sends of its own accord, not those a Handler's error
 // asks for, and whether that rejection counted the message as received: one

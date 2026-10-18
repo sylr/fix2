@@ -318,7 +318,12 @@ func (d *delivery) process(it item) {
 		}
 		s.log.LogAttrs(context.Background(), slog.LevelError, "messages may never be delivered",
 			slog.Uint64("from", it.seq), to, slog.Any("cause", it.err))
-		s.handler.OnRecoveryLoss(ctx, s, it.seq, it.end, it.err)
+		l := RecoveryLoss{Generation: it.gen, Begin: it.seq, End: it.end, Ours: it.err != errResetPast, Cause: it.err}
+		if lh, ok := s.handler.(RecoveryLossHandler); ok {
+			lh.OnLoss(ctx, s, l)
+		} else {
+			s.handler.OnRecoveryLoss(ctx, s, l.Begin, l.End, l.Cause)
+		}
 		return
 	case itemApp:
 		d.deliver(ctx, it)

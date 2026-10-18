@@ -49,9 +49,11 @@ type Event struct {
 	Cutoff uint64 `json:"cutoff,omitempty"` // Sync: the last Append of Gen completed when it began
 	Target uint64 `json:"target,omitempty"`
 
-	// recovery-loss
+	// recovery-loss: Gen its generation, Ours if our messages, else the
+	// counterparty's it reset past
 	Begin uint64 `json:"begin,omitempty"`
 	End   uint64 `json:"end,omitempty"`
+	Ours  bool   `json:"ours,omitempty"`
 
 	// send: Level the receipt reached, Type the Jepsen outcome
 	Level string `json:"level,omitempty"`

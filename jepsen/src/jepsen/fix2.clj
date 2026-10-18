@@ -44,6 +44,7 @@
                             (when (not= :lazy (:ack-probe opts)) (str "-probe-" (name (:ack-probe opts))))
                             (when (pos? (+ (:retention-keep opts) (:retention-max opts))) "-retention")
                             (when (:last-processed opts) "-369")
+                            (when (:reset opts) (str "-reset-" (name (:reset opts))))
                             (when (< 1 (:fix-sessions opts)) (str "-sessions" (:fix-sessions opts)))
                             (when (seq faults) (str "-" (str/join "," (map name (sort faults))))))
             ;; The store on LazyFS, for a power loss or a hung disk; the
@@ -144,6 +145,9 @@
     :default 1
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
+   [nil "--reset WHEN" "The sessions reset their sequence numbers: at every logon, or every disconnection."
+    :parse-fn keyword
+    :validate [#{:logon :disconnect} "Must be logon or disconnect"]]
    [nil "--last-processed" "The sessions send LastMsgSeqNumProcessed (369): the processed prefix, which retention takes for acknowledgements, and Keep the margin for a counterparty forgetting part of it."]
    [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]])
 

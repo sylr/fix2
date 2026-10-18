@@ -41,7 +41,9 @@ type Options struct {
 	// LastProcessed sends LastMsgSeqNumProcessed (369), which retention
 	// takes for acknowledgements.
 	LastProcessed bool
-	MaxWorkers   int // sends running at once, beyond which a send fails
+	// ResetOnLogon and ResetOnDisconnect reset the sequence numbers.
+	ResetOnLogon, ResetOnDisconnect bool
+	MaxWorkers                      int // sends running at once, beyond which a send fails
 	// FromAppDelay makes the application slow: the delivery queue fills,
 	// and the session records how far it processed 64 messages at a time
 	// rather than at each, so a kill has messages to deliver again.
@@ -255,6 +257,8 @@ func newNode(opts Options, k int) (*Node, session.Config, error) {
 		Now:          n.now,
 
 		LastMsgSeqNumProcessed: opts.LastProcessed,
+		ResetOnLogon:           opts.ResetOnLogon,
+		ResetOnDisconnect:      opts.ResetOnDisconnect,
 	}, nil
 }
 
@@ -537,10 +541,12 @@ func (h *handler) OnLogout(_ context.Context, _ *session.Session, reason error) 
 	h.n.ev.Log(ev)
 }
 
-func (h *handler) OnRecoveryLoss(_ context.Context, _ *session.Session, begin, end uint64, cause error) {
-	ev := Event{Kind: "recovery-loss", Begin: begin, End: end}
-	if cause != nil {
-		ev.Err = cause.Error()
+// OnLoss logs a recovery loss with its generation, which OnRecoveryLoss
+// does not give.
+func (h *handler) OnLoss(_ context.Context, _ *session.Session, l session.RecoveryLoss) {
+	ev := Event{Kind: "recovery-loss", Gen: l.Generation, Begin: l.Begin, End: l.End, Ours: l.Ours}
+	if l.Cause != nil {
+		ev.Err = l.Cause.Error()
 	}
 	h.n.ev.Log(ev)
 }

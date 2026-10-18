@@ -156,6 +156,8 @@
         :-retention-keep (:retention-keep test 0)
         :-retention-max (:retention-max test 0)
         (str "-last-processed=" (boolean (:last-processed test)))
+        (str "-reset-on-logon=" (= :logon (:reset test)))
+        (str "-reset-on-disconnect=" (= :disconnect (:reset test)))
         :-events events-dir
         :-incarnation incarnation
         :-heartbeat (str (:heartbeat test 1) "s")

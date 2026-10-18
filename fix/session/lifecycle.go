@@ -280,6 +280,18 @@ func (cb *callbacks) OnRecoveryLoss(_ context.Context, s *Session, begin, end ui
 	cb.h.OnRecoveryLoss(c, s, begin, end, cause)
 }
 
+// OnLoss tells the handler of l: by OnLoss if it is a RecoveryLossHandler,
+// else by OnRecoveryLoss.
+func (cb *callbacks) OnLoss(_ context.Context, s *Session, l RecoveryLoss) {
+	c := cb.begin(cbOnRecoveryLoss)
+	defer c.end()
+	if lh, ok := cb.h.(RecoveryLossHandler); ok {
+		lh.OnLoss(c, s, l)
+		return
+	}
+	cb.h.OnRecoveryLoss(c, s, l.Begin, l.End, l.Cause)
+}
+
 func (sc *signingCallbacks) SignLogon(_ context.Context, s *Session, h LogonHeader, b *fix.Builder) error {
 	c := sc.begin(cbSignLogon)
 	defer c.end()
