@@ -253,9 +253,10 @@ barrier.
    than 64 MsgSeqNums, administrative ones included, before the highest one
    any earlier incarnation delivered.
 3. **One message per sequence number.** No (generation, MsgSeqNum) of
-   either direction carries two different application messages, across all
-   incarnations of both sides; resends and GapFills do not count as
-   different.
+   either direction carries two different messages, across all
+   incarnations of both sides: two orders, or an order and a session
+   message, or two session messages of different MsgTypes. Resends and
+   GapFills do not count as different.
 4. **Acknowledged ⇒ delivered.** Every `:ok` send is delivered by the
    counterparty, unless reported lost.
 5. **Nothing lost silently.** Every application message the counterparty
@@ -267,7 +268,8 @@ barrier.
 7. **Sequence numbers survive.** After every restart, the store state
    `Open` loads puts the next sender sequence number past every durable
    message and every message the counterparty saw, from earlier
-   incarnations of the generation.
+   incarnations of the generation; in a run without power loss, past every
+   message appended, synced or not, since a kill loses no commit.
 8. **Halts.** Once a session halted, in that incarnation: no `Append`
    begins, no Logon is sent or accepted, and no `Send` called after the halt
    succeeds. What was under way may finish: writes, `SetNextTarget` as
@@ -350,12 +352,12 @@ Results go to `jepsen/store`, ignored by git.
 | J2 | `jepsen/node`: both roles, SQLite and `memstore`, the store wrapper, control API with capped workers, drain and barrier, event logs, mutants; tested in-process against a fix2 counterparty | yes; two nodes over TCP on SQLite: orders both ways delivered once and in order, each synced before written; a restart carrying on; the HTTP API; the mutants; a store write held (send unresolved, then resolved; drain waiting for it) or in doubt (send `info`, session halted); the wrapper's optional interfaces; the digest across a resend. Not yet: a crash (J6) |
 | J3 | `jepsen/docker`: control and node images (LazyFS prebuilt), compose file, setup of SSH keys, the binary built in a container; `jepsen/Makefile` | yes; `make check-env` on Docker Desktop (arm64): SSH to both nodes, the binary and the nemeses' tools there, LazyFS mounted as `jepsen.lazyfs` mounts it, losing an unsynced file and keeping a synced one. `jepsen.lazyfs/install!` fetches and rebuilds LazyFS: the suite calls `mount!` alone |
 | J4 | The Clojure test: DB, client, generator, drain, barrier, log download; a baseline run without faults, live and green on checks 4 and 9 | yes; 20s and 30s runs on Docker Desktop, about a thousand orders each acknowledged and delivered before the closing marker; `--mutant drop-deliver` fails check 4. Check 4 does not yet excuse reported losses: they come with the faults (J5) |
-| J5 | Checks 1–9, their tests on histories that break them, the mutants caught; perf and timeline | |
+| J5 | Checks 1–9, their tests on histories that break them, the mutants caught; perf and timeline | yes; `make -C jepsen unit`: a clean run valid, each check failed by a run made to break it (55 assertions). An order never delivered is excused only once the receiver processed past it (a later delivery, a SetNextTarget begun): by a recovery loss; by a Reject for its SendingTime, or a stale SendingTime with no Reject, only `:unknown`. On Docker Desktop, 30s clean; `redeliver` fails check 1 alone, `drop-deliver` checks 2, 4 and 5 alone (`make -C jepsen verdicts`). `no-sync` needs a power loss: J8 |
 | J6 | Kill and pause nemeses | |
 | J7 | Partition and packet nemeses | |
 | J8 | Power loss on LazyFS | |
 | J9 | Disk full, first checking which store failure a full disk causes (SQLite reuses its write-ahead log in place), and driving both kinds; hung disk, first checking that stopping LazyFS hangs the store's I/O | |
-| J10 | Clock skew through `Config.Now` | |
+| J10 | Clock skew through `Config.Now`. First, evidence the checkers lack: whether a Reject for SendingTime consumed its message (received in sequence) or not (ahead of a gap), and the session's own receive time rather than the observer's reading of `Now`; until then such Rejects excuse a loss as `:unknown` only | |
 | J11 | Checks keyed on the session ID and on logical epochs, mapped from each side's recorded resets across store lifetimes (`memstore` starts at generation 1 every time), with resets' abandoned messages accounted for; `OnRecoveryLoss` gives no generation, so a report queued before a reset and delivered after it needs one first (a field of the callback, or evidence from the store wrapper). Variants: several sessions per node pair, retention on (`ErrBeyondRetention` reported), `ResetOnDisconnect` mid-run, `AckProbeEager`, `memstore` with `ResetOnLogon` under the reset-aware checks. Apart, a durability comparison without resets: `memstore` against SQLite under kills, `memstore` expected to fail checks 4, 5 and 7 | |
 | J12 | Results: long runs of each nemesis on Linux, recorded here, defects filed apart; a short run in CI; FIXP sessions considered | |
 

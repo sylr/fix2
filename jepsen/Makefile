@@ -7,7 +7,7 @@ TIME_LIMIT ?= 60
 CONCURRENCY ?= 4
 TEST_OPTS ?=
 
-.PHONY: images up down console node-binary check-env test web
+.PHONY: images up down console node-binary check-env test unit verdicts web
 
 # images builds the control and node images.
 images:
@@ -38,6 +38,15 @@ test: node-binary
 	$(COMPOSE) exec control lein run test --nodes n1,n2 --username root \
 		--ssh-private-key /root/.ssh/id_rsa --concurrency $(CONCURRENCY) \
 		--time-limit $(TIME_LIMIT) $(TEST_OPTS)
+
+# unit runs the checkers' tests, on histories made to break each check.
+unit:
+	$(COMPOSE) exec control lein test
+
+# verdicts prints each check's verdict of the last test, or of RESULTS.
+RESULTS ?= store/fix2/latest/results.edn
+verdicts:
+	$(COMPOSE) exec control lein run -m jepsen.fix2.verdicts $(RESULTS)
 
 # web serves the results on http://localhost:8080.
 web:

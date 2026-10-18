@@ -21,6 +21,8 @@ const (
 	tagResetSeqNumFlag = 141
 	tagSendingTime     = 52
 	tagRejectReason    = 373
+
+	tagBusinessRejectReason = 380
 )
 
 // envelope holds the tags of the standard header and trailer: a resend
@@ -101,7 +103,10 @@ func frameEvent(kind string, f session.Frame, now time.Time) Event {
 	case "3":
 		ev.RefSeqNum = uintField(&m, tagRefSeqNum)
 		ev.RejectReason = string(m.Get(tagRejectReason))
-	case "0", "1", "2", "5", "j":
+	case "j":
+		ev.RefSeqNum = uintField(&m, tagRefSeqNum)
+		ev.RejectReason = string(m.Get(tagBusinessRejectReason))
+	case "0", "1", "2", "5":
 	default:
 		ev.ClOrdID = string(m.Get(tagClOrdID))
 		ev.Digest = digest(&m)
