@@ -213,12 +213,22 @@ twice on an SBE connection.`,
 	pf.BoolVarP(&o.verbose, "verbose", "v", false, "log the session's events in detail")
 	pf.BoolVar(&o.trace, "trace", false, "log every FIX (or SBE) message, field by field, credentials redacted")
 	pf.BoolVar(&o.sbe, "sbe", false, "use Binance's FIX SBE API (binancefix), port 9002, instead of FIX")
+	completeFlags(root, map[string]cobra.CompletionFunc{
+		"api-key":      cobra.NoFileCompletions,
+		"api-key-file": fileCompletion(),
+		"key-file":     fileCompletion(),
+		"sender":       cobra.NoFileCompletions,
+		"endpoint":     cobra.NoFileCompletions,
+		"heartbeat":    cobra.NoFileCompletions,
+	})
 
 	add := func(use, short string, k kind, args cobra.PositionalArgs) *cobra.Command {
 		c := &cobra.Command{
 			Use:   use,
 			Short: short,
 			Args:  args,
+			// Symbols, if any: never files, and not looked up.
+			ValidArgsFunction: cobra.NoFileCompletions,
 			RunE: func(c *cobra.Command, args []string) error {
 				return execute(c.Context(), o, command{k}, args, stdout, stderr)
 			},
@@ -231,12 +241,37 @@ twice on an SBE connection.`,
 	add("ticker SYMBOL...", "Best bid and offer, as they change", kindTicker, symbols)
 	depth := add("depth SYMBOL...", "Order book snapshot, then its changes every 100ms (20ms with --sbe)", kindDepth, symbols)
 	depth.Flags().IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
+	completeFlags(depth, map[string]cobra.CompletionFunc{"levels": cobra.NoFileCompletions})
 	book := add("book SYMBOL...", "Order book kept up to date, its best levels shown on every change", kindBook, symbols)
 	book.Flags().IntVar(&o.levels, "levels", o.levels, "levels of each side of the initial snapshot, 2 to 5000")
 	book.Flags().IntVar(&o.show, "show", o.show, "levels of each side shown")
+	completeFlags(book, map[string]cobra.CompletionFunc{"levels": cobra.NoFileCompletions, "show": cobra.NoFileCompletions})
 	add("instruments [SYMBOL...]", "Instruments' trading rules, all if no symbol is given", kindInstruments, cobra.ArbitraryArgs)
 	add("limits", "Message and subscription limits of the connection", kindLimits, cobra.NoArgs)
 	return root
+}
+
+// completeFlags registers the completion of the value of each flag of cmd
+// fns names: every flag but a boolean one has one, files only where a file
+// is expected.
+func completeFlags(cmd *cobra.Command, fns map[string]cobra.CompletionFunc) {
+	for name, fn := range fns {
+		if err := cmd.RegisterFlagCompletionFunc(name, fn); err != nil {
+			panic(err) // a flag misnamed or completed twice
+		}
+	}
+}
+
+// fileCompletion completes files of extensions exts, any file without: keys
+// and certificates complete any, their loaders checking what a file holds,
+// not its name.
+func fileCompletion(exts ...string) cobra.CompletionFunc {
+	return func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		if len(exts) == 0 {
+			return nil, cobra.ShellCompDirectiveDefault
+		}
+		return exts, cobra.ShellCompDirectiveFilterFileExt
+	}
 }
 
 // execute runs command cmd for symbols.

@@ -18,10 +18,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 	"github.com/sylr/fix2/fixp"
@@ -120,10 +122,11 @@ first, the client its connection.`,
 	// -v is --verbose in the other contribs: no shorthand for --version.
 	root.Flags().Bool("version", false, "version for fixpecho")
 	root.AddCommand(serverCommand(stderr), clientCommand(stdout, stderr), &cobra.Command{
-		Use:   "version",
-		Short: "Print the version",
-		Args:  cobra.NoArgs,
-		Run:   func(*cobra.Command, []string) { fmt.Fprintln(stdout, Version) },
+		Use:               "version",
+		Short:             "Print the version",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		Run:               func(*cobra.Command, []string) { fmt.Fprintln(stdout, Version) },
 	})
 	return root
 }
@@ -163,6 +166,11 @@ func (c *common) register(cmd *cobra.Command) {
 	fs.StringVar(&c.token, "token", "", "credentials: the server requires them, the client sends them (none if empty)")
 	fs.DurationVar(&c.keepalive, "keepalive", time.Second, "keepalive interval")
 	fs.StringVar(&c.logLevel, "log-level", "info", "log level: debug, info, warn or error")
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"token":     cobra.NoFileCompletions,
+		"keepalive": cobra.NoFileCompletions,
+		"log-level": valueCompletion("debug", "info", "warn", "error"),
+	})
 }
 
 func (c *common) logger(stderr io.Writer) (*slog.Logger, error) {
@@ -180,6 +188,56 @@ func parseFlow(s string) (fixp.FlowType, error) {
 		}
 	}
 	return 0, usagef("unknown flow %q: Recoverable, Idempotent, Unsequenced or None", s)
+}
+
+// flows are the flows completed: None, which parseFlow takes, is refused
+// either way, there being nothing to echo.
+var flows = []string{fixp.Recoverable.String(), fixp.Idempotent.String(), fixp.Unsequenced.String()}
+
+// completeFlows completes a comma-separated list of flows: the item after
+// its last comma, with the flows not in it yet, whatever case it is typed
+// in. What is typed is kept, spaces included, the shell matching on it.
+func completeFlows(_ *cobra.Command, _ []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	i := strings.LastIndex(toComplete, ",") + 1
+	listed := strings.Split(toComplete[:i], ",")
+	item := strings.TrimLeftFunc(toComplete[i:], unicode.IsSpace)
+	var comps []cobra.Completion
+	for _, f := range flows {
+		if len(item) <= len(f) && strings.EqualFold(item, f[:len(item)]) &&
+			!slices.ContainsFunc(listed, func(g string) bool { return strings.EqualFold(strings.TrimSpace(g), f) }) {
+			comps = append(comps, toComplete+f[len(item):])
+		}
+	}
+	// No space: a comma may follow.
+	return comps, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+}
+
+// completeFlags registers the completion of the value of each flag of cmd
+// fns names: every flag but a boolean one has one, files only where a file
+// is expected.
+func completeFlags(cmd *cobra.Command, fns map[string]cobra.CompletionFunc) {
+	for name, fn := range fns {
+		if err := cmd.RegisterFlagCompletionFunc(name, fn); err != nil {
+			panic(err) // a flag misnamed or completed twice
+		}
+	}
+}
+
+// fileCompletion completes files of extensions exts, any file without: keys
+// and certificates complete any, their loaders checking what a file holds,
+// not its name.
+func fileCompletion(exts ...string) cobra.CompletionFunc {
+	return func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		if len(exts) == 0 {
+			return nil, cobra.ShellCompDirectiveDefault
+		}
+		return exts, cobra.ShellCompDirectiveFilterFileExt
+	}
+}
+
+// valueCompletion completes values, never files.
+func valueCompletion(values ...string) cobra.CompletionFunc {
+	return cobra.FixedCompletions(values, cobra.ShellCompDirectiveNoFileComp)
 }
 
 func parseFlows(s string) ([]fixp.FlowType, error) {
@@ -209,9 +267,10 @@ func serverCommand(stderr io.Writer) *cobra.Command {
 	var c common
 	var f serverFlags
 	cmd := &cobra.Command{
-		Use:   "server",
-		Short: "Answer each application message with itself",
-		Args:  cobra.NoArgs,
+		Use:               "server",
+		Short:             "Answer each application message with itself",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return ran(runServer(cmd.Context(), &c, &f, stderr))
 		},
@@ -225,6 +284,15 @@ func serverCommand(stderr io.Writer) *cobra.Command {
 	fs.IntVar(&f.maxPending, "max-pending", 0, "the session's queue, in messages (the engine's default if 0)")
 	fs.StringVar(&f.cert, "tls-cert", "", "TLS certificate file (PEM), with --tls-key: TLS")
 	fs.StringVar(&f.key, "tls-key", "", "TLS key file (PEM)")
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"listen":       cobra.NoFileCompletions,
+		"flow":         valueCompletion(flows...),
+		"client-flows": completeFlows,
+		"echo-wait":    cobra.NoFileCompletions,
+		"max-pending":  cobra.NoFileCompletions,
+		"tls-cert":     fileCompletion(),
+		"tls-key":      fileCompletion(),
+	})
 	return cmd
 }
 
@@ -274,9 +342,10 @@ func clientCommand(stdout, stderr io.Writer) *cobra.Command {
 	var c common
 	var f clientFlags
 	cmd := &cobra.Command{
-		Use:   "client",
-		Short: "Send messages, a window of them awaiting their echo, and report the round trips",
-		Args:  cobra.NoArgs,
+		Use:               "client",
+		Short:             "Send messages, a window of them awaiting their echo, and report the round trips",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return ran(runClient(cmd.Context(), &c, &f, stdout, stderr))
 		},
@@ -293,6 +362,17 @@ func clientCommand(stdout, stderr io.Writer) *cobra.Command {
 	fs.BoolVar(&f.tls, "tls", false, "connect with TLS")
 	fs.StringVar(&f.ca, "tls-ca", "", "CA certificate file (PEM) to verify the server with, instead of the system's")
 	fs.StringVar(&f.serverName, "tls-server-name", "", "server name to verify, the address's host if empty")
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"connect":         cobra.NoFileCompletions,
+		"flow":            valueCompletion(flows...),
+		"server-flows":    completeFlows,
+		"count":           cobra.NoFileCompletions,
+		"window":          cobra.NoFileCompletions,
+		"size":            cobra.NoFileCompletions,
+		"timeout":         cobra.NoFileCompletions,
+		"tls-ca":          fileCompletion(),
+		"tls-server-name": cobra.NoFileCompletions,
+	})
 	return cmd
 }
 

@@ -201,15 +201,17 @@ usage error.`,
 	// -v is logon's and probe's --verbose: no shorthand for --version.
 	root.Flags().Bool("version", false, "version for binancefix")
 	root.AddCommand(logonCommand(e), probeCommand(e), &cobra.Command{
-		Use:   "probes",
-		Short: "List the probes and their assumptions",
-		Args:  cobra.NoArgs,
-		Run:   func(*cobra.Command, []string) { listProbes(e.stdout) },
+		Use:               "probes",
+		Short:             "List the probes and their assumptions",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		Run:               func(*cobra.Command, []string) { listProbes(e.stdout) },
 	}, &cobra.Command{
-		Use:   "version",
-		Short: "Print the version",
-		Args:  cobra.NoArgs,
-		Run:   func(*cobra.Command, []string) { fmt.Fprintln(e.stdout, Version) },
+		Use:               "version",
+		Short:             "Print the version",
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
+		Run:               func(*cobra.Command, []string) { fmt.Fprintln(e.stdout, Version) },
 	})
 	return root
 }
@@ -238,18 +240,57 @@ func (c *common) register(cmd *cobra.Command, timeout time.Duration) {
 	fs.StringVar(&c.keyFile, "key-file", "", "PEM file of the API key's Ed25519 private key (default $BINANCE_PRIVATE_KEY)")
 	fs.StringVar(&c.sender, "sender", "", "SenderCompID, 1 to 8 letters, digits, - or _ (default random)")
 	fs.DurationVar(&c.heartbeat, "heartbeat", probe.DefaultHeartBtInt, "heartbeat interval, whole seconds from 5s to 60s")
-	fs.StringVar(&c.sigTime, "signature-time", binancefix.SignatureTimeMicros.String(), "text form of the SendingTime signed: "+forms())
+	fs.StringVar(&c.sigTime, "signature-time", binancefix.SignatureTimeMicros.String(), "text form of the SendingTime signed: "+strings.Join(forms(), ", "))
 	fs.BoolVar(&c.json, "json", false, "write the result as JSON")
 	fs.BoolVarP(&c.verbose, "verbose", "v", false, "log the session's events")
 	fs.DurationVar(&c.timeout, "timeout", timeout, "time limit of the command, its cleanup apart")
+	// --signature-time's, which logon and probe take differently, apart.
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"endpoint":     cobra.NoFileCompletions,
+		"api-key":      cobra.NoFileCompletions,
+		"api-key-file": fileCompletion(),
+		"key-file":     fileCompletion(),
+		"sender":       cobra.NoFileCompletions,
+		"heartbeat":    cobra.NoFileCompletions,
+		"timeout":      cobra.NoFileCompletions,
+	})
 }
 
-func forms() string {
+// forms returns the text forms of the SendingTime signed.
+func forms() []string {
 	var names []string
 	for _, f := range binancefix.SignatureTimes() {
 		names = append(names, f.String())
 	}
-	return strings.Join(names, ", ")
+	return names
+}
+
+// completeFlags registers the completion of the value of each flag of cmd
+// fns names: every flag but a boolean one has one, files only where a file
+// is expected.
+func completeFlags(cmd *cobra.Command, fns map[string]cobra.CompletionFunc) {
+	for name, fn := range fns {
+		if err := cmd.RegisterFlagCompletionFunc(name, fn); err != nil {
+			panic(err) // a flag misnamed or completed twice
+		}
+	}
+}
+
+// fileCompletion completes files of extensions exts, any file without: keys
+// and certificates complete any, their loaders checking what a file holds,
+// not its name.
+func fileCompletion(exts ...string) cobra.CompletionFunc {
+	return func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		if len(exts) == 0 {
+			return nil, cobra.ShellCompDirectiveDefault
+		}
+		return exts, cobra.ShellCompDirectiveFilterFileExt
+	}
+}
+
+// valueCompletion completes values, never files.
+func valueCompletion(values ...string) cobra.CompletionFunc {
+	return cobra.FixedCompletions(values, cobra.ShellCompDirectiveNoFileComp)
 }
 
 var senderPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,8}$`)
@@ -334,12 +375,16 @@ signature is made of (us, the client's default, ms, s, ns, unix-us,
 unix-ms), or auto to try them in turn, twice HeartBtInt apart, until
 Binance accepts one: exit code 0 when it is the default, 3 when another.
 It logs on to the testnet unless --production is given.`,
-		Args: cobra.NoArgs,
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return ran(runLogon(cmd.Context(), e, cmd, &c))
 		},
 	}
 	c.register(cmd, 5*time.Minute)
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"signature-time": valueCompletion(append(forms(), "auto")...),
+	})
 	return cmd
 }
 
@@ -415,7 +460,8 @@ one request per --interval.
 market, inside both PERCENT_PRICE_BY_SIDE bands of the symbol (70000 for
 BTCUSDT at about 81,500); only logon-seqnum, fill and limits run without
 it. The exit code is 0 when all are confirmed, 3 when one is not.`,
-		Args: probeNames,
+		Args:              probeNames,
+		ValidArgsFunction: completeProbes,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return ran(runProbe(cmd.Context(), e, cmd, &c, &p, args))
 		},
@@ -430,7 +476,28 @@ it. The exit code is 0 when all are confirmed, 3 when one is not.`,
 	fs.DurationVar(&p.wait, "wait", probe.DefaultWait, "how long an answer is waited for")
 	fs.DurationVar(&p.settle, "settle", probe.DefaultSettle, "how long late messages are waited for once a request is answered")
 	fs.BoolVar(&p.list, "list", false, "list the probes and exit")
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"signature-time": valueCompletion(forms()...),
+		"symbol":         cobra.NoFileCompletions,
+		"price-far":      cobra.NoFileCompletions,
+		"qty":            cobra.NoFileCompletions,
+		"interval":       cobra.NoFileCompletions,
+		"wait":           cobra.NoFileCompletions,
+		"settle":         cobra.NoFileCompletions,
+	})
 	return cmd
+}
+
+// completeProbes completes probe's arguments: the names of the probes not
+// given yet, by name or letter.
+func completeProbes(_ *cobra.Command, args []string, _ string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	var names []cobra.Completion
+	for _, p := range probe.Probes() {
+		if !slices.ContainsFunc(args, func(n string) bool { return strings.EqualFold(n, p.Name) || strings.EqualFold(n, p.Letter) }) {
+			names = append(names, cobra.CompletionWithDesc(p.Name, "("+p.Letter+")"))
+		}
+	}
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 // probeNames checks the arguments of probe: names or letters of probes.

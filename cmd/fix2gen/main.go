@@ -189,7 +189,8 @@ session layer, for the fix package. With --dispatch, it also generates a
 typed Handler interface and a Dispatch function routing messages to its
 methods. With --bytes, the getters of numbers, booleans and times come with
 <Field>Bytes getters of the raw values, such as exact decimal prices.`,
-		Args: cobra.NoArgs,
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(*cobra.Command, []string) error {
 			// Required, given empty: missing all the same.
 			if dictPath == "" || pkg == "" {
@@ -213,6 +214,11 @@ methods. With --bytes, the getters of numbers, booleans and times come with
 	fs.BoolVar(&opts.Bytes, "bytes", false, "generate <Field>Bytes getters of raw values for numbers, booleans and times")
 	cmd.MarkFlagRequired("dict")
 	cmd.MarkFlagRequired("pkg")
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"dict": fileCompletion("xml"),
+		"pkg":  cobra.NoFileCompletions,
+		"out":  dirCompletion,
+	})
 	return cmd
 }
 
@@ -237,7 +243,8 @@ numVarDataFields other than the received version's, unless
 --tolerate-unfilled-counts, for counts left zero; and ErrNewer for the
 groups and data of a newer schema version, which --assume-same-encodings
 lets them skip.`,
-		Args: cobra.NoArgs,
+		Args:              cobra.NoArgs,
+		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(*cobra.Command, []string) error {
 			// Required, given empty: missing all the same.
 			if schemaPath == "" || pkg == "" {
@@ -271,5 +278,36 @@ lets them skip.`,
 		"take numGroups and numVarDataFields of 0 for counts left unfilled, as Real Logic's encoders leave them")
 	cmd.MarkFlagRequired("schema")
 	cmd.MarkFlagRequired("pkg")
+	completeFlags(cmd, map[string]cobra.CompletionFunc{
+		"schema": fileCompletion("xml"),
+		"pkg":    cobra.NoFileCompletions,
+		"out":    dirCompletion,
+	})
 	return cmd
+}
+
+// completeFlags registers the completion of the value of each flag of cmd
+// fns names: every flag but a boolean one has one, files only where a file
+// is expected.
+func completeFlags(cmd *cobra.Command, fns map[string]cobra.CompletionFunc) {
+	for name, fn := range fns {
+		if err := cmd.RegisterFlagCompletionFunc(name, fn); err != nil {
+			panic(err) // a flag misnamed or completed twice
+		}
+	}
+}
+
+// fileCompletion completes files of extensions exts, any file without.
+func fileCompletion(exts ...string) cobra.CompletionFunc {
+	return func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		if len(exts) == 0 {
+			return nil, cobra.ShellCompDirectiveDefault
+		}
+		return exts, cobra.ShellCompDirectiveFilterFileExt
+	}
+}
+
+// dirCompletion completes directories.
+func dirCompletion(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return nil, cobra.ShellCompDirectiveFilterDirs
 }
