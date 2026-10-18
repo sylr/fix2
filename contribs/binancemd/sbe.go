@@ -189,10 +189,9 @@ func (c *sbeClient) OnLogon(e binancefix.LogonEvent) {
 }
 
 // OnLogout tells of a disconnection: binancefix reconnects, unless the
-// command ends.
+// command ends. binancefix logs the logout.
 func (c *sbeClient) OnLogout(e binancefix.LogoutEvent) {
 	if c.ctx.Err() != nil {
-		c.log.LogAttrs(c.ctx, slog.LevelInfo, "logged out")
 		return
 	}
 	c.log.LogAttrs(c.ctx, slog.LevelWarn, "disconnected, reconnecting", slog.Any("reason", e.Err))
