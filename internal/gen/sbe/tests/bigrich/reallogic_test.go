@@ -49,7 +49,7 @@ func full() *Order {
 // The message Real Logic's SBE 1.33.0 encodes from bigrich.xml decodes,
 // and full encodes to the same bytes.
 func TestRealLogic(t *testing.T) {
-	f, err := os.Open("../testdata/reallogic/bigrich.hex")
+	f, err := os.Open("../../testdata/reallogic/bigrich.hex")
 	if err != nil {
 		t.Fatal(err)
 	}

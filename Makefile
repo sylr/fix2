@@ -60,6 +60,31 @@ fuzz:
 		done; \
 	done
 
+# -- go generate ---------------------------------------------------------------
+
+.PHONY: generate generate-verify
+
+# The directories go generate writes to: those holding a go:generate
+# directive, each generating into its own (-out .), the contribs apart.
+# Found on disk, tracked or not.
+GENERATED = $$(grep -rl --include='*.go' '^//go:generate' --exclude-dir=contribs --exclude-dir=.git --exclude-dir=dist . | xargs -n1 dirname | sort -u)
+
+# generate regenerates the module's generated code with fix2gen: the FIX
+# test dictionaries, the FIXP codecs, the SBE generator's packages.
+generate:
+	$(GO) generate ./...
+
+# generate-verify regenerates the module's code and fails if that changed a
+# tracked file or added one, then runs the contribs' generate-verify, each
+# contrib whose Makefile has one: those with go:generate directives.
+generate-verify: generate
+	git diff --exit-code -- $(GENERATED)
+	@untracked=$$(git status --porcelain --untracked-files=all -- $(GENERATED) | grep '^??'); \
+	if [ -n "$$untracked" ]; then echo "generated files not tracked:"; echo "$$untracked"; exit 1; fi
+	for dir in $(CONTRIBS); do \
+		if grep -q '^generate-verify:' $$dir/Makefile 2>/dev/null; then $(MAKE) -C $$dir generate-verify || exit 1; fi; \
+	done
+
 # -- go mod --------------------------------------------------------------------
 
 .PHONY: go-mod-verify go-mod-tidy

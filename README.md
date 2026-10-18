@@ -87,7 +87,9 @@ run from their directories: `go test ./...` at the root leaves them out.
 
 The tools each have a Makefile: `make` builds `dist/<name>`, `make all`
 cross builds with checksums, `make test` and `make lint`; the market data
-tools also `make generate-verify` (the generated code is up to date). Their
+tools and binancefix also `make generate-verify` (the generated code is up
+to date), which the root's `make generate-verify` runs after checking the
+module's own generated code, as CI does. Their
 messages come from packages fix2gen generates from the venues' dictionaries
 (`go generate ./...` runs fix2gen as a Go tool), they sign their Logon with
 the session's `LogonSigner` hook, resubscribe after every reconnection, and

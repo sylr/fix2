@@ -13,7 +13,7 @@ import (
 // from a fixture of testdata/reallogic.
 func realLogic(t testing.TB, file string) map[string][]byte {
 	t.Helper()
-	f, err := os.Open("../testdata/reallogic/" + file)
+	f, err := os.Open("../../testdata/reallogic/" + file)
 	if err != nil {
 		t.Fatal(err)
 	}

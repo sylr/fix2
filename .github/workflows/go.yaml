@@ -56,12 +56,13 @@ jobs:
       - name: Test
         run: make test test-contribs RACE=1 CODECOV=1
 
-      # binancefix's codecs are what fix2gen sbe makes of its vendored
-      # schema: regenerated, nothing changes. Generation is the same on
-      # every platform: checked once.
-      - name: Verify binancefix's generated codecs
+      # The generated code, the module's and the contribs', is what
+      # fix2gen makes of its dictionaries and schemas: regenerated, nothing
+      # changes, nothing is added. Generation is the same on every
+      # platform: checked once.
+      - name: Verify the generated code
         if: matrix.os == 'ubuntu-24.04' && !matrix.simd
-        run: make -C contribs/binancefix generate-verify
+        run: make generate-verify
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7

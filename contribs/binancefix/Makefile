@@ -142,6 +142,8 @@ generate:
 
 generate-verify: generate
 	git diff --exit-code -- internal/fixsbe codecs.go
+	@untracked=$$(git status --porcelain --untracked-files=all -- internal/fixsbe codecs.go | grep '^??'); \
+	if [ -n "$$untracked" ]; then echo "generated files not tracked:"; echo "$$untracked"; exit 1; fi
 
 # -- go mod --------------------------------------------------------------------
 

@@ -299,6 +299,13 @@ otherwise the application's to check.
 
 ## Tests
 
+The packages the tests generate are in `internal/gen/sbe/tests` (`rich`,
+`bigrich`, `wide`, `newer`, `older`, `oldersame`, `olderunfilled`,
+`oldersameunfilled`), but for §9's examples, the documented example,
+in `internal/gen/sbe/examples`; their schemas and fixtures are in
+`internal/gen/sbe/testdata`. `make generate-verify`, run in CI,
+regenerates every package and fails if anything changes.
+
 - The three examples of §9, decoded to the values they show and encoded
   back to their bytes. Their schema is repaired, in a copy saying so: its
   `id` is 91 as their bytes say, not 100, and its XML is made well-formed.
@@ -350,9 +357,9 @@ otherwise the application's to check.
   `-tolerate-group-redefinitions` and `-tolerate-field-redefinitions`,
   and without each fails telling which, and the package generated from
   it type-checks. The codecs generated from it, and their tests, are
-  `contribs/binancefix/internal/fixsbe`'s, from the same file (`make -C
-  contribs/binancefix generate-verify`, in CI, checks they are what the
-  generator makes): the sample
+  `contribs/binancefix/internal/fixsbe`'s, from the same file (`make
+  generate-verify`, in CI, checks they are what the generator makes):
+  the sample
   Logon of Binance's FIX API documentation decoded to the values it
   lists, its 20-byte header's `seqNum` and `sendingTime` included, and
   encoded back to its bytes but for the header's version, the schema's;

@@ -4,4 +4,4 @@
 // them.
 package olderunfilled
 
-//go:generate go run ../../../../cmd/fix2gen sbe -schema ../testdata/older.xml -pkg olderunfilled -out . -tolerate-unfilled-counts
+//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/older.xml -pkg olderunfilled -out . -tolerate-unfilled-counts

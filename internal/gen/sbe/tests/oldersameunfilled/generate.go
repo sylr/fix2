@@ -4,4 +4,4 @@
 // too, then taking them to hold nothing version 1 does not know.
 package oldersameunfilled
 
-//go:generate go run ../../../../cmd/fix2gen sbe -schema ../testdata/older.xml -pkg oldersameunfilled -out . -assume-same-encodings -tolerate-unfilled-counts
+//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/older.xml -pkg oldersameunfilled -out . -assume-same-encodings -tolerate-unfilled-counts

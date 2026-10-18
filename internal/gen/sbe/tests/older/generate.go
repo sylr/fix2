@@ -6,4 +6,4 @@
 // the same schema with options.
 package older
 
-//go:generate go run ../../../../cmd/fix2gen sbe -schema ../testdata/older.xml -pkg older -out .
+//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/older.xml -pkg older -out .

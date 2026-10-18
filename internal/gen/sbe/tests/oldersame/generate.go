@@ -3,4 +3,4 @@
 // skip the groups and data of version 2 by version 1's encodings.
 package oldersame
 
-//go:generate go run ../../../../cmd/fix2gen sbe -schema ../testdata/older.xml -pkg oldersame -out . -assume-same-encodings
+//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/older.xml -pkg oldersame -out . -assume-same-encodings

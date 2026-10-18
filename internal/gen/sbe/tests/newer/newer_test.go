@@ -8,11 +8,11 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sylr/fix2/internal/gen/sbe/newer"
-	"github.com/sylr/fix2/internal/gen/sbe/older"
-	"github.com/sylr/fix2/internal/gen/sbe/oldersame"
-	"github.com/sylr/fix2/internal/gen/sbe/oldersameunfilled"
-	"github.com/sylr/fix2/internal/gen/sbe/olderunfilled"
+	"github.com/sylr/fix2/internal/gen/sbe/tests/newer"
+	"github.com/sylr/fix2/internal/gen/sbe/tests/older"
+	"github.com/sylr/fix2/internal/gen/sbe/tests/oldersame"
+	"github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled"
+	"github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled"
 )
 
 // The decoders of version 1 under test: older's, strict, oldersame's
