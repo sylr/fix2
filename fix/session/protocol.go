@@ -53,7 +53,9 @@ type recovery struct {
 func (c *conn) handleFrame(frame []byte) {
 	s := c.s
 	s.waitDeliveryRoom(c)
-	now := time.Now()
+	// read dates the frame for the timers, on the monotonic clock; now, on
+	// the session's clock, for its SendingTime and Inbound.Received.
+	read, now := time.Now(), s.now()
 	m := &c.msg
 	applVerID, err := s.parseInbound(m, frame)
 	if err != nil {
@@ -65,7 +67,7 @@ func (c *conn) handleFrame(frame []byte) {
 			if loggedOn && s.c == c && !c.closed {
 				s.stats.MessagesReceived.Add(1)
 				s.stats.BytesReceived.Add(uint64(len(frame)))
-				c.lastRead = now
+				c.lastRead = read
 				if c.peerLoggedOut {
 					// As a message whole (see below).
 					s.log.LogAttrs(context.Background(), slog.LevelInfo, "malformed message after the counterparty's Logout ignored")
@@ -123,7 +125,7 @@ func (c *conn) handleFrame(frame []byte) {
 		s.mu.Unlock()
 		return
 	}
-	c.lastRead = now
+	c.lastRead = read
 	if c.peerLoggedOut {
 		// Its last message: what follows is not handled, as what it held
 		// after it is not (see advanceLocked).

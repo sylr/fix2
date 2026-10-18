@@ -98,7 +98,7 @@ func (c *conn) runReplay(job *replayJob) {
 		buf      []byte
 		frames   []pendingFrame
 		gapStart uint64
-		now      = time.Now()
+		now      = s.now()
 		sending  = fix.AppendUTCTimestamp(nil, now, s.prec)
 		writeErr error
 		evicted  [][2]uint64  // runs of messages beyond retention, inclusive

@@ -249,6 +249,18 @@ type Config struct {
 	// MaxLatency is how far SendingTime (52) may be from our clock, 120s if
 	// 0; negative disables the check.
 	MaxLatency time.Duration
+	// Now is the session's wall clock, time.Now if nil. It stamps the
+	// SendingTime and OrigSendingTime the session writes, a resent message
+	// keeping the OrigSendingTime it was stored with, and the time of
+	// messages received and of a reset; it judges the SendingTime received
+	// (MaxLatency) and opens and closes Schedule windows. Timeouts,
+	// heartbeats and ages run on the monotonic clock whatever it says: a
+	// clock set apart, as a test skewing one counterparty sets it, changes
+	// what the counterparty is told and when windows open, not how long the
+	// session waits otherwise. It is called from the session's goroutines at
+	// once, some holding its lock: it returns promptly, guards what it
+	// shares, and calls no method of the session.
+	Now func() time.Time
 	// ResetOnLogon resets sequence numbers at every logon: an initiator
 	// sends ResetSeqNumFlag (141=Y), an acceptor resets on any Logon.
 	//

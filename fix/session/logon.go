@@ -55,7 +55,7 @@ func (s *Session) logon(c *conn) error {
 		}
 		s.sentReset = true
 	}
-	h := &header{msgType: "A", sendingTime: time.Now()}
+	h := &header{msgType: "A", sendingTime: s.now()}
 	if signer, ok := s.handler.(LogonSigner); ok {
 		// The signature covers the MsgSeqNum and SendingTime: both are
 		// fixed before the handler signs, outside the lock, and the
@@ -481,7 +481,7 @@ func (s *Session) resetStoreLocked(why string, windowID ...string) error {
 	if len(windowID) > 0 {
 		id = windowID[0]
 	}
-	if err := s.storeLocked(func() error { return s.store.Reset(context.Background(), gen, time.Now(), id) }); err != nil {
+	if err := s.storeLocked(func() error { return s.store.Reset(context.Background(), gen, s.now(), id) }); err != nil {
 		s.log.LogAttrs(context.Background(), slog.LevelError, "resetting the store failed", slog.String("why", why), slog.Any("error", err))
 		err = fmt.Errorf("resetting the store (%s): %w", why, err)
 		if uncertain(err) {

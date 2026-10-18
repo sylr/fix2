@@ -19,11 +19,20 @@ var errOutsideWindow = errors.New("session: outside the session's schedule windo
 // timer, which may fire a millisecond late, to hrtimer.
 const precisionWindow = 5 * time.Millisecond
 
-// waitUntil waits until the wall clock reaches t or ctx is done, reporting
-// whether t was reached.
-func waitUntil(ctx context.Context, t time.Time) bool {
+// waitUntil waits until clock, the wall clock if nil, reaches t or ctx is
+// done, reporting whether t was reached.
+func waitUntil(ctx context.Context, clock func() time.Time, t time.Time) bool {
 	for {
-		d := time.Until(t)
+		at, d := t, time.Duration(0)
+		if clock == nil {
+			d = time.Until(t)
+		} else {
+			// hrtimer waits for an instant of the wall clock's: t on
+			// clock, as far away, the wall clock read after clock, which
+			// may take its time.
+			d = t.Sub(clock())
+			at = time.Now().Add(d)
+		}
 		if d <= 0 {
 			return true
 		}
@@ -40,7 +49,7 @@ func waitUntil(ctx context.Context, t time.Time) bool {
 			continue
 		}
 		select {
-		case <-hrtimer.At(t):
+		case <-hrtimer.At(at):
 		case <-ctx.Done():
 			return false
 		}
@@ -71,7 +80,7 @@ func (s *Session) startSchedule(ctx context.Context) {
 func (s *Session) runSchedule(ctx context.Context) {
 	sched := s.cfg.Schedule
 	for ctx.Err() == nil {
-		now := time.Now()
+		now := s.now()
 		w, in, ok := sched.Window(now)
 		if !ok {
 			s.log.LogAttrs(ctx, slog.LevelError, "the schedule has no window to open", slog.String("schedule", sched.String()))
@@ -81,13 +90,13 @@ func (s *Session) runSchedule(ctx context.Context) {
 		if !in {
 			s.closeWindow(w)
 			s.log.LogAttrs(ctx, slog.LevelInfo, "waiting for the next session window", slog.Time("start", w.Start), slog.Time("end", w.End))
-			if !waitUntil(ctx, w.Start) {
+			if !waitUntil(ctx, s.cfg.Now, w.Start) {
 				return
 			}
 			continue
 		}
 		s.openWindow(w)
-		if !waitUntil(ctx, w.End) {
+		if !waitUntil(ctx, s.cfg.Now, w.End) {
 			return
 		}
 		s.closeWindow(w)

@@ -1,5 +1,10 @@
 package session
 
+import (
+	"context"
+	"time"
+)
+
 // RetentionSweeps returns how many evictions s ran, for tests.
 func RetentionSweeps(s *Session) uint64 {
 	s.mu.Lock()
@@ -17,3 +22,8 @@ func HeldScanned(s *Session) uint64 {
 
 // ErrStoreTimeout is errStoreTimeout, for tests.
 var ErrStoreTimeout = errStoreTimeout
+
+// WaitUntil waits until clock reaches t (see waitUntil).
+func WaitUntil(ctx context.Context, clock func() time.Time, t time.Time) bool {
+	return waitUntil(ctx, clock, t)
+}

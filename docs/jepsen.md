@@ -345,7 +345,7 @@ Results go to `jepsen/store`, ignored by git.
 | # | Content | Done |
 |---|---|---|
 | J0 | This document; Docker Desktop checked for FUSE, netem, iptables, loop devices and device-mapper targets; LazyFS 0.3.0 checked to lose SQLite's unsynced commits and keep its synced ones | yes |
-| J1 | `Config.Now`, with tests: SendingTime of messages, resends and GapFills written skewed, a resend's stored OrigSendingTime kept, `MaxLatency` against a skewed counterparty, a reset's `CreatedAt`, schedule windows opening and closing on the skewed clock, timers and retention ages unaffected | |
+| J1 | `Config.Now`, with tests: SendingTime of messages, resends and GapFills written skewed, a resend's stored OrigSendingTime kept, `MaxLatency` against a skewed counterparty, a reset's `CreatedAt`, schedule windows opening and closing on the skewed clock, timers and retention ages unaffected | yes; each wall-clock read put back on `time.Now`, and each timer put on `Now`, fails a test; retention ages, which never read `Now`, have no test of their own |
 | J2 | `jepsen/node`: both roles, SQLite and `memstore`, the store wrapper, control API with capped workers, drain and barrier, event logs, mutants; tested in-process against a fix2 counterparty | |
 | J3 | `jepsen/docker`: control and node images (LazyFS prebuilt), compose file, setup of SSH keys, the binary built in a container; `jepsen/Makefile` | |
 | J4 | The Clojure test: DB, client, generator, drain, barrier, log download; a baseline run without faults, live and green on checks 4 and 9 | |
@@ -372,6 +372,9 @@ Results go to `jepsen/store`, ignored by git.
   or a `Sync` would halt the session: one that only receives, a market data
   client, stays neither halted nor connected. `docs/operations.md` says it
   halts.
+- Fixed (4575f8e), found writing J1's tests: `MaxPendingAge` was enforced
+  only when the connection's timer fired for another reason, up to a
+  heartbeat interval late, since queueing a message never armed it.
 - `Receipt.Wait` is documented as bounded by its context, but takes the
   session's lock before looking at it, which a hung store write holds: it
   waits for the disk. `docs/operations.md` says so of "the other calls that

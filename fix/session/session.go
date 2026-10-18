@@ -305,6 +305,14 @@ func (s *Session) Err() error {
 	return s.halted
 }
 
+// now reads the session's wall clock (see Config.Now).
+func (s *Session) now() time.Time {
+	if s.cfg.Now != nil {
+		return s.cfg.Now()
+	}
+	return time.Now()
+}
+
 // setHeartBtLocked sets the heartbeat interval in effect, and the
 // LogoutTimeout it gives.
 func (s *Session) setHeartBtLocked(hb time.Duration) {
@@ -567,7 +575,7 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 	}
 	h.seq = s.st.NextSender
 	if h.sendingTime.IsZero() {
-		h.sendingTime = time.Now()
+		h.sendingTime = s.now()
 	}
 	if s.cfg.LastMsgSeqNumProcessed && s.prof.lastProc {
 		// The last message processed: the one answered, as QuickFIX
@@ -601,7 +609,7 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 		return 0, fmt.Errorf("session %s: storing message %d: %w", s.id, h.seq, err)
 	}
 	s.st.NextSender++
-	*frames = append(*frames, pendingFrame{end: len(*buf), seq: h.seq, queued: h.sendingTime, probe: h.probe, admin: isAdmin([]byte(h.msgType))})
+	*frames = append(*frames, pendingFrame{end: len(*buf), seq: h.seq, queued: time.Now(), probe: h.probe, admin: isAdmin([]byte(h.msgType))})
 	if s.cfg.MaxPendingAge > 0 && frames == &c.frames && len(c.frames) == 1 {
 		// The first message waiting: the timer is due when it is too old,
 		// not at its next deadline only.
