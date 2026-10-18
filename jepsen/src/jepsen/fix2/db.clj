@@ -149,7 +149,8 @@
         :-listen (str ":" fix-port)
         :-connect (str (acceptor test) ":" fix-port)
         :-http (str ":" http-port)
-        :-store (str "sqlite:" data-dir "/fix.db")
+        :-store (if (= :memstore (:session-store test)) "memstore" (str "sqlite:" data-dir "/fix.db"))
+        :-ack-probe (name (:ack-probe test :lazy))
         :-events events-dir
         :-incarnation incarnation
         :-heartbeat (str (:heartbeat test 1) "s")

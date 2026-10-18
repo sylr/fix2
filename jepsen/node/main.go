@@ -16,6 +16,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/sylr/fix2/fix/session"
 )
 
 func main() {
@@ -30,7 +32,7 @@ func main() {
 func run(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("fix2-jepsen-node", flag.ContinueOnError)
 	var opts Options
-	var httpAddr, mutants, level string
+	var httpAddr, mutants, level, ackProbe string
 	fs.StringVar(&opts.Role, "role", "", "initiator or acceptor")
 	fs.StringVar(&opts.Listen, "listen", ":9876", "acceptor: the FIX address to listen on")
 	fs.StringVar(&opts.Connect, "connect", "", "initiator: the acceptor's FIX address")
@@ -41,6 +43,7 @@ func run(ctx context.Context, args []string) error {
 	fs.DurationVar(&opts.MaxLatency, "max-latency", 0, "MaxLatency, the session's default if 0")
 	fs.DurationVar(&opts.StoreTimeout, "store-timeout", 0, "StoreTimeout, the session's default if 0")
 	fs.DurationVar(&opts.WriteTimeout, "write-timeout", 0, "WriteTimeout, the session's default if 0")
+	fs.StringVar(&ackProbe, "ack-probe", "lazy", "AckProbe: lazy, eager or never")
 	fs.IntVar(&opts.MaxWorkers, "max-workers", 256, "sends running at once")
 	fs.DurationVar(&opts.FromAppDelay, "fromapp-delay", 0, "how long FromApp takes for each message")
 	fs.StringVar(&httpAddr, "http", ":8080", "the control API's address")
@@ -51,6 +54,16 @@ func run(ctx context.Context, args []string) error {
 	}
 	if opts.Incarnation == "" {
 		opts.Incarnation = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	switch ackProbe {
+	case "lazy":
+		opts.AckProbe = session.AckProbeLazy
+	case "eager":
+		opts.AckProbe = session.AckProbeEager
+	case "never":
+		opts.AckProbe = session.AckProbeNever
+	default:
+		return fmt.Errorf("ack-probe %q: want lazy, eager or never", ackProbe)
 	}
 	if mutants != "" {
 		opts.Mutants = strings.Split(mutants, ",")

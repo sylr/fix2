@@ -32,10 +32,15 @@
         hang? (contains? faults :hang-disk)
         _ (when (and power-loss? hang?)
             ;; A kill left pending on a hung disk would lose its power loss.
-            (throw (ex-info "power-loss and hang-disk do not combine yet" {:faults faults})))]
+            (throw (ex-info "power-loss and hang-disk do not combine yet" {:faults faults})))
+        _ (when (and (= :memstore (:session-store opts)) (some #{:power-loss :hang-disk :disk-full} faults))
+            (throw (ex-info "memstore has no disk to fault" {:faults faults})))]
     (merge tests/noop-test
            opts
-           {:name      (str "fix2" (when (seq faults) (str "-" (str/join "," (map name (sort faults))))))
+           {:name      (str "fix2"
+                            (when (= :memstore (:session-store opts)) "-memstore")
+                            (when (not= :lazy (:ack-probe opts)) (str "-probe-" (name (:ack-probe opts))))
+                            (when (seq faults) (str "-" (str/join "," (map name (sort faults))))))
             ;; The store on LazyFS, for a power loss or a hung disk; the
             ;; checkers told what a power loss may take, and that a disk
             ;; fault may halt a session.
@@ -114,6 +119,14 @@
     :default 0
     :parse-fn parse-long
     :validate [#(and % (not (neg? %))) "Must be a whole number of milliseconds, not negative"]]
+   [nil "--session-store STORE" "The sessions' store (:store is Jepsen's): sqlite, or memstore, which a kill empties: the checks are expected to fail under kills."
+    :default :sqlite
+    :parse-fn keyword
+    :validate [#{:sqlite :memstore} "Must be sqlite or memstore"]]
+   [nil "--ack-probe WHEN" "The sessions' AckProbe: lazy or eager. Not never: a send waits to be acknowledged, which only a probe tells."
+    :default :lazy
+    :parse-fn keyword
+    :validate [#{:lazy :eager} "Must be lazy or eager"]]
    [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]])
 
 (defn -main

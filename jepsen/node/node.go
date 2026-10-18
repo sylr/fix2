@@ -35,6 +35,7 @@ type Options struct {
 	MaxLatency   time.Duration
 	StoreTimeout time.Duration
 	WriteTimeout time.Duration
+	AckProbe     session.AckProbe
 	MaxWorkers   int // sends running at once, beyond which a send fails
 	// FromAppDelay makes the application slow: the delivery queue fills,
 	// and the session records how far it processed 64 messages at a time
@@ -164,6 +165,7 @@ func NewNode(opts Options) (*Node, error) {
 		MaxLatency:   opts.MaxLatency,
 		StoreTimeout: opts.StoreTimeout,
 		WriteTimeout: opts.WriteTimeout,
+		AckProbe:     opts.AckProbe,
 		Now:          n.now,
 	}
 	switch opts.Role {
