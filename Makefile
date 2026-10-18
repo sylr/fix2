@@ -10,9 +10,9 @@ FUZZTIME ?= 30s
 FUZZ_MINIMIZE_TIME  ?= 10s
 FUZZ_NO_MINIMIZE    ?= FuzzGenerate FuzzLoad
 
-# The contribs are modules of their own, tested and fuzzed apart: tools, and
-# stores under contribs/store.
-CONTRIBS := $(patsubst %/go.mod,%,$(wildcard contribs/*/go.mod contribs/*/*/go.mod))
+# The contribs are modules of their own, tested and fuzzed apart: tools,
+# stores under contribs/store, and the Jepsen suite's node under jepsen.
+CONTRIBS := $(patsubst %/go.mod,%,$(wildcard contribs/*/go.mod contribs/*/*/go.mod jepsen/*/go.mod))
 
 GO_TEST_FLAGS ?=
 GO_FUZZ_FLAGS ?=

@@ -46,6 +46,7 @@ jobs:
             go.sum
             contribs/*/go.sum
             contribs/*/*/go.sum
+            jepsen/*/go.sum
 
       - name: Verify go mod
         run: make go-mod-verify
@@ -67,7 +68,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
-          files: coverage.txt,contribs/binancefix/coverage.txt,contribs/binancemd/coverage.txt,contribs/coinbasemd/coverage.txt,contribs/fixpecho/coverage.txt,contribs/store/sqlite3/coverage.txt
+          files: coverage.txt,contribs/binancefix/coverage.txt,contribs/binancemd/coverage.txt,contribs/coinbasemd/coverage.txt,contribs/fixpecho/coverage.txt,contribs/store/sqlite3/coverage.txt,jepsen/node/coverage.txt
           # Each platform covers code the others do not, SIMD checksums,
           # darwin's hrtimer: Codecov merges them.
           flags: ${{ runner.os }}-${{ runner.arch }}${{ matrix.simd && '-simd' || '' }}
@@ -98,6 +99,7 @@ jobs:
             go.sum
             contribs/*/go.sum
             contribs/*/*/go.sum
+            jepsen/*/go.sum
 
       - name: Locate the fuzz cache
         id: gocache
