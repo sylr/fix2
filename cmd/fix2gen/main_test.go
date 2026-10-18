@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,8 @@ func TestRun(t *testing.T) {
 		{"no subcommand", nil, 2, "fix2gen --help"},
 		{"help", []string{"-h"}, 0, "tagvalue"},
 		{"--help", []string{"--help"}, 0, "sbe"},
+		{"--version", []string{"--version"}, 0, "fix2gen version dev\n"},
+		{"-v", []string{"-v"}, 2, "unknown shorthand"},
 		{"help command", []string{"help", "sbe"}, 0, "--tolerate-unfilled-counts"},
 		{"subcommand help", []string{"tagvalue", "-h"}, 0, "--dispatch"},
 		{"subcommand --help", []string{"tagvalue", "--help"}, 0, "--dispatch"},
@@ -110,11 +113,37 @@ func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("write fai
 // Failing to write stdout, cobra's own output included, is a failure: exit
 // 1, no usage hint.
 func TestRunOutputFails(t *testing.T) {
-	for _, args := range [][]string{{"--help"}, {"sbe", "--help"}, {"completion", "bash"}} {
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"sbe", "--help"}, {"completion", "bash"}} {
 		var stderr strings.Builder
 		if code := run(args, brokenWriter{}, &stderr); code != 1 || strings.Count(stderr.String(), "write failed") != 1 ||
 			strings.Contains(stderr.String(), "for usage") {
 			t.Errorf("%q: exit %d, stderr %q", args, code, stderr.String())
+		}
+	}
+}
+
+func TestVersion(t *testing.T) {
+	fix2 := func(v string, r *debug.Module) *debug.Module {
+		return &debug.Module{Path: module, Version: v, Replace: r}
+	}
+	other := debug.Module{Path: "example.com/m"}
+	for _, tc := range []struct {
+		name string
+		info *debug.BuildInfo
+		ok   bool
+		want string
+	}{
+		{"no build information", nil, false, "dev"},
+		{"built in fix2", &debug.BuildInfo{Main: *fix2("(devel)", nil)}, true, "dev"},
+		{"built in fix2 from git", &debug.BuildInfo{Main: *fix2("v0.3.1-0.20261018091500-ae51e5a1b2c3+dirty", nil)}, true, "v0.3.1-0.20261018091500-ae51e5a1b2c3+dirty"},
+		{"go install", &debug.BuildInfo{Main: *fix2("v0.4.0", nil)}, true, "v0.4.0"},
+		{"fix2 a dependency", &debug.BuildInfo{Main: other, Deps: []*debug.Module{{Path: "example.com/x", Version: "v1.0.0"}, fix2("v0.4.0", nil)}}, true, "v0.4.0"},
+		{"fix2 replaced by a directory", &debug.BuildInfo{Main: other, Deps: []*debug.Module{fix2("v0.0.0", &debug.Module{Path: "../.."})}}, true, "dev"},
+		{"fix2 replaced by a version", &debug.BuildInfo{Main: other, Deps: []*debug.Module{fix2("v0.4.0", &debug.Module{Path: "example.com/fork", Version: "v0.4.1"})}}, true, "v0.4.1"},
+		{"fix2 not found", &debug.BuildInfo{Main: other}, true, "dev"},
+	} {
+		if got := version(tc.info, tc.ok); got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }

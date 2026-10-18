@@ -5,6 +5,7 @@
 //
 //	fix2gen tagvalue --dict <xml-path> --pkg <package-name> [--out <dir>] [--dispatch] [--bytes]
 //	fix2gen sbe --schema <xml-path> --pkg <package-name> [--out <dir>] [--tolerate-foreign-metadata] [--tolerate-undeclared-primitive-types] [--tolerate-group-redefinitions] [--tolerate-field-redefinitions] [--tolerate-unfilled-counts] [--assume-same-encodings]
+//	fix2gen --version
 //
 // sbe generates codecs of the messages of an SBE 1.0 message schema: a Go
 // struct per message, encoded and decoded whole (see docs/sbe.md). By
@@ -36,6 +37,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -44,8 +46,48 @@ import (
 	"github.com/sylr/fix2/internal/gen/tagvalue"
 )
 
+// Version is the version of fix2gen, if set at build time; otherwise
+// version tells the version of fix2 it was built from.
+var Version = ""
+
+// module is fix2's module path.
+const module = "github.com/sylr/fix2"
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// version returns the version of fix2gen: Version, or else the version of
+// fix2 in info, the build's (go install, go tool, go build), "dev" when
+// unknown, as when built from a fix2 replaced by a directory.
+func version(info *debug.BuildInfo, ok bool) string {
+	if Version != "" {
+		return Version
+	}
+	if !ok {
+		return "dev"
+	}
+	m := &info.Main
+	if m.Path != module {
+		m = nil
+		for _, d := range info.Deps {
+			if d.Path == module {
+				m = d
+			}
+		}
+	}
+	switch {
+	case m == nil:
+		return "dev"
+	case m.Replace != nil && m.Replace.Version == "":
+		return "dev"
+	case m.Replace != nil:
+		m = m.Replace
+	}
+	if m.Version == "" || m.Version == "(devel)" {
+		return "dev"
+	}
+	return m.Version
 }
 
 // runError is an error of a command that ran, as opposed to a usage error.
@@ -84,7 +126,7 @@ func (w *errWriter) failed() error {
 // and returns its exit code: 2 for a usage error, 1 for a command that
 // failed.
 func run(args []string, stdout, stderr io.Writer) int {
-	// A failed write of stdout, cobra's own (help, completion)
+	// A failed write of stdout, cobra's own (help, --version, completion)
 	// included, fails the command: exit 1.
 	out := &errWriter{w: stdout}
 	root := newCommand(out, stderr)
@@ -118,6 +160,7 @@ func newCommand(stdout, stderr io.Writer) *cobra.Command {
 		Long: `Generate typed Go code for the messages of fix2's protocols, one
 subcommand per encoding: tagvalue for FIX tagvalue, sbe for Simple Binary
 Encoding.`,
+		Version:       version(debug.ReadBuildInfo()),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Without a command, nothing asked for was done: a usage error.
@@ -127,6 +170,8 @@ Encoding.`,
 	}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
+	// -v is --verbose in the contribs: no shorthand for --version.
+	root.Flags().Bool("version", false, "version for fix2gen")
 	root.AddCommand(tagValueCommand(), sbeCommand())
 	return root
 }
