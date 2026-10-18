@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -46,6 +47,9 @@ type Options struct {
 	// rather than at each, so a kill has messages to deliver again.
 	FromAppDelay time.Duration
 
+	// Sessions is how many sessions the host runs, 1 if 0.
+	Sessions int
+
 	Logger *slog.Logger
 
 	// store, if set, is used instead of the one Store names: for tests.
@@ -83,9 +87,9 @@ type Node struct {
 	offset  atomic.Int64 // Config.Now's offset from time.Now
 	clockMu sync.Mutex   // serializes SetClock
 
-	sess     *session.Session
-	run      func(context.Context) error
-	listener *tcp.Listener
+	host *Host
+	k    int // the host's k-th session
+	sess *session.Session
 
 	workers  chan struct{} // a slot per send running
 	inflight sync.WaitGroup
@@ -120,8 +124,26 @@ type Status struct {
 	Draining   bool      `json:"draining"`
 }
 
-// NewNode opens the node's event log and store and creates its session.
+// Host runs a node's sessions under one Initiator or Acceptor: the first
+// INI and ACC, the k-th INI<k> and ACC<k>, each with its own store, event
+// log and control API.
+type Host struct {
+	Nodes    []*Node
+	run      func(context.Context) error
+	listener *tcp.Listener
+}
+
+// NewNode creates a host and returns its first session's node.
 func NewNode(opts Options) (*Node, error) {
+	h, err := NewHost(opts)
+	if err != nil {
+		return nil, err
+	}
+	return h.Nodes[0], nil
+}
+
+// NewHost opens its sessions' event logs and stores and creates them.
+func NewHost(opts Options) (*Host, error) {
 	for _, m := range opts.Mutants {
 		if !slices.Contains(mutants, m) {
 			return nil, fmt.Errorf("mutant %q: want one of %s", m, strings.Join(mutants, ", "))
@@ -130,39 +152,98 @@ func NewNode(opts Options) (*Node, error) {
 	if opts.MaxWorkers <= 0 {
 		opts.MaxWorkers = 256
 	}
+	if opts.Sessions <= 0 {
+		opts.Sessions = 1
+	}
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.DiscardHandler)
 	}
-	ev, err := OpenEvents(opts.Events, opts.Incarnation)
-	if err != nil {
+	h := &Host{}
+	var add func(session.Config) (*session.Session, error)
+	var a *session.Acceptor
+	switch opts.Role {
+	case "initiator":
+		i := session.NewInitiator(session.InitiatorOptions{Logger: opts.Logger, ReconnectMin: 100 * time.Millisecond, ReconnectMax: time.Second})
+		add = func(cfg session.Config) (*session.Session, error) {
+			return i.Add(cfg, &tcp.Dialer{Addresses: []string{opts.Connect}})
+		}
+		h.run = i.Run
+	case "acceptor":
+		a = session.NewAcceptor(session.AcceptorOptions{Logger: opts.Logger})
+		add = a.Add
+		h.run = a.Run
+	default:
+		return nil, fmt.Errorf("role %q: want initiator or acceptor", opts.Role)
+	}
+	var stores []store.Store
+	fail := func(err error) (*Host, error) {
+		for _, st := range stores {
+			st.Close()
+		}
 		return nil, err
 	}
-	n := &Node{opts: opts, ev: ev, log: opts.Logger, workers: make(chan struct{}, opts.MaxWorkers), markers: map[string]bool{}}
+	for k := range opts.Sessions {
+		n, cfg, err := newNode(opts, k)
+		if err != nil {
+			return fail(err)
+		}
+		n.host = h
+		stores = append(stores, cfg.Store)
+		if n.sess, err = add(cfg); err != nil {
+			return fail(err)
+		}
+		h.Nodes = append(h.Nodes, n)
+	}
+	if a != nil {
+		var err error
+		if h.listener, err = tcp.Listen(opts.Listen, nil); err != nil {
+			return fail(err)
+		}
+		a.Listen(h.listener)
+	}
+	return h, nil
+}
+
+// newNode opens session k's event log and store, and returns its Config.
+func newNode(opts Options, k int) (*Node, session.Config, error) {
+	ev, err := OpenEvents(opts.Events, eventsFile(opts.Incarnation, k), opts.Incarnation)
+	if err != nil {
+		return nil, session.Config{}, err
+	}
+	n := &Node{opts: opts, k: k, ev: ev, log: opts.Logger, workers: make(chan struct{}, opts.MaxWorkers), markers: map[string]bool{}}
+	if opts.Sessions > 1 {
+		n.log = opts.Logger.With("session", k)
+	}
 	n.status.Store(&Status{At: time.Now(), State: "starting"})
 	ev.Log(Event{Kind: "start", Role: opts.Role, Store: opts.Store, Mutant: opts.Mutants})
 
-	st := opts.store
+	var st store.Store
 	switch {
-	case st != nil:
+	case opts.store != nil && k == 0:
+		st = opts.store
 	case opts.Store == "memstore":
 		st = memstore.New()
 	case strings.HasPrefix(opts.Store, "sqlite:"):
-		if st, err = sqlite3.OpenFile(strings.TrimPrefix(opts.Store, "sqlite:"), "jepsen"); err != nil {
-			return nil, err
+		if st, err = sqlite3.OpenFile(storePath(strings.TrimPrefix(opts.Store, "sqlite:"), k), "jepsen"); err != nil {
+			return nil, session.Config{}, err
 		}
 	default:
-		return nil, fmt.Errorf("store %q: want memstore or sqlite:<path>", opts.Store)
+		return nil, session.Config{}, fmt.Errorf("store %q: want memstore or sqlite:<path>", opts.Store)
 	}
 	st = wrapStore(st, ev, n.mutant(mutantNoSync))
 
-	id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
+	suffix := ""
+	if k > 0 {
+		suffix = strconv.Itoa(k)
+	}
+	id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI" + suffix, TargetCompID: "ACC" + suffix}
 	if opts.Role == "acceptor" {
 		id.SenderCompID, id.TargetCompID = id.TargetCompID, id.SenderCompID
 	}
-	cfg := session.Config{
+	return n, session.Config{
 		ID:           id,
 		Store:        st,
-		Logger:       opts.Logger,
+		Logger:       n.log,
 		Observer:     observer{n},
 		Handler:      &handler{n: n},
 		HeartBtInt:   opts.HeartBtInt,
@@ -171,43 +252,44 @@ func NewNode(opts Options) (*Node, error) {
 		WriteTimeout: opts.WriteTimeout,
 		AckProbe:     opts.AckProbe,
 		Retention:    opts.Retention,
+		Now:          n.now,
 
 		LastMsgSeqNumProcessed: opts.LastProcessed,
-		Now:          n.now,
+	}, nil
+}
+
+// eventsFile names session k's event log: the first's events-<inc>.jsonl,
+// the k-th's events-s<k>-<inc>.jsonl.
+func eventsFile(inc string, k int) string {
+	if k == 0 {
+		return "events-" + inc + ".jsonl"
 	}
-	switch opts.Role {
-	case "initiator":
-		i := session.NewInitiator(session.InitiatorOptions{Logger: opts.Logger, ReconnectMin: 100 * time.Millisecond, ReconnectMax: time.Second})
-		n.sess, err = i.Add(cfg, &tcp.Dialer{Addresses: []string{opts.Connect}})
-		n.run = i.Run
-	case "acceptor":
-		a := session.NewAcceptor(session.AcceptorOptions{Logger: opts.Logger})
-		if n.sess, err = a.Add(cfg); err != nil {
-			break
-		}
-		if n.listener, err = tcp.Listen(opts.Listen, nil); err != nil {
-			break
-		}
-		a.Listen(n.listener)
-		n.run = a.Run
-	default:
-		err = fmt.Errorf("role %q: want initiator or acceptor", opts.Role)
+	return fmt.Sprintf("events-s%d-%s.jsonl", k, inc)
+}
+
+// storePath is session k's SQLite file: path for the first, -s<k> before
+// its extension for the k-th.
+func storePath(path string, k int) string {
+	if k == 0 {
+		return path
 	}
-	if err != nil {
-		st.Close()
-		return nil, err
-	}
-	return n, nil
+	ext := filepath.Ext(path)
+	return fmt.Sprintf("%s-s%d%s", strings.TrimSuffix(path, ext), k, ext)
 }
 
 // Addr is the acceptor's FIX address.
-func (n *Node) Addr() net.Addr { return n.listener.Addr() }
+func (n *Node) Addr() net.Addr { return n.host.listener.Addr() }
 
-// Run runs the session until ctx is done. The event log stays open: a send
+// Run runs the host's sessions until ctx is done (see Host.Run).
+func (n *Node) Run(ctx context.Context) error { return n.host.Run(ctx) }
+
+// Run runs the sessions until ctx is done. The event logs stay open: a send
 // or a store write may still be running, and logs when it returns.
-func (n *Node) Run(ctx context.Context) error {
-	go n.watch(ctx)
-	return n.run(ctx)
+func (h *Host) Run(ctx context.Context) error {
+	for _, n := range h.Nodes {
+		go n.watch(ctx)
+	}
+	return h.run(ctx)
 }
 
 func (n *Node) mutant(name string) bool { return slices.Contains(n.opts.Mutants, name) }
@@ -293,6 +375,9 @@ func (n *Node) Barrier(timeout time.Duration) (string, SendResult) {
 	n.mu.Lock()
 	n.markerN++
 	id := fmt.Sprintf("%s%s-%d", markerPrefix, n.opts.Incarnation, n.markerN)
+	if n.k > 0 {
+		id = fmt.Sprintf("%ss%d-%s-%d", markerPrefix, n.k, n.opts.Incarnation, n.markerN)
+	}
 	n.mu.Unlock()
 	return id, n.dispatch(id, timeout, true)
 }

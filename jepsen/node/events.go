@@ -78,12 +78,12 @@ type Events struct {
 	inc string
 }
 
-// OpenEvents opens dir/events-<inc>.jsonl for appending.
-func OpenEvents(dir, inc string) (*Events, error) {
+// OpenEvents opens dir/name for appending, its events stamped inc.
+func OpenEvents(dir, name, inc string) (*Events, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "events-"+inc+".jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, err
 	}

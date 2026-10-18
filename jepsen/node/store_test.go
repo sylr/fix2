@@ -33,7 +33,7 @@ func (truncOnly) Sync() {} // shadows memstore's: not a Syncer
 // The wrapper implements exactly the optional interfaces of the store it
 // wraps.
 func TestWrapStore_Interfaces(t *testing.T) {
-	ev, err := OpenEvents(t.TempDir(), "t")
+	ev, err := OpenEvents(t.TempDir(), "events-t.jsonl", "t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestWrapStore_Interfaces(t *testing.T) {
 func TestWrapStore_NoSync(t *testing.T) {
 	for _, noSync := range []bool{false, true} {
 		dir := t.TempDir()
-		ev, err := OpenEvents(dir, "t")
+		ev, err := OpenEvents(dir, "events-t.jsonl", "t")
 		if err != nil {
 			t.Fatal(err)
 		}

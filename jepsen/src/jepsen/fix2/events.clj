@@ -1,6 +1,7 @@
 (ns jepsen.fix2.events
   "Reads the event logs the nodes wrote, downloaded with the test's log
-  files: events-<node>-<n>.jsonl, the nth process started on the node."
+  files: events-<node>-<n>.jsonl, the nth process started on the node,
+  of its first session, events-s<k>-<node>-<n>.jsonl of its k-th."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [jepsen.store :as store]))
@@ -29,15 +30,25 @@
   [^java.io.File f]
   (or (some->> (.getName f) (re-find #"-(\d+)\.jsonl$") second parse-long) 0))
 
+(defn session-number
+  "k, of events-s<k>-<node>-<n>.jsonl, the k-th session's; 0 for the
+  first's, events-<node>-<n>.jsonl: node's name may look like s<k>."
+  [node file-name]
+  (or (some->> file-name
+               (re-find (re-pattern (str "^events-s(\\d+)-" (java.util.regex.Pattern/quote node) "-\\d+\\.jsonl$")))
+               second parse-long)
+      0))
+
 (defn node-events
-  "Every event node logged, each tagged with :node, in the order its
-  processes were started and, within one, of its file."
+  "Every event node logged, each tagged with :node and :session, in the
+  order its processes were started and, within one, of its files."
   [test node]
   (let [dir (store/path test node "events")]
     (->> (.listFiles (io/file dir))
          (filter #(re-find #"\.jsonl$" (.getName ^java.io.File %)))
-         (sort-by incarnation-number)
-         (mapcat read-file)
+         (sort-by (juxt incarnation-number #(session-number node (.getName ^java.io.File %))))
+         (mapcat (fn [^java.io.File f]
+                   (let [k (session-number node (.getName f))] (map #(assoc % :session k) (read-file f)))))
          (map #(assoc % :node node)))))
 
 (defn all

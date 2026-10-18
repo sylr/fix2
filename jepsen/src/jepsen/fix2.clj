@@ -16,9 +16,11 @@
                          [nemesis :as nemesis]]))
 
 (defn sends
-  "Orders with unique ClOrdIDs."
-  []
-  (map (fn [i] {:f :send :value (str "O" i)}) (range)))
+  "Orders with unique ClOrdIDs, spread over n sessions in turn."
+  [n]
+  (map (fn [i] (cond-> {:f :send :value (str "O" i)}
+                 (< 1 n) (assoc :session (mod i n))))
+       (range)))
 
 (defn fix2-test
   "Builds the test from the CLI's options."
@@ -42,6 +44,7 @@
                             (when (not= :lazy (:ack-probe opts)) (str "-probe-" (name (:ack-probe opts))))
                             (when (pos? (+ (:retention-keep opts) (:retention-max opts))) "-retention")
                             (when (:last-processed opts) "-369")
+                            (when (< 1 (:fix-sessions opts)) (str "-sessions" (:fix-sessions opts)))
                             (when (seq faults) (str "-" (str/join "," (map name (sort faults))))))
             ;; The store on LazyFS, for a power loss or a hung disk; the
             ;; checkers told what a power loss may take, and that a disk
@@ -74,7 +77,7 @@
                           :timeline   (timeline/html)
                           :fix2       (fix2-checker/checker)})
             :generator (gen/phases
-                         (->> (sends)
+                         (->> (sends (:fix-sessions opts))
                               (gen/stagger (/ (:rate opts)))
                               (gen/nemesis (:generator pkg))
                               (gen/time-limit (:time-limit opts)))
@@ -137,6 +140,10 @@
     :default 0
     :parse-fn parse-long
     :validate [#(and % (not (neg? %))) "Must be a whole number, not negative"]]
+   [nil "--fix-sessions N" "FIX sessions per node pair (:sessions is Jepsen's, SSH), under one Initiator and one Acceptor: the sends spread over them in turn."
+    :default 1
+    :parse-fn parse-long
+    :validate [#(and % (pos? %)) "Must be a positive integer"]]
    [nil "--last-processed" "The sessions send LastMsgSeqNumProcessed (369): the processed prefix, which retention takes for acknowledgements, and Keep the margin for a counterparty forgetting part of it."]
    [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]])
 

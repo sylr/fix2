@@ -58,7 +58,7 @@
                                                      (cond
                                                        (db/complete-kill! test node)
                                                        :released-killed
-                                                       (seq (:err (client/status node)))
+                                                       (client/halted? test node)
                                                        (do (db/kill! (dissoc test :power-loss) node)
                                                            (db/start! test node)
                                                            :released-restarted)

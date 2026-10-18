@@ -1,7 +1,8 @@
 (ns jepsen.fix2.checker-test
   "The checks, fed a clean run and runs that break each of them."
   (:require [clojure.test :refer [deftest is testing]]
-            [jepsen.fix2.checker :as c]))
+            [jepsen.fix2 [checker :as c]
+                         [events :as events]]))
 
 (def test-map {:nodes ["n1" "n2"] :concurrency 2 :max-latency 120})
 
@@ -122,6 +123,43 @@
 (deftest clean-run
   (let [res (check (clean))]
     (is (true? (:valid? res)) (pr-str res))))
+
+(defn- two-sessions
+  "The clean run in sessions 0 and 1, f applied to session 1's events."
+  [f]
+  (let [s0 (clean)
+        s1 (f (update-vals (clean) (fn [es] (mapv #(assoc % :session 1) es))))
+        h1 (mapv #(assoc % :session 1) (concat (acked "O1" 2) (acked "O2" 3) (acked "O3" 4)))
+        quiesce [{:type :invoke :f :quiesce :process 1}
+                 {:type :ok :f :quiesce :process 1 :value {:markers {"n1" m1 "n2" m2 "n1/s1" m1 "n2/s1" m2}}}]]
+    {:history (vec (concat (acked "O1" 2) (acked "O2" 3) (acked "O3" 4) h1 quiesce))
+     :evs (merge-with (comp vec concat) s0 s1)}))
+
+(deftest session-files
+  (is (= 0 (events/session-number "n1" "events-n1-3.jsonl")))
+  (is (= 2 (events/session-number "n1" "events-s2-n1-3.jsonl")))
+  (testing "a node named like a session"
+    (is (= 0 (events/session-number "s1" "events-s1-1.jsonl")))
+    (is (= 1 (events/session-number "s1" "events-s1-s1-1.jsonl")))))
+
+(deftest sessions
+  (let [t (assoc test-map :fix-sessions 2)
+        run (fn [f] (let [{:keys [history evs]} (two-sessions f)] (c/analyze t history evs)))]
+    (testing "two clean sessions"
+      (let [res (run identity)]
+        (is (true? (:valid? res)) (pr-str res))))
+    (testing "a loss in the second only"
+      (let [res (run #(remove-ev % "n2" (delivery? "O2")))]
+        (is (false? (valid res :acked)))
+        (is (false? (get-in res [:acked "s1 n1->n2" :valid?])))
+        (is (true? (get-in res [:acked "s0 n1->n2" :valid?])))))
+    (testing "an order of the second delivered in the first"
+      (let [{:keys [history evs]} (two-sessions identity)
+            evs (update evs "n2" conj (ev "n2-1" "deliver" :seq 9 :clordid "X1" :digest (digest "X1")))
+            history (into [{:type :invoke :f :send :value "X1" :process 0 :session 1}
+                           {:type :info :f :send :value "X1" :process 0 :session 1 :node "n1"}]
+                          history)]
+        (is (false? (valid (c/analyze t history evs) :phantoms)))))))
 
 (deftest order
   (testing "a duplicate within a process"

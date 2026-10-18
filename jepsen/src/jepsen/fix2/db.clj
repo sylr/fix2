@@ -151,6 +151,7 @@
         :-http (str ":" http-port)
         :-store (if (= :memstore (:session-store test)) "memstore" (str "sqlite:" data-dir "/fix.db"))
         :-ack-probe (name (:ack-probe test :lazy))
+        :-sessions (:fix-sessions test 1)
         :-retention-interval (if (pos? (+ (:retention-keep test 0) (:retention-max test 0))) "500ms" "0s")
         :-retention-keep (:retention-keep test 0)
         :-retention-max (:retention-max test 0)

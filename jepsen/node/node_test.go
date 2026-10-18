@@ -442,3 +442,48 @@ func TestNode_Refusals(t *testing.T) {
 		t.Error("unknown mutant accepted")
 	}
 }
+
+// A host runs several sessions, each with its own store and event log: an
+// order sent on the k-th is delivered on the counterparty's k-th, and only
+// there.
+func TestSessions(t *testing.T) {
+	dir := t.TempDir()
+	acc := start(t, Options{Role: "acceptor", Sessions: 3, Store: "sqlite:" + filepath.Join(dir, "acc.db"),
+		Events: filepath.Join(dir, "acc"), Incarnation: "acc-1"})
+	ini := start(t, Options{Role: "initiator", Sessions: 3, Connect: acc.Addr().String(), Store: "sqlite:" + filepath.Join(dir, "ini.db"),
+		Events: filepath.Join(dir, "ini"), Incarnation: "ini-1"})
+	for k := range 3 {
+		a, i := &started{Node: acc.host.Nodes[k]}, &started{Node: ini.host.Nodes[k]}
+		waitFor(t, "logged on", func() bool { return a.Snapshot().LoggedOn && i.Snapshot().LoggedOn })
+		sendAll(t, i, []string{fmt.Sprintf("S%d", k)})
+		settle(t, i, a)
+	}
+	for _, f := range []string{"acc.db", "acc-s1.db", "acc-s2.db", "ini-s2.db"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Error(err)
+		}
+	}
+	for k, name := range []string{"events-acc-1.jsonl", "events-s1-acc-1.jsonl", "events-s2-acc-1.jsonl"} {
+		b, err := os.ReadFile(filepath.Join(dir, "acc", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for j := range 3 {
+			want := j == k
+			if got := strings.Contains(string(b), fmt.Sprintf(`"kind":"deliver","gen":1,"seq":2,"clordid":"S%d"`, j)); got != want {
+				t.Errorf("%s: delivered S%d %v, want %v", name, j, got, want)
+			}
+		}
+	}
+	srv := httptest.NewServer(acc.host.Handler())
+	defer srv.Close()
+	for _, q := range []string{"", "?session=2"} {
+		resp, err := http.Get(srv.URL + "/status" + q)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			t.Errorf("status%s: %v %v", q, resp, err)
+		}
+	}
+	if resp, _ := http.Get(srv.URL + "/status?session=3"); resp == nil || resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status of no such session: %v", resp)
+	}
+}

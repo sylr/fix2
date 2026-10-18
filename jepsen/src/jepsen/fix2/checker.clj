@@ -11,7 +11,8 @@
   (:require [clojure.string :as str]
             [jepsen.checker :as checker]
             [jepsen.history :as h]
-            [jepsen.fix2.events :as events]))
+            [jepsen.fix2 [client :as client]
+                         [events :as events]]))
 
 (def marker-prefix "BARRIER-")
 
@@ -494,16 +495,31 @@
     {:valid? (empty? found) :phantoms (take 32 found)}))
 
 (defn analyze
-  "Checks history against evs, each node's events in order."
+  "Checks history against evs, each node's events in order, session by
+  session: each has its sends (:session, 0 if none), events (:session, 0 if
+  none) and markers."
   [test history evs]
   (let [quiesce (->> history (filter #(= :quiesce (:f %))) (remove h/invoke?) first)
         live (= :ok (:type quiesce))
         markers (get-in quiesce [:value :markers])
         [n1 n2] (:nodes test)
-        dirs {(str n1 "->" n2) (direction test history evs n1 n2 markers)
-              (str n2 "->" n1) (direction test history evs n2 n1 markers)}
+        ks (range (:fix-sessions test 1))
+        label (fn [k d] (if (= [0] ks) d (str "s" k " " d)))
+        per (for [k ks]
+              (let [in? #(= k (:session % 0))
+                    h (filter #(or (not= :send (:f %)) (in? %)) history)
+                    e (update-vals evs #(filterv in? %))
+                    m (into {} (for [n [n1 n2]] [n (get markers (client/marker-key n k))]))]
+                {:k k :history h :evs e
+                 :dirs {(label k (str n1 "->" n2)) (direction test h e n1 n2 m)
+                        (label k (str n2 "->" n1)) (direction test h e n2 n1 m)}}))
+        dirs (into {} (mapcat :dirs per))
+        phantom-checks (for [{:keys [k history evs]} per] [k (phantoms test history evs)])
         checks (into {:live {:valid? live :quiesce quiesce}
-                      :phantoms (phantoms test history evs)}
+                      :phantoms (if (= [0] ks)
+                                  (second (first phantom-checks))
+                                  (assoc (into {} (for [[k r] phantom-checks] [(label k "") r]))
+                                         :valid? (checker/merge-valid (map (comp :valid? second) phantom-checks))))}
                      (for [check [:order :redelivery :identity :acked :silent-loss :skipped :retention :durability :halts :rejects]]
                        [check (let [by-dir (into {} (for [[d r] dirs] [d (r check)]))]
                                 (assoc by-dir :valid? (checker/merge-valid (map :valid? (vals by-dir)))))]))]
