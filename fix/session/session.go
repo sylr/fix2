@@ -602,6 +602,11 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 	}
 	s.st.NextSender++
 	*frames = append(*frames, pendingFrame{end: len(*buf), seq: h.seq, queued: h.sendingTime, probe: h.probe, admin: isAdmin([]byte(h.msgType))})
+	if s.cfg.MaxPendingAge > 0 && frames == &c.frames && len(c.frames) == 1 {
+		// The first message waiting: the timer is due when it is too old,
+		// not at its next deadline only.
+		s.armLocked(c)
+	}
 	_ = control
 	c.wakeWriter()
 	return h.seq, nil
