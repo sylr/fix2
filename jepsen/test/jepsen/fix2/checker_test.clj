@@ -283,6 +283,21 @@
                   (update "n1" conj (ev "n1-1" "store" :call "append" :phase "end" :seq 6))
                   (update "n1" into (started "n1-2" 6)))]
       (is (false? (valid (check evs) :durability)))))
+  (testing "a processed prefix synced, then reopened below"
+    (let [evs (-> (clean)
+                  (update "n1" into (concat [(processed "n1-1" 3)] (synced "n1-1" 5)))
+                  (update "n1" into (started "n1-2" 6)))
+          evs (update evs "n1" (fn [es] (mapv #(if (and (= "n1-2" (:inc %)) (= "open" (:call %))) (assoc % :target 2) %) es)))
+          res (check (assoc test-map :power-loss true) (history) evs)]
+      (is (false? (valid res :durability)))
+      (is (= :processed-prefix-forgotten (some :problem (-> res :durability (get "n1->n2") :forgotten))))))
+  (testing "a processed prefix committed, not synced, below after a power loss: valid; after a kill: forgotten"
+    (let [evs (-> (clean)
+                  (update "n1" conj (processed "n1-1" 3))
+                  (update "n1" into (started "n1-2" 6)))
+          evs (update evs "n1" (fn [es] (mapv #(if (and (= "n1-2" (:inc %)) (= "open" (:call %))) (assoc % :target 2) %) es)))]
+      (is (true? (valid (check (assoc test-map :power-loss true) (history) evs) :durability)))
+      (is (false? (valid (check test-map (history) evs) :durability)))))
   (testing "an Append an earlier process made, synced by a later one, forgotten after a power loss"
     (let [evs (-> (clean)
                   (update "n1" into (appended "n1-1" "O4" 6))           ; unsynced

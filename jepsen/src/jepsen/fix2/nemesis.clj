@@ -5,8 +5,9 @@
   (:require [jepsen.nemesis.combined :as nc]))
 
 (def faults
-  "The faults --nemesis takes."
-  #{:kill :pause :partition :packet})
+  "The faults --nemesis takes. power-loss is kill with the store on LazyFS,
+  what was not fsynced lost at each kill."
+  #{:kill :pause :partition :packet :power-loss})
 
 (def packet-behaviors
   "What the packet nemesis does to the traffic of the nodes it targets:
@@ -34,7 +35,8 @@
                      :partition {:targets [:one]}
                      :packet    {:targets [:one :all] :behaviors packet-behaviors}}
                     opts)
-        faults (:faults opts)]
+        faults (cond-> (:faults opts) (contains? (:faults opts) :power-loss) (conj :kill))
+        opts (assoc opts :faults faults)]
     (nc/compose-packages
       (cond-> []
         (faults :partition)                (conj (nc/partition-package opts))

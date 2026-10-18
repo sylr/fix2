@@ -124,6 +124,34 @@
                           :appended afront :durable dfront})))
       {:processes out :durable durable :appended appended})))
 
+(defn target-history
+  "Walks a node's processes in order, from its store events, for how far
+  it recorded processing what it received (SetNextTarget). A recorded
+  prefix is durable once a Sync that returned nil began after it was
+  committed, or, the one an Open loaded, once a Sync of that process
+  returned nil. Returns, for each process, its :open event and the
+  :committed and :durable frontiers (generation → highest prefix) of the
+  processes before it."
+  [evs]
+  (loop [incs (incarnations evs), committed {}, durable {}, out []]
+    (if-let [inc-evs (first incs)]
+      (let [open (first (filter (store-end? "open") inc-evs))
+            [c d] (reduce (fn [[c d snap] ev]
+                            (cond
+                              ((store-end? "set-next-target") ev)
+                              [(bump c [(:gen ev) (:target ev 0)]) d snap]
+                              (and (= "store" (:kind ev)) (= "sync" (:call ev)) (= "begin" (:phase ev)))
+                              [c d c]
+                              ((store-end? "sync") ev)
+                              [c (merge-with max d snap
+                                             (when open {(:gen open) (:target open 0)}))
+                               snap]
+                              :else [c d snap]))
+                          [(if open (bump committed [(:gen open) (:target open 0)]) committed) durable {}]
+                          inc-evs)]
+        (recur (rest incs) c d (conj out {:inc (:inc (first inc-evs)) :open open :committed committed :durable durable})))
+      out)))
+
 (defn- seen-before
   "For each of a's processes, generation → the highest MsgSeqNum b read
   before it started: b-ins and the processes' starts swept in time order.
@@ -313,6 +341,14 @@
                         :when (and open (<= (:next open 0) highest))]
                     {:inc (:inc p) :next-sender (:next open) :highest-before highest
                      :kept (get kept g 0) :seen (get seen g 0)})
+        ;; ...and so does how far a recorded processing what b sent: not
+        ;; below a durable prefix, nor, without power loss, a committed one.
+        prefix-forgotten (for [p (target-history a-evs)
+                               :let [open (:open p)
+                                     g (:gen open)
+                                     kept (get (if (:power-loss test) (:durable p) (:committed p)) g 0)]
+                               :when (and open (< (:target open 0) kept))]
+                           {:inc (:inc p) :problem :processed-prefix-forgotten :next-target (:target open) :kept kept})
 
         ;; 8. Halts: nothing stored after, no send begun after succeeding.
         halts (for [inc-evs (incarnations a-evs)
@@ -348,7 +384,8 @@
                      :owed (count owed) :lost-count (count lost) :lost (take 16 lost)
                      :unknown (take 16 (filter #(= :unknown (:excused %)) silent))})
      :skipped     {:valid? (empty? skipped-unfilled) :unfilled (take 16 skipped-unfilled)}
-     :durability  {:valid? (empty? forgotten) :forgotten (take 16 forgotten)}
+     :durability  (let [all (concat forgotten prefix-forgotten)]
+                    {:valid? (empty? all) :forgotten (take 16 all)})
      :halts       {:valid? (empty? halts) :problems (take 16 halts)}
      :rejects     {:valid? (empty? bad-rejects) :rejected (take 16 bad-rejects)}}))
 

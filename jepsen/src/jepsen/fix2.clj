@@ -26,10 +26,15 @@
   (when (not= 2 (count (:nodes opts)))
     (throw (ex-info "fix2 runs on two nodes: the initiator, then the acceptor" {:nodes (:nodes opts)})))
   (let [db  (db/db)
-        pkg (nemesis/package {:db db :faults (:nemesis opts) :interval (:nemesis-interval opts)})]
+        pkg (nemesis/package {:db db :faults (:nemesis opts) :interval (:nemesis-interval opts)})
+        power-loss? (contains? (:nemesis opts) :power-loss)]
     (merge tests/noop-test
            opts
            {:name      (str "fix2" (when (seq (:nemesis opts)) (str "-" (str/join "," (map name (sort (:nemesis opts)))))))
+            ;; The store on LazyFS, and the checkers told what a power loss
+            ;; may take.
+            :lazyfs     power-loss?
+            :power-loss power-loss?
             :os        os/noop
             ;; The interface named: jepsen.net shapes the first one `ip link`
             ;; lists, and Docker Desktop's kernel puts tunnel devices (tunl0,
@@ -66,7 +71,7 @@
     :default 1
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
-   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause, partition, packet."
+   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause, partition, packet, power-loss (kill, with the store on LazyFS losing what was not fsynced)."
     :default #{}
     :parse-fn (fn [s] (set (map keyword (remove str/blank? (str/split s #",")))))
     :validate [#(every? nemesis/faults %) (str "Must be among " (str/join ", " (map name (sort nemesis/faults))))]]
