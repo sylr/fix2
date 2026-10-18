@@ -487,6 +487,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 	s.mu.Unlock()
 	release()
 	c.handleFrame(frame)
+	s.notifyRejects()
 	reason := c.run()
 	s.log.LogAttrs(ctx, slog.LevelDebug, "connection ended", slog.Any("reason", reason))
 }

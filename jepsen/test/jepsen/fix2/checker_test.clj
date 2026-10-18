@@ -39,6 +39,11 @@
 
 (defn- received [inc id seq] (ev inc "in" :msgtype "D" :seq seq :clordid id :digest (digest id)))
 
+(defn- stale-received
+  "Received with its SendingTime ten minutes off."
+  [inc id seq]
+  (assoc (received inc id seq) :sendingtime "2023-11-14T22:00:00Z" :now "2023-11-14T22:10:00Z"))
+
 (defn- processed
   "B's store recording it processed everything below target."
   [inc target]
@@ -195,6 +200,49 @@
       (is (= :unknown (valid res :acked)) (pr-str (:acked res)))
       (is (= :unknown (valid res :silent-loss)))
       (is (true? (valid res :rejects)))))
+  (testing "rejected, the receiver saying it counted it: excused"
+    (let [evs (-> (clean) (remove-ev "n2" (delivery? "O1"))
+                  (update "n2" into [(rejected "n2-1" 2 "10") (ev "n2-1" "rejected" :seq 2 :rejectreason "10" :counted true)]))
+          res (check evs)]
+      (is (true? (valid res :acked)))
+      (is (true? (valid res :silent-loss)))
+      (is (true? (valid res :redelivery)))))
+  (testing "rejected, the receiver saying it did not count it, never delivered after: lost"
+    (let [evs (-> (clean) (remove-ev "n2" (delivery? "O1"))
+                  (update "n2" into [(rejected "n2-1" 2 "10") (ev "n2-1" "rejected" :seq 2 :rejectreason "10")]))]
+      (is (false? (valid (check evs) :acked)))
+      (is (false? (valid (check evs) :silent-loss)))))
+  (testing "rejected ahead of a gap, not counted, then in sequence with no word of it: unknown"
+    (let [evs (-> (clean) (remove-ev "n2" (delivery? "O1"))
+                  (update "n2" into [(rejected "n2-1" 2 "10") (ev "n2-1" "rejected" :seq 2 :rejectreason "10")
+                                     (rejected "n2-1" 2 "10") (processed "n2-1" 5)]))]
+      (is (= :unknown (valid (check evs) :acked)))
+      (is (= :unknown (valid (check evs) :silent-loss)))))
+  (testing "its SendingTime too far off, the receiver's process ending on it: unknown"
+    (let [evs (-> (clean) (remove-ev "n2" (delivery? "O1")) (update "n2" conj (stale-received "n2-1" "O1" 2)))]
+      (is (= :unknown (valid (check evs) :acked)))))
+  (testing "fresh as logged, the process ending on it, but stale by the clock before its last change: unknown"
+    (let [fresh (assoc (received "n2-1" "O1" 2) :sendingtime "2023-11-14T22:13:20Z" :now "2023-11-14T22:13:21Z")
+          evs (-> (clean) (remove-ev "n2" (delivery? "O1")))]
+      (is (= :unknown (valid (check (update evs "n2" into [(ev "n2-1" "clock" :was_ms 600000) fresh])) :acked)))
+      (testing "two changes, the last from 0"
+        (is (= :unknown (valid (check (update evs "n2" into [(ev "n2-1" "clock" :offset_ms 600000)
+                                                             (ev "n2-1" "clock" :was_ms 600000)
+                                                             (ev "n2-1" "clock" :offset_ms 3000)
+                                                             fresh]))
+                               :acked))))
+      (testing "fresh as logged, but logged after a pause: unknown"
+        (let [late (assoc (received "n2-1" "O1" 2) :t "2023-11-14T22:30:00Z"
+                          :sendingtime "2023-11-14T22:29:00Z" :now "2023-11-14T22:30:00Z")]
+          (is (= :unknown (valid (check (update evs "n2" conj late)) :acked)))))
+      (testing "no clock change: lost"
+        (is (false? (valid (check (update evs "n2" conj fresh)) :acked))))))
+  (testing "rejected, not counted, then received again and ignored, handled since: lost"
+    (let [evs (-> (clean) (remove-ev "n2" (delivery? "O1"))
+                  (update "n2" into [(stale-received "n2-1" "O1" 2) (ev "n2-1" "rejected" :seq 2 :rejectreason "10")
+                                     (stale-received "n2-1" "O1" 2) (received "n2-1" "O9" 99)]))]
+      (is (false? (valid (check evs) :acked)))
+      (is (false? (valid (check evs) :silent-loss)))))
   (testing "rejected for its SendingTime, the receiver never past it: lost"
     (let [evs (-> (clean) (remove-ev "n2" #(= "deliver" (:kind %))) (update "n2" conj (rejected "n2-1" 2 "10")))]
       (is (false? (valid (check evs) :acked)))))
@@ -241,16 +289,16 @@
     (let [res (check (assoc test-map :power-loss true) power-loss-history (power-lost true 5))]
       (is (false? (valid res :silent-loss)))
       (is (true? (valid res :durability)))))
-  (testing "seen past MaxLatency, processed past, no Reject written: unknown"
+  (testing "seen past MaxLatency, processed past, handled with no word of a Reject: lost"
     (let [stale (fn [es] (mapv #(if (and (= "in" (:kind %)) (= "O1" (:clordid %)))
                                   (assoc % :sendingtime "2026-10-18T10:00:00Z" :now "2026-10-18T10:05:00Z")
                                   %)
                                es))
           evs (-> (clean) (remove-ev "n2" (delivery? "O1")) (update "n2" stale) (update "n2" conj (processed "n2-1" 5)))
           res (check evs)]
-      (is (= :unknown (valid res :silent-loss)))
-      (is (= :unknown (valid res :acked)))
-      (is (= :unknown (valid res :redelivery)))
+      (is (false? (valid res :silent-loss)))
+      (is (false? (valid res :acked)))
+      (is (false? (valid res :redelivery)))
       (testing "but not processed past: lost"
         (is (false? (valid (check (-> (clean) (remove-ev "n2" #(= "deliver" (:kind %))) (update "n2" stale))) :silent-loss))))
       (testing "stale but delivered after all: definite"

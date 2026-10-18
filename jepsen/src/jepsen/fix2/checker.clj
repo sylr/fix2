@@ -217,14 +217,16 @@
         ;; later one, or asked its store to record a processed prefix past
         ;; it (a SetNextTarget begun: whether it was stored does not
         ;; matter). One b never processed past is not excused. One it did
-        ;; is by a recovery loss; by a Reject for its SendingTime or a
-        ;; SendingTime seen beyond MaxLatency with no Reject written, only
-        ;; :unknown: such a Reject consumes a message received in sequence
-        ;; but not one received ahead of a gap, which the log does not
-        ;; tell apart yet (J10).
+        ;; is by a recovery loss, or a Reject b's session says counted it;
+        ;; only :unknown by a rejection b's process may have ended before
+        ;; telling (see cut-short).
         recovery (recovery-losses a-evs b-evs)
         all-rejects (rejects a-evs b-evs)
-        rejected-for-time (set (map :key (filter sending-time-reject? all-rejects)))
+        ;; How many times a message was rejected for its SendingTime: as b
+        ;; wrote it, as a read it, whichever saw more.
+        times-rejected (merge-with max
+                                   (frequencies (for [r (rejects [] b-evs) :when (sending-time-reject? r)] (:key r)))
+                                   (frequencies (for [r (rejects a-evs []) :when (sending-time-reject? r)] (:key r))))
         processed (reduce (fn [m [g s]] (update m g (fnil max 0) s))
                           {}
                           (concat (for [ev b-evs
@@ -233,16 +235,44 @@
                                   (for [d deliveries] [(:gen d) (:seq d)])))
         processed-past? (fn [[g s]] (< s (get processed g 0)))
         max-latency-ms (* 1000 (:max-latency test 120))
-        stale (set (for [ev (filter (kind? "in") b-evs)
-                         :when (order-frame? ev)
-                         :let [st (instant (:sendingtime ev)) now (instant (:now ev))]
-                         :when (and st now (<= max-latency-ms (Math/abs (- (.toEpochMilli now) (.toEpochMilli st)))))]
-                     [(:gen ev) (:seq ev)]))
+        stale-at? (fn [ev ^java.time.Instant now]
+                    (let [st (instant (:sendingtime ev))]
+                      (and (order-frame? ev) st now
+                           (<= max-latency-ms (Math/abs (- (.toEpochMilli now) (.toEpochMilli st)))))))
+        ;; b's session tells (RejectObserver) of each Reject it sends, and
+        ;; whether it counted the message as received: one it did is never
+        ;; delivered. A message may be rejected more than once, ahead of a
+        ;; gap then in sequence.
+        notes (group-by (juxt :gen :seq) (filter (kind? "rejected") b-evs))
+        ;; A frame with its SendingTime too far off that b's process ended
+        ;; on, no word of it after: killed handling it, rejected or not, no
+        ;; Reject written perhaps. One followed by another frame was
+        ;; handled: rejected with word of it, or ignored (from a connection
+        ;; no longer current, after the peer's Logout). The session dates
+        ;; a frame before the observer does, once the frame before is
+        ;; handled: the process paused in between perhaps, the clock
+        ;; changed, more than once: stale by any offset the process had, at
+        ;; either end.
+        cut-short (set (for [inc-evs b-incs
+                             :let [[after [ev & before]] (split-with (complement (kind? "in")) (reverse inc-evs))]
+                             :when (and ev (:t ev) (:now ev))
+                             :let [hi (instant (:t ev))
+                                   lo (instant (:t (or (first (filter (kind? "in") before)) (last before) ev)))
+                                   offsets (into (hash-set 0 (- (.toEpochMilli (instant (:now ev))) (.toEpochMilli hi)))
+                                                 (mapcat (juxt #(:was_ms % 0) #(:offset_ms % 0)))
+                                                 (filter (kind? "clock") before))]
+                             :when (some (fn [o] (some #(stale-at? ev (.plusMillis ^java.time.Instant % (long o))) [lo hi])) offsets)
+                             :when (not-any? #(and ((kind? "rejected") %) (= [(:gen ev) (:seq ev)] [(:gen %) (:seq %)]))
+                                             after)]
+                         [(:gen ev) (:seq ev)]))
         excused (fn [[_ s :as k]]
                   (cond (recovery s)                     :lost
                         (not (processed-past? k))        nil
-                        (or (contains? rejected-for-time k)
-                            (contains? stale k))         :unknown))
+                        (some :counted (notes k))        :lost
+                        ;; A rejection with no word of it: b killed in
+                        ;; between, counted or not.
+                        (or (< (count (notes k)) (times-rejected k 0))
+                            (cut-short k))               :unknown))
 
         ;; 1. Order and duplicates, within each of b's processes.
         disorder (for [inc-evs b-incs

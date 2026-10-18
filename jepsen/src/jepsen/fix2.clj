@@ -48,6 +48,9 @@
             ;; A hung disk halts the session once a write passes
             ;; StoreTimeout: shortened in those runs, unless given.
             :store-timeout (if (and hang? (zero? (:store-timeout opts))) 2000 (:store-timeout opts))
+            ;; Clock skews of seconds against a MaxLatency of 5s, unless
+            ;; given; the checkers read the same.
+            :max-latency (or (:max-latency opts) (if (contains? faults :clock) 5 120))
             :os        os/noop
             ;; The interface named: jepsen.net shapes the first one `ip link`
             ;; lists, and Docker Desktop's kernel puts tunnel devices (tunl0,
@@ -84,6 +87,9 @@
     :default 1
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
+   [nil "--max-latency SECONDS" "The sessions' MaxLatency: 120, or 5 under clock."
+    :parse-fn parse-long
+    :validate [#(and % (pos? %)) "Must be a positive whole number of seconds"]]
    [nil "--store-timeout MS" "The sessions' StoreTimeout, their default if 0 (2000 under hang-disk)."
     :default 0
     :parse-fn parse-long

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/dictionary"
 )
 
 // Inbound describes a received message to a Handler. A message received
@@ -173,6 +174,28 @@ type Frame struct {
 type MessageObserver interface {
 	OnInbound(s *Session, f Frame)
 	OnOutbound(s *Session, f Frame)
+}
+
+// RejectObserver, implemented by a MessageObserver, is told of each Reject
+// (35=3) the session sends of its own accord, not those a Handler's error
+// asks for, and whether that rejection counted the message as received: one
+// counted is not delivered, nor asked for again. One not counted was not
+// consumed by it: received ahead of a gap, it is rejected again once handled
+// in sequence; a duplicate was counted before; an administrative message may
+// be counted later with no further word. OnRejected runs on the connection's
+// reader goroutine once the frame that carried the message is handled, under
+// the same constraints as OnInbound.
+type RejectObserver interface {
+	OnRejected(s *Session, r Rejected)
+}
+
+// Rejected is a message the session rejected.
+type Rejected struct {
+	// Seq is its MsgSeqNum, 0 if it had no valid one.
+	Seq, Generation uint64
+	Reason          dictionary.RejectReason
+	// Counted reports whether this rejection counted it as received.
+	Counted bool
 }
 
 // callbackKey marks a context passed to a Handler callback.

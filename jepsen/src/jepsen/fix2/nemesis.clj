@@ -15,7 +15,7 @@
   what was not fsynced lost at each kill; hang-disk stops LazyFS, every
   store I/O hanging until it resumes; disk-full fills the store's
   filesystem, a small one, then frees it."
-  #{:kill :pause :partition :packet :power-loss :hang-disk :disk-full})
+  #{:kill :pause :partition :packet :power-loss :hang-disk :disk-full :clock})
 
 (def packet-behaviors
   "What the packet nemesis does to the traffic of the nodes it targets:
@@ -80,6 +80,41 @@
      :nemesis         (disk-nemesis (:db opts))
      :perf            #{{:name "disk" :start #{:hang-disk :fill-disk} :stop #{:release-disk} :color "#C0A0E9"}}}))
 
+(def clock-offsets
+  "Offsets of a node's session clock, in ms, against a MaxLatency of 5s:
+  some within it, some beyond."
+  [-30000 -8000 -3000 3000 8000 30000])
+
+(defn- clock-nemesis
+  "Skews the nodes' session clocks (Config.Now) through their control API:
+  :bump-clock [node-spec offset-ms], :reset-clock puts all back at 0."
+  [db]
+  (reify
+    n/Reflection
+    (fs [_] #{:bump-clock :reset-clock})
+
+    n/Nemesis
+    (setup! [this test] this)
+    (invoke! [_ test op]
+      (case (:f op)
+        :bump-clock  (let [[spec offset] (:value op)
+                           nodes (nc/db-nodes test db spec)]
+                       (assoc op :value (into {} (for [node nodes]
+                                                   [node (client/set-clock! node offset)]))))
+        :reset-clock (assoc op :value (into {} (for [node (:nodes test)]
+                                                 [node (client/set-clock! node 0)])))))
+    (teardown! [_ test])))
+
+(defn- clock-package
+  [opts]
+  {:generator       (->> (gen/flip-flop (fn [_ _] {:type :info :f :bump-clock
+                                                    :value [(rand-nth [:one :all]) (rand-nth clock-offsets)]})
+                                        (gen/repeat {:type :info :f :reset-clock}))
+                         (gen/stagger (:interval opts nc/default-interval)))
+   :final-generator {:type :info :f :reset-clock}
+   :nemesis         (clock-nemesis (:db opts))
+   :perf            #{{:name "clock" :start #{:bump-clock} :stop #{:reset-clock} :color "#A0E9DB"}}})
+
 (defn package
   "The nemesis package for opts: :faults, a set of faults; :interval,
   mean seconds between nemesis operations; :db. The network's and disks'
@@ -100,4 +135,5 @@
         (faults :partition)                       (conj (nc/partition-package opts))
         (faults :packet)                          (conj (nc/packet-package opts))
         (some #{:hang-disk :disk-full} faults)    (conj (disk-package opts))
+        (faults :clock)                           (conj (clock-package opts))
         (some #{:kill :pause} faults)             (conj (nc/db-package opts))))))

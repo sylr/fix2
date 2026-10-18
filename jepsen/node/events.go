@@ -60,6 +60,13 @@ type Event struct {
 	// halt
 	Watchdog bool `json:"watchdog,omitempty"`
 
+	// rejected: counted as received, never to be delivered
+	Counted bool `json:"counted,omitempty"`
+
+	// clock: the session clock's offset from T, before and after
+	WasMS    int64 `json:"was_ms,omitempty"`
+	OffsetMS int64 `json:"offset_ms,omitempty"`
+
 	Err string `json:"err,omitempty"`
 }
 

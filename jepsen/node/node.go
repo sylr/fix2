@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -74,7 +75,8 @@ type Node struct {
 	ev   *Events
 	log  *slog.Logger
 
-	offset atomic.Int64 // Config.Now's offset from time.Now
+	offset  atomic.Int64 // Config.Now's offset from time.Now
+	clockMu sync.Mutex   // serializes SetClock
 
 	sess     *session.Session
 	run      func(context.Context) error
@@ -384,8 +386,14 @@ func (n *Node) Drain(timeout time.Duration) bool {
 	}
 }
 
-// SetClock sets Config.Now's offset.
-func (n *Node) SetClock(offset time.Duration) { n.offset.Store(int64(offset)) }
+// SetClock sets Config.Now's offset, logged first: a frame the session dated
+// with the old offset and the observer with the new one is logged after.
+func (n *Node) SetClock(offset time.Duration) {
+	n.clockMu.Lock()
+	defer n.clockMu.Unlock()
+	n.ev.Log(Event{Kind: "clock", WasMS: time.Duration(n.offset.Load()).Milliseconds(), OffsetMS: offset.Milliseconds()})
+	n.offset.Store(int64(offset))
+}
 
 // handler logs what the session hands the application.
 type handler struct {
@@ -453,4 +461,10 @@ func (o observer) OnInbound(_ *session.Session, f session.Frame) {
 
 func (o observer) OnOutbound(_ *session.Session, f session.Frame) {
 	o.n.ev.Log(frameEvent("out", f, o.n.now()))
+}
+
+// OnRejected logs a message the session rejected, and whether it counted it
+// as received, never to be delivered.
+func (o observer) OnRejected(_ *session.Session, r session.Rejected) {
+	o.n.ev.Log(Event{Kind: "rejected", Gen: r.Generation, Seq: r.Seq, RejectReason: strconv.Itoa(int(r.Reason)), Counted: r.Counted})
 }

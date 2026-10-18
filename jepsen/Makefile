@@ -43,8 +43,9 @@ test: node-binary
 unit:
 	$(COMPOSE) exec control lein test
 
-# verdicts prints each check's verdict of the last test, or of RESULTS.
-RESULTS ?= store/fix2/latest/results.edn
+# verdicts prints each check's verdict of the last test, or of RESULTS: the
+# store names a test's directory after its faults.
+RESULTS ?= $(shell ls -td store/fix2*/latest 2>/dev/null | head -1)/results.edn
 verdicts:
 	$(COMPOSE) exec control lein run -m jepsen.fix2.verdicts $(RESULTS)
 

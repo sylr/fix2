@@ -155,7 +155,8 @@
         :-heartbeat (str (:heartbeat test 1) "s")
         :-mutant (or (:mutant test) "")
         :-fromapp-delay (str (:fromapp-delay test 0) "ms")
-        :-store-timeout (str (:store-timeout test 0) "ms")))
+        :-store-timeout (str (:store-timeout test 0) "ms")
+        :-max-latency (str (:max-latency test 120) "s")))
     (cu/await-tcp-port http-port {:timeout 10000})))
 
 (defn kill!

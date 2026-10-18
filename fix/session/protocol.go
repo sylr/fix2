@@ -49,6 +49,22 @@ type recovery struct {
 	withheld bool
 }
 
+// notifyRejects tells a RejectObserver the messages rejected while the last
+// frame was handled, outside the lock.
+func (s *Session) notifyRejects() {
+	ro, ok := s.cfg.Observer.(RejectObserver)
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	notes := s.rejectNotes
+	s.rejectNotes = nil
+	s.mu.Unlock()
+	for _, r := range notes {
+		ro.OnRejected(s, r)
+	}
+}
+
 // handleFrame handles a frame the reader read.
 func (c *conn) handleFrame(frame []byte) {
 	s := c.s
@@ -1037,6 +1053,11 @@ func (s *Session) onRegularLocked(c *conn, m *fix.Message, frame []byte, in Inbo
 // markLocked queues the processing of received message seq, which needs no
 // delivery, so that the processed prefix moves past it in order.
 func (s *Session) markLocked(seq uint64) {
+	for i := range s.rejectNotes {
+		if r := &s.rejectNotes[i]; r.Seq == seq && r.Generation == s.st.Generation {
+			r.Counted = true
+		}
+	}
 	if !s.deliv.messagesAhead() {
 		// No message ahead of it to deliver: processed now. A Logon is,
 		// whether OnLogon ran yet or not: LastMsgSeqNumProcessed says so.
@@ -1245,6 +1266,14 @@ func (s *Session) rejectLocked(m *fix.Message, reason dictionary.RejectReason, t
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "not rejecting a message after our Logout",
 			s.msgTypeAttr(m), s.seqAttr(m), slog.Int("reason", int(reason)))
 		return
+	}
+	if _, ok := s.cfg.Observer.(RejectObserver); ok && !s.handlerRejecting {
+		// Counted if markLocked marks it before the frame is handled.
+		r := Rejected{Generation: s.st.Generation, Reason: reason}
+		if seq, err := fix.ParseInt(m.Get(tagMsgSeqNum)); err == nil && seq > 0 {
+			r.Seq = uint64(seq)
+		}
+		s.rejectNotes = append(s.rejectNotes, r)
 	}
 	fallback := rejectText(reason, "value withheld")
 	if m == s.partial {

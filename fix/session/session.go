@@ -164,6 +164,12 @@ type Session struct {
 	// Those held ahead of a gap, handled meanwhile, are listed after it.
 	rejected     []rejection
 	watchRejects int
+	// rejectNotes holds, for a RejectObserver, the messages rejected while
+	// a frame is handled, until the reader tells it (see notifyRejects).
+	rejectNotes []Rejected
+	// handlerRejecting is set while a Handler's error is answered: its
+	// Rejects are not told a RejectObserver.
+	handlerRejecting bool
 	// gapFilling is set while a GapFill moves the expected MsgSeqNum.
 	gapFilling bool
 	// draining is set while advanceLocked handles messages kept ahead.

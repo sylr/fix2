@@ -261,6 +261,7 @@ func (c *conn) run() error {
 			break
 		}
 		c.handleFrame(frame)
+		c.s.notifyRejects()
 	}
 	c.writers.Wait()
 	c.s.mu.Lock()

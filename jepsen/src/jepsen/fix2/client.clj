@@ -31,6 +31,12 @@
 
 (defn status [node] (request :get node "/status" nil 2000))
 
+(defn set-clock!
+  "Sets node's session clock offset, in ms."
+  [node offset-ms]
+  (let [r (request :post node "/clock" {:offset_ms offset-ms} 2000)]
+    (if (:http-error r) (:http-error r) offset-ms)))
+
 (defn- send!
   "Sends an order, and turns the node's answer into the op's completion."
   [op node]

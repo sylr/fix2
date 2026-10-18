@@ -368,6 +368,8 @@ func (d *delivery) deliver(ctx context.Context, it item) {
 	}
 	var rej *RejectError
 	var brej *BusinessRejectError
+	s.handlerRejecting = true
+	defer func() { s.handlerRejecting = false }()
 	switch {
 	case errors.As(err, &rej):
 		tag := rej.Tag
