@@ -158,9 +158,8 @@ type sbeClient struct {
 }
 
 // OnLogon sends the command's requests: each connection starts afresh,
-// its subscriptions gone with the last one.
+// its subscriptions gone with the last one. binancefix logs the logon.
 func (c *sbeClient) OnLogon(e binancefix.LogonEvent) {
-	c.log.LogAttrs(c.ctx, slog.LevelInfo, "logged on", slog.Uint64("epoch", e.Epoch), slog.String("uuid", e.UUID))
 	c.epoch, c.maintenance, c.resync = e.Epoch, false, false
 	c.subs = map[string]*sub{}
 	c.receipts = map[*binancefix.Receipt]string{}
