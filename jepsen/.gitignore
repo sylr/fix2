@@ -1,0 +1,5 @@
+/bin/
+/store/
+/target/
+/.lein-*
+/.nrepl-port

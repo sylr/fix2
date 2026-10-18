@@ -1,0 +1,32 @@
+# The Jepsen environment of docs/jepsen.md: a control node and two fix2
+# nodes, n1 the initiator and n2 the acceptor. The nodes run privileged, for
+# FUSE (LazyFS), iptables, tc and loop devices.
+name: fix2-jepsen
+
+services:
+  control:
+    build:
+      context: ..
+      dockerfile: docker/control/Dockerfile
+    hostname: control
+    volumes:
+      - secret:/secret
+      - ..:/jepsen
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on: [n1, n2]
+
+  n1: &node
+    build: ./node
+    image: fix2-jepsen-node
+    hostname: n1
+    privileged: true
+    volumes:
+      - secret:/secret:ro
+
+  n2:
+    <<: *node
+    hostname: n2
+
+volumes:
+  secret:

@@ -334,6 +334,7 @@ monotonic reading, so that a timer left on it shows.
 
     make -C jepsen images      # control and node images, built locally
     make -C jepsen up          # control, n1, n2
+    make -C jepsen check-env   # the node binary built, the environment checked
     make -C jepsen test NEMESIS=kill,partition TIME_LIMIT=300
     make -C jepsen web         # the results browser, on localhost:8080
     make -C jepsen down
@@ -346,8 +347,8 @@ Results go to `jepsen/store`, ignored by git.
 |---|---|---|
 | J0 | This document; Docker Desktop checked for FUSE, netem, iptables, loop devices and device-mapper targets; LazyFS 0.3.0 checked to lose SQLite's unsynced commits and keep its synced ones | yes |
 | J1 | `Config.Now`, with tests: SendingTime of messages, resends and GapFills written skewed, a resend's stored OrigSendingTime kept, `MaxLatency` against a skewed counterparty, a reset's `CreatedAt`, schedule windows opening and closing on the skewed clock, timers and retention ages unaffected | yes; each wall-clock read put back on `time.Now`, and each timer put on `Now`, fails a test; retention ages, which never read `Now`, have no test of their own |
-| J2 | `jepsen/node`: both roles, SQLite and `memstore`, the store wrapper, control API with capped workers, drain and barrier, event logs, mutants; tested in-process against a fix2 counterparty | |
-| J3 | `jepsen/docker`: control and node images (LazyFS prebuilt), compose file, setup of SSH keys, the binary built in a container; `jepsen/Makefile` | |
+| J2 | `jepsen/node`: both roles, SQLite and `memstore`, the store wrapper, control API with capped workers, drain and barrier, event logs, mutants; tested in-process against a fix2 counterparty | yes; two nodes over TCP on SQLite: orders both ways delivered once and in order, each synced before written; a restart carrying on; the HTTP API; the mutants; a store write held (send unresolved, then resolved; drain waiting for it) or in doubt (send `info`, session halted); the wrapper's optional interfaces; the digest across a resend. Not yet: a crash (J6) |
+| J3 | `jepsen/docker`: control and node images (LazyFS prebuilt), compose file, setup of SSH keys, the binary built in a container; `jepsen/Makefile` | yes; `make check-env` on Docker Desktop (arm64): SSH to both nodes, the binary and the nemeses' tools there, LazyFS mounted as `jepsen.lazyfs` mounts it, losing an unsynced file and keeping a synced one. `jepsen.lazyfs/install!` fetches and rebuilds LazyFS: the suite calls `mount!` alone |
 | J4 | The Clojure test: DB, client, generator, drain, barrier, log download; a baseline run without faults, live and green on checks 4 and 9 | |
 | J5 | Checks 1–9, their tests on histories that break them, the mutants caught; perf and timeline | |
 | J6 | Kill and pause nemeses | |
