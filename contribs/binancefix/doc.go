@@ -253,13 +253,14 @@
 //
 // Documented by Binance, and relied on: the endpoints and limits, the
 // templates, matching by symbol and template, snapshots on activation of
-// book streams, levels deleted by a missing size. To settle on the testnet
-// (MD3): whether trades get a snapshot, how a stream's data end after an
-// unsubscribe, which reject (MarketDataRequestReject or Reject) refuses a
-// malformed request, whether an unsubscribe needs more than its MDReqID
-// (the client sends its SubscriptionRequestType, MDReqID and MarketDepth),
-// whether unsubscribed streams count against MaxStreams, and that
-// required strings are never empty.
+// book streams, levels deleted by a missing size. Seen on production
+// (MD3, the README has the details): trades get no snapshot, book streams
+// do, depth update IDs follow the snapshot's, and required strings came
+// filled. Not settled: how a stream's data end after an unsubscribe, which
+// reject (MarketDataRequestReject or Reject) refuses a malformed request,
+// whether an unsubscribe needs more than its MDReqID (the client sends its
+// SubscriptionRequestType, MDReqID and MarketDepth), and whether
+// unsubscribed streams count against MaxStreams.
 //
 // # Settled on the testnet
 //

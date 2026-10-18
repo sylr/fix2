@@ -43,10 +43,12 @@
 //   - --trace logs every SBE message, decoded field by field, the Logon's
 //     API key and signature redacted.
 //
-// Still to check on the testnet (MD3): which streams get a snapshot on
-// activation (book streams do, as documented; trades are not expected
-// to), the form of an unsubscribe Binance takes, the 1000 streams per
-// connection, and the actions inferred side by side with the FIX path's.
+// Checked on production beside the FIX path (MD3, binancefix's README):
+// book streams get a snapshot, trades none; the inferred actions agree
+// with the FIX API's on every level the book holds, and the books with
+// the FIX path's within their snapshots' price ranges. A book is exact
+// within its initial snapshot's price range only: beyond it, a level
+// shows once it changes again, on either path.
 package main
 
 import (

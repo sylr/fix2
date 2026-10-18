@@ -118,7 +118,12 @@ With `--sbe` it uses Binance's FIX SBE API instead, through binancefix's
 market data sessions: the same commands and events, depth updates every
 20ms with their actions inferred from the book kept since the snapshot,
 and a reconnection, then new subscriptions, when a book loses updates (a
-stream is never subscribed twice on an SBE connection).
+stream is never subscribed twice on an SBE connection). Checked on
+production beside the FIX API (see binancefix's README): the same
+updates, the FIX API's actions on every level the book holds, the same
+books within their snapshots' price ranges. A book is exact within its initial
+snapshot's price range: beyond it, a level shows once it changes again,
+so `--levels` should cover the prices the book will reach.
 
 ### binancefix
 

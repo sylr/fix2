@@ -11,7 +11,8 @@ against the Spot testnet what the order entry client relies on where
 Binance's documentation is silent: all of it
 [settled](#settled-on-the-testnet) on 2026-10-17, the command
 [stays](#checking-against-the-testnet) as the regression check. Market
-data's assumptions are yet to settle (MD3).
+data's were [seen on production](#market-data) on 2026-10-18 (MD3), but
+for unsubscribing and the reject of a malformed request.
 
 FIX SBE is Binance's own protocol: its documentation is the specification
 here, out of the scope of fix2's strictness rule
@@ -204,12 +205,46 @@ its events waiting for the Handler are bounded by 16,384 messages and
 
 Documented by Binance, and relied on: the endpoints and limits, the
 templates, matching by symbol and template, snapshots on activation of
-book streams, a level without size deleted. **To settle on the testnet
-(MD3)**: whether trades get a snapshot, how long data flow after an
-unsubscribe, which reject refuses a malformed request, whether an
-unsubscribe needs more than its MDReqID (the client sends its type,
-MDReqID and MarketDepth), whether unsubscribed streams count against the
-1000, and that required strings are never empty.
+book streams, a level without size deleted.
+
+**Seen on production** (MD3: `binancemd --sbe` against
+`fix-md.binance.com:9002`, BTCUSDT, 2026-10-18, beside the FIX API):
+
+- The LogonAck is numbered 1 and says the vendored schema is not
+  deprecated. A LimitQuery as the first request: messages 1 of 2000 per
+  60 seconds (the query itself), subscriptions 0 of 1000.
+- Trades get **no snapshot**: the first data is a Trade, and one Trade
+  message may carry several trades, of one TransactTime.
+- A book ticker starts with a snapshot (MarketDataSnapshot, one level a
+  side), then BookTicker messages carrying the side that changed only:
+  several hundred a second.
+- Depth starts with a snapshot of the levels asked; the first update
+  follows its LastBookUpdateID, and update IDs ran on without a gap
+  (1847 updates over 38 seconds, often several at once).
+  Updates cover the whole book, beyond the levels asked.
+- Actions inferred from the local book, as binancemd does, agree with
+  those the FIX API sends for the same stream on every level the local
+  book holds; FIX says change where inference says new only for levels
+  beyond the snapshot's range (298 of 18,299 changes), Binance knowing
+  its whole book. Both lead to the same book.
+- Books kept over SBE and over FIX agree at the same update IDs (their
+  best five levels shown, 166 of 169 times, from 100-level snapshots;
+  every level within both snapshots' price ranges, from 20-level
+  snapshots) but for levels beyond either snapshot's
+  price range, which a book only learns of when they change again: a
+  limit of partial snapshots, the same over FIX.
+- Data still come between our Logout and Binance's ("Logout
+  acknowledgment."), usually within 0.4 s; under 20ms depth updates,
+  traced to a terminal, no acknowledgment came within the 2 s binancemd
+  waits, the updates going on.
+- Required strings were never empty, nor anything malformed: no
+  connection ended on validation.
+
+Not settled (binancemd never unsubscribes: it logs out, or reconnects):
+how long data flow after an unsubscribe, whether an unsubscribe needs
+more than its MDReqID (the client sends its type, MDReqID and
+MarketDepth), whether unsubscribed streams count against the 1000, and
+which reject refuses a malformed request.
 
 ## Settled on the testnet
 
