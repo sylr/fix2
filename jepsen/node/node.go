@@ -217,7 +217,17 @@ func newNode(opts Options, k int) (*Node, session.Config, error) {
 		n.log = opts.Logger.With("session", k)
 	}
 	n.status.Store(&Status{At: time.Now(), State: "starting"})
-	ev.Log(Event{Kind: "start", Role: opts.Role, Store: opts.Store, Mutant: opts.Mutants})
+	start := Event{Kind: "start", Role: opts.Role, Store: opts.Store, Mutant: opts.Mutants, Life: "mem:" + opts.Incarnation}
+	if path, ok := strings.CutPrefix(opts.Store, "sqlite:"); ok {
+		start.Life = "sqlite:" + storePath(path, k)
+	}
+	switch {
+	case opts.ResetOnLogon:
+		start.ResetMode = "logon"
+	case opts.ResetOnDisconnect:
+		start.ResetMode = "disconnect"
+	}
+	ev.Log(start)
 
 	var st store.Store
 	switch {
@@ -506,7 +516,7 @@ func (h *handler) FromApp(_ context.Context, _ *session.Session, m *fix.Message,
 		time.Sleep(d)
 	}
 	id := string(m.Get(tagClOrdID))
-	ev := Event{Kind: "deliver", Gen: in.Generation, Seq: in.Seq, ClOrdID: id, PossDup: in.PossDup, Digest: digest(m)}
+	ev := Event{Kind: "deliver", Gen: in.Generation, Seq: in.Seq, ClOrdID: id, PossDup: in.PossDup, Digest: digest(m), Received: &in.Received}
 	times := 1
 	if k := h.nApply.Add(1); k%10 == 0 {
 		switch {
@@ -527,6 +537,22 @@ func (h *handler) FromApp(_ context.Context, _ *session.Session, m *fix.Message,
 	}
 	n.mu.Unlock()
 	return nil
+}
+
+// FromAdmin logs a session message the session handled: a reset Logon's
+// Generation is the one it ends.
+func (h *handler) FromAdmin(_ context.Context, _ *session.Session, m *fix.Message, in session.Inbound) {
+	ev := Event{Kind: "admin", MsgType: string(m.MsgType()), Gen: in.Generation, Seq: in.Seq, PossDup: in.PossDup, Received: &in.Received}
+	switch ev.MsgType {
+	case "A":
+		ev.Reset = string(m.Get(tagResetSeqNumFlag)) == "Y"
+	case "4":
+		ev.GapFill = string(m.Get(tagGapFillFlag)) == "Y"
+		ev.NewSeqNo = uintField(m, tagNewSeqNo)
+	case "0", "1":
+		ev.TestReqID = string(m.Get(tagTestReqID))
+	}
+	h.n.ev.Log(ev)
 }
 
 func (h *handler) OnLogon(context.Context, *session.Session) {

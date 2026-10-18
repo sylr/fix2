@@ -87,7 +87,7 @@ func (l *loggedStore) Open(ctx context.Context) (store.State, error) {
 // mu: a Sync whose begin is logged after an Append's end has it below its
 // cutoff.
 func (l *loggedStore) Append(ctx context.Context, gen, seq uint64, raw []byte) error {
-	ev := Event{Kind: "store", Phase: "begin", Call: "append", Gen: gen, Seq: seq}
+	ev := Event{Kind: "store", Phase: "begin", Call: "append", Gen: gen, Seq: seq, Hash: hash(raw)}
 	if id := clOrdID(raw); id != "" {
 		ev.ClOrdID, ev.Digest = id, digestRaw(raw)
 	}
@@ -117,15 +117,43 @@ func (l *loggedStore) SetNextSender(ctx context.Context, gen, next uint64) error
 	})
 }
 
-// Range is a read: not logged.
+// Range logs the holes it reported, in runs: which messages a resend could
+// not find.
 func (l *loggedStore) Range(ctx context.Context, gen, begin, end uint64, fn func(seq uint64, raw []byte, hole store.Hole) error) error {
-	return l.inner.Range(ctx, gen, begin, end, fn)
+	ev := Event{Kind: "store", Call: "range", Phase: "begin", Gen: gen, Begin: begin, End: end}
+	l.ev.Log(ev)
+	var holes []HoleRun
+	err := l.inner.Range(ctx, gen, begin, end, func(seq uint64, raw []byte, hole store.Hole) error {
+		if hole != store.HoleNone {
+			if n := len(holes); n > 0 && holes[n-1].To+1 == seq && holes[n-1].Kind == hole.String() {
+				holes[n-1].To = seq
+			} else {
+				holes = append(holes, HoleRun{From: seq, To: seq, Kind: hole.String()})
+			}
+		}
+		return fn(seq, raw, hole)
+	})
+	ev.Phase, ev.Holes = "end", holes
+	if err != nil {
+		ev.Err = err.Error()
+	}
+	l.ev.Log(ev)
+	return err
 }
 
+// Reset logs the generation it started.
 func (l *loggedStore) Reset(ctx context.Context, expectGen uint64, createdAt time.Time, windowID string) error {
-	return l.call(Event{Call: "reset", Gen: expectGen}, func() error {
-		return l.inner.Reset(ctx, expectGen, createdAt, windowID)
-	})
+	ev := Event{Kind: "store", Call: "reset", Phase: "begin", Gen: expectGen}
+	l.ev.Log(ev)
+	err := l.inner.Reset(ctx, expectGen, createdAt, windowID)
+	ev.Phase = "end"
+	if err != nil {
+		ev.Err = err.Error()
+	} else {
+		ev.NewGen = expectGen + 1
+	}
+	l.ev.Log(ev)
+	return err
 }
 
 func (l *loggedStore) Close() error {

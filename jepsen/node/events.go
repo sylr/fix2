@@ -14,13 +14,17 @@ import (
 // Now, which a skew moves.
 type Event struct {
 	T    time.Time `json:"t"`
+	N    uint64    `json:"n"` // the event's place in its log, from 1: T may not rise with it
 	Inc  string    `json:"inc"`
 	Kind string    `json:"kind"`
 
-	// start
-	Role   string   `json:"role,omitempty"`
-	Store  string   `json:"store,omitempty"`
-	Mutant []string `json:"mutant,omitempty"`
+	// start: Life names the store's lifetime, which a SQLite file keeps
+	// across processes and a memstore ends with its process
+	Role      string   `json:"role,omitempty"`
+	Store     string   `json:"store,omitempty"`
+	Life      string   `json:"life,omitempty"`
+	ResetMode string   `json:"reset_mode,omitempty"` // "logon", "disconnect" or ""
+	Mutant    []string `json:"mutant,omitempty"`
 
 	// deliver, in, out, store, recovery-loss, logon, logout, send
 	Gen     uint64 `json:"gen,omitempty"`
@@ -29,7 +33,9 @@ type Event struct {
 	PossDup bool   `json:"possdup,omitempty"`
 	Digest  string `json:"digest,omitempty"`
 
-	// in, out
+	// in, out: Hash identifies the frame's bytes, of every message
+	Hash         string     `json:"hash,omitempty"`
+	TestReqID    string     `json:"testreqid,omitempty"`
 	Epoch        uint64     `json:"epoch,omitempty"`
 	MsgType      string     `json:"msgtype,omitempty"`
 	SendingTime  *time.Time `json:"sendingtime,omitempty"`
@@ -48,6 +54,13 @@ type Event struct {
 	UpTo   uint64 `json:"upto,omitempty"`
 	Cutoff uint64 `json:"cutoff,omitempty"` // Sync: the last Append of Gen completed when it began
 	Target uint64 `json:"target,omitempty"`
+	NewGen uint64 `json:"newgen,omitempty"` // Reset: the generation it started
+	// range: Begin to End, and the holes it reported, in runs
+	Holes []HoleRun `json:"holes,omitempty"`
+
+	// deliver, admin: when its last byte was read; admin, a session
+	// message the session handled (FromAdmin)
+	Received *time.Time `json:"received,omitempty"`
 
 	// recovery-loss: Gen its generation, Ours if our messages, else the
 	// counterparty's it reset past
@@ -72,12 +85,20 @@ type Event struct {
 	Err string `json:"err,omitempty"`
 }
 
+// HoleRun is a run of positions a Range reported holes of one kind.
+type HoleRun struct {
+	From uint64 `json:"from"`
+	To   uint64 `json:"to"`
+	Kind string `json:"kind"`
+}
+
 // Events appends events to a file of JSON lines, each with one write(2),
 // so a process killed loses none it logged.
 type Events struct {
 	mu  sync.Mutex
 	f   *os.File
 	inc string
+	n   uint64
 }
 
 // OpenEvents opens dir/name for appending, its events stamped inc.
@@ -92,17 +113,19 @@ func OpenEvents(dir, name, inc string) (*Events, error) {
 	return &Events{f: f, inc: inc}, nil
 }
 
-// Log writes e, stamped. A log that cannot be written ends the process: the
-// checkers would read a history with holes.
+// Log writes e, stamped, under the lock: its time and place rise with the
+// file's order. A log that cannot be written ends the process: the checkers
+// would read a history with holes.
 func (e *Events) Log(ev Event) {
-	ev.T, ev.Inc = time.Now(), e.inc
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.n++
+	ev.T, ev.N, ev.Inc = time.Now(), e.n, e.inc
 	b, err := json.Marshal(ev)
 	if err != nil {
 		panic(fmt.Sprintf("event log: %v", err))
 	}
 	b = append(b, '\n')
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if _, err := e.f.Write(b); err != nil {
 		panic(fmt.Sprintf("event log: %v", err))
 	}

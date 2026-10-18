@@ -117,3 +117,37 @@ func TestDigest(t *testing.T) {
 		t.Errorf("digest unchanged by another quantity: %q", other)
 	}
 }
+
+// Range logs the holes it reported, in runs.
+func TestWrapStore_RangeHoles(t *testing.T) {
+	dir := t.TempDir()
+	ev, err := OpenEvents(dir, "events-t.jsonl", "t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	w := wrapStore(memstore.New(), ev, false)
+	if _, err := w.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for seq := uint64(1); seq <= 6; seq++ {
+		if err := w.Append(ctx, 1, seq, []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.(store.Truncater).Truncate(ctx, 1, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Range(ctx, 1, 1, 6, func(uint64, []byte, store.Hole) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	var got []HoleRun
+	for _, e := range events(t, dir) {
+		if e.Call == "range" && e.Phase == "end" {
+			got = e.Holes
+		}
+	}
+	if len(got) != 1 || got[0].From != 1 || got[0].To != 3 || got[0].Kind != store.HoleRetention.String() {
+		t.Errorf("holes %+v, want 1 to 3 retention", got)
+	}
+}

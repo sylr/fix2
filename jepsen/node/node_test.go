@@ -487,3 +487,55 @@ func TestSessions(t *testing.T) {
 		t.Errorf("status of no such session: %v", resp)
 	}
 }
+
+// The events give the checkers of resets their evidence: a place in the log
+// rising from 1, every frame's hash, probes' TestReqIDs, the session
+// messages handled, the store's lifetime and reset mode, and the generation
+// a reset starts.
+func TestEvidence(t *testing.T) {
+	dir := t.TempDir()
+	acc := start(t, Options{Role: "acceptor", Store: "sqlite:" + filepath.Join(dir, "acc.db"),
+		Events: filepath.Join(dir, "acc"), Incarnation: "acc-1", ResetOnDisconnect: true})
+	ini := start(t, Options{Role: "initiator", Connect: acc.Addr().String(), Store: "memstore",
+		Events: filepath.Join(dir, "ini"), Incarnation: "ini-1"})
+	waitFor(t, "logged on", func() bool { return acc.Snapshot().LoggedOn && ini.Snapshot().LoggedOn })
+	sendAll(t, ini, []string{"E1"})
+	ini.stop()
+	waitFor(t, "reset on disconnect", func() bool {
+		for _, ev := range events(t, filepath.Join(dir, "acc")) {
+			if ev.Call == "reset" && ev.Phase == "end" && ev.NewGen == 2 {
+				return true
+			}
+		}
+		return false
+	})
+	acc.stop()
+	for _, side := range []string{"acc", "ini"} {
+		evs := events(t, filepath.Join(dir, side))
+		var probes, admins int
+		for i, ev := range evs {
+			if ev.N != uint64(i+1) {
+				t.Fatalf("%s: event %d has N %d", side, i, ev.N)
+			}
+			if (ev.Kind == "in" || ev.Kind == "out") && ev.Hash == "" {
+				t.Errorf("%s: frame without a hash: %+v", side, ev)
+			}
+			if ev.MsgType == "1" && ev.TestReqID != "" {
+				probes++
+			}
+			if ev.Kind == "admin" && ev.MsgType == "A" {
+				admins++
+			}
+		}
+		if probes == 0 || admins == 0 {
+			t.Errorf("%s: %d TestRequests with their ID, %d Logons handled", side, probes, admins)
+		}
+		start := evs[0]
+		switch {
+		case side == "acc" && (start.Life != "sqlite:"+filepath.Join(dir, "acc.db") || start.ResetMode != "disconnect"):
+			t.Errorf("acc start %+v", start)
+		case side == "ini" && (start.Life != "mem:ini-1" || start.ResetMode != ""):
+			t.Errorf("ini start %+v", start)
+		}
+	}
+}

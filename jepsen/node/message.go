@@ -20,6 +20,7 @@ const (
 	tagRefSeqNum       = 45
 	tagResetSeqNumFlag = 141
 	tagSendingTime     = 52
+	tagTestReqID       = 112
 	tagRejectReason    = 373
 
 	tagBusinessRejectReason = 380
@@ -79,9 +80,15 @@ func order(id string, now time.Time) *fix.Builder {
 		SetString(40, "1")
 }
 
+// hash identifies raw bytes, any message's.
+func hash(raw []byte) string {
+	h := sha256.Sum256(raw)
+	return hex.EncodeToString(h[:12])
+}
+
 // frameEvent describes a frame the session read or wrote.
 func frameEvent(kind string, f session.Frame, now time.Time) Event {
-	ev := Event{Kind: kind, Gen: f.Generation, Seq: f.Seq, Epoch: f.Epoch, Resend: f.Resend, Now: &now}
+	ev := Event{Kind: kind, Gen: f.Generation, Seq: f.Seq, Epoch: f.Epoch, Resend: f.Resend, Now: &now, Hash: hash(f.Raw)}
 	m, err := fix.Parse(f.Raw)
 	if err != nil {
 		ev.Err = err.Error()
@@ -106,7 +113,9 @@ func frameEvent(kind string, f session.Frame, now time.Time) Event {
 	case "j":
 		ev.RefSeqNum = uintField(&m, tagRefSeqNum)
 		ev.RejectReason = string(m.Get(tagBusinessRejectReason))
-	case "0", "1", "2", "5":
+	case "0", "1":
+		ev.TestReqID = string(m.Get(tagTestReqID))
+	case "2", "5":
 	default:
 		ev.ClOrdID = string(m.Get(tagClOrdID))
 		ev.Digest = digest(&m)
