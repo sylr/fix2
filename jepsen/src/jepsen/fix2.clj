@@ -27,14 +27,27 @@
     (throw (ex-info "fix2 runs on two nodes: the initiator, then the acceptor" {:nodes (:nodes opts)})))
   (let [db  (db/db)
         pkg (nemesis/package {:db db :faults (:nemesis opts) :interval (:nemesis-interval opts)})
-        power-loss? (contains? (:nemesis opts) :power-loss)]
+        faults (:nemesis opts)
+        power-loss? (contains? faults :power-loss)
+        hang? (contains? faults :hang-disk)
+        _ (when (and power-loss? hang?)
+            ;; A kill left pending on a hung disk would lose its power loss.
+            (throw (ex-info "power-loss and hang-disk do not combine yet" {:faults faults})))]
     (merge tests/noop-test
            opts
-           {:name      (str "fix2" (when (seq (:nemesis opts)) (str "-" (str/join "," (map name (sort (:nemesis opts)))))))
-            ;; The store on LazyFS, and the checkers told what a power loss
-            ;; may take.
-            :lazyfs     power-loss?
-            :power-loss power-loss?
+           {:name      (str "fix2" (when (seq faults) (str "-" (str/join "," (map name (sort faults))))))
+            ;; The store on LazyFS, for a power loss or a hung disk; the
+            ;; checkers told what a power loss may take, and that a disk
+            ;; fault may halt a session.
+            ;; :nemesis holds the nemesis itself: the faults go here.
+            :faults      faults
+            :lazyfs      (or power-loss? hang?)
+            :power-loss  power-loss?
+            :disk-full   (contains? faults :disk-full)
+            :disk-faults (boolean (some #{:hang-disk :disk-full} faults))
+            ;; A hung disk halts the session once a write passes
+            ;; StoreTimeout: shortened in those runs, unless given.
+            :store-timeout (if (and hang? (zero? (:store-timeout opts))) 2000 (:store-timeout opts))
             :os        os/noop
             ;; The interface named: jepsen.net shapes the first one `ip link`
             ;; lists, and Docker Desktop's kernel puts tunnel devices (tunl0,
@@ -71,7 +84,11 @@
     :default 1
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive integer"]]
-   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause, partition, packet, power-loss (kill, with the store on LazyFS losing what was not fsynced)."
+   [nil "--store-timeout MS" "The sessions' StoreTimeout, their default if 0 (2000 under hang-disk)."
+    :default 0
+    :parse-fn parse-long
+    :validate [#(and % (not (neg? %))) "Must be a whole number of milliseconds, not negative"]]
+   [nil "--nemesis FAULTS" "Faults, comma-separated: kill, pause, partition, packet, power-loss (kill, with the store on LazyFS losing what was not fsynced), hang-disk (LazyFS stopped), disk-full (the store's small filesystem filled)."
     :default #{}
     :parse-fn (fn [s] (set (map keyword (remove str/blank? (str/split s #",")))))
     :validate [#(every? nemesis/faults %) (str "Must be among " (str/join ", " (map name (sort nemesis/faults))))]]

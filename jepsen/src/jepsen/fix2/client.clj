@@ -65,20 +65,50 @@
   [node]
   (true? (:drained (request :post node "/drain" {:timeout_ms 10000} 15000))))
 
+(defn- await-logged-on
+  "Polls the nodes until each session is logged on, or ms pass."
+  [nodes ms]
+  (let [deadline (+ (System/currentTimeMillis) ms)]
+    (loop []
+      (when (and (not-every? #(:logged_on (status %)) nodes)
+                 (< (System/currentTimeMillis) deadline))
+        (Thread/sleep 200)
+        (recur)))))
+
+(defn- barrier!
+  "Sends node's marker, again while it fails outright (not logged on yet),
+  for up to 30s."
+  [node]
+  (let [deadline (+ (System/currentTimeMillis) 30000)]
+    (loop []
+      (let [m (request :post node "/barrier" {:timeout_ms 10000} 15000)]
+        (if (and (= "fail" (:type m)) (< (System/currentTimeMillis) deadline))
+          (do (Thread/sleep 500) (recur))
+          m)))))
+
 (defn- quiesce!
   "Drains both nodes, restarting one whose sends do not return, sends a
   marker each way, and waits for each to be delivered: every message sent
   before a marker is then delivered or skipped."
   [test op]
   (let [nodes     (:nodes test)
+        ;; A halted session neither sends nor connects again: restarting
+        ;; its process is the documented reconciliation.
+        ;; Or whose disk was faulted: a store in doubt does not always
+        ;; halt its session (docs/jepsen.md, "Found while planning").
+        halted    (if (:disk-faults test) nodes (filter #(seq (:err (status %))) nodes))
+        _         (when (seq halted)
+                    (warn "Restarting halted or disk-faulted nodes:" halted)
+                    (c/on-nodes test halted (fn [test node] (db/kill! (dissoc test :power-loss) node) (db/start! test node))))
         stuck     (remove drain! nodes)
         _         (when (seq stuck)
                     (warn "Restarting nodes whose sends did not return:" stuck)
                     (c/on-nodes test stuck (fn [test node] (db/kill! test node) (db/start! test node))))
         undrained (remove drain! stuck)
+        ;; Restarted, the sessions log on again before a marker can go.
+        _         (when (or (seq halted) (seq stuck)) (await-logged-on nodes 30000))
         markers   (when (empty? undrained)
-                    (into {} (for [n nodes]
-                               [n (request :post n "/barrier" {:timeout_ms 10000} 15000)])))
+                    (into {} (for [n nodes] [n (barrier! n)])))
         ids       (into {} (for [[n m] markers] [n (:id m)]))
         live?     (and (empty? undrained)
                        (every? :id (vals markers))
@@ -86,7 +116,7 @@
                                              (* 1000 (:quiesce-timeout test)))))]
     (assoc op
            :type  (if live? :ok :fail)
-           :value {:restarted (vec stuck) :markers ids}
+           :value {:halted (vec halted) :restarted (vec stuck) :markers ids}
            :error (cond (seq undrained) [:not-drained undrained]
                         (not live?)     :markers-not-delivered))))
 

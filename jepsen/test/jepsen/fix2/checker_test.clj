@@ -334,6 +334,22 @@
     (is (false? (valid (check (assoc test-map :disk-faults true) (history)
                               (update (clean) "n1" into (cons (ev "n1-1" "halt" :err "store") (appended "n1-1" "O7" 9))))
                        :halts))))
+  (testing "a Logon written after a halt"
+    (is (false? (valid (check (assoc test-map :disk-faults true) (history)
+                              (update (clean) "n1" into [(ev "n1-1" "halt" :err "store") (ev "n1-1" "out" :msgtype "A" :seq 9)]))
+                       :halts))))
+  (testing "a store write hung past 1.5 StoreTimeout without a halt"
+    (let [hung (fn [halt-after-ms]
+                 (let [b (ev "n1-1" "store" :call "append" :phase "begin" :seq 9 :clordid "O9" :digest "d-O9")
+                       at (fn [ms] (str (.plusMillis (java.time.Instant/parse (:t b)) ms)))]
+                   (update (clean) "n1" into
+                           (concat [b]
+                                   (when halt-after-ms [(assoc (ev "n1-1" "halt" :err "watchdog" :watchdog true) :t (at halt-after-ms))])
+                                   [(assoc (ev "n1-1" "store" :call "append" :phase "end" :seq 9 :err "timeout") :t (at 10000))]))))
+          t (assoc test-map :disk-faults true :store-timeout 2000)]
+      (is (false? (valid (check t (history) (hung nil)) :halts)))
+      (is (false? (valid (check t (history) (hung 6000)) :halts)))
+      (is (true? (valid (check t (history) (hung 3100)) :halts)))))
   (testing "a halt, nothing after it, with disk faults: valid"
     (is (true? (valid (check (assoc test-map :disk-faults true) (history)
                              (update (clean) "n1" conj (ev "n1-1" "halt" :err "store")))

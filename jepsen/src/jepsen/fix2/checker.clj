@@ -363,8 +363,32 @@
                                 {:problem :appended-after-halt :seq (:seq ev)})
                               (for [ev after
                                     :when (and ((kind? "send") ev) (= "end" (:phase ev)) (= "ok" (:type ev)) (began (:clordid ev)))]
-                                {:problem :sent-after-halt :clordid (:clordid ev)}))]
+                                {:problem :sent-after-halt :clordid (:clordid ev)})
+                              (for [ev after :when (and ((kind? "out") ev) (= "A" (:msgtype ev)))]
+                                {:problem :logon-after-halt :seq (:seq ev)}))]
                 (assoc problem :inc (:inc halt)))
+        ;; ...and a store write under the session's lock still running past
+        ;; 1.5 StoreTimeout halts it by then (the halt event comes from a
+        ;; watcher polling every 100ms: 300ms more allowed).
+        store-timeout-ms (let [st (:store-timeout test 0)] (if (pos? st) st 30000))
+        unhalted (for [inc-evs (incarnations a-evs)
+                       :let [v (vec inc-evs)
+                             halt (some #(when ((kind? "halt") %) %) v)
+                             last-t (instant (:t (peek v)))
+                             limit (long (+ (* 1.5 store-timeout-ms) 300))]
+                       [i ev] (map-indexed vector v)
+                       :when (and (= "store" (:kind ev)) (= "begin" (:phase ev))
+                                  (#{"append" "set-next-target" "set-next-sender" "reset" "truncate"} (:call ev)))
+                       :let [began (instant (:t ev))
+                             end (some #(when (and (= "store" (:kind %)) (= "end" (:phase %)) (= (:call ev) (:call %))) %)
+                                       (subvec v (inc i)))
+                             ended (if end (instant (:t end)) last-t)
+                             ms (- (.toEpochMilli ended) (.toEpochMilli began))]
+                       ;; Hung past the limit, its process alive that long.
+                       :when (< limit ms)
+                       :when (or (nil? halt)
+                                 (< limit (- (.toEpochMilli (instant (:t halt))) (.toEpochMilli began))))]
+                   {:inc (:inc ev) :problem :not-halted-past-store-timeout :call (:call ev) :seq (:seq ev) :ran-ms ms})
 
         ;; Rejects of valid orders, but for their SendingTime.
         bad-rejects (for [r all-rejects
@@ -386,7 +410,8 @@
      :skipped     {:valid? (empty? skipped-unfilled) :unfilled (take 16 skipped-unfilled)}
      :durability  (let [all (concat forgotten prefix-forgotten)]
                     {:valid? (empty? all) :forgotten (take 16 all)})
-     :halts       {:valid? (empty? halts) :problems (take 16 halts)}
+     :halts       (let [all (concat halts unhalted)]
+                    {:valid? (empty? all) :problems (take 16 all)})
      :rejects     {:valid? (empty? bad-rejects) :rejected (take 16 bad-rejects)}}))
 
 ;; Both directions

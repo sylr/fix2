@@ -2,7 +2,7 @@
   "Runs fix2-jepsen-node on the nodes: the first node the initiator, the
   second the acceptor."
   (:require [clojure.string :as str]
-            [clojure.tools.logging :refer [info]]
+            [clojure.tools.logging :refer [info warn]]
             [jepsen [control :as c]
                     [db :as db]
                     [lazyfs :as lazyfs]]
@@ -27,6 +27,56 @@
   files created, renamed or removed meanwhile, which reach its backing
   directory at once: a power loss losing those is not simulated."
   (lazyfs/lazyfs {:dir data-dir :cache-size "0.5GB"}))
+
+(def disk-image "A small filesystem for the store, to fill." "/var/lib/fix2/disk.img")
+
+(def disk-size "Its size." "64M")
+
+(defn- disk-dir
+  "Where the small filesystem is mounted: the store's directory, or
+  LazyFS's backing directory when the store is on LazyFS."
+  [test]
+  (if (:lazyfs test) (:data-dir lazy) data-dir))
+
+(def filler "Fills the small filesystem." "filler")
+
+(defn mount-disk!
+  "Mounts a fresh small ext4 filesystem where the store goes."
+  [test]
+  (c/su
+    (c/exec :mkdir :-p (disk-dir test))
+    (c/exec :fallocate :-l disk-size disk-image)
+    ;; No blocks reserved: the node runs as root, which could use them.
+    (c/exec :mkfs.ext4 :-q :-F :-m 0 disk-image)
+    (c/exec :mount :-o :loop disk-image (disk-dir test))))
+
+(defn umount-disk!
+  []
+  (c/su
+    (doseq [d [(:data-dir lazy) data-dir]]
+      (c/exec :sh :-c (str "! mountpoint -q " d " || umount -l " d)))
+    (c/exec :rm :-f disk-image)))
+
+(defn fill-disk!
+  "Fills the small filesystem, and checks nothing is left."
+  []
+  (c/su
+    (let [dir (if (cu/exists? (str (:data-dir lazy))) (:data-dir lazy) data-dir)
+          avail #(parse-long (str/trim (c/exec :sh :-c (str "df --output=avail -B1 " dir " | tail -1"))))]
+      ;; All but a MiB at once (ext4 needs room for the file's own
+      ;; extents), then the rest written until the disk says it is full.
+      (c/exec :fallocate :-l (max 0 (- (avail) 1048576)) (str dir "/" filler))
+      (c/exec :sh :-c (str "dd if=/dev/zero of=" dir "/" filler "2 bs=4096 2>/dev/null; true"))
+      (let [left (avail)]
+        (when (< 65536 left)
+          (throw (ex-info "the store's filesystem is not full" {:dir dir :available left})))
+        :filled))))
+
+(defn free-disk!
+  []
+  (c/su (c/exec :rm :-f (str (:data-dir lazy) "/" filler) (str data-dir "/" filler)
+                (str (:data-dir lazy) "/" filler "2") (str data-dir "/" filler "2")))
+  :freed)
 
 (defn- caches-cleared
   "How many times LazyFS's log says it cleared its cache."
@@ -63,6 +113,22 @@
 
 (declare start-new!)
 
+(def pending-kills
+  "Nodes killed while their disk hung, their process to die once released."
+  (atom #{}))
+
+(declare kill!)
+
+(defn complete-kill!
+  "Once node's disk is released: waits for a pending kill's process to die,
+  then starts the node again. True if one was pending."
+  [test node]
+  (when (contains? @pending-kills node)
+    (kill! test node)
+    (swap! pending-kills disj node)
+    (start-new! test node)
+    true))
+
 (defn start!
   "Starts the node, with a new incarnation, unless it is running: the
   nemesis starts all nodes, those it did not kill too."
@@ -88,7 +154,8 @@
         :-incarnation incarnation
         :-heartbeat (str (:heartbeat test 1) "s")
         :-mutant (or (:mutant test) "")
-        :-fromapp-delay (str (:fromapp-delay test 0) "ms")))
+        :-fromapp-delay (str (:fromapp-delay test 0) "ms")
+        :-store-timeout (str (:store-timeout test 0) "ms")))
     (cu/await-tcp-port http-port {:timeout 10000})))
 
 (defn kill!
@@ -96,15 +163,22 @@
   start! would find it running. On LazyFS, what the store did not fsync is
   then lost: a power loss."
   [test node]
-  (c/su
-    (cu/grepkill! :kill "fix2-jepsen-node")
-    (loop [i 0]
-      (when (cu/daemon-running? pid-file)
-        (if (< i 100)
-          (do (Thread/sleep 100) (recur (inc i)))
-          (throw (ex-info "fix2-jepsen-node survived SIGKILL" {:node node}))))))
-  (when (:lazyfs test)
-    (lose-unfsynced-writes! node)))
+  (let [dead? (c/su
+                (cu/grepkill! :kill "fix2-jepsen-node")
+                (loop [i 0]
+                  (cond (not (cu/daemon-running? pid-file)) true
+                        (< i 100) (do (Thread/sleep 100) (recur (inc i)))
+                        ;; Waiting on a stopped LazyFS, it dies once the
+                        ;; disk is released.
+                        (contains? (:faults test) :hang-disk) false
+                        :else (throw (ex-info "fix2-jepsen-node survived SIGKILL" {:node node})))))]
+    (cond
+      (not dead?) (do (warn node "killed while its disk hangs: dies once released")
+                      (swap! pending-kills conj node)
+                      :kill-pending)
+      ;; Writes are lost under a dead process only.
+      (:power-loss test) (do (lose-unfsynced-writes! node) :killed)
+      :else :killed)))
 
 (defrecord DB []
   db/DB
@@ -113,18 +187,23 @@
       (c/exec :mkdir :-p dir data-dir events-dir)
       (c/upload local-bin bin)
       (c/exec :chmod :+x bin))
+    (when (:disk-full test)
+      (mount-disk! test))
     (when (:lazyfs test)
       (lazyfs/mount! lazy))
     (start! test node))
 
   (teardown! [this test node]
-    (kill! (dissoc test :lazyfs) node)
-    (when (lazyfs/mounted? lazy) ; by this test or one before
-      (lazyfs/umount! lazy))
+    (kill! (dissoc test :power-loss) node)
+    (c/su (cu/grepkill! :cont "lazyfs")) ; a hung disk left stopped
+    ;; LazyFS, then the small filesystem, which may be its backing
+    ;; directory: jepsen.lazyfs/umount! would remove that while mounted.
+    (c/su (c/exec :sh :-c (str "! mountpoint -q " data-dir " || fusermount -uz " data-dir)))
+    (umount-disk!)
     (c/su (c/exec :rm :-rf dir "/var/lib/fix2")))
 
   db/Kill
-  (kill! [this test node] (kill! test node) :killed)
+  (kill! [this test node] (kill! test node))
   (start! [this test node] (start! test node) :started)
 
   db/Pause
