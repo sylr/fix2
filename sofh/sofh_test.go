@@ -409,15 +409,36 @@ func (r *cycleReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// frameReader repeats data, a frame, a Read never going past its end: each
+// Next reads.
+type frameReader struct {
+	data []byte
+	off  int
+}
+
+func (r *frameReader) Read(p []byte) (int, error) {
+	n := copy(p, r.data[r.off:])
+	r.off = (r.off + n) % len(r.data)
+	return n, nil
+}
+
 func TestReader_DoesNotAllocate(t *testing.T) {
-	rd := NewReader(&cycleReader{data: unhex(t, negotiate)}, ReaderOptions{})
-	allocs := testing.AllocsPerRun(1000, func() {
-		if _, _, err := rd.Next(); err != nil {
-			t.Fatal(err)
+	raw := unhex(t, negotiate)
+	for name, r := range map[string]io.Reader{
+		// Many frames a Read: AllocsPerRun's average would hide an
+		// allocation of each Read.
+		"buffered":  &cycleReader{data: raw},
+		"read each": &frameReader{data: raw},
+	} {
+		rd := NewReader(r, ReaderOptions{})
+		allocs := testing.AllocsPerRun(1000, func() {
+			if _, _, err := rd.Next(); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("%s: Next: %v allocs, want 0", name, allocs)
 		}
-	})
-	if allocs != 0 {
-		t.Errorf("Next: %v allocs, want 0", allocs)
 	}
 }
 

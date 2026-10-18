@@ -1164,14 +1164,12 @@ func mend(d *dictionary.Dict, m *fix.Message, tag int, v []byte) (*fix.Message, 
 // TolerateEmptyRequiredGroups. An undefined tag is reason 0 with
 // RejectUndefinedTagAsInvalidTagNumber.
 func (s *Session) validateWith(d *dictionary.Dict, m *fix.Message) *dictionary.ValidationError {
-	checks := dictionary.CheckAll &^ s.cfg.TolerateValidationFailures
-	if s.cfg.TolerateFinerTimestamps {
-		checks &^= dictionary.CheckTimestampPrecision
+	err := d.ValidateWith(m, s.validationChecks())
+	if err == nil {
+		return nil
 	}
-	if s.cfg.TolerateEmptyRequiredGroups {
-		checks &^= dictionary.CheckEmptyRequiredGroups
-	}
-	err := d.ValidateWith(m, checks)
+	// Declared past the nil check: given to errors.As, ve is allocated where
+	// it is declared, which every valid message would pay.
 	var ve *dictionary.ValidationError
 	if errors.As(err, &ve) {
 		if errors.Is(ve, dictionary.ErrUnknownMsgType) {
@@ -1186,10 +1184,20 @@ func (s *Session) validateWith(d *dictionary.Dict, m *fix.Message) *dictionary.V
 		}
 		return ve
 	}
-	if err != nil {
-		return &dictionary.ValidationError{Err: err, Reason: dictionary.ReasonOther, Msg: err.Error()}
+	return &dictionary.ValidationError{Err: err, Reason: dictionary.ReasonOther, Msg: err.Error()}
+}
+
+// validationChecks returns the dictionary checks of a received message: all
+// but those tolerated.
+func (s *Session) validationChecks() dictionary.Checks {
+	checks := dictionary.CheckAll &^ s.cfg.TolerateValidationFailures
+	if s.cfg.TolerateFinerTimestamps {
+		checks &^= dictionary.CheckTimestampPrecision
 	}
-	return nil
+	if s.cfg.TolerateEmptyRequiredGroups {
+		checks &^= dictionary.CheckEmptyRequiredGroups
+	}
+	return checks
 }
 
 // rejectValidationLocked rejects m for verr. A Reject or BusinessMessageReject

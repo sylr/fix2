@@ -165,8 +165,13 @@ func (r *Reader) fill(n int) error {
 // isTimeout reports whether err reports a timeout: a deadline passed, the
 // stream still usable once it is moved (net.Conn).
 func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Declared past the nil check: given to errors.As, t is allocated where
+	// it is declared, which every read without an error would pay.
 	var t interface{ Timeout() bool }
-	return err != nil && errors.As(err, &t) && t.Timeout()
+	return errors.As(err, &t) && t.Timeout()
 }
 
 // unexpected turns io.EOF in the middle of a frame into io.ErrUnexpectedEOF.

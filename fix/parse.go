@@ -55,7 +55,11 @@ type ParseOptions struct {
 // are an ErrBodyLenMismatch, FIX ending a message with that field. A tag
 // number must be positive and without leading zeros (see ParseOptions).
 func Parse(data []byte) (Message, error) {
-	return ParseOptions{}.Parse(data)
+	// Not ParseOptions{}.Parse(data): its Message, returned by value, would
+	// be copied once more.
+	var msg Message
+	err := parseInto(&msg, data, defaultProfile.kinds, ParseOptions{})
+	return msg, err
 }
 
 // Parse parses data as Parse does, with the departures o enables.
