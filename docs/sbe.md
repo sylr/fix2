@@ -6,10 +6,10 @@ Encoding schema: [SBE 1.0](https://www.fixtrading.org/wp-content/uploads/downloa
 below (§) are its own. FIXP's session messages are its first user
 ([docs/fixp.md](fixp.md)), venues' application schemas the next.
 
-    fix2gen sbe -schema <xml-path> -pkg <package-name> [-out <dir>]
-        [-tolerate-foreign-metadata] [-tolerate-undeclared-primitive-types]
-        [-tolerate-group-redefinitions] [-tolerate-field-redefinitions]
-        [-tolerate-unfilled-counts] [-assume-same-encodings]
+    fix2gen sbe --schema <xml-path> --pkg <package-name> [--out <dir>]
+        [--tolerate-foreign-metadata] [--tolerate-undeclared-primitive-types]
+        [--tolerate-group-redefinitions] [--tolerate-field-redefinitions]
+        [--tolerate-unfilled-counts] [--assume-same-encodings]
 
 By default it follows SBE 1.0 strictly. Six flags, off by default, each
 change what it accepts or what the decoders it generates do, and are
@@ -17,12 +17,12 @@ named in the generated package's doc comment:
 
 | Flag | Does | Kind |
 |---|---|---|
-| `-tolerate-foreign-metadata` | loads a schema holding elements and attributes of other namespaces, and ignores them (see [Schemas](#schemas)) | a toleration: sbe.xsd, normative, allows none |
-| `-tolerate-undeclared-primitive-types` | resolves a field's `type` naming a primitive, such as `uint32`, that no encoding is named, as that primitive (see [Schemas](#schemas)) | a toleration: a field's type names an encoding of `<types>` (§6.7, sbe.xsd) |
-| `-tolerate-group-redefinitions` | loads a schema where a group's name or id stands for different groups, and generates a type for each (see [Generated code](#generated-code)) | a toleration: a group's name and id identify one group throughout a schema (§6.8, §6.9) |
-| `-tolerate-field-redefinitions` | loads a schema where a field's name or id stands for fields of different ids, names or encodings, `<data>` included (see [Schemas](#schemas)) | a toleration: a field's name and id identify one field, of one encoding, throughout a schema (§6.7, §6.9) |
-| `-assume-same-encodings` | decoders skip a newer version's groups and data, which the header's and dimensions' counts tell of, by the schema's `groupSizeEncoding` and data length (see [Decoding](#decoding)) | an assumption SBE does not guarantee: a newer version encoding them otherwise is misread |
-| `-tolerate-unfilled-counts` | decoders take a header's or dimension's `numGroups` or `numVarDataFields` of 0, where the received version holds groups or data, for a count left unfilled, as Real Logic's encoders leave them, rather than `ErrMalformed` (see [Decoding](#decoding)) | a toleration: such counts contradict the message |
+| `--tolerate-foreign-metadata` | loads a schema holding elements and attributes of other namespaces, and ignores them (see [Schemas](#schemas)) | a toleration: sbe.xsd, normative, allows none |
+| `--tolerate-undeclared-primitive-types` | resolves a field's `type` naming a primitive, such as `uint32`, that no encoding is named, as that primitive (see [Schemas](#schemas)) | a toleration: a field's type names an encoding of `<types>` (§6.7, sbe.xsd) |
+| `--tolerate-group-redefinitions` | loads a schema where a group's name or id stands for different groups, and generates a type for each (see [Generated code](#generated-code)) | a toleration: a group's name and id identify one group throughout a schema (§6.8, §6.9) |
+| `--tolerate-field-redefinitions` | loads a schema where a field's name or id stands for fields of different ids, names or encodings, `<data>` included (see [Schemas](#schemas)) | a toleration: a field's name and id identify one field, of one encoding, throughout a schema (§6.7, §6.9) |
+| `--assume-same-encodings` | decoders skip a newer version's groups and data, which the header's and dimensions' counts tell of, by the schema's `groupSizeEncoding` and data length (see [Decoding](#decoding)) | an assumption SBE does not guarantee: a newer version encoding them otherwise is misread |
+| `--tolerate-unfilled-counts` | decoders take a header's or dimension's `numGroups` or `numVarDataFields` of 0, where the received version holds groups or data, for a count left unfilled, as Real Logic's encoders leave them, rather than `ErrMalformed` (see [Decoding](#decoding)) | a toleration: such counts contradict the message |
 
 ## Generated code
 
@@ -42,13 +42,13 @@ come later, if benchmarks call for them.
 | optional composite | the composite, whose first element is an optional scalar: the composite is null when that element is (§6.5.4.4) |
 | optional set | the set: SBE has no null set but the empty one (§4.14.2) |
 | constant | no field: a method returning the constant |
-| `<group>` | a slice of entry structs, one type per group name: a name and an id define one group throughout a schema (§6.8, §6.9), which loading checks. With `-tolerate-group-redefinitions`, each group of a name standing for different groups has a type of its own, named by its place (below) |
+| `<group>` | a slice of entry structs, one type per group name: a name and an id define one group throughout a schema (§6.8, §6.9), which loading checks. With `--tolerate-group-redefinitions`, each group of a name standing for different groups has a type of its own, named by its place (below) |
 | `<data>` | `[]byte`, decoded as a subslice of the input |
 | message | a struct, its template ID as a constant, `AppendTo(dst) ([]byte, error)`, `Decode(b) (int, error)`, `DecodeBody(h, body) (int, error)` |
 | `messageHeader` | `MessageHeader`, `ReadHeader(b) (MessageHeader, []byte, error)`. A header with elements beside SBE's six (§5.2), such as Binance's `seqNum` and `sendingTime`, gives each message `AppendWithHeader(dst, h) ([]byte, error)`: SBE's elements are set from the message and the schema, the others written from `h`; `AppendTo` writes them zero |
 
 Names are the schema's, exported: `ClOrdID`, `SideEnum`, `SideEnumBuy`.
-A group's type is its name, exported, but where `-tolerate-group-redefinitions`
+A group's type is its name, exported, but where `--tolerate-group-redefinitions`
 let one name stand for different groups: each group of that name, nested
 ones included, is then named by its place, the names of its message and
 of the groups enclosing it before its own, exported and joined. Binance's
@@ -84,7 +84,7 @@ caller read, checking the template id. Both return the length they read:
 the root block of the header's `blockLength`, padding or a newer
 version's fields included, then the groups and data, entries counted by
 their dimension's `blockLength` likewise, and, with
-`-assume-same-encodings`, the groups and data of a newer version the
+`--assume-same-encodings`, the groups and data of a newer version the
 decoder skips (below). On error, the struct is left
 zero and the length is 0. A decoded struct's `[]byte` fields alias the
 input: they are valid until the input is changed or reused.
@@ -125,7 +125,7 @@ does not fit is an error, never a panic or a read past the input.
   it (§7.3.2), in a message of any version: another count is
   `ErrMalformed`, but for a newer version's groups and data (below).
   Real Logic's encoders leave these counts zero unless the application
-  sets them: `-tolerate-unfilled-counts` takes a count of 0 for one the
+  sets them: `--tolerate-unfilled-counts` takes a count of 0 for one the
   encoder did not fill, and the decoder reads what it knows the version
   holds.
 - A newer version, a header `version` above the schema's, may add fixed
@@ -149,7 +149,7 @@ does not fit is an error, never a panic or a read past the input.
     cannot be told from bytes after the message, and are not read, nor
     counted in the length, the caller deciding.
 
-  `-assume-same-encodings` assumes instead that a newer version encodes
+  `--assume-same-encodings` assumes instead that a newer version encodes
   its groups and data as the schema does: where the header or dimension
   counts them, a count above the schema's tells of groups and data the
   decoder skips, and counts in its length, a group by SBE's default
@@ -163,10 +163,10 @@ does not fit is an error, never a panic or a read past the input.
   `02 00 00 00 58 59` read as a `uint16` skips 4 bytes, not 6. Without
   counts, as by default.
 
-  A count of 0 that `-tolerate-unfilled-counts` takes for unfilled tells
+  A count of 0 that `--tolerate-unfilled-counts` takes for unfilled tells
   nothing of a newer version's groups and data: alone, the flag leaves
   them as where nothing counts them, `ErrNewer` where they could come
-  before what the decoder reads; with `-assume-same-encodings`, they are
+  before what the decoder reads; with `--assume-same-encodings`, they are
   taken to be none, and a newer version's group before the message's
   data is misread, its dimension read as the data's length.
 
@@ -205,7 +205,7 @@ up to the higher one.
 | Supported | Rejected, with an error naming the element |
 |---|---|
 | `<type>`: the 11 primitives, arrays, `length="0"` in data | a primitive SBE does not define |
-| a field's `type` naming an encoding of `<types>` | a field's `type` naming a primitive no encoding is named (`uint32`), unless `-tolerate-undeclared-primitive-types` |
+| a field's `type` naming an encoding of `<types>` | a field's `type` naming a primitive no encoding is named (`uint32`), unless `--tolerate-undeclared-primitive-types` |
 | `presence` required, optional (with `nullValue`) and constant (a value or `valueRef`) | `nullValue` on a required or constant type; a constant without a value |
 | `<composite>` with `<type>`, `<enum>`, `<set>`, `<composite>` and `<ref>` | a composite without elements; a reference cycle |
 | `<enum>` over `char` or an unsigned type; `<set>` over an unsigned type | other encodings |
@@ -214,7 +214,7 @@ up to the higher one.
 | `headerType`, `dimensionType` of the schema's | a header without unsigned `blockLength`, `templateId`, `schemaId`, `version`; a dimension without `blockLength` and `numInGroup` |
 | both byte orders | `xi:include` |
 | `minValue`, `maxValue`, `nullValue` | one its type cannot represent; a data length's or a count's `minValue` above its `maxValue` |
-| | a group or data field before a field, a group after data (§5.5); duplicate names or ids; a group name or id defining two different groups, its members' versions included, unless `-tolerate-group-redefinitions`; a field name or id standing for another id, name or encoding, unless `-tolerate-field-redefinitions`; a header's `numGroups` or `numVarDataFields` that is not a required unsigned scalar (§5.2.1); ids, versions or block lengths the header or dimension cannot hold |
+| | a group or data field before a field, a group after data (§5.5); duplicate names or ids; a group name or id defining two different groups, its members' versions included, unless `--tolerate-group-redefinitions`; a field name or id standing for another id, name or encoding, unless `--tolerate-field-redefinitions`; a header's `numGroups` or `numVarDataFields` that is not a required unsigned scalar (§5.2.1); ids, versions or block lengths the header or dimension cannot hold |
 
 Elements and attributes are checked by their expanded names, against
 sbe.xsd (§6.1). The root is `messageSchema` of SBE 1.0's namespace,
@@ -226,7 +226,7 @@ where sbe.xsd has none, an attribute sbe.xsd does not give its element
 (a misspelt `presense`), an SBE element or attribute qualified otherwise,
 or a prefix never declared, is an error naming it. Elements and
 attributes of another namespace, such as a venue's metadata, are errors
-too: sbe.xsd declares no wildcard for them. `-tolerate-foreign-metadata`
+too: sbe.xsd declares no wildcard for them. `--tolerate-foreign-metadata`
 (`LoadOptions.TolerateForeignMetadata`) accepts and ignores them, an
 element with all it holds. Of XML Schema instance's attributes, which
 XML Schema allows on any element, the location hints
@@ -248,7 +248,7 @@ encoding specifications for each of the integer primitive types", `<type
 name="uint32" primitiveType="uint32"/>`). Binance's schema types fields
 `uint32`, `int32`, `int64`, `uint64`, `uint16` and `uint8` without
 declaring them, as Real Logic's SbeTool, which predefines the eleven
-primitives, accepts. `-tolerate-undeclared-primitive-types`
+primitives, accepts. `--tolerate-undeclared-primitive-types`
 (`LoadOptions.TolerateUndeclaredPrimitiveTypes`) resolves such a name as
 that encoding would be: a required scalar of the primitive, the field's
 `presence` applying, an optional one null as its primitive is (§4.4.2),
@@ -263,7 +263,7 @@ messages, but each instance must represent the same type. Each of those
 instances must match on both id and name attributes." A name or an id
 standing for two different groups, their dimensions, members, offsets,
 presences or versions differing, is an error.
-`-tolerate-group-redefinitions` (`LoadOptions.TolerateGroupRedefinitions`)
+`--tolerate-group-redefinitions` (`LoadOptions.TolerateGroupRedefinitions`)
 accepts it, Binance's schema needing it for Orders, RelatedSym,
 MDEntriesBids and MDEntriesAsks, and the generator names each such group
 by its place (see [Generated code](#generated-code)).
@@ -274,7 +274,7 @@ field type within a message schema"; §6.9, "Attributes id and name must
 uniquely identify a type within a message schema. This applies to fields
 and groups." A field name standing for another id or encoding, or an id
 for another name or encoding, is an error; the presence may differ, as a
-FIX field's does between messages. `-tolerate-field-redefinitions`
+FIX field's does between messages. `--tolerate-field-redefinitions`
 (`LoadOptions.TolerateFieldRedefinitions`) accepts it, which the FIX
 Trading Community's own FIXP session schema needs, naming fields `Code`
 with ids 7, 12, 15 and 16 and giving id 8 to `Reason` and `Flow` (see
@@ -325,8 +325,8 @@ regenerates every package and fails if anything changes.
 - The length decoding returns: whole messages, with bytes after them,
   root blocks and group entries longer than the schema's.
 - Counts and a newer version: `testdata/older.xml` at version 1,
-  generated four times, strictly (`older`), with `-assume-same-encodings`
-  (`oldersame`), with `-tolerate-unfilled-counts` (`olderunfilled`) and
+  generated four times, strictly (`older`), with `--assume-same-encodings`
+  (`oldersame`), with `--tolerate-unfilled-counts` (`olderunfilled`) and
   with both (`oldersameunfilled`), and
   `testdata/newer.xml` at version 2 (`newer`, whose tests check them
   all), which adds a field, a group and a data field to a message and to
@@ -338,7 +338,7 @@ regenerates every package and fails if anything changes.
   those of other encodings are misread, as the assumption says. Counts
   of headers and dimensions, at versions 0 and 1: those of the version
   decode, others are `ErrMalformed`, and counts of 0 decode to the values
-  encoded with `-tolerate-unfilled-counts`; in version 2, they are
+  encoded with `--tolerate-unfilled-counts`; in version 2, they are
   `ErrNewer` before what the decoder reads but with both flags. Real
   Logic's messages of the richer schema have their counts filled, by its
   program for the header and Legs' dimension, and need no flag. The
@@ -353,8 +353,8 @@ regenerates every package and fails if anything changes.
   generate code that type-checks.
 - Binance's Spot FIX SBE schema (`testdata/binance`, the schema pinned
   to a commit of Binance's repository and its SHA-256): it loads with
-  `-tolerate-foreign-metadata`, `-tolerate-undeclared-primitive-types`,
-  `-tolerate-group-redefinitions` and `-tolerate-field-redefinitions`,
+  `--tolerate-foreign-metadata`, `--tolerate-undeclared-primitive-types`,
+  `--tolerate-group-redefinitions` and `--tolerate-field-redefinitions`,
   and without each fails telling which, and the package generated from
   it type-checks. The codecs generated from it, and their tests, are
   `contribs/binancefix/internal/fixsbe`'s, from the same file (`make

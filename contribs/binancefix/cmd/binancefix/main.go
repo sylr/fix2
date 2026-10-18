@@ -39,7 +39,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -48,9 +47,11 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/sylr/fix2/contribs/binancefix"
 	"github.com/sylr/fix2/contribs/binancefix/internal/probe"
 	"github.com/sylr/fix2/transport"
@@ -79,20 +80,6 @@ type env struct {
 	sleep func(context.Context, time.Duration) error
 }
 
-const usage = `usage: binancefix logon [flags]
-       binancefix probe [flags] [PROBE...]
-       binancefix probes
-       binancefix version
-
-logon logs on to Binance's FIX SBE order entry endpoint (the testnet's
-unless --production), shows the LogonAck and logs out; --signature-time
-auto tries each form of the signed SendingTime until one is accepted.
-probe checks the client's assumptions against the testnet, and only it;
---price-far, the price of its limit orders, is required (below the
-market, inside both PERCENT_PRICE_BY_SIDE bands).
-Run "binancefix logon -h" or "binancefix probe -h" for the flags.
-`
-
 // usageError is a usage error: exit code 2.
 type usageError struct{ err error }
 
@@ -107,42 +94,124 @@ type verdictError struct{ msg string }
 
 func (e verdictError) Error() string { return e.msg }
 
+// runError is the failure of a command that ran: exit code 1.
+type runError struct{ err error }
+
+func (e runError) Error() string { return e.err.Error() }
+func (e runError) Unwrap() error { return e.err }
+
+// ran returns the error of a command that ran: a runError, unless it is a
+// usage error or a verdict.
+func ran(err error) error {
+	if err == nil || errors.As(err, new(usageError)) || errors.As(err, new(verdictError)) {
+		return err
+	}
+	return runError{err}
+}
+
+// errWriter writes to w, and keeps the first error a write returned.
+type errWriter struct {
+	w   io.Writer
+	mu  sync.Mutex
+	err error
+}
+
+func (w *errWriter) Write(p []byte) (int, error) {
+	n, err := w.w.Write(p)
+	if err != nil {
+		w.mu.Lock()
+		if w.err == nil {
+			w.err = err
+		}
+		w.mu.Unlock()
+	}
+	return n, err
+}
+
+// failed returns the first error a write returned, nil if none did.
+func (w *errWriter) failed() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
+}
+
 // run runs the command line args, and returns the exit code.
 func run(ctx context.Context, e env, args []string) int {
-	if len(args) == 0 {
-		fmt.Fprint(e.stderr, usage)
-		return 2
-	}
-	var err error
-	switch args[0] {
-	case "logon":
-		err = runLogon(ctx, e, args[1:])
-	case "probe":
-		err = runProbe(ctx, e, args[1:])
-	case "probes":
-		listProbes(e.stdout)
-	case "version":
-		fmt.Fprintln(e.stdout, Version)
-	case "-h", "-help", "--help", "help":
-		fmt.Fprint(e.stdout, usage)
-	default:
-		fmt.Fprint(e.stderr, usage)
-		return 2
-	}
-	var ve verdictError
-	switch {
-	case err == nil, errors.Is(err, flag.ErrHelp):
+	// A failed write of stdout, cobra's own (help, --version, completion)
+	// included, fails the command: exit 1.
+	out := &errWriter{w: e.stdout}
+	e.stdout = out
+	root := newCommand(e)
+	// Given nil, cobra would read os.Args.
+	root.SetArgs(append([]string{}, args...))
+	err := root.ExecuteContext(ctx)
+	werr := out.failed()
+	if err == nil && werr == nil {
 		return 0
-	case errors.As(err, &ve):
-		fmt.Fprintln(e.stderr, "binancefix:", err)
-		return 3
-	case errors.As(err, new(usageError)):
-		fmt.Fprintln(e.stderr, "binancefix:", err)
-		return 2
-	default:
-		fmt.Fprintln(e.stderr, "binancefix:", err)
-		return 1
 	}
+	if err != nil {
+		fmt.Fprintln(e.stderr, "binancefix:", err)
+	}
+	// A failed write of stdout, unless it is the error told, is told too.
+	if werr != nil && !errors.Is(err, werr) {
+		fmt.Fprintln(e.stderr, "binancefix:", werr)
+	}
+	switch {
+	case errors.As(err, new(runError)) || werr != nil:
+		return 1
+	case errors.As(err, new(verdictError)):
+		return 3
+	}
+	fmt.Fprintln(e.stderr, "Run 'binancefix --help' for usage.")
+	return 2
+}
+
+// newCommand returns the binancefix command, running with e.
+func newCommand(e env) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "binancefix",
+		Short: "Check the binancefix client's assumptions against Binance's Spot testnet",
+		Long: `Check, against Binance's Spot testnet, the assumptions the binancefix
+client makes where Binance's FIX SBE documentation is silent.
+
+logon logs on to Binance's FIX SBE order entry endpoint (the testnet's
+unless --production), shows the LogonAck and logs out; --signature-time
+auto tries each form of the signed SendingTime until one is accepted.
+probe checks the client's assumptions against the testnet, and only it;
+--price-far, the price of its limit orders, is required (below the
+market, inside both PERCENT_PRICE_BY_SIDE bands).
+
+The API key is --api-key, --api-key-file (a file holding it) or
+BINANCE_API_KEY; its Ed25519 private key the PEM file --key-file or
+BINANCE_PRIVATE_KEY names. Order entry needs the FIX_API permission.
+
+The exit code is 0 when all went as the client assumes, 3 when an
+assumption is contradicted or a probe inconclusive, 1 on failure, 2 on a
+usage error.`,
+		Version:       Version,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		// Without a command, nothing asked for was done: a usage error.
+		RunE: func(*cobra.Command, []string) error {
+			return errors.New("no command given")
+		},
+	}
+	root.SetOut(e.stdout)
+	root.SetErr(e.stderr)
+	// -v is logon's and probe's --verbose: no shorthand for --version.
+	root.Flags().Bool("version", false, "version for binancefix")
+	root.AddCommand(logonCommand(e), probeCommand(e), &cobra.Command{
+		Use:   "probes",
+		Short: "List the probes and their assumptions",
+		Args:  cobra.NoArgs,
+		Run:   func(*cobra.Command, []string) { listProbes(e.stdout) },
+	}, &cobra.Command{
+		Use:   "version",
+		Short: "Print the version",
+		Args:  cobra.NoArgs,
+		Run:   func(*cobra.Command, []string) { fmt.Fprintln(e.stdout, Version) },
+	})
+	return root
 }
 
 // common are the flags of logon and probe.
@@ -160,7 +229,8 @@ type common struct {
 	timeout    time.Duration
 }
 
-func (c *common) register(fs *flag.FlagSet, timeout time.Duration) {
+func (c *common) register(cmd *cobra.Command, timeout time.Duration) {
+	fs := cmd.Flags()
 	fs.StringVar(&c.endpoint, "endpoint", "", "order entry endpoint, host:port (default "+binancefix.TestnetEndpoint+", "+binancefix.Endpoint+" with --production)")
 	fs.BoolVar(&c.production, "production", false, "allow Binance's production endpoint (logon only: probe refuses it)")
 	fs.StringVar(&c.apiKey, "api-key", "", "Ed25519 API key, with the FIX_API permission (default $BINANCE_API_KEY)")
@@ -170,7 +240,7 @@ func (c *common) register(fs *flag.FlagSet, timeout time.Duration) {
 	fs.DurationVar(&c.heartbeat, "heartbeat", probe.DefaultHeartBtInt, "heartbeat interval, whole seconds from 5s to 60s")
 	fs.StringVar(&c.sigTime, "signature-time", binancefix.SignatureTimeMicros.String(), "text form of the SendingTime signed: "+forms())
 	fs.BoolVar(&c.json, "json", false, "write the result as JSON")
-	fs.BoolVar(&c.verbose, "v", false, "log the session's events")
+	fs.BoolVarP(&c.verbose, "verbose", "v", false, "log the session's events")
 	fs.DurationVar(&c.timeout, "timeout", timeout, "time limit of the command, its cleanup apart")
 }
 
@@ -184,16 +254,15 @@ func forms() string {
 
 var senderPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,8}$`)
 
-// options checks the common flags of fs and returns the Options they give,
+// options checks the common flags of cmd and returns the Options they give,
 // the API key and private key read.
-func (c *common) options(e env, fs *flag.FlagSet) (probe.Options, error) {
-	set := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+func (c *common) options(e env, cmd *cobra.Command) (probe.Options, error) {
+	fs := cmd.Flags()
 	var errs []error
-	if set["api-key"] && set["api-key-file"] {
+	if fs.Changed("api-key") && fs.Changed("api-key-file") {
 		errs = append(errs, errors.New("--api-key and --api-key-file: one or the other"))
 	}
-	if !set["api-key"] && !set["api-key-file"] {
+	if !fs.Changed("api-key") && !fs.Changed("api-key-file") {
 		c.apiKey = e.getenv("BINANCE_API_KEY")
 	}
 	if c.keyFile == "" {
@@ -252,17 +321,29 @@ func (c *common) resolveEndpoint() {
 	}
 }
 
-func runLogon(ctx context.Context, e env, args []string) error {
-	fs := flag.NewFlagSet("binancefix logon", flag.ContinueOnError)
-	fs.SetOutput(e.stderr)
+func logonCommand(e env) *cobra.Command {
 	var c common
-	c.register(fs, 5*time.Minute)
-	if err := fs.Parse(args); err != nil {
-		return usageError{err}
+	cmd := &cobra.Command{
+		Use:   "logon",
+		Short: "Log on, show the LogonAck, log out",
+		Long: `Log on to Binance's FIX SBE order entry endpoint, show Binance's LogonAck
+and log out (M0, settled: Binance checks the microsecond form, us).
+
+--signature-time chooses the text of the SendingTime the Logon's
+signature is made of (us, the client's default, ms, s, ns, unix-us,
+unix-ms), or auto to try them in turn, twice HeartBtInt apart, until
+Binance accepts one: exit code 0 when it is the default, 3 when another.
+It logs on to the testnet unless --production is given.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return ran(runLogon(cmd.Context(), e, cmd, &c))
+		},
 	}
-	if fs.NArg() > 0 {
-		return usagef("logon takes no argument: %q", fs.Args())
-	}
+	c.register(cmd, 5*time.Minute)
+	return cmd
+}
+
+func runLogon(ctx context.Context, e env, cmd *cobra.Command, c *common) error {
 	c.resolveEndpoint()
 	if !probe.IsTestnet(c.endpoint) && !c.production {
 		return usagef("%s is not the testnet's endpoint, %s: --production to log on to it", c.endpoint, binancefix.TestnetEndpoint)
@@ -276,7 +357,7 @@ func runLogon(ctx context.Context, e env, args []string) error {
 		}
 		form = f
 	}
-	o, err := c.options(e, fs)
+	o, err := c.options(e, cmd)
 	if err != nil {
 		return err
 	}
@@ -309,23 +390,65 @@ func runLogon(ctx context.Context, e env, args []string) error {
 	return nil
 }
 
-func runProbe(ctx context.Context, e env, args []string) error {
-	fs := flag.NewFlagSet("binancefix probe", flag.ContinueOnError)
-	fs.SetOutput(e.stderr)
+// probeFlags are the flags of probe alone.
+type probeFlags struct {
+	symbol, price, qty     string
+	interval, wait, settle time.Duration
+	list                   bool
+}
+
+func probeCommand(e env) *cobra.Command {
 	var c common
-	c.register(fs, 5*time.Minute)
-	symbol := fs.String("symbol", probe.DefaultSymbol, "symbol traded")
-	price := fs.String("price-far", "", "price of the limit orders, required by the probes resting them (order, amend, cancel-replace, list-cancel, mass-cancel): "+
-		"below the market, inside both PERCENT_PRICE_BY_SIDE bands, e.g. 70000 for BTCUSDT at about 81,500")
-	qty := fs.String("qty", probe.DefaultQty, "quantity of the orders, small, above the symbol's minimum notional at --price-far")
-	interval := fs.Duration("interval", probe.DefaultInterval, "least time between two requests, 10ms at least")
-	wait := fs.Duration("wait", probe.DefaultWait, "how long an answer is waited for")
-	settle := fs.Duration("settle", probe.DefaultSettle, "how long late messages are waited for once a request is answered")
-	list := fs.Bool("list", false, "list the probes and exit")
-	if err := fs.Parse(args); err != nil {
-		return usageError{err}
+	var p probeFlags
+	cmd := &cobra.Command{
+		Use:   "probe [PROBE...]",
+		Short: "Run the probes, all if none is named",
+		Long: `Run the probes named, by name or letter, all if none is (binancefix probes
+lists them): each places small orders below the market on the testnet, and
+only there, --production or not, exchanges a few messages and judges an
+assumption confirmed, contradicted or inconclusive (all confirmed on
+2026-10-17: the probes are the regression check). Whatever it placed is
+cancelled when it is done, on error or interrupt too, and it sends at most
+one request per --interval.
+
+--price-far, the price of the limit orders, has no default: below the
+market, inside both PERCENT_PRICE_BY_SIDE bands of the symbol (70000 for
+BTCUSDT at about 81,500); only logon-seqnum, fill and limits run without
+it. The exit code is 0 when all are confirmed, 3 when one is not.`,
+		Args: probeNames,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ran(runProbe(cmd.Context(), e, cmd, &c, &p, args))
+		},
 	}
-	if *list {
+	c.register(cmd, 5*time.Minute)
+	fs := cmd.Flags()
+	fs.StringVar(&p.symbol, "symbol", probe.DefaultSymbol, "symbol traded")
+	fs.StringVar(&p.price, "price-far", "", "price of the limit orders, required by the probes resting them (order, amend, cancel-replace, list-cancel, mass-cancel): "+
+		"below the market, inside both PERCENT_PRICE_BY_SIDE bands, e.g. 70000 for BTCUSDT at about 81,500")
+	fs.StringVar(&p.qty, "qty", probe.DefaultQty, "quantity of the orders, small, above the symbol's minimum notional at --price-far")
+	fs.DurationVar(&p.interval, "interval", probe.DefaultInterval, "least time between two requests, 10ms at least")
+	fs.DurationVar(&p.wait, "wait", probe.DefaultWait, "how long an answer is waited for")
+	fs.DurationVar(&p.settle, "settle", probe.DefaultSettle, "how long late messages are waited for once a request is answered")
+	fs.BoolVar(&p.list, "list", false, "list the probes and exit")
+	return cmd
+}
+
+// probeNames checks the arguments of probe: names or letters of probes.
+func probeNames(_ *cobra.Command, args []string) error {
+	var unknown []string
+	for _, n := range args {
+		if !slices.ContainsFunc(probe.Probes(), func(p probe.Probe) bool { return strings.EqualFold(n, p.Name) || strings.EqualFold(n, p.Letter) }) {
+			unknown = append(unknown, n)
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown probe %s: run binancefix probes for the list", strings.Join(unknown, ", "))
+	}
+	return nil
+}
+
+func runProbe(ctx context.Context, e env, cmd *cobra.Command, c *common, p *probeFlags, args []string) error {
+	if p.list {
 		listProbes(e.stdout)
 		return nil
 	}
@@ -337,34 +460,25 @@ func runProbe(ctx context.Context, e env, args []string) error {
 	if err != nil {
 		return usagef("--signature-time: %v (probe takes one form: settle it with logon --signature-time auto)", err)
 	}
-	var unknown []string
-	for _, n := range fs.Args() {
-		if !slices.ContainsFunc(probe.Probes(), func(p probe.Probe) bool { return strings.EqualFold(n, p.Name) || strings.EqualFold(n, p.Letter) }) {
-			unknown = append(unknown, n)
-		}
-	}
-	if len(unknown) > 0 {
-		return usagef("unknown probe %s: run binancefix probes for the list", strings.Join(unknown, ", "))
-	}
-	if *price == "" && probe.PriceRequired(fs.Args()...) {
+	if p.price == "" && probe.PriceRequired(args...) {
 		return usagef("--price-far is required by the probes resting limit orders (order, amend, cancel-replace, list-cancel, mass-cancel; "+
 			"logon-seqnum, fill and limits run without it): %s", probe.PriceFarHelp)
 	}
-	if *interval < 10*time.Millisecond {
-		return usagef("--interval %v: 10ms at least", *interval)
+	if p.interval < 10*time.Millisecond {
+		return usagef("--interval %v: 10ms at least", p.interval)
 	}
-	if *wait <= 0 || *settle <= 0 {
+	if p.wait <= 0 || p.settle <= 0 {
 		return usagef("--wait and --settle: positive")
 	}
-	o, err := c.options(e, fs)
+	o, err := c.options(e, cmd)
 	if err != nil {
 		return err
 	}
-	o.SignatureTime, o.Symbol, o.PriceFar, o.Qty = form, strings.ToUpper(*symbol), *price, *qty
-	o.Interval, o.Wait, o.Settle = *interval, *wait, *settle
+	o.SignatureTime, o.Symbol, o.PriceFar, o.Qty = form, strings.ToUpper(p.symbol), p.price, p.qty
+	o.Interval, o.Wait, o.Settle = p.interval, p.wait, p.settle
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	rep, err := probe.Run(ctx, o, fs.Args()...)
+	rep, err := probe.Run(ctx, o, args...)
 	if werr := writeReport(e.stdout, rep, c.json); werr != nil {
 		return werr
 	}

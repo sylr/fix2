@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -118,6 +119,23 @@ func TestRun_Failure(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "missing.pem") {
 		t.Errorf("stderr: %s", stderr.String())
+	}
+}
+
+// brokenWriter fails every write.
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+// Failing to write stdout, cobra's own output included, is a failure: exit
+// 1, no usage hint.
+func TestRun_OutputFails(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"completion", "bash"}} {
+		var stderr bytes.Buffer
+		if code := run(args, brokenWriter{}, &stderr); code != 1 || strings.Count(stderr.String(), "write failed") != 1 ||
+			strings.Contains(stderr.String(), "for usage") {
+			t.Errorf("%q: exit %d, stderr %q", args, code, stderr.String())
+		}
 	}
 }
 

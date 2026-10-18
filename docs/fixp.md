@@ -60,7 +60,7 @@ engine does, and the file is not edited. It breaks SBE's rule that a
 field's name and id identify one field (SBE §6.9): fields named `Code`
 have ids 7, 12, 15 and 16, `Reason` and `Flow` share id 8. `fix2gen sbe`
 refuses that by default, and generates `fixp/internal/codec` with
-`-tolerate-field-redefinitions` ([docs/conformance.md](conformance.md#sbe)).
+`--tolerate-field-redefinitions` ([docs/conformance.md](conformance.md#sbe)).
 
 Schema id 2748, version 0, little-endian. The SBE message header is four
 `uint16`: blockLength, templateId, schemaId, version.

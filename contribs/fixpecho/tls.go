@@ -15,7 +15,7 @@ func serverTLS(certFile, keyFile string) (*tls.Config, error) {
 		return nil, nil
 	}
 	if certFile == "" || keyFile == "" {
-		return nil, errors.New("-tls-cert and -tls-key go together")
+		return nil, errors.New("--tls-cert and --tls-key go together")
 	}
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -30,7 +30,7 @@ func serverTLS(certFile, keyFile string) (*tls.Config, error) {
 func clientTLS(enabled bool, caFile, serverName string) (*tls.Config, error) {
 	if !enabled {
 		if caFile != "" || serverName != "" {
-			return nil, errors.New("-tls-ca and -tls-server-name need -tls")
+			return nil, errors.New("--tls-ca and --tls-server-name need --tls")
 		}
 		return nil, nil
 	}

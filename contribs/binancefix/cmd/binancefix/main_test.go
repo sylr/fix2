@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -95,23 +96,34 @@ func (h *harness) probeArgs(extra ...string) []string {
 func TestUsage(t *testing.T) {
 	h := newHarness(t, fakebinance.Behaviour{})
 	ctx := context.Background()
-	if code := h.run(ctx); code != 2 || !strings.Contains(h.err.String(), "usage:") {
+	if code := h.run(ctx); code != 2 || !strings.Contains(h.err.String(), "binancefix --help") {
 		t.Errorf("no command: %d", code)
 	}
 	if code := h.run(ctx, "nope"); code != 2 {
 		t.Errorf("unknown command: %d", code)
 	}
-	if code := h.run(ctx, "help"); code != 0 || !strings.Contains(h.out.String(), "binancefix probe") {
-		t.Errorf("help: %d", code)
+	for _, args := range [][]string{{"--bogus"}, {"version", "extra"}, {"probes", "extra"}} {
+		if code := h.run(ctx, args...); code != 2 || !strings.Contains(h.err.String(), "binancefix --help") {
+			t.Errorf("%v: %d", args, code)
+		}
+	}
+	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}} {
+		if code := h.run(ctx, args...); code != 0 || !strings.Contains(h.out.String(), "logon") || !strings.Contains(h.out.String(), "probes") {
+			t.Errorf("%v: %d", args, code)
+		}
 	}
 	if code := h.run(ctx, "version"); code != 0 || h.out.String() != "dev\n" {
 		t.Errorf("version: %d %q", code, h.out.String())
 	}
-	if code := h.run(ctx, "logon", "-h"); code != 0 || !strings.Contains(h.err.String(), "-signature-time") {
+	if code := h.run(ctx, "--version"); code != 0 || !strings.Contains(h.out.String(), "dev") {
+		t.Errorf("--version: %d %q", code, h.out.String())
+	}
+	if code := h.run(ctx, "logon", "-h"); code != 0 || !strings.Contains(h.out.String(), "--signature-time") || !strings.Contains(h.out.String(), "-v, --verbose") {
 		t.Errorf("logon -h: %d", code)
 	}
 	for _, args := range [][]string{
 		{"logon", "extra"},
+		{"logon", "-signature-time", "us"}, // a single dash: shorthands
 		{"logon", "--signature-time", "minutes"},
 		{"logon", "--heartbeat", "3s"},
 		{"logon", "--sender", "much-too-long"},
@@ -132,6 +144,36 @@ func TestUsage(t *testing.T) {
 	}
 	if len(h.dialed) > 0 {
 		t.Errorf("dialed %v", h.dialed)
+	}
+}
+
+// brokenWriter fails every write.
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+// Failing to write stdout, cobra's own output included, is a failure: exit
+// 1, no usage hint.
+func TestOutputFails(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"version"}, {"probes"}, {"completion", "bash"}} {
+		var stderr bytes.Buffer
+		if code := run(context.Background(), env{stdout: brokenWriter{}, stderr: &stderr, getenv: func(string) string { return "" }}, args); code != 1 ||
+			strings.Count(stderr.String(), "write failed") != 1 || strings.Contains(stderr.String(), "for usage") {
+			t.Errorf("%q: exit %d, stderr %q", args, code, stderr.String())
+		}
+	}
+}
+
+// A verdict whose report could not be written is a failure, the verdict
+// and the write error both told.
+func TestVerdictOutputFails(t *testing.T) {
+	h := newHarness(t, fakebinance.Behaviour{}, binancefix.SignatureTimeMillis)
+	e := h.env()
+	e.stdout = brokenWriter{}
+	code := run(context.Background(), e, slices.Concat([]string{"logon", "--signature-time", "auto", "--heartbeat", "7s"}, h.keys()))
+	if stderr := h.err.String(); code != 1 || !strings.Contains(stderr, "binancefix: Binance accepted signature time ms, not us") ||
+		!strings.Contains(stderr, "binancefix: write failed") || strings.Contains(stderr, "for usage") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 }
 
@@ -335,7 +377,7 @@ func TestProbePriceRequired(t *testing.T) {
 		t.Errorf("a, f, h without --price-far: exit %d", code)
 	}
 	// probe -h tells how to pick it.
-	if code := h.run(ctx, "probe", "-h"); code != 0 || !strings.Contains(h.err.String(), "PERCENT_PRICE_BY_SIDE") {
+	if code := h.run(ctx, "probe", "-h"); code != 0 || !strings.Contains(h.out.String(), "PERCENT_PRICE_BY_SIDE") {
 		t.Errorf("probe -h: %d", code)
 	}
 }

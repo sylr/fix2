@@ -2076,7 +2076,7 @@ const rawGettersXML = `<fix type="FIX" major="4" minor="4">
   </fields>
 </fix>`
 
-// TestGenerateRawGetters covers -bytes: raw values of parsed fields, on
+// TestGenerateRawGetters covers --bytes: raw values of parsed fields, on
 // messages and group entries, exactly as received.
 func TestGenerateRawGetters(t *testing.T) {
 	runGeneratedWith(t, rawGettersXML, "raw", `package raw
@@ -2133,7 +2133,7 @@ func TestGenerateRawGetterClash(t *testing.T) {
 		t.Error("expected a clash between BidPxBytes and BidPx's raw getter")
 	}
 	if err := generateWith(dict, "raw", t.TempDir(), options{}); err != nil {
-		t.Errorf("without -bytes: %v", err)
+		t.Errorf("without --bytes: %v", err)
 	}
 }
 

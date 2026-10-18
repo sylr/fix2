@@ -12,7 +12,7 @@ GOARCH                   ?= $(GOENV_GOARCH)
 GOARM                    ?= $(GOENV_GOARM)
 # The binary builds against the fix2 of the repository (replace directive):
 # its sources count too.
-GO_BUILD_SRC             := $(shell find . -name \*.go -type f) go.mod
+GO_BUILD_SRC             := $(shell find . -name \*.go -type f) go.mod go.sum
 GO_BUILD_SRC             += $(shell find ../.. -path ../../contribs -prune -o -name \*.go -type f -print) ../../go.mod ../../go.sum
 GO_BUILD_EXTLDFLAGS      ?=
 GO_BUILD_TAGS            ?=

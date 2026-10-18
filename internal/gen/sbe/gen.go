@@ -40,7 +40,7 @@ type Options struct {
 	// schema's data encodings share. SBE does not guarantee a newer version
 	// encodes them so: new fields may have new types (§7.1.1), a group
 	// another dimensionType (§5.4.10.2); one that does not is misread. The
-	// flag -assume-same-encodings of fix2gen sbe.
+	// flag --assume-same-encodings of fix2gen sbe.
 	AssumeSameEncodings bool
 	// TolerateUnfilledCounts takes a numGroups or numVarDataFields of 0, in
 	// a header or a dimension, where the received version holds groups or
@@ -51,7 +51,7 @@ type Options struct {
 	// them, they are ErrNewer before what the decoder reads, unless
 	// AssumeSameEncodings, with which they are taken to be none, and a
 	// newer version's group before known data is misread. The flag
-	// -tolerate-unfilled-counts of fix2gen sbe.
+	// --tolerate-unfilled-counts of fix2gen sbe.
 	TolerateUnfilledCounts bool
 }
 
@@ -60,10 +60,10 @@ type Options struct {
 func (g *gen) flags() string {
 	f := g.s.Tolerated.flags()
 	if g.opts.AssumeSameEncodings {
-		f = append(f, "-assume-same-encodings")
+		f = append(f, "--assume-same-encodings")
 	}
 	if g.opts.TolerateUnfilledCounts {
-		f = append(f, "-tolerate-unfilled-counts")
+		f = append(f, "--tolerate-unfilled-counts")
 	}
 	return strings.Join(f, " ")
 }
@@ -1170,7 +1170,7 @@ func (g *gen) counted(counts *Type, countName, count, skip string, sinces []int,
 	if g.opts.TolerateUnfilledCounts {
 		g.p("if %s == 0 && active > 0 {", count)
 		g.p("// A count the encoder did not fill, as Real Logic's do not")
-		g.p("// (-tolerate-unfilled-counts): nothing is known beyond the schema's.")
+		g.p("// (--tolerate-unfilled-counts): nothing is known beyond the schema's.")
 		if !g.opts.AssumeSameEncodings && followed {
 			g.p("// In a newer version, nothing then tells of its %s, which would", what)
 			g.p("// be here.")
@@ -1181,7 +1181,7 @@ func (g *gen) counted(counts *Type, countName, count, skip string, sinces []int,
 	g.p("if %[1]s < active || %[1]s > active && version <= SchemaVersion {\nreturn 0, ErrMalformed\n} else if %[1]s > active {", count)
 	if g.opts.AssumeSameEncodings {
 		g.p("// A newer version's, skipped by the schema's encodings")
-		g.p("// (-assume-same-encodings).")
+		g.p("// (--assume-same-encodings).")
 		g.p("n, err := %s\nif err != nil {\nreturn 0, err\n}\npos += n", skip)
 	} else {
 		g.p("// A newer version's, which cannot be bounded without assuming their")

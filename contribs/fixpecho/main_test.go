@@ -100,7 +100,7 @@ func TestEchoBackpressure(t *testing.T) {
 	}
 }
 
-// An echo waiting for room past -echo-wait terminates the connection; the
+// An echo waiting for room past --echo-wait terminates the connection; the
 // client's Recoverable flow sends its message again, every echo coming,
 // once.
 func TestEchoWaitLapses(t *testing.T) {
@@ -323,13 +323,13 @@ func TestTLS(t *testing.T) {
 
 func TestTLSConfigErrors(t *testing.T) {
 	if _, err := serverTLS("cert.pem", ""); err == nil {
-		t.Error("-tls-cert without -tls-key")
+		t.Error("--tls-cert without --tls-key")
 	}
 	if _, err := serverTLS("missing.pem", "missing.key"); err == nil {
 		t.Error("missing files")
 	}
 	if _, err := clientTLS(false, "ca.pem", ""); err == nil {
-		t.Error("-tls-ca without -tls")
+		t.Error("--tls-ca without --tls")
 	}
 	empty := filepath.Join(t.TempDir(), "empty.pem")
 	os.WriteFile(empty, nil, 0o600)
@@ -419,30 +419,83 @@ func TestRun(t *testing.T) {
 		code int
 	}{
 		{nil, 2},
+		{[]string{}, 2},
 		{[]string{"nope"}, 2},
+		{[]string{"--bogus"}, 2},
 		{[]string{"version"}, 0},
+		{[]string{"version", "extra"}, 2},
+		{[]string{"--version"}, 0},
 		{[]string{"help"}, 0},
+		{[]string{"--help"}, 0},
 		{[]string{"server", "-h"}, 0},
-		{[]string{"server", "-flow", "Sideways"}, 2},
-		{[]string{"server", "-flow", "None"}, 1},
-		{[]string{"server", "-client-flows", "Idempotent,Nope"}, 2},
-		{[]string{"server", "-echo-wait", "0s"}, 2},
-		{[]string{"server", "-tls-cert", "c.pem"}, 2},
-		{[]string{"server", "-log-level", "loud"}, 2},
+		{[]string{"server", "--help"}, 0},
+		{[]string{"server", "--bogus"}, 2},
+		{[]string{"server", "-listen", "127.0.0.1:0"}, 2}, // a single dash: shorthands
+		{[]string{"server", "--flow", "Sideways"}, 2},
+		{[]string{"server", "--flow", "None"}, 1},
+		{[]string{"server", "--client-flows", "Idempotent,Nope"}, 2},
+		{[]string{"server", "--echo-wait", "0s"}, 2},
+		{[]string{"server", "--echo-wait", "soon"}, 2},
+		{[]string{"server", "--tls-cert", "c.pem"}, 2},
+		{[]string{"server", "--log-level", "loud"}, 2},
 		{[]string{"server", "extra"}, 2},
-		{[]string{"server", "-listen", "256.0.0.1:1"}, 1},
-		{[]string{"client", "-count", "0"}, 2},
-		{[]string{"client", "-window", "0"}, 2},
-		{[]string{"client", "-size", "3"}, 2},
-		{[]string{"client", "-timeout", "0s"}, 2},
-		{[]string{"client", "-flow", "None", "-timeout", "1s"}, 1},
-		{[]string{"client", "-tls-ca", "ca.pem"}, 2},
-		{[]string{"client", "-server-flows", "x"}, 2},
+		{[]string{"server", "--listen", "256.0.0.1:1"}, 1},
+		{[]string{"client", "--count", "0"}, 2},
+		{[]string{"client", "--window", "0"}, 2},
+		{[]string{"client", "--size", "3"}, 2},
+		{[]string{"client", "--timeout", "0s"}, 2},
+		{[]string{"client", "--flow", "None", "--timeout", "1s"}, 1},
+		{[]string{"client", "--tls-ca", "ca.pem"}, 2},
+		{[]string{"client", "--server-flows", "x"}, 2},
 		{[]string{"client", "extra"}, 2},
 	} {
 		var out, errOut bytes.Buffer
 		if code := run(context.Background(), c.args, &out, &errOut); code != c.code {
 			t.Errorf("%q: exit %d, want %d: %s%s", c.args, code, c.code, out.String(), errOut.String())
+		}
+		if c.code == 2 && !strings.Contains(errOut.String(), "fixpecho --help") {
+			t.Errorf("%q: %s", c.args, errOut.String())
+		}
+	}
+}
+
+// Help, the version, on stdout.
+func TestRunOutput(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"--help"}, []string{"server", "client", "version", "fixpecho server --listen"}},
+		{[]string{"server", "--help"}, []string{"--listen", "--flow", "--client-flows", "--echo-wait", "--max-pending", "--tls-cert", "--tls-key", "--token", "--keepalive", "--log-level"}},
+		{[]string{"client", "--help"}, []string{"--connect", "--flow", "--server-flows", "--count", "--window", "--size", "--timeout", "--tls", "--tls-ca", "--tls-server-name"}},
+		{[]string{"version"}, []string{Version + "\n"}},
+		{[]string{"--version"}, []string{"fixpecho version " + Version}},
+	} {
+		var out, errOut bytes.Buffer
+		if code := run(context.Background(), c.args, &out, &errOut); code != 0 {
+			t.Errorf("%q: exit %d: %s", c.args, code, errOut.String())
+		}
+		for _, want := range c.want {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%q: no %q in %s", c.args, want, out.String())
+			}
+		}
+	}
+}
+
+// brokenWriter fails every write.
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+// Failing to write stdout, cobra's own output included, is a failure: exit
+// 1, no usage hint.
+func TestRunOutputFails(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"version"}, {"completion", "bash"}} {
+		var stderr bytes.Buffer
+		if code := run(context.Background(), args, brokenWriter{}, &stderr); code != 1 || strings.Count(stderr.String(), "write failed") != 1 ||
+			strings.Contains(stderr.String(), "for usage") {
+			t.Errorf("%q: exit %d, stderr %q", args, code, stderr.String())
 		}
 	}
 }
@@ -459,14 +512,14 @@ func TestRunCommands(t *testing.T) {
 	var serverErr bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- run(ctx, []string{"server", "-listen", addr, "-token", "t", "-keepalive", "100ms", "-log-level", "warn"}, &bytes.Buffer{}, &serverErr)
+		done <- run(ctx, []string{"server", "--listen", addr, "--token", "t", "--keepalive", "100ms", "--log-level", "warn"}, &bytes.Buffer{}, &serverErr)
 	}()
 	var out, errOut bytes.Buffer
 	code := 1
 	for range 50 {
 		out.Reset()
 		errOut.Reset()
-		code = run(context.Background(), []string{"client", "-connect", addr, "-token", "t", "-count", "500", "-keepalive", "100ms", "-timeout", "5s", "-log-level", "warn"}, &out, &errOut)
+		code = run(context.Background(), []string{"client", "--connect", addr, "--token", "t", "--count", "500", "--keepalive", "100ms", "--timeout", "5s", "--log-level", "warn"}, &out, &errOut)
 		if code == 0 || !strings.Contains(errOut.String(), "not established") {
 			break
 		}

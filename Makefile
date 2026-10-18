@@ -65,7 +65,7 @@ fuzz:
 .PHONY: generate generate-verify
 
 # The directories go generate writes to: those holding a go:generate
-# directive, each generating into its own (-out .), the contribs apart.
+# directive, each generating into its own (--out .), the contribs apart.
 # Found on disk, tracked or not.
 GENERATED = $$(grep -rl --include='*.go' '^//go:generate' --exclude-dir=contribs --exclude-dir=.git --exclude-dir=dist . | xargs -n1 dirname | sort -u)
 

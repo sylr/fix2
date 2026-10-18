@@ -3,4 +3,4 @@
 // olderunfilled and oldersameunfilled, whose decoding of what these encode its tests check.
 package newer
 
-//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/newer.xml -pkg newer -out .
+//go:generate go run ../../../../../cmd/fix2gen sbe --schema ../../testdata/newer.xml --pkg newer --out .

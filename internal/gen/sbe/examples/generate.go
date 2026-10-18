@@ -2,4 +2,4 @@
 // of SBE 1.0, section 9 (testdata/examples.xml), and their tests.
 package examples
 
-//go:generate go run ../../../../cmd/fix2gen sbe -schema ../testdata/examples.xml -pkg examples -out .
+//go:generate go run ../../../../cmd/fix2gen sbe --schema ../testdata/examples.xml --pkg examples --out .

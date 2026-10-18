@@ -102,7 +102,7 @@ type LoadOptions struct {
 	// attributes of namespaces other than SBE's and XML Schema instance's,
 	// such as a venue's annotations, which sbe.xsd, normative (§6.1), does
 	// not allow: it declares no wildcard. Off, they are errors. The flag
-	// -tolerate-foreign-metadata of fix2gen sbe.
+	// --tolerate-foreign-metadata of fix2gen sbe.
 	TolerateForeignMetadata bool
 	// TolerateUndeclaredPrimitiveTypes resolves the type of a field naming
 	// an SBE primitive, such as uint32, that no encoding of <types> is
@@ -111,19 +111,19 @@ type LoadOptions struct {
 	// as Real Logic's SbeTool resolves it. A field's type must name an
 	// encoding of <types> (§6.7, sbe.xsd), which an enum's encodingType
 	// need not (§4.13.3). Off, it is an error. The flag
-	// -tolerate-undeclared-primitive-types of fix2gen sbe.
+	// --tolerate-undeclared-primitive-types of fix2gen sbe.
 	TolerateUndeclaredPrimitiveTypes bool
 	// TolerateGroupRedefinitions accepts a group name, or id, standing for
 	// different groups in different places, which a group's name and id
 	// identify throughout a schema (§6.8, §6.9). Each group of such a name
 	// gets a Go type of its own, named by its place (see docs/sbe.md). Off,
-	// it is an error. The flag -tolerate-group-redefinitions of fix2gen sbe.
+	// it is an error. The flag --tolerate-group-redefinitions of fix2gen sbe.
 	TolerateGroupRedefinitions bool
 	// TolerateFieldRedefinitions accepts a field name, or id, standing for
 	// fields of different ids, names or encodings in different places,
 	// which a field's name and id identify throughout a schema (§6.7,
 	// §6.9), <data> included. The FIX Trading Community's own FIXP schema
-	// needs it. Off, it is an error. The flag -tolerate-field-redefinitions
+	// needs it. Off, it is an error. The flag --tolerate-field-redefinitions
 	// of fix2gen sbe.
 	TolerateFieldRedefinitions bool
 }
@@ -132,16 +132,16 @@ type LoadOptions struct {
 func (o LoadOptions) flags() []string {
 	var f []string
 	if o.TolerateForeignMetadata {
-		f = append(f, "-tolerate-foreign-metadata")
+		f = append(f, "--tolerate-foreign-metadata")
 	}
 	if o.TolerateUndeclaredPrimitiveTypes {
-		f = append(f, "-tolerate-undeclared-primitive-types")
+		f = append(f, "--tolerate-undeclared-primitive-types")
 	}
 	if o.TolerateGroupRedefinitions {
-		f = append(f, "-tolerate-group-redefinitions")
+		f = append(f, "--tolerate-group-redefinitions")
 	}
 	if o.TolerateFieldRedefinitions {
-		f = append(f, "-tolerate-field-redefinitions")
+		f = append(f, "--tolerate-field-redefinitions")
 	}
 	return f
 }
@@ -172,7 +172,7 @@ func inSpace(space string) string {
 }
 
 // foreignHint is how an error about foreign metadata ends.
-const foreignHint = "metadata of another namespace, which sbe.xsd does not allow: -tolerate-foreign-metadata ignores it"
+const foreignHint = "metadata of another namespace, which sbe.xsd does not allow: --tolerate-foreign-metadata ignores it"
 
 // checkNode checks n, an element of sbeElements whose path in errors is
 // path, and its descendants.
@@ -882,7 +882,7 @@ func (l *loader) fieldType(name string) (*Type, error) {
 		return l.resolve(name)
 	}
 	if !l.opts.TolerateUndeclaredPrimitiveTypes {
-		return nil, fmt.Errorf("no encoding named %q: a field's type names an encoding of <types> (§6.7), not a primitive: -tolerate-undeclared-primitive-types resolves it as the primitive", name)
+		return nil, fmt.Errorf("no encoding named %q: a field's type names an encoding of <types> (§6.7), not a primitive: --tolerate-undeclared-primitive-types resolves it as the primitive", name)
 	}
 	t := l.primitives[name]
 	if t == nil {
@@ -938,7 +938,7 @@ func (l *loader) group(n *node) (*Group, error) {
 		return g, nil
 	}
 	sig := groupSignature(g)
-	const hint = ": -tolerate-group-redefinitions generates a type for each"
+	const hint = ": --tolerate-group-redefinitions generates a type for each"
 	if prev, ok := l.groups[g.Name]; ok && prev != sig {
 		return nil, fmt.Errorf("%s: a different group of the same name is defined elsewhere%s", n.what(), hint)
 	}
@@ -991,7 +991,7 @@ func (l *loader) identify(n *node, name string, id uint64, typ *Type) error {
 	if l.opts.TolerateFieldRedefinitions {
 		return nil
 	}
-	const hint = ": -tolerate-field-redefinitions accepts it"
+	const hint = ": --tolerate-field-redefinitions accepts it"
 	this := fieldIdentity{name, id, typ}
 	if prev, ok := l.fields[name]; ok && prev != this {
 		return fmt.Errorf("%s: field %q is id %d of type %q elsewhere, id %d of type %q here (§6.9)%s", n.what(), name, prev.id, prev.typ.Name, id, typ.Name, hint)

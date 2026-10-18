@@ -48,7 +48,7 @@ func (m *Report) decode(b []byte, blockLen, version int, numGroups, numData uint
 			return 0, ErrMalformed
 		} else if numGroups > active {
 			// A newer version's, skipped by the schema's encodings
-			// (-assume-same-encodings).
+			// (--assume-same-encodings).
 			n, err := skipGroups(b[pos:], numGroups-active, entries)
 			if err != nil {
 				return 0, err
@@ -100,7 +100,7 @@ func (m *Report) decode(b []byte, blockLen, version int, numGroups, numData uint
 			return 0, ErrMalformed
 		} else if numData > active {
 			// A newer version's, skipped by the schema's encodings
-			// (-assume-same-encodings).
+			// (--assume-same-encodings).
 			n, err := skipData(b[pos:], numData-active)
 			if err != nil {
 				return 0, err
@@ -244,7 +244,7 @@ func (m *Lines) decode(b []byte, blockLen, version int, numGroups, numData uint6
 			return 0, ErrMalformed
 		} else if numGroups > active {
 			// A newer version's, skipped by the schema's encodings
-			// (-assume-same-encodings).
+			// (--assume-same-encodings).
 			n, err := skipGroups(b[pos:], numGroups-active, entries)
 			if err != nil {
 				return 0, err
@@ -259,7 +259,7 @@ func (m *Lines) decode(b []byte, blockLen, version int, numGroups, numData uint6
 			return 0, ErrMalformed
 		} else if numData > active {
 			// A newer version's, skipped by the schema's encodings
-			// (-assume-same-encodings).
+			// (--assume-same-encodings).
 			n, err := skipData(b[pos:], numData-active)
 			if err != nil {
 				return 0, err

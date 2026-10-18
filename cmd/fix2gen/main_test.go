@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,46 +17,55 @@ func TestRun(t *testing.T) {
 		code int
 		msg  string // in what run writes, "" for nothing
 	}{
-		{"no subcommand", nil, 2, "fix2gen sbe -schema"},
-		{"help", []string{"-h"}, 0, "fix2gen tagvalue -dict"},
-		{"subcommand help", []string{"tagvalue", "-h"}, 0, "-dispatch"},
-		{"subcommand --help", []string{"tagvalue", "--help"}, 0, "-dispatch"},
-		{"unknown subcommand", []string{"protobuf"}, 2, `unknown subcommand "protobuf"`},
-		{"missing flags", []string{"tagvalue", "-pkg", "x"}, 1, "-dict"},
-		{"unknown flag", []string{"tagvalue", "-nope"}, 2, "-nope"},
-		{"extra argument", []string{"tagvalue", "-dict", "d.xml", "-pkg", "x", "extra"}, 1, "Usage"},
-		{"missing dictionary", []string{"tagvalue", "-dict", filepath.Join(out, "none.xml"), "-pkg", "x"}, 1, "fix2gen: "},
-		{"generate", []string{"tagvalue", "-dict", "../../fix/dictionary/testdata/FIX40.xml", "-pkg", "fix40", "-out", out, "-dispatch", "-bytes"}, 0, ""},
-		{"sbe help", []string{"sbe", "-h"}, 0, "-schema"},
-		{"sbe missing flags", []string{"sbe", "-pkg", "x"}, 1, "-schema"},
-		{"sbe missing schema", []string{"sbe", "-schema", filepath.Join(out, "none.xml"), "-pkg", "x"}, 1, "fix2gen: "},
-		{"sbe invalid schema", []string{"sbe", "-schema", "main.go", "-pkg", "x", "-out", t.TempDir()}, 1, "fix2gen: sbe: "},
-		{"sbe generate", []string{"sbe", "-schema", "../../internal/gen/sbe/testdata/examples.xml", "-pkg", "examples", "-out", sbeOut}, 0, ""},
-		{"sbe unfilled counts alone", []string{"sbe", "-schema", "../../internal/gen/sbe/testdata/rich.xml", "-pkg", "rich", "-out", t.TempDir(), "-tolerate-unfilled-counts"}, 0, ""},
-		{"sbe assumptions", []string{"sbe", "-schema", "../../internal/gen/sbe/testdata/rich.xml", "-pkg", "rich", "-out", sbeAssume, "-assume-same-encodings", "-tolerate-unfilled-counts"}, 0, ""},
-		{"sbe Binance strictly", []string{"sbe", "-schema", binance, "-pkg", "binance", "-out", t.TempDir()}, 1, "-tolerate-foreign-metadata"},
-		{"sbe Binance with foreign metadata", []string{"sbe", "-schema", binance, "-pkg", "binance", "-out", t.TempDir(), "-tolerate-foreign-metadata"}, 1, "-tolerate-field-redefinitions"},
-		{"sbe Binance with field redefinitions", []string{"sbe", "-schema", binance, "-pkg", "binance", "-out", t.TempDir(), "-tolerate-foreign-metadata", "-tolerate-field-redefinitions"}, 1, "-tolerate-undeclared-primitive-types"},
-		{"sbe Binance with primitive types", []string{"sbe", "-schema", binance, "-pkg", "binance", "-out", t.TempDir(), "-tolerate-foreign-metadata", "-tolerate-field-redefinitions", "-tolerate-undeclared-primitive-types"}, 1, "-tolerate-group-redefinitions"},
-		{"sbe Binance without field redefinitions", []string{"sbe", "-schema", binance, "-pkg", "binance", "-out", t.TempDir(), "-tolerate-foreign-metadata", "-tolerate-undeclared-primitive-types", "-tolerate-group-redefinitions"}, 1, "-tolerate-field-redefinitions"},
-		{"sbe FIXP strictly", []string{"sbe", "-schema", "../../fixp/internal/codec/SBEschemaForFIXP.xml", "-pkg", "codec", "-out", t.TempDir()}, 1, "-tolerate-field-redefinitions"},
-		{"sbe FIXP", []string{"sbe", "-schema", "../../fixp/internal/codec/SBEschemaForFIXP.xml", "-pkg", "codec", "-out", t.TempDir(), "-tolerate-field-redefinitions"}, 0, ""},
-		{"sbe Binance", []string{"sbe", "-schema", binance, "-pkg", "binance", "-out", sbeBinance, "-tolerate-foreign-metadata", "-tolerate-undeclared-primitive-types", "-tolerate-group-redefinitions", "-tolerate-field-redefinitions"}, 0, ""},
+		{"no subcommand", nil, 2, "fix2gen --help"},
+		{"help", []string{"-h"}, 0, "tagvalue"},
+		{"--help", []string{"--help"}, 0, "sbe"},
+		{"help command", []string{"help", "sbe"}, 0, "--tolerate-unfilled-counts"},
+		{"subcommand help", []string{"tagvalue", "-h"}, 0, "--dispatch"},
+		{"subcommand --help", []string{"tagvalue", "--help"}, 0, "--dispatch"},
+		{"unknown subcommand", []string{"protobuf"}, 2, `unknown command "protobuf"`},
+		{"unknown root flag", []string{"--nope"}, 2, "--nope"},
+		{"missing flags", []string{"tagvalue", "--pkg", "x"}, 2, `required flag(s) "dict" not set`},
+		{"unknown flag", []string{"tagvalue", "--nope"}, 2, "--nope"},
+		{"single dash", []string{"tagvalue", "-dict", "d.xml", "--pkg", "x"}, 2, "unknown shorthand"},
+		{"extra argument", []string{"tagvalue", "--dict", "d.xml", "--pkg", "x", "extra"}, 2, `unknown command "extra"`},
+		{"missing dictionary", []string{"tagvalue", "--dict", filepath.Join(out, "none.xml"), "--pkg", "x"}, 1, "fix2gen: "},
+		{"generate", []string{"tagvalue", "--dict", "../../fix/dictionary/testdata/FIX40.xml", "--pkg", "fix40", "--out", out, "--dispatch", "--bytes"}, 0, ""},
+		{"sbe help", []string{"sbe", "-h"}, 0, "--schema"},
+		{"sbe missing flags", []string{"sbe", "--pkg", "x"}, 2, `required flag(s) "schema" not set`},
+		{"sbe missing schema", []string{"sbe", "--schema", filepath.Join(out, "none.xml"), "--pkg", "x"}, 1, "fix2gen: "},
+		{"sbe invalid schema", []string{"sbe", "--schema", "main.go", "--pkg", "x", "--out", t.TempDir()}, 1, "fix2gen: sbe: "},
+		{"sbe generate", []string{"sbe", "--schema", "../../internal/gen/sbe/testdata/examples.xml", "--pkg", "examples", "--out", sbeOut}, 0, ""},
+		{"sbe unfilled counts alone", []string{"sbe", "--schema", "../../internal/gen/sbe/testdata/rich.xml", "--pkg", "rich", "--out", t.TempDir(), "--tolerate-unfilled-counts"}, 0, ""},
+		{"sbe assumptions", []string{"sbe", "--schema", "../../internal/gen/sbe/testdata/rich.xml", "--pkg", "rich", "--out", sbeAssume, "--assume-same-encodings", "--tolerate-unfilled-counts"}, 0, ""},
+		{"sbe Binance strictly", []string{"sbe", "--schema", binance, "--pkg", "binance", "--out", t.TempDir()}, 1, "--tolerate-foreign-metadata"},
+		{"sbe Binance with foreign metadata", []string{"sbe", "--schema", binance, "--pkg", "binance", "--out", t.TempDir(), "--tolerate-foreign-metadata"}, 1, "--tolerate-field-redefinitions"},
+		{"sbe Binance with field redefinitions", []string{"sbe", "--schema", binance, "--pkg", "binance", "--out", t.TempDir(), "--tolerate-foreign-metadata", "--tolerate-field-redefinitions"}, 1, "--tolerate-undeclared-primitive-types"},
+		{"sbe Binance with primitive types", []string{"sbe", "--schema", binance, "--pkg", "binance", "--out", t.TempDir(), "--tolerate-foreign-metadata", "--tolerate-field-redefinitions", "--tolerate-undeclared-primitive-types"}, 1, "--tolerate-group-redefinitions"},
+		{"sbe Binance without field redefinitions", []string{"sbe", "--schema", binance, "--pkg", "binance", "--out", t.TempDir(), "--tolerate-foreign-metadata", "--tolerate-undeclared-primitive-types", "--tolerate-group-redefinitions"}, 1, "--tolerate-field-redefinitions"},
+		{"sbe FIXP strictly", []string{"sbe", "--schema", "../../fixp/internal/codec/SBEschemaForFIXP.xml", "--pkg", "codec", "--out", t.TempDir()}, 1, "--tolerate-field-redefinitions"},
+		{"sbe FIXP", []string{"sbe", "--schema", "../../fixp/internal/codec/SBEschemaForFIXP.xml", "--pkg", "codec", "--out", t.TempDir(), "--tolerate-field-redefinitions"}, 0, ""},
+		{"sbe Binance", []string{"sbe", "--schema", binance, "--pkg", "binance", "--out", sbeBinance, "--tolerate-foreign-metadata", "--tolerate-undeclared-primitive-types", "--tolerate-group-redefinitions", "--tolerate-field-redefinitions"}, 0, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var stderr strings.Builder
-			if code := run(tc.args, &stderr); code != tc.code {
+			var stdout, stderr strings.Builder
+			if code := run(tc.args, &stdout, &stderr); code != tc.code {
 				t.Errorf("exit code %d, want %d; stderr:\n%s", code, tc.code, stderr.String())
 			}
-			if tc.msg == "" && stderr.Len() > 0 || !strings.Contains(stderr.String(), tc.msg) {
-				t.Errorf("stderr %q, want %q", stderr.String(), tc.msg)
+			// Help on stdout, errors on stderr.
+			got := stderr.String()
+			if tc.code == 0 {
+				got = stdout.String() + got
+			}
+			if tc.msg == "" && len(got) > 0 || !strings.Contains(got, tc.msg) {
+				t.Errorf("output %q, want %q", got, tc.msg)
 			}
 		})
 	}
-	if b, err := os.ReadFile(filepath.Join(sbeAssume, "sbe.go")); err != nil || !strings.Contains(string(b), "generated by fix2gen sbe -assume-same-encodings -tolerate-unfilled-counts.") {
+	if b, err := os.ReadFile(filepath.Join(sbeAssume, "sbe.go")); err != nil || !strings.Contains(string(b), "generated by fix2gen sbe --assume-same-encodings --tolerate-unfilled-counts.") {
 		t.Errorf("sbe.go generated with assumptions: %.300q, %v", b, err)
 	}
-	if b, err := os.ReadFile(filepath.Join(sbeBinance, "sbe.go")); err != nil || !strings.Contains(string(b), "generated by fix2gen sbe -tolerate-foreign-metadata -tolerate-undeclared-primitive-types -tolerate-group-redefinitions -tolerate-field-redefinitions.") {
+	if b, err := os.ReadFile(filepath.Join(sbeBinance, "sbe.go")); err != nil || !strings.Contains(string(b), "generated by fix2gen sbe --tolerate-foreign-metadata --tolerate-undeclared-primitive-types --tolerate-group-redefinitions --tolerate-field-redefinitions.") {
 		t.Errorf("sbe.go generated with tolerations: %.300q, %v", b, err)
 	}
 	for _, path := range []string{"dispatch.go", "fields.go", "msg_logon.go", filepath.Join(sbeOut, "msg_new_order_single.go")} {
@@ -66,6 +76,45 @@ func TestRun(t *testing.T) {
 		b, err := os.ReadFile(path)
 		if err != nil || !strings.HasPrefix(string(b), "// Code generated by fix2gen; DO NOT EDIT.") {
 			t.Errorf("%s: %.60q, %v", name, b, err)
+		}
+	}
+}
+
+// A required flag given empty is a usage error, found before anything is
+// loaded or written.
+func TestRunEmptyRequired(t *testing.T) {
+	const dict, schema = "../../fix/dictionary/testdata/FIX40.xml", "../../internal/gen/sbe/testdata/examples.xml"
+	for _, args := range [][]string{
+		{"tagvalue", "--dict=", "--pkg", "x"},
+		{"tagvalue", "--dict", dict, "--pkg="},
+		{"sbe", "--schema=", "--pkg", "x"},
+		{"sbe", "--schema", schema, "--pkg="},
+	} {
+		out := filepath.Join(t.TempDir(), "out")
+		var stdout, stderr strings.Builder
+		if code := run(append(args, "--out", out), &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "must not be empty") ||
+			!strings.Contains(stderr.String(), "fix2gen --help") {
+			t.Errorf("%q: exit %d, stderr %q", args, code, stderr.String())
+		}
+		if _, err := os.Stat(out); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%q: %s made: %v", args, out, err)
+		}
+	}
+}
+
+// brokenWriter fails every write.
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+// Failing to write stdout, cobra's own output included, is a failure: exit
+// 1, no usage hint.
+func TestRunOutputFails(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"sbe", "--help"}, {"completion", "bash"}} {
+		var stderr strings.Builder
+		if code := run(args, brokenWriter{}, &stderr); code != 1 || strings.Count(stderr.String(), "write failed") != 1 ||
+			strings.Contains(stderr.String(), "for usage") {
+			t.Errorf("%q: exit %d, stderr %q", args, code, stderr.String())
 		}
 	}
 }

@@ -36,8 +36,8 @@ followed and what each toleration relaxes.
   `Compose` for FIXT 1.1 application messages.
 - **Code generation** (`cmd/fix2gen`): `fix2gen tagvalue` writes typed
   readers, builders and the dictionary as Go code, from a QuickFIX
-  dictionary or an Orchestra repository; `-dispatch` adds a typed handler
-  interface, `-bytes` getters of raw values (exact decimal prices, for one).
+  dictionary or an Orchestra repository; `--dispatch` adds a typed handler
+  interface, `--bytes` getters of raw values (exact decimal prices, for one).
   `fix2gen sbe` writes the codecs of a Simple Binary Encoding schema, a
   struct per message ([docs/sbe.md](docs/sbe.md)).
 - **Sessions** (`fix/session`): initiators and acceptors for FIX 4.0 to 4.4 and
@@ -179,8 +179,8 @@ then finishes its flow until the session is finalized. Recoverable,
 Idempotent or Unsequenced flows either way, TLS, a token as credentials:
 
     cd contribs/fixpecho && make
-    dist/fixpecho server -listen 127.0.0.1:7760 -token s3cret
-    dist/fixpecho client -connect 127.0.0.1:7760 -token s3cret -count 100000 -window 100
+    dist/fixpecho server --listen 127.0.0.1:7760 --token s3cret
+    dist/fixpecho client --connect 127.0.0.1:7760 --token s3cret --count 100000 --window 100
 
 ### store/sqlite3
 

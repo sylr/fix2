@@ -22,12 +22,12 @@ application's schema must therefore:
 
 ## Generating
 
-    go run github.com/sylr/fix2/cmd/fix2gen sbe -schema orders.xml -pkg orders -out internal/orders
+    go run github.com/sylr/fix2/cmd/fix2gen sbe --schema orders.xml --pkg orders --out internal/orders
 
 or, as a Go tool of the application's module (`go get -tool
 github.com/sylr/fix2/cmd/fix2gen`), from a `//go:generate` line:
 
-    //go:generate go tool fix2gen sbe -schema orders.xml -pkg orders -out .
+    //go:generate go tool fix2gen sbe --schema orders.xml --pkg orders --out .
 
 The package holds a struct per message, with `AppendTo`, `Decode` and
 `DecodeBody`, its template ID as a constant, and `SchemaID`,

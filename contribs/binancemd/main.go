@@ -58,6 +58,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -97,6 +98,32 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
+// errWriter writes to w, and keeps the first error a write returned.
+type errWriter struct {
+	w   io.Writer
+	mu  sync.Mutex
+	err error
+}
+
+func (w *errWriter) Write(p []byte) (int, error) {
+	n, err := w.w.Write(p)
+	if err != nil {
+		w.mu.Lock()
+		if w.err == nil {
+			w.err = err
+		}
+		w.mu.Unlock()
+	}
+	return n, err
+}
+
+// failed returns the first error a write returned, nil if none did.
+func (w *errWriter) failed() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
+}
+
 // runError is an error of a command that ran, as opposed to a usage error.
 type runError struct{ err error }
 
@@ -108,14 +135,25 @@ func (e runError) Unwrap() error { return e.err }
 func run(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signalContext()
 	defer stop()
-	root := newCommand(stdout, stderr)
-	root.SetArgs(args)
+	// A failed write of stdout, cobra's own (help, --version, completion)
+	// included, fails the command: exit 1.
+	out := &errWriter{w: stdout}
+	root := newCommand(out, stderr)
+	// Given nil, cobra would read os.Args.
+	root.SetArgs(append([]string{}, args...))
 	err := root.ExecuteContext(ctx)
-	if err == nil {
+	werr := out.failed()
+	if err == nil && werr == nil {
 		return 0
 	}
-	fmt.Fprintf(stderr, "binancemd: %v\n", err)
-	if errors.As(err, new(runError)) {
+	if err != nil {
+		fmt.Fprintf(stderr, "binancemd: %v\n", err)
+	}
+	// A failed write of stdout, unless it is the error told, is told too.
+	if werr != nil && !errors.Is(err, werr) {
+		fmt.Fprintf(stderr, "binancemd: %v\n", werr)
+	}
+	if errors.As(err, new(runError)) || werr != nil {
 		return 1
 	}
 	fmt.Fprintf(stderr, "Run 'binancemd --help' for usage.\n")
@@ -318,8 +356,12 @@ func validID(id string, n int) bool {
 	return true
 }
 
-// isTerminal reports whether w is a terminal.
+// isTerminal reports whether w, or the writer of an errWriter, is a
+// terminal.
 func isTerminal(w io.Writer) bool {
+	if ew, ok := w.(*errWriter); ok {
+		w = ew.w
+	}
 	f, ok := w.(*os.File)
 	if !ok {
 		return false

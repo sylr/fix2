@@ -50,7 +50,7 @@ FIX2GEN_SRC := $(shell find ../../../cmd/fix2gen ../../../internal/gen ../../dic
 
 gen/fix2/.stamp: $(DICT) go.mod go.sum $(FIX2GEN_SRC)
 	rm -rf gen/fix2 && mkdir -p gen/fix2/fix44
-	$(GO) tool fix2gen tagvalue -dict $(DICT) -pkg fix44 -out gen/fix2/fix44 -dispatch
+	$(GO) tool fix2gen tagvalue --dict $(DICT) --pkg fix44 --out gen/fix2/fix44 --dispatch
 	touch $@
 
 gen/quickfixgo/.stamp: $(DICT) go.mod go.sum

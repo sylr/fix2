@@ -16,7 +16,7 @@ import (
 )
 
 // The decoders of version 1 under test: older's, strict, oldersame's
-// (-assume-same-encodings), olderunfilled's (-tolerate-unfilled-counts) and
+// (--assume-same-encodings), olderunfilled's (--tolerate-unfilled-counts) and
 // oldersameunfilled's (both), seen through what version 1 knows.
 type view struct {
 	ID     uint32
@@ -204,7 +204,7 @@ func TestNewerVersionStrict(t *testing.T) {
 	}
 }
 
-// With -assume-same-encodings, a decoder of version 1 reads messages of
+// With --assume-same-encodings, a decoder of version 1 reads messages of
 // version 2 whole: the fields a block adds are skipped by its blockLength,
 // the groups and data a message or an entry adds by the counts of its
 // header or dimension, recursively (§7.3). What it knows decodes as version
@@ -278,7 +278,7 @@ func zero(b []byte, at int) []byte {
 
 // The header's and dimensions' numGroups and numVarDataFields are those of
 // the received version, whatever it is, or ErrMalformed (§7.3.2); with
-// -tolerate-unfilled-counts, a count of 0 is taken for one left unfilled,
+// --tolerate-unfilled-counts, a count of 0 is taken for one left unfilled,
 // as Real Logic's encoders leave them, and the decoder reads what it knows
 // the version holds.
 func TestCounts(t *testing.T) {
@@ -306,7 +306,7 @@ func TestCounts(t *testing.T) {
 		b         []byte
 		want      view
 		malformed bool // strictly
-		tolerated bool // with -tolerate-unfilled-counts
+		tolerated bool // with --tolerate-unfilled-counts
 	}{
 		{"version 1, filled", decoder.orderOf, order, orderWant, false, true},
 		{"version 1, header unfilled", decoder.orderOf, zero(order, 4), orderWant, true, true},
@@ -338,9 +338,9 @@ func (d decoder) reportOf() func([]byte) (view, int, error) { return d.report }
 
 // In a message of a newer version, a count below what version 1 knows is
 // malformed as in any; a count of 0, unfilled, with
-// -tolerate-unfilled-counts, tells nothing of the newer version's groups and
+// --tolerate-unfilled-counts, tells nothing of the newer version's groups and
 // data: ErrNewer, as where nothing counts them, where they could come before
-// what the decoder reads, unless -assume-same-encodings, with which they are
+// what the decoder reads, unless --assume-same-encodings, with which they are
 // taken to be none, and a new group's dimension before known data is read
 // as that data. Counts of zero where version 1 knows nothing agree with it:
 // what follows is not read, nor counted.

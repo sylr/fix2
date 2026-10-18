@@ -43,7 +43,7 @@ func (m *Order) decode(b []byte, blockLen, version int, numGroups, numData uint6
 		active := uint64(1)
 		if numGroups == 0 && active > 0 {
 			// A count the encoder did not fill, as Real Logic's do not
-			// (-tolerate-unfilled-counts): nothing is known beyond the schema's.
+			// (--tolerate-unfilled-counts): nothing is known beyond the schema's.
 			// In a newer version, nothing then tells of its groups, which would
 			// be here.
 			if version > SchemaVersion {
@@ -77,7 +77,7 @@ func (m *Order) decode(b []byte, blockLen, version int, numGroups, numData uint6
 		active := uint64(1)
 		if numData == 0 && active > 0 {
 			// A count the encoder did not fill, as Real Logic's do not
-			// (-tolerate-unfilled-counts): nothing is known beyond the schema's.
+			// (--tolerate-unfilled-counts): nothing is known beyond the schema's.
 		} else if numData < active || numData > active && version <= SchemaVersion {
 			return 0, ErrMalformed
 		} else if numData > active {
@@ -213,7 +213,7 @@ func (m *Legs) decode(b []byte, blockLen, version int, numGroups, numData uint64
 		active := uint64(0)
 		if numGroups == 0 && active > 0 {
 			// A count the encoder did not fill, as Real Logic's do not
-			// (-tolerate-unfilled-counts): nothing is known beyond the schema's.
+			// (--tolerate-unfilled-counts): nothing is known beyond the schema's.
 			// In a newer version, nothing then tells of its groups, which would
 			// be here.
 			if version > SchemaVersion {
@@ -247,7 +247,7 @@ func (m *Legs) decode(b []byte, blockLen, version int, numGroups, numData uint64
 		active := uint64(1)
 		if numData == 0 && active > 0 {
 			// A count the encoder did not fill, as Real Logic's do not
-			// (-tolerate-unfilled-counts): nothing is known beyond the schema's.
+			// (--tolerate-unfilled-counts): nothing is known beyond the schema's.
 			// In a newer version, nothing then tells of its data, which would
 			// be here.
 			if version > SchemaVersion {

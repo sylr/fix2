@@ -52,7 +52,7 @@ func TestLoadFIXP(t *testing.T) {
 	// The FIX Trading Community's schema gives id 8 to Reason and Flow,
 	// and the name Code to fields of four ids (§6.9).
 	if _, err := LoadFile("../../../fixp/internal/codec/SBEschemaForFIXP.xml"); err == nil ||
-		!strings.Contains(err.Error(), `field id 8 is "Reason" of type "CharacterString" elsewhere, "Flow" of type "FlowType" here (§6.9): -tolerate-field-redefinitions accepts it`) {
+		!strings.Contains(err.Error(), `field id 8 is "Reason" of type "CharacterString" elsewhere, "Flow" of type "FlowType" here (§6.9): --tolerate-field-redefinitions accepts it`) {
 		t.Errorf("strictly: %v", err)
 	}
 }
@@ -93,7 +93,7 @@ func TestLoadFieldRedefinitions(t *testing.T) {
 	}
 	for _, c := range []struct{ name, messages, want string }{
 		{"a name of two ids", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="a" id="3" type="u8"/></sbe:message>`,
-			`<message name="n">: <field name="a">: field "a" is id 2 of type "u8" elsewhere, id 3 of type "u8" here (§6.9): -tolerate-field-redefinitions accepts it`},
+			`<message name="n">: <field name="a">: field "a" is id 2 of type "u8" elsewhere, id 3 of type "u8" here (§6.9): --tolerate-field-redefinitions accepts it`},
 		{"a name of two types", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="a" id="2" type="u16"/></sbe:message>`,
 			`field "a" is id 2 of type "u8" elsewhere, id 2 of type "u16" here`},
 		{"a name of two encodings alike", `<sbe:message name="m" id="1"><field name="a" id="2" type="u8"/></sbe:message><sbe:message name="n" id="2"><field name="a" id="2" type="u8b"/></sbe:message>`,
@@ -149,11 +149,11 @@ func TestLoadRejects(t *testing.T) {
 		{"two groups of a name", `<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="g" id="2"><field name="b" id="4" type="u16"/></group></sbe:message>`, "different group of the same name"},
 		{"two groups of a name, their members of different versions", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="g" id="2"><field name="a" id="3" type="u8" sinceVersion="1"/></group></sbe:message>`, "different group of the same name"},
 		{"two groups of an id", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/></group></sbe:message><sbe:message name="n" id="2"><group name="h" id="2"><field name="a" id="3" type="u8"/></group></sbe:message>`,
-			"different group of the same id 2 is defined elsewhere: -tolerate-group-redefinitions generates a type for each"},
+			"different group of the same id 2 is defined elsewhere: --tolerate-group-redefinitions generates a type for each"},
 		{"two nested groups of a name", `<type name="u8" primitiveType="uint8"/><type name="u16" primitiveType="uint16"/>`, `<sbe:message name="m" id="1"><group name="g" id="2"><group name="n" id="3"><field name="a" id="4" type="u8"/></group></group></sbe:message><sbe:message name="o" id="2"><group name="n" id="3"><field name="b" id="5" type="u16"/></group></sbe:message>`,
 			`<message name="o">: <group name="n">: a different group of the same name`},
 		{"a field of a primitive no encoding is named", ``, `<sbe:message name="Reject" id="1"><field name="RefSeqNum" id="45" type="uint32" presence="optional"/></sbe:message>`,
-			`<message name="Reject">: <field name="RefSeqNum">: no encoding named "uint32": a field's type names an encoding of <types> (§6.7), not a primitive: -tolerate-undeclared-primitive-types resolves it as the primitive`},
+			`<message name="Reject">: <field name="RefSeqNum">: no encoding named "uint32": a field's type names an encoding of <types> (§6.7), not a primitive: --tolerate-undeclared-primitive-types resolves it as the primitive`},
 		{"data shorter than it can be", `<composite name="d2"><type name="length" primitiveType="uint8" minValue="5" maxValue="3"/><type name="data" primitiveType="uint8" length="0"/></composite>`, `<sbe:message name="m" id="1"><data name="d" id="2" type="d2"/></sbe:message>`, "its length allows 5 to 3 bytes"},
 		{"valueRef to nothing", `<type name="x" primitiveType="uint8" presence="constant" valueRef="E.v"/>`, ``, "valueRef"},
 		{"data of a scalar", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><data name="d" id="2" type="u8"/></sbe:message>`, "not a composite of an unsigned length"},
@@ -180,7 +180,7 @@ func TestLoadRejects(t *testing.T) {
 		{"type in the SBE namespace", `<sbe:type name="x" primitiveType="uint8"/>`, ``, `<type name="x">: in the SBE namespace: sbe.xsd declares it unqualified`},
 		{"element of an undeclared prefix", `<mbx:note/>`, ``, `<mbx:note>: undeclared prefix "mbx"`},
 		{"foreign attribute", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><field name="f" id="2" type="u8" xmlns:mbx="https://binance.example/sbe" mbx:x="1"/></sbe:message>`,
-			`<message name="m">: <field name="f">: attribute "x" in namespace "https://binance.example/sbe": metadata of another namespace, which sbe.xsd does not allow: -tolerate-foreign-metadata ignores it`},
+			`<message name="m">: <field name="f">: attribute "x" in namespace "https://binance.example/sbe": metadata of another namespace, which sbe.xsd does not allow: --tolerate-foreign-metadata ignores it`},
 		{"foreign element", `<type name="u8" primitiveType="uint8"/>`, `<sbe:message name="m" id="1"><mbx:doc xmlns:mbx="https://binance.example/sbe"/></sbe:message>`,
 			`<message name="m">: <doc> in namespace "https://binance.example/sbe": metadata of another namespace`},
 		{"xml:lang", `<type name="u8" primitiveType="uint8" xml:lang="en"/>`, ``, `<type name="u8">: attribute "lang" in namespace "http://www.w3.org/XML/1998/namespace"`},
@@ -246,7 +246,7 @@ func TestLoadForeignNamespaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(strings.NewReader(src)); err == nil || !strings.Contains(err.Error(), "-tolerate-foreign-metadata") {
+	if _, err := Load(strings.NewReader(src)); err == nil || !strings.Contains(err.Error(), "--tolerate-foreign-metadata") {
 		t.Errorf("without TolerateForeignMetadata: %v", err)
 	}
 	if len(s.Types) != len(plain.Types) || len(s.Messages) != 1 {
@@ -290,7 +290,7 @@ func TestLoadUndeclaredPrimitiveTypes(t *testing.T) {
 	src := schema(`<type name="char" primitiveType="uint8"/>`,
 		`<sbe:message name="m" id="1"><field name="a" id="2" type="uint32" presence="optional"/><field name="b" id="3" type="uint32"/>
 		<field name="c" id="4" type="int8"/><field name="d" id="5" type="double" presence="optional"/><field name="e" id="6" type="char"/></sbe:message>`)
-	if _, err := Load(strings.NewReader(src)); err == nil || !strings.Contains(err.Error(), "-tolerate-undeclared-primitive-types") {
+	if _, err := Load(strings.NewReader(src)); err == nil || !strings.Contains(err.Error(), "--tolerate-undeclared-primitive-types") {
 		t.Fatalf("strictly: %v", err)
 	}
 	s, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateUndeclaredPrimitiveTypes: true})
@@ -340,7 +340,7 @@ func TestLoadGroupRedefinitions(t *testing.T) {
 		`<sbe:message name="m" id="1"><group name="g" id="2"><field name="a" id="3" type="u8"/><group name="n" id="4"><field name="b" id="5" type="u8"/></group></group></sbe:message>
 		<sbe:message name="o" id="2"><group name="g" id="2"><field name="a" id="3" type="u16"/><group name="n" id="4"><field name="b" id="5" type="u16"/></group></group>
 		<group name="h" id="4"><field name="b" id="5" type="u8"/></group></sbe:message>`)
-	if _, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateFieldRedefinitions: true}); err == nil || !strings.Contains(err.Error(), "-tolerate-group-redefinitions") {
+	if _, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateFieldRedefinitions: true}); err == nil || !strings.Contains(err.Error(), "--tolerate-group-redefinitions") {
 		t.Fatalf("strictly: %v", err)
 	}
 	s, err := LoadWith(strings.NewReader(src), LoadOptions{TolerateGroupRedefinitions: true, TolerateFieldRedefinitions: true})

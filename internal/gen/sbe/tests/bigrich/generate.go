@@ -2,4 +2,4 @@
 // testdata/bigrich.xml, rich.xml big-endian, and their tests.
 package bigrich
 
-//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/bigrich.xml -pkg bigrich -out .
+//go:generate go run ../../../../../cmd/fix2gen sbe --schema ../../testdata/bigrich.xml --pkg bigrich --out .

@@ -16,7 +16,7 @@ package fixsbe
 // optionalVarString8) or two names (id 58, Text and ErrorText), each take a
 // toleration.
 
-//go:generate go tool fix2gen sbe -schema spot-fixsbe-1_1.xml -pkg fixsbe -out . -tolerate-foreign-metadata -tolerate-undeclared-primitive-types -tolerate-group-redefinitions -tolerate-field-redefinitions
+//go:generate go tool fix2gen sbe --schema spot-fixsbe-1_1.xml --pkg fixsbe --out . --tolerate-foreign-metadata --tolerate-undeclared-primitive-types --tolerate-group-redefinitions --tolerate-field-redefinitions
 
 // Package binancefix exports these codecs through aliases, regenerated
 // after them.

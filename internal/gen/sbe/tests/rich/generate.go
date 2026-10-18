@@ -2,4 +2,4 @@
 // and their tests.
 package rich
 
-//go:generate go run ../../../../../cmd/fix2gen sbe -schema ../../testdata/rich.xml -pkg rich -out .
+//go:generate go run ../../../../../cmd/fix2gen sbe --schema ../../testdata/rich.xml --pkg rich --out .
