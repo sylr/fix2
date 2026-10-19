@@ -77,7 +77,7 @@ export STACK
 export PULUMI_CONFIG_PASSPHRASE ?=
 ON_CONTROL := sh infra/on-control.sh
 
-.PHONY: vm-up vm-deploy vm-down vm-check-env vm-unit vm-console
+.PHONY: vm-up vm-deploy vm-down vm-check-env vm-unit vm-console vm-test vm-test-wait vm-test-fetch vm-test-stop
 
 # vm-up makes the VMs, then sets them up and builds the suite there.
 vm-up:
@@ -103,3 +103,21 @@ vm-unit:
 
 vm-console:
 	$(ON_CONTROL) -t 'bash -l'
+
+# vm-test runs the test as a job on control, as test does on Docker; the
+# packet faults shape the interface the nodes reach each other through,
+# unless TEST_OPTS gives --net-dev. It follows the job to its end, fetches
+# its results into store/, and fails unless valid: make turns every failure
+# into 2, and `sh infra/vm-test.sh start` tells them apart. The job outlives
+# the connection: vm-test-wait follows it again.
+vm-test:
+	sh infra/vm-test.sh start --concurrency $(CONCURRENCY) --time-limit $(TIME_LIMIT) $(TEST_OPTS)
+
+vm-test-wait:
+	sh infra/vm-test.sh wait
+
+vm-test-fetch:
+	sh infra/vm-test.sh fetch
+
+vm-test-stop:
+	sh infra/vm-test.sh stop

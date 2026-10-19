@@ -9,6 +9,14 @@ say() { echo "$*" >&3; echo "== $*"; }
 trap 'echo "failed: see $log on $(hostname)" >&3; tail -20 "$log" >&3' EXIT
 
 d=/opt/fix2-jepsen
+# The sources a running test reads are not replaced under it: the lock
+# infra/job.sh takes to start one, held to the end of the build.
+exec 9>/var/lib/fix2-jepsen/lock
+if ! flock -n 9 || systemctl list-units 'fix2-jepsen-test-*' --all --no-legend --plain |
+	awk '$3 != "inactive" && $3 != "failed"' | grep -q .; then
+	echo "a test is running or starting: wait for it, or stop it (make vm-test-stop)" >&3
+	exit 1
+fi
 say "sources"
 rm -rf "$d/src.new"
 mkdir -p "$d/src.new"

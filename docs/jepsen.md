@@ -380,12 +380,29 @@ backend (`pulumi login --local`):
 
 Each setup is a script run as a whole, idempotent, and run again when it
 changes or its host is made again; its log stays on the host, in
-`/var/log/fix2-jepsen-setup.log`. The sources build again when they change.
+`/var/log/fix2-jepsen-setup.log`. The sources build again when they change,
+unless a test is running.
+
 Running the test is not Pulumi's: a test is a job, not a resource.
+`jepsen/infra/job.sh` runs it on control as a systemd unit of its own id,
+one at a time and not while the suite builds, under a lock both take; the
+unit outlives the SSH connection that started it. The packet faults shape
+the interface the nodes reach each other through, found from their routes
+in every direction, unless `--net-dev` names one. `make vm-test` starts it,
+follows its log, fetches its results into `jepsen/store`, whole or not at
+all, and fails unless the run is valid. `sh infra/vm-test.sh start`, from
+`jepsen`, exits with the verdict itself, make turning every failure into 2: 0 valid,
+1 invalid, 2 unknown; 3 if the run reached no verdict (stopped, crashed
+before checking, or the connection lost), 4 if its results could not be
+fetched. Cut short, it leaves the test running: `make vm-test-wait`
+follows it again.
 
     make -C jepsen vm-up          # the VMs made, set up, the suite built
     make -C jepsen vm-check-env   # check-env.sh, on control
     make -C jepsen vm-unit        # the checker tests, on control
+    make -C jepsen vm-test TEST_OPTS="--nemesis kill,partition" TIME_LIMIT=300
+    make -C jepsen vm-test-wait   # follows a test again, then as vm-test
+    make -C jepsen vm-test-stop
     make -C jepsen vm-deploy      # set up and built again, after a change
     make -C jepsen vm-console     # a shell on control
     make -C jepsen vm-down
@@ -416,7 +433,7 @@ Running the test is not Pulumi's: a test is a job, not a resource.
 | J11d2 | Resets: checks keyed on each sender's epochs, mapped to the receiver's generations from the logs across store lifetimes (`memstore` starts at generation 1 every time), with resets' abandoned messages accounted for. Variants: `ResetOnDisconnect` mid-run, `memstore` with `ResetOnLogon` | yes; the checks key on the sender's epochs, [store lifetime, generation]: the receiver's frames are matched to the sender's by their bytes' hash, else by the frame read before at the same sequence number in the receiver's generation; what it delivered, rejected or processed past by the frame read at that sequence number. The final marker closes its own epoch; an order in an epoch before it, never processed past, was abandoned by the reset that ended it: excused, and counted (`:reset-abandoned`), but not once the receiver's process answered a TestRequest sent after it, which it does once it processed what came before in sequence, and then delivered a message it read after answering: delivery is in order, and a reset does not drop what was queued. One read with no probe after it is not known queued rather than held ahead of a gap, which a reset may drop: still excused (a receiver mirroring the session's stash in the checker got six cases wrong). An order acknowledged and never read is excused by nothing. Order and duplicates are taken within the receiver's generations, a reset making the sender resend; the redelivery bound too. A loss told with its generation (`OnLoss`) excuses only its epoch. A run that does not reset keeps one lifetime a node: `memstore` under kills still fails checks 2, 3 and 7. `make reanalyze` checks a stored run again with the current checker: the earlier runs stay valid, and J11d1's reset probe, which failed five checks, is valid (38 orders abandoned, none acknowledged); J0's, without the frames' hashes, cannot be matched. Valid on Docker Desktop: `ResetOnDisconnect` under 60 s of kills and partitions at 2000 orders/s (9 resets); `memstore` with `ResetOnLogon` under 90 s of kills (58,521 sends acknowledged, 2 orders abandoned). Under resets `--mutant drop-deliver` fails checks 2, 4 and 5, `redeliver` check 1. Not yet: a sender epoch reallocated (a power loss rolling a Reset back) |
 | J12a | Checks without a shared clock, for nodes on machines of their own: the two places comparing one node's times with the other's (what the receiver read before a restart, for check 7; a retention GapFill the receiver read against the sender's truncations) by who wrote each frame instead | yes; each frame the receiver read is matched to the sender's process by its bytes' hash, else by the frames of the same connection; a connection with none logged lies between its neighbours on the initiator, which connects once at a time, and is any process's on the acceptor, which numbers connections as they attach (Codex: a socket of a killed process may attach after its successor's). Check 7 is `:unknown` on a frame the restarted process may have written itself; a retention GapFill the sender never logged excuses a loss only if truncated by an earlier process than any that may have written it, `:unknown` if by one that may have. `make -C jepsen unit` shifts either node's clock a day each way over five runs, verdicts unchanged (the previous checker fails 18 of the new assertions). The 26 stored Docker runs reanalyzed: those whose frames carry hashes (J11d1 on) keep every verdict, kills included; earlier ones with restarts go from valid to `:unknown` on check 7, their writers unknowable |
 | J12b | Virtual machines: a Pulumi stack creating the nodes with Multipass, another setting up hosts reachable over SSH (packages, LazyFS, the control node's tools, the sources, the node binary built there); `check-env` covering the VMs' kernels | yes; `make vm-up` on macOS arm64 (Multipass 1.16.4, Ubuntu 26.04, kernel 7.0): three VMs made, set up and the suite built in about 7 minutes; `vm-check-env` passes on both nodes (netem, prio and u32 on `enp0s1`, iptables, a loop-mounted ext4, LazyFS), `vm-unit` passes; a second `pulumi preview` of either stack changes nothing; the VMs renamed, they are made again, set up again and the sources copied to the new control host; a second stack named onto them is refused, and its destroy leaves them (Codex); the same VMs set up and checked through a stack whose config names them, reached as `ubuntu` with sudo. Ubuntu 26.04's uutils `sync FILE` calls sync(2), which LazyFS ignores: `check-env` fsyncs with `dd` now. LazyFS's TOML library needs `CMAKE_POLICY_VERSION_MINIMUM` under CMake 4 |
-| J12c | A runner outside Pulumi: the test started as a job on the control node, waited for, its results fetched, the overall verdict its exit status; `--net-dev` in place of `eth0` | |
+| J12c | A runner outside Pulumi: the test started as a job on the control node, waited for, its results fetched, the overall verdict its exit status; `--net-dev` in place of `eth0` | yes; on the Multipass VMs: 60 s without faults, valid, exit 0, `--net-dev enp0s1` found from the routes; 2 min of kill, partition and packet faults, valid, both directions shaped on `enp0s1`, the network back to `fq_codel` and no iptables rule after; the runner killed 45 s in, the job ran on, a second start was refused, `vm-test-wait` followed it to its end and fetched it; a deploy changing the sources under a running test was refused. After Codex's three rounds: an option Jepsen refuses (254, no results) exits 3, a mutant's invalid run 1, a test stopped while followed 3; a node unreachable fails the interface's discovery; of two starts at once one runs; a start while the last test stops is refused; of two fetches at once one fetches, whole, the other is refused |
 | J12d | Results: long runs of each nemesis on Linux, recorded here, defects filed apart; a short run in CI; FIXP sessions considered | |
 
 ## Found while planning

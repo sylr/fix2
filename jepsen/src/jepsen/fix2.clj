@@ -66,7 +66,7 @@
             ;; The interface named: jepsen.net shapes the first one `ip link`
             ;; lists, and Docker Desktop's kernel puts tunnel devices (tunl0,
             ;; gre0, sit0...) before eth0 in every container.
-            :net       (net/iptables-with-dev "eth0")
+            :net       (net/iptables-with-dev (:net-dev opts))
             :db        db
             :client    (client/client)
             :nemesis   (:nemesis pkg)
@@ -149,7 +149,10 @@
     :parse-fn keyword
     :validate [#{:logon :disconnect} "Must be logon or disconnect"]]
    [nil "--last-processed" "The sessions send LastMsgSeqNumProcessed (369): the processed prefix, which retention takes for acknowledgements, and Keep the margin for a counterparty forgetting part of it."]
-   [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]])
+   [nil "--mutant NAMES" "Breaks the nodes on purpose, for the checkers to catch: no-sync, drop-deliver, redeliver, comma-separated."]
+   [nil "--net-dev DEV" "The nodes' interface to each other, which packet faults shape: eth0 on Docker, the route's on other hosts."
+    :default "eth0"
+    :validate [#(re-matches #"[A-Za-z0-9_.@-]{1,15}" %) "Must be an interface name"]]])
 
 (defn -main
   [& args]
