@@ -97,3 +97,34 @@ if mountpoint -q $d; then echo "lazyfs not unmounted"; exit 1; fi
 rm -rf /var/lib/fix2-check'
 	echo "$n: lazyfs ok: the synced write kept, the unsynced one lost, unmounted"
 done
+
+# Device-mapper's delay and flakey targets, for slow-disk and flaky-disk:
+# not everywhere (not on Docker Desktop), so told, not required.
+for n in $NODES; do
+	if ! ssh "$n" 'modprobe -a dm_delay dm_flakey 2>/dev/null && command -v dmsetup >/dev/null'; then
+		echo "$n: device-mapper delay and flakey unavailable: slow-disk and flaky-disk cannot run"
+		continue
+	fi
+	ssh "$n" 'set -eu
+img=$(mktemp) name=fix2-check-dm
+fallocate -l 16M "$img"
+l=$(losetup -f --show "$img")
+s=$(blockdev --getsz "$l")
+trap "dmsetup remove $name 2>/dev/null || true; losetup -d $l; rm -f $img" EXIT
+dmsetup create $name --table "0 $s delay $l 0 0 $l 0 300"
+t0=$(date +%s%N)
+dd if=/dev/zero of=/dev/mapper/$name bs=4096 count=1 oflag=direct,dsync status=none
+ms=$(( ($(date +%s%N) - t0) / 1000000 ))
+[ "$ms" -ge 250 ] || { echo "dm-delay delayed a write $ms ms, not 300"; exit 1; }
+dmsetup suspend --nolockfs $name
+dmsetup load $name --table "0 $s flakey $l 0 1 4 1 error_writes"
+dmsetup resume $name
+ok=0 failed=0
+for i in $(seq 12); do
+	if dd if=/dev/zero of=/dev/mapper/$name bs=4096 count=1 oflag=direct status=none 2>/dev/null; then ok=$((ok+1)); else failed=$((failed+1)); fi
+	sleep 0.5
+done
+[ "$failed" -gt 0 ] && [ "$ok" -gt 0 ] || { echo "dm-flakey: $ok writes taken, $failed failed"; exit 1; }
+echo "dm-delay held a write $ms ms; dm-flakey took $ok writes, failed $failed"'
+	echo "$n: device-mapper ok"
+done

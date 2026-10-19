@@ -38,6 +38,13 @@
 
 (defn- instant ^java.time.Instant [s] (when s (java.time.Instant/parse s)))
 
+(defn- unsynced-lost?
+  "Whether what the store did not fsync may be lost: on LazyFS at each kill
+  (power-loss), on a disk failing its writes when written back
+  (flaky-disk). Runs recorded before :unsynced-lost tell by :power-loss."
+  [test]
+  (boolean (or (:power-loss test) (:unsynced-lost test))))
+
 (defn- instant-ns [^java.time.Instant i] (+ (* 1000000000 (.getEpochSecond i)) (.getNano i)))
 
 (defn- node-ns
@@ -158,24 +165,30 @@
   committed, or, the one an Open loaded, once a Sync of that process
   returned nil. Returns, for each process, its :open event and the
   :committed and :durable frontiers (generation → highest prefix) of the
-  processes before it."
+  processes before it.
+
+  A Sync makes durable what its process committed since it opened, on
+  top of what that Open loaded: not what processes before committed and
+  a loss (power-loss, flaky-disk) took, which only a later commit and Sync
+  make durable again."
   [evs]
   (loop [incs (incarnations evs), committed {}, durable {}, out []]
     (if-let [inc-evs (first incs)]
       (let [open (first (filter (store-end? "open") inc-evs))
-            [c d] (reduce (fn [[c d snap] ev]
-                            (cond
-                              ((store-end? "set-next-target") ev)
-                              [(bump c [(:gen ev) (:target ev 0)]) d snap]
-                              (and (= "store" (:kind ev)) (= "sync" (:call ev)) (= "begin" (:phase ev)))
-                              [c d c]
-                              ((store-end? "sync") ev)
-                              [c (merge-with max d snap
-                                             (when open {(:gen open) (:target open 0)}))
-                               snap]
-                              :else [c d snap]))
-                          [(if open (bump committed [(:gen open) (:target open 0)]) committed) durable {}]
-                          inc-evs)]
+            ;; [every commit, this process's from what it loaded, durable,
+            ;; this process's when the Sync in progress began]
+            [c _ d] (reduce (fn [[c cur d snap] ev]
+                              (cond
+                                ((store-end? "set-next-target") ev)
+                                (let [k [(:gen ev) (:target ev 0)]] [(bump c k) (bump cur k) d snap])
+                                (and (= "store" (:kind ev)) (= "sync" (:call ev)) (= "begin" (:phase ev)))
+                                [c cur d cur]
+                                ((store-end? "sync") ev)
+                                [c cur (merge-with max d snap) snap]
+                                :else [c cur d snap]))
+                            (let [loaded (when open {(:gen open) (:target open 0)})]
+                              [(merge-with max committed loaded) (or loaded committed) durable {}])
+                            inc-evs)]
         (recur (rest incs) c d (conj out {:inc (:inc (first inc-evs)) :open open :committed committed :durable durable})))
       out)))
 
@@ -555,7 +568,7 @@
                                               :when (= (:gen x) (:gen y))
                                               w (written-between (:gen x) (:seq x) (:seq y))]
                                           (assoc w :inc (:inc y) :problem :skipped))
-                                        (when (and d0 (not (:power-loss test)) (<= (:seq d0) m)
+                                        (when (and d0 (not (unsynced-lost? test)) (<= (:seq d0) m)
                                                    (<= redelivery-bound (- m (:seq d0))))
                                           [{:inc (:inc d0) :problem :redelivered-too-much :from (:seq d0) :highest m}]))]
                          (recur (rest incs)
@@ -584,7 +597,7 @@
 
         ;; 5. Nothing lost silently.
         durable-orders (into {} (filter val (:durable stores)))
-        owed (merge (if (:power-loss test) {} (into {} (filter val (:appended stores))))
+        owed (merge (if (unsynced-lost? test) {} (into {} (filter val (:appended stores))))
                     durable-orders
                     written)
         silent (for [[[g s :as k] id] owed
@@ -626,7 +639,7 @@
         forgotten (for [[p {:keys [seen maybe]}] (map vector (:processes stores) (seen-before (:processes stores) writer b-evs))
                         :let [open (:open p)
                               g (:gen open)
-                              kept (if (:power-loss test) (:durable p) (:appended p))
+                              kept (if (unsynced-lost? test) (:durable p) (:appended p))
                               highest (max (get kept g 0) (get seen g 0))
                               perhaps (max highest (get maybe g 0))]
                         :when (and open (<= (:next open 0) perhaps))]
@@ -638,7 +651,7 @@
         prefix-forgotten (for [p (target-history a-evs)
                                :let [open (:open p)
                                      g (:gen open)
-                                     kept (get (if (:power-loss test) (:durable p) (:committed p)) g 0)]
+                                     kept (get (if (unsynced-lost? test) (:durable p) (:committed p)) g 0)]
                                :when (and open (< (:target open 0) kept))]
                            {:inc (:inc p) :problem :processed-prefix-forgotten :next-target (:target open) :kept kept})
 

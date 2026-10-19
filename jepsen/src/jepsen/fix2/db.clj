@@ -40,21 +40,104 @@
 
 (def filler "Fills the small filesystem." "filler")
 
+(def dm-name
+  "The device-mapper device the store's filesystem sits on, with :dm-disk:
+  its table linear, or delaying the disk's writes, or failing them."
+  "fix2-store")
+
+(def dm-dev (str "/dev/mapper/" dm-name))
+
+(def loop-record "The loop device under dm-name." "/var/lib/fix2/disk.loop")
+
 (defn mount-disk!
-  "Mounts a fresh small ext4 filesystem where the store goes."
+  "Mounts a fresh small ext4 filesystem where the store goes: on the image
+  looped, or, with :dm-disk, on dm-name over it."
   [test]
   (c/su
     (c/exec :mkdir :-p (disk-dir test))
     (c/exec :fallocate :-l disk-size disk-image)
-    ;; No blocks reserved: the node runs as root, which could use them.
-    (c/exec :mkfs.ext4 :-q :-F :-m 0 disk-image)
-    (c/exec :mount :-o :loop disk-image (disk-dir test))))
+    (if (:dm-disk test)
+      (let [_ (c/exec :modprobe :-a :dm_delay :dm_flakey)
+            loop-dev (str/trim (c/exec :losetup :-f :--show disk-image))
+            sectors (str/trim (c/exec :blockdev :--getsz loop-dev))]
+        (c/exec :echo loop-dev :> loop-record)
+        (c/exec :dmsetup :create dm-name :--table (str "0 " sectors " linear " loop-dev " 0"))
+        ;; No blocks reserved: the node runs as root, which could use them.
+        (c/exec :mkfs.ext4 :-q :-F :-m 0 dm-dev)
+        (c/exec :mount dm-dev (disk-dir test)))
+      (do (c/exec :mkfs.ext4 :-q :-F :-m 0 disk-image)
+          (c/exec :mount :-o :loop disk-image (disk-dir test))))))
+
+(defn- dm-table
+  "dm-name's table: :linear; [:delay ms], writes and flushes delayed;
+  :flakey, writes failing with EIO 4 s in every 5."
+  [kind]
+  (let [loop-dev (str/trim (c/exec :cat loop-record))
+        sectors (str/trim (c/exec :blockdev :--getsz loop-dev))
+        [k ms] (if (vector? kind) kind [kind])]
+    (str "0 " sectors " "
+         (case k
+           :linear (str "linear " loop-dev " 0")
+           :delay  (str "delay " loop-dev " 0 0 " loop-dev " 0 " ms)
+           :flakey (str "flakey " loop-dev " 0 1 4 1 error_writes")))))
+
+(defn set-disk!
+  "Swaps dm-name's table for kind's (see dm-table). Suspended without
+  freezing the filesystem, whose writes may be failing."
+  [kind]
+  (c/su
+    (let [table (dm-table kind)]
+      (c/exec :dmsetup :suspend :--nolockfs dm-name)
+      (try (c/exec :dmsetup :load dm-name :--table table)
+           (finally (c/exec :dmsetup :resume dm-name))))
+    kind))
+
+(defn disk-damaged?
+  "Whether the store's filesystem stopped taking writes: ext4 aborts its
+  journal on a failed write and goes read-only."
+  [test]
+  (c/su
+    (let [d (disk-dir test)]
+      (or (str/includes? (str "," (str/trim (c/exec :findmnt :-no :OPTIONS d)) ",") ",ro,")
+          (not= "ok" (str/trim (c/exec :sh :-c (str "touch " d "/.probe 2>/dev/null && rm -f " d "/.probe && echo ok || true"))))))))
+
+(defn repair-disk!
+  "Checks and mounts again the store's filesystem, its node stopped: what
+  its journal committed kept, what failed to reach the disk lost."
+  [test]
+  (c/su
+    (let [d (disk-dir test)]
+      (c/exec :sh :-c (str "! mountpoint -q " d " || umount " d))
+      ;; 0 clean, 1 errors fixed, 2 fixed and reboot advised: a loop
+      ;; device's filesystem needs none.
+      (c/exec :sh :-c (str "e2fsck -fy " dm-dev " >/dev/null; [ $? -le 2 ]"))
+      (c/exec :mount dm-dev d))
+    :repaired))
+
+(defn heal-disk!
+  "Puts dm-name back to linear, if there, resumed first: a run cut short
+  between a suspend and its resume leaves the store's I/O waiting, which
+  no signal ends, and its node unkillable until then. Best effort."
+  []
+  (c/su
+    (c/exec :sh :-c (str "dmsetup info " dm-name " >/dev/null 2>&1 || exit 0; "
+                         "dmsetup resume " dm-name "; "
+                         "[ -e " loop-record " ] || exit 0; l=$(cat " loop-record "); "
+                         "dmsetup suspend --nolockfs " dm-name " && "
+                         "{ dmsetup load " dm-name " --table \"0 $(blockdev --getsz $l) linear $l 0\"; "
+                         "dmsetup resume " dm-name "; }; true"))))
 
 (defn umount-disk!
   []
   (c/su
+    ;; Healed first, if a run ended on a fault: unmounted, the filesystem
+    ;; writes back what it holds.
+    (heal-disk!)
     (doseq [d [(:data-dir lazy) data-dir]]
-      (c/exec :sh :-c (str "! mountpoint -q " d " || umount -l " d)))
+      (c/exec :sh :-c (str "! mountpoint -q " d " || umount " d " || umount -l " d)))
+    ;; dm-name and its loop device, if any.
+    (c/exec :sh :-c (str "if dmsetup info " dm-name " >/dev/null 2>&1; then dmsetup remove --retry " dm-name "; fi; "
+                         "if [ -e " loop-record " ]; then losetup -d $(cat " loop-record ") 2>/dev/null || true; rm -f " loop-record "; fi"))
     (c/exec :rm :-f disk-image)))
 
 (defn fill-disk!
@@ -196,13 +279,16 @@
       (c/exec :mkdir :-p dir data-dir events-dir)
       (c/upload local-bin bin)
       (c/exec :chmod :+x bin))
-    (when (:disk-full test)
+    (when (or (:disk-full test) (:dm-disk test))
       (mount-disk! test))
     (when (:lazyfs test)
       (lazyfs/mount! lazy))
     (start! test node))
 
   (teardown! [this test node]
+    ;; Before the kill, which waits for the node to die: a suspended disk
+    ;; holds it.
+    (heal-disk!)
     (kill! (dissoc test :power-loss) node)
     (c/su (cu/grepkill! :cont "lazyfs")) ; a hung disk left stopped
     ;; LazyFS, then the small filesystem, which may be its backing

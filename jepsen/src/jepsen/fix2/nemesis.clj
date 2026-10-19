@@ -19,7 +19,7 @@
   filesystem, a small one, then frees it. clock skews the sessions' clocks
   (Config.Now); system-clock steps and strobes the nodes' real clocks,
   which only nodes with a kernel each have: not on Docker."
-  #{:kill :pause :partition :packet :power-loss :hang-disk :disk-full :clock :system-clock})
+  #{:kill :pause :partition :packet :power-loss :hang-disk :disk-full :slow-disk :flaky-disk :clock :system-clock})
 
 (def packet-behaviors
   "What the packet nemesis does to the traffic of the nodes it targets:
@@ -36,13 +36,16 @@
    {:delay {} :loss {:percent :10%} :duplicate {:percent :10%}}])
 
 (defn- disk-nemesis
-  "Hangs and fills the nodes' stores: :hang-disk stops LazyFS on the nodes
-  of its value's spec, :fill-disk fills their filesystems; :release-disk
-  resumes LazyFS and frees the filesystems of all nodes."
+  "Hangs, fills, slows and fails the nodes' stores: :hang-disk stops LazyFS
+  on the nodes of its value's spec, :fill-disk fills their filesystems,
+  :slow-disk [spec ms] delays their disks' writes, :flaky-disk fails
+  them; :release-disk resumes LazyFS, frees the filesystems and heals the
+  disks of all nodes, a filesystem a failed write took read-only checked
+  and mounted again, its node stopped meanwhile."
   [db]
   (reify
     n/Reflection
-    (fs [_] #{:hang-disk :fill-disk :release-disk})
+    (fs [_] #{:hang-disk :fill-disk :slow-disk :flaky-disk :release-disk})
 
     n/Nemesis
     (setup! [this test] this)
@@ -52,22 +55,36 @@
                                                    (fn [_ _] (c/su (cu/grepkill! :stop "lazyfs")) :hung)))
         :fill-disk    (assoc op :value (c/on-nodes test (nc/db-nodes test db (:value op))
                                                    (fn [_ _] (db/fill-disk!))))
+        :slow-disk    (let [[spec ms] (:value op)]
+                        (assoc op :value (c/on-nodes test (nc/db-nodes test db spec)
+                                                     (fn [_ _] (db/set-disk! [:delay ms])))))
+        :flaky-disk   (assoc op :value (c/on-nodes test (nc/db-nodes test db (:value op))
+                                                   (fn [_ _] (db/set-disk! :flakey))))
         ;; Released, a node whose session halted is restarted, the
         ;; documented reconciliation: else it stays down the whole run.
         :release-disk (assoc op :value (c/on-nodes test
                                                    (fn [test node]
                                                      (when (contains? (:faults test) :hang-disk)
                                                        (c/su (cu/grepkill! :cont "lazyfs")))
-                                                     (db/free-disk!)
-                                                     (cond
-                                                       (db/complete-kill! test node)
-                                                       :released-killed
-                                                       (client/halted? test node)
-                                                       (do (db/kill! (dissoc test :power-loss) node)
-                                                           (db/start! test node)
-                                                           :released-restarted)
-                                                       :else
-                                                       :released))))))
+                                                     (let [repaired? (when (:dm-disk test)
+                                                                       (db/set-disk! :linear)
+                                                                       (when (db/disk-damaged? test)
+                                                                         (db/kill! test node)
+                                                                         (db/repair-disk! test)
+                                                                         (db/start! test node)
+                                                                         true))]
+                                                       (db/free-disk!)
+                                                       (cond
+                                                         repaired?
+                                                         :released-repaired
+                                                         (db/complete-kill! test node)
+                                                         :released-killed
+                                                         (client/halted? test node)
+                                                         (do (db/kill! (dissoc test :power-loss) node)
+                                                             (db/start! test node)
+                                                             :released-restarted)
+                                                         :else
+                                                         :released)))))))
     (teardown! [_ test])))
 
 (defn- disk-package
@@ -76,13 +93,22 @@
         targets [:one :all]
         hang    (fn [_ _] {:type :info :f :hang-disk :value (rand-nth targets)})
         fill    (fn [_ _] {:type :info :f :fill-disk :value (rand-nth targets)})
+        ;; Writes slowed past and short of the store's 2 s StoreTimeout
+        ;; under disk faults and WriteTimeout's default.
+        slow    (fn [_ _] {:type :info :f :slow-disk :value [(rand-nth targets) (rand-nth [20 200 1000 3000])]})
+        flaky   (fn [_ _] {:type :info :f :flaky-disk :value (rand-nth targets)})
         release {:type :info :f :release-disk :value :all}
-        starts  (cond-> [] (faults :hang-disk) (conj hang) (faults :disk-full) (conj fill))]
+        starts  (cond-> []
+                  (faults :hang-disk)  (conj hang)
+                  (faults :disk-full)  (conj fill)
+                  (faults :slow-disk)  (conj slow)
+                  (faults :flaky-disk) (conj flaky))]
     {:generator       (->> (gen/flip-flop (gen/mix (map gen/repeat starts)) (gen/repeat release))
                            (gen/stagger (:interval opts nc/default-interval)))
      :final-generator release
      :nemesis         (disk-nemesis (:db opts))
-     :perf            #{{:name "disk" :start #{:hang-disk :fill-disk} :stop #{:release-disk} :color "#C0A0E9"}}}))
+     :perf            #{{:name "disk" :start #{:hang-disk :fill-disk :slow-disk :flaky-disk} :stop #{:release-disk}
+                         :color "#C0A0E9"}}}))
 
 (def clock-offsets
   "Offsets of a node's session clock, in ms, against a MaxLatency of 5s:
@@ -224,7 +250,7 @@
       (cond-> []
         (faults :partition)                       (conj (nc/partition-package opts))
         (faults :packet)                          (conj (nc/packet-package opts))
-        (some #{:hang-disk :disk-full} faults)    (conj (disk-package opts))
+        (some #{:hang-disk :disk-full :slow-disk :flaky-disk} faults) (conj (disk-package opts))
         (faults :clock)                           (conj (clock-package opts))
         (faults :system-clock)                    (conj (system-clock-package opts))
         (some #{:kill :pause} faults)             (conj (nc/db-package opts))))))

@@ -32,10 +32,15 @@
         faults (:nemesis opts)
         power-loss? (contains? faults :power-loss)
         hang? (contains? faults :hang-disk)
+        dm? (boolean (some #{:slow-disk :flaky-disk} faults))
         _ (when (and power-loss? hang?)
             ;; A kill left pending on a hung disk would lose its power loss.
             (throw (ex-info "power-loss and hang-disk do not combine yet" {:faults faults})))
-        _ (when (and (= :memstore (:session-store opts)) (some #{:power-loss :hang-disk :disk-full} faults))
+        _ (when (and dm? (or power-loss? hang?))
+            ;; Repaired, the store's filesystem is unmounted: LazyFS would
+            ;; sit on it.
+            (throw (ex-info "slow-disk and flaky-disk do not combine with LazyFS's faults yet" {:faults faults})))
+        _ (when (and (= :memstore (:session-store opts)) (some #{:power-loss :hang-disk :disk-full :slow-disk :flaky-disk} faults))
             (throw (ex-info "memstore has no disk to fault" {:faults faults})))]
     (merge tests/noop-test
            opts
@@ -55,10 +60,15 @@
             :lazyfs      (or power-loss? hang?)
             :power-loss  power-loss?
             :disk-full   (contains? faults :disk-full)
-            :disk-faults (boolean (some #{:hang-disk :disk-full} faults))
+            ;; The store's filesystem on device-mapper, its table swapped.
+            :dm-disk     dm?
+            :disk-faults (boolean (some #{:hang-disk :disk-full :slow-disk :flaky-disk} faults))
+            ;; What the store did not fsync may be lost: on LazyFS at each
+            ;; kill, on a disk failing its writes when written back.
+            :unsynced-lost (boolean (some #{:power-loss :flaky-disk} faults))
             ;; A hung disk halts the session once a write passes
             ;; StoreTimeout: shortened in those runs, unless given.
-            :store-timeout (if (and hang? (zero? (:store-timeout opts))) 2000 (:store-timeout opts))
+            :store-timeout (if (and (or hang? (contains? faults :slow-disk)) (zero? (:store-timeout opts))) 2000 (:store-timeout opts))
             ;; Clock skews of seconds against a MaxLatency of 5s, unless
             ;; given; the checkers read the same.
             :max-latency (or (:max-latency opts) (if (some #{:clock :system-clock} faults) 5 120))
@@ -101,7 +111,7 @@
    [nil "--max-latency SECONDS" "The sessions' MaxLatency: 120, or 5 under clock."
     :parse-fn parse-long
     :validate [#(and % (pos? %)) "Must be a positive whole number of seconds"]]
-   [nil "--store-timeout MS" "The sessions' StoreTimeout, their default if 0 (2000 under hang-disk)."
+   [nil "--store-timeout MS" "The sessions' StoreTimeout, their default if 0 (2000 under hang-disk and slow-disk)."
     :default 0
     :parse-fn parse-long
     :validate [#(and % (not (neg? %))) "Must be a whole number of milliseconds, not negative"]]

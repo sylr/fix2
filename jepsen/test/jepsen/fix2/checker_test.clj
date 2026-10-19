@@ -467,6 +467,27 @@
       (is (false? (valid (check (assoc test-map :power-loss true) power-loss-history evs) :silent-loss)))
       (is (false? (valid (check test-map power-loss-history evs) :silent-loss))))))
 
+(deftest flaky-disk
+  (testing "a disk failing its write-back loses what was not fsynced, as a power loss does"
+    (doseq [[name evs] {"unsynced lost, its number reused" (power-lost false 4)
+                        "durable forgotten" (power-lost true 4)
+                        "durable, never written" (power-lost true 5)}]
+      (let [ks [:durability :silent-loss :acked :redelivery]
+            vs #(map (partial valid (check % power-loss-history evs)) ks)]
+        (is (= (vs (assoc test-map :power-loss true)) (vs (assoc test-map :unsynced-lost true))) name))))
+  (testing "a prefix committed, lost unsynced, is not made durable by a later process's Sync"
+    (let [target (fn [inc t] (ev inc "store" :call "set-next-target" :phase "end" :target t))
+          opened (fn [inc t] (ev inc "store" :call "open" :phase "end" :target t))
+          synced (fn [inc] [(ev inc "store" :call "sync" :phase "begin") (ev inc "store" :call "sync" :phase "end")])
+          evs (vec (concat [(opened "n1-1" 1) (target "n1-1" 100)]
+                           [(opened "n1-2" 1) (target "n1-2" 10)] (synced "n1-2")
+                           [(opened "n1-3" 10)]))
+          p3 (last (c/target-history evs))]
+      (is (= {1 10} (:durable p3)))
+      (is (= {1 100} (:committed p3)) "what was committed, for runs that lose none")))
+  (testing "neither: a kill loses no commit"
+    (is (false? (valid (check test-map power-loss-history (power-lost false 4)) :durability)))))
+
 (deftest durability
   (testing "restarted on a NextSender below what was durable"
     (let [res (check (assoc test-map :power-loss true) power-loss-history (power-lost true 4))]
