@@ -2,6 +2,7 @@
   "The checks, fed a clean run and runs that break each of them."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [jepsen.checker :as checker]
             [jepsen.fix2 [checker :as c]
                          [events :as events]]))
 
@@ -732,3 +733,15 @@
 
 (deftest live
   (is (false? (valid (check test-map (vec (butlast (history))) (clean)) :live))))
+
+(deftest nemesis-errors
+  (let [check #(checker/check (c/nemesis-checker) test-map % {})
+        healed [{:index 0 :process :nemesis :type :info :f :release-disk}
+                {:index 1 :process :nemesis :type :info :f :release-disk :value {"n1" :released}}]]
+    (testing "faults made and healed: valid"
+      (is (true? (:valid? (check healed)))))
+    (testing "a nemesis operation that threw: unknown, the fault not as the run says"
+      (let [res (check (conj healed {:index 2 :process :nemesis :type :info :f :start
+                                     :exception {:via [{:message "e2fsck failed"}]} :error "e2fsck failed"}))]
+        (is (= :unknown (:valid? res)))
+        (is (= [{:index 2 :f :start :error "e2fsck failed"}] (:errors res)))))))

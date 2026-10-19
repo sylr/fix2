@@ -94,16 +94,19 @@
 
 (defn disk-damaged?
   "Whether the store's filesystem stopped taking writes: ext4 aborts its
-  journal on a failed write and goes read-only."
+  journal on a failed write and goes read-only; or is not mounted, a
+  repair having failed half way."
   [test]
   (c/su
     (let [d (disk-dir test)]
-      (or (str/includes? (str "," (str/trim (c/exec :findmnt :-no :OPTIONS d)) ",") ",ro,")
+      (or (not= "ok" (str/trim (c/exec :sh :-c (str "mountpoint -q " d " && echo ok || true"))))
+          (str/includes? (str "," (str/trim (c/exec :findmnt :-no :OPTIONS d)) ",") ",ro,")
           (not= "ok" (str/trim (c/exec :sh :-c (str "touch " d "/.probe 2>/dev/null && rm -f " d "/.probe && echo ok || true"))))))))
 
 (defn repair-disk!
   "Checks and mounts again the store's filesystem, its node stopped: what
-  its journal committed kept, what failed to reach the disk lost."
+  its journal committed kept, what failed to reach the disk lost, the
+  page cache dropped. Not under LazyFS, which flaky-disk refuses."
   [test]
   (c/su
     (let [d (disk-dir test)]
@@ -111,8 +114,8 @@
       ;; 0 clean, 1 errors fixed, 2 fixed and reboot advised: a loop
       ;; device's filesystem needs none.
       (c/exec :sh :-c (str "e2fsck -fy " dm-dev " >/dev/null; [ $? -le 2 ]"))
-      (c/exec :mount dm-dev d))
-    :repaired))
+      (c/exec :mount dm-dev d)))
+  :repaired)
 
 (defn heal-disk!
   "Puts dm-name back to linear, if there, resumed first: a run cut short
@@ -212,16 +215,41 @@
     (start-new! test node)
     true))
 
+(def pending-starts
+  "Nodes whose start waits for their disk to stop failing writes: under
+  flaky-disk a start mounts the store's filesystem again, which a failing
+  disk fails."
+  (atom #{}))
+
+(defn disk-failing?
+  "Whether dm-name fails writes now (flaky-disk)."
+  []
+  (c/su (str/includes? (c/exec :sh :-c (str "dmsetup table " dm-name " 2>/dev/null || true")) "flakey")))
+
 (defn start!
   "Starts the node, with a new incarnation, unless it is running: the
-  nemesis starts all nodes, those it did not kill too."
+  nemesis starts all nodes, those it did not kill too. Under flaky-disk,
+  on a disk failing writes, the start waits for the disk's release."
   [test node]
-  (if (c/su (cu/daemon-running? pid-file))
-    :already-running
-    (start-new! test node)))
+  (cond (c/su (cu/daemon-running? pid-file))
+        :already-running
+        (and (contains? (:faults test) :flaky-disk) (disk-failing?))
+        (do (swap! pending-starts conj node) :start-pending)
+        :else
+        (start-new! test node)))
 
 (defn- start-new!
+  "Starts a process. Under flaky-disk, on the store's filesystem checked
+  and mounted again first, which drops the page cache: a write-back the
+  disk failed leaves its page clean in the cache and stale on the disk, a
+  later fsync need not say so, and a process started on that cache reads
+  what is not there, builds on it and syncs until the cache goes; SQLite
+  then drops every WAL frame after the stale one, synced or not. This
+  checks the filesystem, not the database."
   [test node]
+  (swap! pending-starts disj node)
+  (when (contains? (:faults test) :flaky-disk)
+    (repair-disk! test))
   (let [incarnation (str node "-" (swap! incarnations inc))]
     (info "Starting fix2-jepsen-node" incarnation)
     (c/su
@@ -296,6 +324,9 @@
     ;; umount, not fusermount: Ubuntu's AppArmor lets fusermount unmount
     ;; under /tmp, /mnt and homes only, not the store.
     (c/su (c/exec :sh :-c (str "! mountpoint -q " data-dir " || umount -l " data-dir)))
+    ;; Gone, LazyFS holds its backing files no more: a device-mapper
+    ;; device under them could not be removed.
+    (c/su (cu/grepkill! :kill "lazyfs"))
     (umount-disk!)
     (c/su (c/exec :rm :-rf dir "/var/lib/fix2")))
 

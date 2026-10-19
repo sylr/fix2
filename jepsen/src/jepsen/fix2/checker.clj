@@ -772,3 +772,19 @@
   []
   (reify checker/Checker
     (check [_ test history opts] (analyze test history (events/all test)))))
+
+(defn nemesis-errors
+  "The nemesis operations that threw: a fault not made, or not healed, as
+  the run says. Jepsen counts the run valid all the same; this check
+  makes it :unknown."
+  [history]
+  (for [op history
+        :when (and (= :nemesis (:process op)) (not= :invoke (:type op)) (:exception op))]
+    {:index (:index op) :f (:f op) :error (or (get-in op [:exception :via 0 :message]) (:error op))}))
+
+(defn nemesis-checker
+  []
+  (reify checker/Checker
+    (check [_ test history opts]
+      (let [errs (vec (nemesis-errors history))]
+        {:valid? (if (seq errs) :unknown true) :count (count errs) :errors (take 20 errs)}))))

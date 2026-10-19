@@ -33,13 +33,14 @@
         power-loss? (contains? faults :power-loss)
         hang? (contains? faults :hang-disk)
         dm? (boolean (some #{:slow-disk :flaky-disk} faults))
+        _ (when (and (contains? faults :flaky-disk) (or power-loss? hang?))
+            ;; LazyFS 0.3.0's fsync writes its cache to the disk below and
+            ;; does not fsync it, nor report the write failing: on a disk
+            ;; failing write-back, what the store synced may be lost.
+            (throw (ex-info "flaky-disk does not combine with LazyFS's faults: LazyFS's fsync reaches no disk" {:faults faults})))
         _ (when (and power-loss? hang?)
             ;; A kill left pending on a hung disk would lose its power loss.
             (throw (ex-info "power-loss and hang-disk do not combine yet" {:faults faults})))
-        _ (when (and dm? (or power-loss? hang?))
-            ;; Repaired, the store's filesystem is unmounted: LazyFS would
-            ;; sit on it.
-            (throw (ex-info "slow-disk and flaky-disk do not combine with LazyFS's faults yet" {:faults faults})))
         _ (when (and (= :memstore (:session-store opts)) (some #{:power-loss :hang-disk :disk-full :slow-disk :flaky-disk} faults))
             (throw (ex-info "memstore has no disk to fault" {:faults faults})))]
     (merge tests/noop-test
@@ -86,7 +87,8 @@
                           :exceptions (checker/unhandled-exceptions)
                           :panics     (checker/log-file-pattern #"panic:" "node.log")
                           :timeline   (timeline/html)
-                          :fix2       (fix2-checker/checker)})
+                          :fix2       (fix2-checker/checker)
+                          :nemesis    (fix2-checker/nemesis-checker)})
             :generator (gen/phases
                          (->> (sends (:fix-sessions opts))
                               (gen/stagger (/ (:rate opts)))

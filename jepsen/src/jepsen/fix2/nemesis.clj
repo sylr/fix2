@@ -69,14 +69,26 @@
                                                      (let [repaired? (when (:dm-disk test)
                                                                        (db/set-disk! :linear)
                                                                        (when (db/disk-damaged? test)
-                                                                         (db/kill! test node)
-                                                                         (db/repair-disk! test)
+                                                                         ;; A kill left pending on a hung
+                                                                         ;; disk is this one.
+                                                                         (db/kill! (dissoc test :power-loss) node)
+                                                                         (swap! db/pending-kills disj node)
+                                                                         ;; Under flaky-disk, starting
+                                                                         ;; repairs (db/start-new!).
+                                                                         (when-not (contains? (:faults test) :flaky-disk)
+                                                                           (db/repair-disk! test))
                                                                          (db/start! test node)
-                                                                         true))]
+                                                                         true))
+                                                           ;; Started while its disk failed writes.
+                                                           started? (when (contains? @db/pending-starts node)
+                                                                      (db/start! test node)
+                                                                      true)]
                                                        (db/free-disk!)
                                                        (cond
                                                          repaired?
                                                          :released-repaired
+                                                         started?
+                                                         :released-started
                                                          (db/complete-kill! test node)
                                                          :released-killed
                                                          (client/halted? test node)
