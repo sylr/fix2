@@ -92,7 +92,7 @@
   begun and never ended, its process killed, counts once the next Open
   shows it committed.
 
-  Returns :processes, each with its :open event, :start time, and the
+  Returns :processes, each with its :open event and the
   :appended and :durable frontiers (generation → highest MsgSeqNum) of the
   processes before it; :durable and :appended, [gen seq] → [clordid
   digest], nil for a session message."
@@ -127,8 +127,7 @@
                (into appended appends)
                (reduce bump dfront (map first made))
                (reduce bump afront (map first appends))
-               (conj out {:inc (:inc (first inc-evs)) :open open :start (instant (:t (first inc-evs)))
-                          :appended afront :durable dfront})))
+               (conj out {:inc (:inc (first inc-evs)) :open open :appended afront :durable dfront})))
       {:processes out :durable durable :appended appended})))
 
 (defn target-history
@@ -159,20 +158,61 @@
         (recur (rest incs) c d (conj out {:inc (:inc (first inc-evs)) :open open :committed committed :durable durable})))
       out)))
 
+(defn- places
+  "Each process's place among its node's, by incarnation: 0 the first
+  started."
+  [evs]
+  (into {} (map-indexed (fn [i inc-evs] [(:inc (first inc-evs)) i]) (incarnations evs))))
+
+(defn- writers
+  "Which of a's processes wrote each frame b read, with no clock shared
+  between the nodes: the one that logged writing the same bytes; else the
+  one that wrote what b read on the same connection (b's process, its
+  epoch), a process killed before logging its last frames. Of a connection
+  with none logged, a process killed as it connected, any process, but on
+  an initiator: its connections follow one another, as do each node's
+  processes, so a later one cannot join an earlier process, and one lies
+  between those before and after it. An acceptor numbers its connections
+  as they attach, not as they were made: one of a process since killed may
+  attach late. Returns ev → [lo hi], the places (see places) of the
+  processes that may have written it."
+  [a-evs b-evs]
+  (let [place (places a-evs)
+        last-place (dec (count place))
+        span (fn [[lo hi] i] [(min (or lo i) i) (max (or hi i) i)])
+        by-hash (reduce (fn [m ev] (if (:hash ev) (update m (:hash ev) span (place (:inc ev))) m))
+                        {} (filter (kind? "out") a-evs))
+        ins (filter (kind? "in") b-evs)
+        conn (juxt :inc #(:epoch % 0))
+        b-place (places b-evs)
+        conns (sort-by (fn [[inc e]] [(b-place inc) e]) (distinct (map conn ins)))
+        matched (reduce (fn [m ev] (if-let [[lo hi] (by-hash (:hash ev))]
+                                     (update m (conn ev) #(span (span % lo) hi))
+                                     m))
+                        {} ins)
+        initiator? (= "initiator" (some #(when ((kind? "start") %) (:role %)) b-evs))
+        ;; Past the lowest a connection before it joined, short of the
+        ;; highest one after it did.
+        lows (rest (reductions (fn [lo c] (max lo (get-in matched [c 0] 0))) 0 conns))
+        highs (reverse (rest (reductions (fn [hi c] (min hi (get-in matched [c 1] last-place))) last-place (reverse conns))))
+        ranges (into {} (map (fn [c lo hi]
+                               [c (cond (matched c)                    (matched c)
+                                        (and initiator? (<= lo hi)) [lo hi]
+                                        :else                          [0 last-place])])
+                             conns lows highs))]
+    (fn [ev] (or (by-hash (:hash ev)) (ranges (conn ev))))))
+
 (defn- seen-before
   "For each of a's processes, generation → the highest MsgSeqNum b read
-  before it started: b-ins and the processes' starts swept in time order.
-  The nodes share one kernel clock."
-  [processes b-evs]
-  (let [ins (->> b-evs (filter (kind? "in")) (remove :err)
-                 (map (fn [ev] [(instant (:t ev)) (:gen ev) (:seq ev)]))
-                 (sort-by first))]
-    (loop [ps processes, ins ins, front {}, out []]
-      (if-let [p (first ps)]
-        (let [[before after] (split-with #(.isBefore ^java.time.Instant (first %) (:start p)) ins)
-              front (reduce (fn [f [_ g s]] (bump f [g s])) front before)]
-          (recur (rest ps) after front (conj out front)))
-        out))))
+  that an earlier process wrote (:seen), or may have (:maybe), by writer
+  (see writers): the nodes' clocks are not compared."
+  [processes writer b-evs]
+  (let [ins (for [ev b-evs :when ((kind? "in") ev) :when (not (:err ev))] [(writer ev) (:gen ev) (:seq ev)])
+        ;; Process i: the frames whose bound is below i.
+        fronts (fn [bound]
+                 (let [by (reduce (fn [m [r g s]] (update m (bound r) bump [g s])) {} ins)]
+                   (reductions (fn [f i] (merge-with max f (by i))) {} (range (dec (count processes))))))]
+    (map (fn [seen maybe] {:seen seen :maybe maybe}) (fronts second) (fronts first))))
 
 (defn- rejects
   "Every Reject (35=3) and BusinessMessageReject (35=j) of A's messages:
@@ -186,28 +226,49 @@
 (defn- sending-time-reject? [r] (= ["3" "10"] [(:msgtype r) (:reason r)]))
 
 (defn- recovery-losses
-  "Whether an OnRecoveryLoss reported A's message at a sequence number:
-  A's own (evicted, missing from its store), and those B was reset past.
-  Or would have: a GapFill A wrote or B read over messages A's store was
-  asked to truncate before, the callback queued after the GapFill, which a
-  kill may forestall."
-  [a-evs b-evs]
+  "Whether an OnRecoveryLoss reported A's message at a sequence number
+  (:told): A's own (evicted, missing from its store), and those B was
+  reset past. Or would have: a GapFill A wrote or B read over messages A's
+  store was asked to truncate before, the callback queued after the
+  GapFill, which a kill may forestall. A GapFill B read that A never
+  logged writing, killed first, follows a truncation of a process before
+  any that may have written it (see writers); :perhaps one of a process
+  that may have, the nodes' clocks not compared."
+  [a-evs b-evs writer]
   (let [truncations (filter #(and (= "store" (:kind %)) (= "truncate" (:call %)) (= "begin" (:phase %))) a-evs)
-        ;; [epoch lo hi]; a loss logged before OnLoss told its
-        ;; generation, of any epoch.
-        ranges (concat
-                 (for [ev (concat (filter #(and ((kind? "recovery-loss") %) (not (re-find #"reset" (str (:err %))))) a-evs)
-                                  (filter #(and ((kind? "recovery-loss") %) (re-find #"reset" (str (:err %)))) b-evs))]
-                   [(when (some? (:ours ev)) (:gen ev)) (:begin ev) (:end ev)])
-                 (for [gf (concat (filter (kind? "out") a-evs) (filter (kind? "in") b-evs))
-                       :when (and (= "4" (:msgtype gf)) (:gapfill gf) (:newseqno gf))
+        place (places a-evs)
+        logged (set (keep #(when ((kind? "out") %) (:hash %)) a-evs))
+        gap-fill? #(and (= "4" (:msgtype %)) (:gapfill %) (:newseqno %))
+        ;; [epoch lo hi] of a GapFill over what tr truncated.
+        filled (fn [gf tr]
+                 (let [hi (dec (min (:newseqno gf) (:begin tr 0)))]
+                   (when (and (= (:gen tr) (:gen gf)) (<= (:seq gf) hi)) [(:gen gf) (:seq gf) hi])))
+        ;; A loss logged before OnLoss told its generation, of any epoch.
+        told (concat
+               (for [ev (concat (filter #(and ((kind? "recovery-loss") %) (not (re-find #"reset" (str (:err %))))) a-evs)
+                                (filter #(and ((kind? "recovery-loss") %) (re-find #"reset" (str (:err %)))) b-evs))]
+                 [(when (some? (:ours ev)) (:gen ev)) (:begin ev) (:end ev)])
+               (for [gf (filter (kind? "out") a-evs)
+                     :when (gap-fill? gf)
+                     tr truncations
+                     :when (not (.isAfter (instant (:t tr)) (instant (:t gf))))
+                     :let [r (filled gf tr)]
+                     :when r]
+                 r))
+        ;; [range sure?]
+        unlogged (for [gf (filter (kind? "in") b-evs)
+                       :when (and (gap-fill? gf) (not (logged (:hash gf))))
+                       :let [[lo hi] (writer gf)]
                        tr truncations
-                       :when (= (:gen tr) (:gen gf))
-                       :when (not (.isAfter (instant (:t tr)) (instant (:t gf))))
-                       :let [hi (dec (min (:newseqno gf) (:begin tr 0)))]
-                       :when (<= (:seq gf) hi)]
-                   [(:gen gf) (:seq gf) hi]))]
-    (fn [[g s]] (some (fn [[lg lo hi]] (and (or (nil? lg) (= lg g)) (<= lo s hi))) ranges))))
+                       :let [p (place (:inc tr))]
+                       :when (<= p hi)
+                       :let [r (filled gf tr)]
+                       :when r]
+                   [r (< p lo)])
+        sure (concat told (map first (filter second unlogged)))
+        perhaps (map first (remove second unlogged))
+        in? (fn [ranges [g s]] (some (fn [[lg lo hi]] (and (or (nil? lg) (= lg g)) (<= lo s hi))) ranges))]
+    (fn [k] (cond (in? sure k) :told (in? perhaps k) :perhaps))))
 
 ;; Epochs
 
@@ -354,7 +415,8 @@
         ;; is by a recovery loss, or a Reject b's session says counted it;
         ;; only :unknown by a rejection b's process may have ended before
         ;; telling (see cut-short).
-        recovery (recovery-losses a-evs b-evs)
+        writer (writers a-evs b-evs)
+        recovery (recovery-losses a-evs b-evs writer)
         all-rejects (rejects a-evs b-evs)
         ;; How many times a message was rejected for its SendingTime: as b
         ;; wrote it, as a read it, whichever saw more.
@@ -400,12 +462,13 @@
                                              after)]
                          [(:gen ev) (:seq ev)]))
         excused (fn [[g _ :as k]]
-                  (cond (recovery k)                     :lost
+                  (cond (= :told (recovery k))           :lost
                         ;; Abandoned by a reset that ended its epoch,
                         ;; before b processed past it, or queued it.
                         (and (ended? g) (not (processed-past? k)) (not (owed-by-b? k))) :reset
+                        (and (processed-past? k) (some :counted (notes k))) :lost
+                        (recovery k)                     :unknown
                         (not (processed-past? k))        nil
-                        (some :counted (notes k))        :lost
                         ;; A rejection with no word of it: b killed in
                         ;; between, counted or not.
                         (or (< (count (notes k)) (times-rejected k 0))
@@ -521,15 +584,18 @@
 
         ;; 7. Sequence numbers survive: every Append, session messages
         ;; included, without power loss; what was durable with it; and
-        ;; whatever b read before.
-        forgotten (for [[p seen] (map vector (:processes stores) (seen-before (:processes stores) b-evs))
+        ;; whatever b read of an earlier process: :unknown if b read it of
+        ;; a process that may have been this one.
+        forgotten (for [[p {:keys [seen maybe]}] (map vector (:processes stores) (seen-before (:processes stores) writer b-evs))
                         :let [open (:open p)
                               g (:gen open)
                               kept (if (:power-loss test) (:durable p) (:appended p))
-                              highest (max (get kept g 0) (get seen g 0))]
-                        :when (and open (<= (:next open 0) highest))]
-                    {:inc (:inc p) :next-sender (:next open) :highest-before highest
-                     :kept (get kept g 0) :seen (get seen g 0)})
+                              highest (max (get kept g 0) (get seen g 0))
+                              perhaps (max highest (get maybe g 0))]
+                        :when (and open (<= (:next open 0) perhaps))]
+                    (cond-> {:inc (:inc p) :next-sender (:next open) :highest-before highest
+                             :kept (get kept g 0) :seen (get seen g 0)}
+                      (< highest (:next open 0)) (assoc :unknown true :maybe-seen (get maybe g 0))))
         ;; ...and so does how far a recorded processing what b sent: not
         ;; below a durable prefix, nor, without power loss, a committed one.
         prefix-forgotten (for [p (target-history a-evs)
@@ -601,7 +667,7 @@
      :skipped     {:valid? (empty? skipped-unfilled) :unfilled (take 16 skipped-unfilled)}
      :retention   {:valid? (empty? unevicted) :unevicted (take 16 unevicted)}
      :durability  (let [all (concat forgotten prefix-forgotten)]
-                    {:valid? (empty? all) :forgotten (take 16 all)})
+                    {:valid? (worst (remove :unknown all) (filter :unknown all)) :forgotten (take 16 all)})
      :halts       (let [all (concat halts unhalted)]
                     {:valid? (empty? all) :problems (take 16 all)})
      :rejects     {:valid? (empty? bad-rejects) :rejected (take 16 bad-rejects)}}))

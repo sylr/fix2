@@ -32,14 +32,16 @@
   [(ev inc "store" :call "sync" :phase "begin" :cutoff cutoff)
    (ev inc "store" :call "sync" :phase "end" :cutoff cutoff)])
 
-(defn- written [inc id seq] (ev inc "out" :msgtype "D" :seq seq :clordid id :digest (digest id)))
+(defn- frame-hash [id seq] (str "h-" id "-" seq))
+
+(defn- written [inc id seq] (ev inc "out" :msgtype "D" :seq seq :clordid id :digest (digest id) :hash (frame-hash id seq)))
 
 (defn- sent
   "An order sent: appended, synced, written."
   [inc id seq]
   (concat (appended inc id seq) (synced inc seq) [(written inc id seq)]))
 
-(defn- received [inc id seq] (ev inc "in" :msgtype "D" :seq seq :clordid id :digest (digest id)))
+(defn- received [inc id seq] (ev inc "in" :msgtype "D" :seq seq :clordid id :digest (digest id) :hash (frame-hash id seq)))
 
 (defn- stale-received
   "Received with its SendingTime ten minutes off."
@@ -503,6 +505,91 @@
                   (update "n1" into (concat (appended "n1-2" nil 7) (synced "n1-2" 7)))
                   (update "n1" into (started "n1-3" 6)))]               ; rolled back
       (is (false? (valid (check (assoc test-map :power-loss true) (history) evs) :durability))))))
+
+(defn- shift
+  "node's clock ms off the other's."
+  [evs node ms]
+  (update evs node (fn [es] (mapv #(assoc % :t (str (.plusMillis (java.time.Instant/parse (:t %)) ms))) es))))
+
+(defn- verdicts [res] (into {} (for [[k v] res :when (map? v)] [k (:valid? v)])))
+
+(deftest no-shared-clock
+  (let [day 86400000
+        below-seen (-> (clean) (remove-ev "n1" #(= "store" (:kind %))) (update "n1" into (started "n1-2" 3)))
+        past-both (update (clean) "n1" into (started "n1-2" 6))
+        runs {"clean" [test-map (history) (clean)]
+              "restarted below what n2 read" [test-map (history) below-seen]
+              "restarted past both" [test-map (history) past-both]
+              "power lost, n2 reading the next process's marker" [(assoc test-map :power-loss true) power-loss-history (power-lost false 4)]
+              "durable forgotten" [(assoc test-map :power-loss true) power-loss-history (power-lost true 4)]}]
+    (testing "a node's clock a day off the other's changes no verdict"
+      (doseq [[name [t h evs]] runs
+              node ["n1" "n2"]
+              ms [(- day) day]]
+        (is (= (verdicts (c/analyze t h evs)) (verdicts (c/analyze t h (shift evs node ms))))
+            (str name ", " node " " ms "ms"))))
+    (testing "read of the process before, whatever the clocks"
+      (let [res (check (shift below-seen "n2" day))]
+        (is (false? (valid res :durability)))
+        (is (= 5 (-> res :durability (get "n1->n2") :forgotten first :seen)))))
+    (let [;; n2 reads, on a connection of its own, a frame n1 never logged
+          ;; writing, at the sequence number n1-2 opens on.
+          unlogged (fn [n1-1-also]
+                     (-> (clean)
+                         (update "n1" into n1-1-also)
+                         (update "n1" into (started "n1-2" 6))
+                         (update "n2" conj (ev "n2-1" "in" :msgtype "0" :seq 6 :epoch 2))))]
+      (testing "a frame no process logged, of n1-1 or n1-2: unknown"
+        (is (= :unknown (valid (check (unlogged [])) :durability))))
+      (testing "the acceptor attaching a connection n1-1 made after n1-2's: its order tells nothing"
+        ;; n2-1's connections: 1 of n1-2, 2 none logged (n1-2's, at 7),
+        ;; 3 of n1-1, attached late.
+        (let [evs (-> (clean)
+                      (update "n1" into [(ev "n1-1" "out" :msgtype "0" :seq 1 :hash "hb1")])
+                      (update "n1" into (started "n1-2" 6))
+                      (update "n1" into [(ev "n1-2" "out" :msgtype "A" :seq 6 :hash "a6")])
+                      (update "n2" into [(ev "n2-1" "in" :msgtype "A" :seq 6 :hash "a6" :epoch 1)
+                                         (ev "n2-1" "in" :msgtype "0" :seq 7 :epoch 2)
+                                         (ev "n2-1" "in" :msgtype "0" :seq 1 :hash "hb1" :epoch 3)]))]
+          (is (= :unknown (valid (check evs) :durability))))))
+    (testing "the initiator's connections, one at a time: one none logged lies between its neighbours'"
+      ;; n1 reads n2-1's Logon on its connection 1, a frame none logged on
+      ;; 2, n2-1's heartbeat on 3: 2 was n2-1's, at the number n2-2 reused.
+      (let [evs (fn [role]
+                  {"n1" [(assoc (ev "n1-1" "start") :role role)
+                         (ev "n1-1" "store" :call "open" :phase "end" :next 1 :target 1)
+                         (ev "n1-1" "in" :msgtype "A" :seq 1 :hash "b1" :epoch 1)
+                         (ev "n1-1" "in" :msgtype "0" :seq 3 :epoch 2)
+                         (ev "n1-1" "in" :msgtype "0" :seq 2 :hash "b2" :epoch 3)]
+                   "n2" (vec (concat (started "n2-1" 1)
+                                     [(ev "n2-1" "out" :msgtype "A" :seq 1 :hash "b1")
+                                      (ev "n2-1" "out" :msgtype "0" :seq 2 :hash "b2")]
+                                     (started "n2-2" 3)))})
+            durability #(get-in (check test-map quiesced (evs %)) [:durability "n2->n1" :valid?])]
+        (is (false? (durability "initiator")))
+        (testing "not on an acceptor"
+          (is (= :unknown (durability "acceptor"))))))
+    (testing "a retention GapFill n2 read, n1 killed before logging it"
+      (let [gf (ev "n2-1" "in" :msgtype "4" :seq 2 :gapfill true :newseqno 3 :epoch 2)
+            run (fn [truncated-by]
+                  (-> (clean)
+                      (remove-ev "n2" (delivery? "O1"))
+                      (update "n1" into (concat (when (= "n1-1" truncated-by)
+                                                  [(ev "n1-1" "store" :call "truncate" :phase "begin" :begin 3)])
+                                                (started "n1-2" 6)
+                                                (when (= "n1-2" truncated-by)
+                                                  [(ev "n1-2" "store" :call "truncate" :phase "begin" :begin 3)])
+                                                [(ev "n1-2" "out" :msgtype "A" :seq 6 :hash "a6")]))
+                      (update "n2" into [(ev "n2-1" "in" :msgtype "A" :seq 6 :hash "a6" :epoch 2) gf])))]
+        (testing "truncated by an earlier process than wrote it: excused"
+          (is (true? (valid (check (run "n1-1")) :acked)))
+          (is (true? (valid (check (shift (run "n1-1") "n2" (- day))) :acked))))
+        (testing "truncated by the process that wrote it, before or after: unknown"
+          (is (= :unknown (valid (check (run "n1-2")) :acked)))
+          (testing "but a Reject n2 counted it by excuses it"
+            (is (true? (valid (check (update (run "n1-2") "n2" conj (ev "n2-1" "rejected" :seq 2 :counted true))) :acked)))))
+        (testing "not truncated: lost"
+          (is (false? (valid (check (run nil)) :acked))))))))
 
 (deftest skipped
   (let [h (conj (history) {:type :info :f :send :value "O9" :process 0 :node "n1" :gen 1 :seq 3

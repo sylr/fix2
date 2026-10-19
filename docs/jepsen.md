@@ -241,6 +241,18 @@ barrier.
   events show it truncated first, the report itself perhaps lost to a kill.
 - **The same message** means the same ClOrdID and digest. A GapFill is not
   a message: it covers the sequence numbers it fills.
+- **Written by** a process of the sender means it logged writing the
+  frame's bytes. One it did not log, killed first, was written by the
+  process that wrote what the receiver read on the same connection. A
+  connection with no frame logged, its process killed as it connected, may
+  be any process's; on the initiator, which makes one connection at a time,
+  one between those that wrote what it read on the connections before and
+  after. The acceptor numbers connections as they attach to the session,
+  not as they were made: one a process since killed made may attach late.
+  The checks never order one node's events against the other's by their
+  times, which on separate machines do not agree: where only the times
+  could tell, the check is `:unknown`. (A SendingTime is still compared
+  with the receiver's clock, as the session itself does.)
 
 1. **Order and duplicates.** Within an incarnation, deliveries rise
    strictly by MsgSeqNum and no ClOrdID is delivered twice.
@@ -269,7 +281,9 @@ barrier.
    `Open` loads puts the next sender sequence number past every durable
    message and every message the counterparty saw, from earlier
    incarnations of the generation; in a run without power loss, past every
-   message appended, synced or not, since a kill loses no commit.
+   message appended, synced or not, since a kill loses no commit. A frame
+   the counterparty saw that the restarted process may have written
+   itself makes the check `:unknown`, not failed.
 8. **Halts.** Once a session halted, in that incarnation: no `Append`
    begins, no Logon is sent or accepted, and no `Send` called after the halt
    succeeds. What was under way may finish: writes, `SetNextTarget` as
@@ -364,7 +378,10 @@ Results go to `jepsen/store`, ignored by git.
 | J11d0 | Resets, first: `OnRecoveryLoss` gives no generation, so a report queued before a reset and delivered after it needs one (the user chose a fix2 API addition over evidence from the store wrapper); the node's `--reset-on-logon` and `--reset-on-disconnect`, the test's `--reset` | yes; fix2 gains `RecoveryLossHandler`, a `Handler` told by `OnLoss`, in place of `OnRecoveryLoss`, of each loss with its generation and whose messages they are (`Ours`, else the counterparty's it reset past); the node logs both. A first run with `ResetOnDisconnect` under kills and partitions (60 s, 11 resets) fails checks 2, 3, 4, 5 and 7: all of the checkers' making (every acknowledged send was delivered), each side numbering its generations apart, a kill mid-reset putting them out of step. Resets also abandon messages, with no loss told: 133 orders appended and never delivered (132 written, one accepted only), each send ending `ErrUnknownDelivery` |
 | J11d1 | Resets: the node's further evidence (an ordinal per event, store lifetimes, the generations a reset ends and starts, every frame's hash, administrative messages received, ranges read) | yes; every event has its place in its log (`n`, from 1), stamped with its time under the log's lock; the start event the store's lifetime (`sqlite:<file>`, kept across processes, or `mem:<incarnation>`) and the reset mode; every frame and Append the hash of its bytes, TestRequests and Heartbeats their TestReqID; an `admin` event each session message the session handled (`FromAdmin`: its generation, a reset Logon's the one it ends, its receipt time, its reset, GapFill and TestReqID fields); deliveries their receipt time; a Reset the generation it started; a Range its bounds and the holes it reported, in runs of one kind. Valid on Docker Desktop under 60 s of kills at 2000 orders/s, 33 MB of events a node |
 | J11d2 | Resets: checks keyed on each sender's epochs, mapped to the receiver's generations from the logs across store lifetimes (`memstore` starts at generation 1 every time), with resets' abandoned messages accounted for. Variants: `ResetOnDisconnect` mid-run, `memstore` with `ResetOnLogon` | yes; the checks key on the sender's epochs, [store lifetime, generation]: the receiver's frames are matched to the sender's by their bytes' hash, else by the frame read before at the same sequence number in the receiver's generation; what it delivered, rejected or processed past by the frame read at that sequence number. The final marker closes its own epoch; an order in an epoch before it, never processed past, was abandoned by the reset that ended it: excused, and counted (`:reset-abandoned`), but not once the receiver's process answered a TestRequest sent after it, which it does once it processed what came before in sequence, and then delivered a message it read after answering: delivery is in order, and a reset does not drop what was queued. One read with no probe after it is not known queued rather than held ahead of a gap, which a reset may drop: still excused (a receiver mirroring the session's stash in the checker got six cases wrong). An order acknowledged and never read is excused by nothing. Order and duplicates are taken within the receiver's generations, a reset making the sender resend; the redelivery bound too. A loss told with its generation (`OnLoss`) excuses only its epoch. A run that does not reset keeps one lifetime a node: `memstore` under kills still fails checks 2, 3 and 7. `make reanalyze` checks a stored run again with the current checker: the earlier runs stay valid, and J11d1's reset probe, which failed five checks, is valid (38 orders abandoned, none acknowledged); J0's, without the frames' hashes, cannot be matched. Valid on Docker Desktop: `ResetOnDisconnect` under 60 s of kills and partitions at 2000 orders/s (9 resets); `memstore` with `ResetOnLogon` under 90 s of kills (58,521 sends acknowledged, 2 orders abandoned). Under resets `--mutant drop-deliver` fails checks 2, 4 and 5, `redeliver` check 1. Not yet: a sender epoch reallocated (a power loss rolling a Reset back) |
-| J12 | Results: long runs of each nemesis on Linux, recorded here, defects filed apart; a short run in CI; FIXP sessions considered | |
+| J12a | Checks without a shared clock, for nodes on machines of their own: the two places comparing one node's times with the other's (what the receiver read before a restart, for check 7; a retention GapFill the receiver read against the sender's truncations) by who wrote each frame instead | yes; each frame the receiver read is matched to the sender's process by its bytes' hash, else by the frames of the same connection; a connection with none logged lies between its neighbours on the initiator, which connects once at a time, and is any process's on the acceptor, which numbers connections as they attach (Codex: a socket of a killed process may attach after its successor's). Check 7 is `:unknown` on a frame the restarted process may have written itself; a retention GapFill the sender never logged excuses a loss only if truncated by an earlier process than any that may have written it, `:unknown` if by one that may have. `make -C jepsen unit` shifts either node's clock a day each way over five runs, verdicts unchanged (the previous checker fails 18 of the new assertions). The 26 stored Docker runs reanalyzed: those whose frames carry hashes (J11d1 on) keep every verdict, kills included; earlier ones with restarts go from valid to `:unknown` on check 7, their writers unknowable |
+| J12b | Virtual machines: a Pulumi stack creating the nodes with Multipass, another setting up hosts reachable over SSH (packages, LazyFS, the control node's tools, the sources, the node binary built there); `check-env` covering the VMs' kernels | |
+| J12c | A runner outside Pulumi: the test started as a job on the control node, waited for, its results fetched, the overall verdict its exit status; `--net-dev` in place of `eth0` | |
+| J12d | Results: long runs of each nemesis on Linux, recorded here, defects filed apart; a short run in CI; FIXP sessions considered | |
 
 ## Found while planning
 
