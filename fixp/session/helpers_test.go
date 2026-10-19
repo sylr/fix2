@@ -272,6 +272,9 @@ type raw struct {
 	r  *sofh.Reader
 	id fixp.SessionID
 	ts uint64
+	// mayEnd: the server may close the connection, halting mid-script;
+	// what is sent after is lost, not a failure.
+	mayEnd bool
 }
 
 func dialRaw(t testing.TB, l *mem.Listener) *raw {
@@ -290,14 +293,12 @@ func (r *raw) send(m encoder) {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	if _, err := r.c.Write(f); err != nil {
-		r.t.Fatal(err)
-	}
+	r.sendBytes(f)
 }
 
 func (r *raw) sendBytes(b []byte) {
 	r.t.Helper()
-	if _, err := r.c.Write(b); err != nil {
+	if _, err := r.c.Write(b); err != nil && !r.mayEnd {
 		r.t.Fatal(err)
 	}
 }

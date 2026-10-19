@@ -45,7 +45,10 @@ func TestFinalize(t *testing.T) {
 			if err := cs.Finish(bg); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cs.Send(bg, appMsg{1, "late"}); !errors.Is(err, fixp.ErrNoFlow) {
+			// Finish does not wait for the answer: the session may be
+			// finalized already, a call on it then fails with ErrStopped.
+			if _, err := cs.Send(bg, appMsg{1, "late"}); !errors.Is(err, fixp.ErrNoFlow) &&
+				!(errors.Is(err, ErrStopped) && cs.State() == StateFinalized) {
 				t.Errorf("Send after Finish: %v", err)
 			}
 			p.srvH.skipUntil(t, "peerfinished")

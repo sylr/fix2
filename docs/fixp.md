@@ -288,7 +288,9 @@ Terminate unbinds the connection; the session lives on (§4.4).
 - On a Terminate, the engine answers Terminate and sends nothing more
   (§4.4.1). The side that sent the first Terminate closes the connection
   on the answer, or after one keepalive interval without it (§4.4.1,
-  §4.4.2).
+  §4.4.2). The specification does not say whose: the engine waits the
+  longer of the two sides', the answer being the peer's, its writes
+  possibly late.
 - Until then, the side that sent it receives only: the peer's in-flight
   messages are handled (§4.4.1: "to permit in-flight messages to be
   processed"), application messages delivered, sequence numbers,

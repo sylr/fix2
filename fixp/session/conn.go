@@ -226,7 +226,7 @@ func (c *conn) answer(code fixp.TerminationCode, reason string) {
 
 // terminate queues our graceful Terminate, after what is queued: the
 // connection closes on the answer, or one keepalive interval after it is
-// written (§4.4.1, §4.4.2).
+// written, the longer of the two sides' (§4.4.1, §4.4.2).
 func (c *conn) terminate(reason string) {
 	s := c.s
 	r := truncate(reason, s.cfg.MaxReasonLength)
@@ -480,7 +480,9 @@ func (c *conn) writeLoop() {
 						c.close(nil) // answered while we wrote it
 						return
 					}
-					c.closeAfter(ka)
+					// The answer is the peer's message: its interval bounds the
+					// wait, its own writes possibly late.
+					c.closeAfter(max(ka, c.peerKeepalive))
 				}
 				if e.finishing {
 					c.finSent = true // the heartbeat may be FinishedSending now

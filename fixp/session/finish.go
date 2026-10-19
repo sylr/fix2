@@ -383,8 +383,10 @@ func (s *Session) finalize() {
 	s.mu.Unlock()
 	s.logInfo("finalized")
 	s.doneOnce.Do(func() { close(s.done) })
-	s.handler.OnFinalized(s.cbCtx, s)
+	// The server forgets the session before the handler hears of it, as
+	// a retirement does: OnFinalized never finds it still served.
 	if s.onFinalized != nil {
 		s.onFinalized(s)
 	}
+	s.handler.OnFinalized(s.cbCtx, s)
 }

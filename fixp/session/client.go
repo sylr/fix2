@@ -87,7 +87,7 @@ func retry(err error) error { return &retryError{err} }
 //     (Unnegotiated, Credentials, KeepaliveInterval), or a store error;
 //   - ctx's error once ctx is done, after terminating the established
 //     connection (Terminate Finished, its answer awaited for one keepalive
-//     interval at most).
+//     interval at most, the longer of the two sides').
 //
 // A negotiation that times out, or whose answer is not its request's, is
 // tried again under a new session ID (§7.1.7.5, §7.1.7.6); one rejected

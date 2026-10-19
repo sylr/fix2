@@ -634,6 +634,10 @@ func TestUnscheduledTimeout(t *testing.T) {
 			c := newClient(t, dialer, memstore.New(), cliH, fixp.Unsequenced, func(c *ClientConfig) {
 				c.KeepaliveInterval = time.Second
 				c.ToleratePeerWithoutKeepalives = tolerate
+				// Watched, the server's keepalives never lapse here: a
+				// Sequence late on a loaded machine, past 1.5 times its
+				// 50ms, would end the connection before the timeout.
+				c.KeepaliveLeniency = 20
 				c.ReconnectMin, c.ReconnectMax = time.Minute, time.Minute
 			})
 			cancel, done := runClient(c)

@@ -615,6 +615,10 @@ func (s *Session) queueLocked(h *header, body []byte, control bool) (uint64, err
 		return 0, fmt.Errorf("session %s: storing message %d: %w", s.id, h.seq, err)
 	}
 	s.st.NextSender++
+	// Not idle once something is queued: until the writer, which took
+	// c.pending and has not written it yet, dates lastWrite (see wrote),
+	// the timer would queue a heartbeat every millisecond.
+	c.lastWrite = time.Now()
 	*frames = append(*frames, pendingFrame{end: len(*buf), seq: h.seq, queued: time.Now(), probe: h.probe, admin: isAdmin([]byte(h.msgType))})
 	if s.cfg.MaxPendingAge > 0 && frames == &c.frames && len(c.frames) == 1 {
 		// The first message waiting: the timer is due when it is too old,

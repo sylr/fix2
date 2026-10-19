@@ -531,10 +531,14 @@ func crashReceiver(t *testing.T, flow fixp.FlowType, commit bool) {
 			second := &delivered{}
 			srv, cancelSrv, srvDone = newServer(t, cur.Load(), restarted, second, fixp.Unsequenced, nil)
 			defer func() { cancelSrv(); <-srvDone }()
-			if srv.Session(c.Session().ID()) == nil {
+			rs := srv.Session(c.Session().ID())
+			if rs == nil {
 				return // never recorded established: retired, or a new session
 			}
-			eventually(t, func() bool { return c.Session().State() == StateEstablished })
+			// The restarted's establishment, not the client's state, which
+			// stays Established until it sees its dead connection end: a
+			// message sent then is lost, as an Idempotent flow's may be.
+			eventually(t, func() bool { return rs.State() == StateEstablished && c.Session().State() == StateEstablished })
 			if _, err := c.Session().Send(bg, appMsg{1, "after"}); err != nil {
 				t.Fatal(err)
 			}

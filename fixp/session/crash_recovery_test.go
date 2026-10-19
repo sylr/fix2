@@ -117,6 +117,7 @@ func crashRecovery(t *testing.T, commit bool, clientFlow, serverFlow fixp.FlowTy
 			halted := func() bool { s := srv.Session(r.id); return s != nil && s.State() == StateStopped }
 			established := rawHandshake(r, clientFlow, codec.Some(uint64(1)))
 			if established {
+				r.mayEnd = true // the server crashing at any of its writes
 				first(r)
 				eventually(t, func() bool { return done(log1) || halted() })
 			}
