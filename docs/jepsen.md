@@ -357,6 +357,42 @@ monotonic reading, so that a timer left on it shows.
 
 Results go to `jepsen/store`, ignored by git.
 
+### On virtual machines
+
+Two Pulumi programs in Go, under `jepsen/infra`, state on the local
+backend (`pulumi login --local`):
+
+- `multipass` makes the control host and the nodes as Multipass VMs on this
+  machine, Ubuntu 26.04 (4 CPUs, 8 GB for control; 2 and 2 GB for each
+  node), root reachable over SSH with a key of the stack's own, named
+  `fix2-jepsen-<stack>-control`, `-n1`, `-n2` unless `prefix` says
+  otherwise. A VM records the stack that made it: no other stack takes it
+  or deletes it. Its outputs, `hosts` and `privateKey`, are an inventory.
+- `run` sets up hosts reachable over SSH as root, or as a user with
+  passwordless sudo: on the nodes, the nemeses' tools, the kernel modules
+  packet faults need, LazyFS built where `jepsen.lazyfs` looks for it; on
+  control, a JDK, Leiningen, Go and a C compiler, the key the nodes
+  authorize and their host keys. It then copies the working tree to
+  control, tracked files and untracked ones git does not ignore, and builds
+  the node binary and the test's dependencies there. The hosts come from a
+  stack such as `multipass` (config `inventory`), or from its own config,
+  `hosts` and `privateKey`, for machines made otherwise.
+
+Each setup is a script run as a whole, idempotent, and run again when it
+changes or its host is made again; its log stays on the host, in
+`/var/log/fix2-jepsen-setup.log`. The sources build again when they change.
+Running the test is not Pulumi's: a test is a job, not a resource.
+
+    make -C jepsen vm-up          # the VMs made, set up, the suite built
+    make -C jepsen vm-check-env   # check-env.sh, on control
+    make -C jepsen vm-unit        # the checker tests, on control
+    make -C jepsen vm-deploy      # set up and built again, after a change
+    make -C jepsen vm-console     # a shell on control
+    make -C jepsen vm-down
+
+`STACK` names both stacks (`dev`); their secrets are encrypted with
+`PULUMI_CONFIG_PASSPHRASE`, empty unless set.
+
 ## Increments
 
 | # | Content | Done |
@@ -379,7 +415,7 @@ Results go to `jepsen/store`, ignored by git.
 | J11d1 | Resets: the node's further evidence (an ordinal per event, store lifetimes, the generations a reset ends and starts, every frame's hash, administrative messages received, ranges read) | yes; every event has its place in its log (`n`, from 1), stamped with its time under the log's lock; the start event the store's lifetime (`sqlite:<file>`, kept across processes, or `mem:<incarnation>`) and the reset mode; every frame and Append the hash of its bytes, TestRequests and Heartbeats their TestReqID; an `admin` event each session message the session handled (`FromAdmin`: its generation, a reset Logon's the one it ends, its receipt time, its reset, GapFill and TestReqID fields); deliveries their receipt time; a Reset the generation it started; a Range its bounds and the holes it reported, in runs of one kind. Valid on Docker Desktop under 60 s of kills at 2000 orders/s, 33 MB of events a node |
 | J11d2 | Resets: checks keyed on each sender's epochs, mapped to the receiver's generations from the logs across store lifetimes (`memstore` starts at generation 1 every time), with resets' abandoned messages accounted for. Variants: `ResetOnDisconnect` mid-run, `memstore` with `ResetOnLogon` | yes; the checks key on the sender's epochs, [store lifetime, generation]: the receiver's frames are matched to the sender's by their bytes' hash, else by the frame read before at the same sequence number in the receiver's generation; what it delivered, rejected or processed past by the frame read at that sequence number. The final marker closes its own epoch; an order in an epoch before it, never processed past, was abandoned by the reset that ended it: excused, and counted (`:reset-abandoned`), but not once the receiver's process answered a TestRequest sent after it, which it does once it processed what came before in sequence, and then delivered a message it read after answering: delivery is in order, and a reset does not drop what was queued. One read with no probe after it is not known queued rather than held ahead of a gap, which a reset may drop: still excused (a receiver mirroring the session's stash in the checker got six cases wrong). An order acknowledged and never read is excused by nothing. Order and duplicates are taken within the receiver's generations, a reset making the sender resend; the redelivery bound too. A loss told with its generation (`OnLoss`) excuses only its epoch. A run that does not reset keeps one lifetime a node: `memstore` under kills still fails checks 2, 3 and 7. `make reanalyze` checks a stored run again with the current checker: the earlier runs stay valid, and J11d1's reset probe, which failed five checks, is valid (38 orders abandoned, none acknowledged); J0's, without the frames' hashes, cannot be matched. Valid on Docker Desktop: `ResetOnDisconnect` under 60 s of kills and partitions at 2000 orders/s (9 resets); `memstore` with `ResetOnLogon` under 90 s of kills (58,521 sends acknowledged, 2 orders abandoned). Under resets `--mutant drop-deliver` fails checks 2, 4 and 5, `redeliver` check 1. Not yet: a sender epoch reallocated (a power loss rolling a Reset back) |
 | J12a | Checks without a shared clock, for nodes on machines of their own: the two places comparing one node's times with the other's (what the receiver read before a restart, for check 7; a retention GapFill the receiver read against the sender's truncations) by who wrote each frame instead | yes; each frame the receiver read is matched to the sender's process by its bytes' hash, else by the frames of the same connection; a connection with none logged lies between its neighbours on the initiator, which connects once at a time, and is any process's on the acceptor, which numbers connections as they attach (Codex: a socket of a killed process may attach after its successor's). Check 7 is `:unknown` on a frame the restarted process may have written itself; a retention GapFill the sender never logged excuses a loss only if truncated by an earlier process than any that may have written it, `:unknown` if by one that may have. `make -C jepsen unit` shifts either node's clock a day each way over five runs, verdicts unchanged (the previous checker fails 18 of the new assertions). The 26 stored Docker runs reanalyzed: those whose frames carry hashes (J11d1 on) keep every verdict, kills included; earlier ones with restarts go from valid to `:unknown` on check 7, their writers unknowable |
-| J12b | Virtual machines: a Pulumi stack creating the nodes with Multipass, another setting up hosts reachable over SSH (packages, LazyFS, the control node's tools, the sources, the node binary built there); `check-env` covering the VMs' kernels | |
+| J12b | Virtual machines: a Pulumi stack creating the nodes with Multipass, another setting up hosts reachable over SSH (packages, LazyFS, the control node's tools, the sources, the node binary built there); `check-env` covering the VMs' kernels | yes; `make vm-up` on macOS arm64 (Multipass 1.16.4, Ubuntu 26.04, kernel 7.0): three VMs made, set up and the suite built in about 7 minutes; `vm-check-env` passes on both nodes (netem, prio and u32 on `enp0s1`, iptables, a loop-mounted ext4, LazyFS), `vm-unit` passes; a second `pulumi preview` of either stack changes nothing; the VMs renamed, they are made again, set up again and the sources copied to the new control host; a second stack named onto them is refused, and its destroy leaves them (Codex); the same VMs set up and checked through a stack whose config names them, reached as `ubuntu` with sudo. Ubuntu 26.04's uutils `sync FILE` calls sync(2), which LazyFS ignores: `check-env` fsyncs with `dd` now. LazyFS's TOML library needs `CMAKE_POLICY_VERSION_MINIMUM` under CMake 4 |
 | J12c | A runner outside Pulumi: the test started as a job on the control node, waited for, its results fetched, the overall verdict its exit status; `--net-dev` in place of `eth0` | |
 | J12d | Results: long runs of each nemesis on Linux, recorded here, defects filed apart; a short run in CI; FIXP sessions considered | |
 

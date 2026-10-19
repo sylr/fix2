@@ -1,0 +1,34 @@
+name: fix2-jepsen-multipass
+description: The Jepsen suite's machines as local Multipass VMs (docs/jepsen.md)
+runtime: go
+config:
+  image:
+    type: string
+    default: "26.04"
+    description: The Ubuntu image every VM boots.
+  prefix:
+    type: string
+    default: ""
+    description: The VMs are named <prefix>-control, <prefix>-n1...; fix2-jepsen-<stack> if empty. A VM records the stack that made it, and no other stack takes or deletes it.
+  nodes:
+    type: integer
+    default: 2
+    description: How many nodes, n1 the initiator.
+  controlCpus:
+    type: integer
+    default: 4
+  controlMemory:
+    type: string
+    default: 8G
+  controlDisk:
+    type: string
+    default: 40G
+  nodeCpus:
+    type: integer
+    default: 2
+  nodeMemory:
+    type: string
+    default: 2G
+  nodeDisk:
+    type: string
+    default: 10G

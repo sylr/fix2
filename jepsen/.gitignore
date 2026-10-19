@@ -3,3 +3,5 @@
 /target/
 /.lein-*
 /.nrepl-port
+# A stack's config is its user's: Pulumi.yaml alone is the project's.
+/infra/*/Pulumi.*.yaml

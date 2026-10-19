@@ -1,0 +1,17 @@
+name: fix2-jepsen-run
+description: Sets up hosts reachable over SSH for the Jepsen suite, and builds it on the control host (docs/jepsen.md)
+runtime: go
+config:
+  inventory:
+    type: string
+    default: ""
+    description: A stack whose outputs hosts and privateKey are the hosts, such as organization/fix2-jepsen-multipass/dev. Else hosts and privateKey are this stack's config.
+  goVersion:
+    type: string
+    default: 1.27.2
+  leinVersion:
+    type: string
+    default: 2.11.2
+  lazyfsVersion:
+    type: string
+    default: 0.3.0

@@ -1,5 +1,6 @@
 # The Jepsen suite of docs/jepsen.md, on Docker: a control node and two fix2
-# nodes. Results go to store/.
+# nodes. Results go to store/. The vm- targets run it on machines of its
+# own instead.
 
 COMPOSE := docker compose -f docker/compose.yaml
 GO_IMAGE ?= golang:1.27-trixie
@@ -64,4 +65,41 @@ web:
 # nodes over SSH, the node binary and the nemeses' tools run there, and
 # LazyFS loses what was not fsynced.
 check-env: node-binary
-	$(COMPOSE) exec control sh /jepsen/docker/check-env.sh
+	$(COMPOSE) exec control sh check-env.sh
+
+# The suite on machines of its own (docs/jepsen.md): infra/multipass makes
+# them as Multipass VMs on this machine, infra/run sets up hosts reachable
+# over SSH and builds the suite on the control host. STACK names the stack
+# of each; the stacks' secrets are encrypted with PULUMI_CONFIG_PASSPHRASE,
+# empty unless set.
+STACK ?= dev
+export STACK
+export PULUMI_CONFIG_PASSPHRASE ?=
+ON_CONTROL := sh infra/on-control.sh
+
+.PHONY: vm-up vm-deploy vm-down vm-check-env vm-unit vm-console
+
+# vm-up makes the VMs, then sets them up and builds the suite there.
+vm-up:
+	cd infra/multipass && pulumi stack select --create $(STACK) && pulumi up --yes
+	cd infra/run && pulumi stack select --create $(STACK) && \
+		pulumi config set inventory organization/fix2-jepsen-multipass/$(STACK) && pulumi up --yes
+
+# vm-deploy sets up and builds again, after a change to the sources, or on
+# hosts of another kind: infra/run's config then holds them (hosts,
+# privateKey) and no inventory.
+vm-deploy:
+	cd infra/run && pulumi stack select --create $(STACK) && pulumi up --yes
+
+vm-down:
+	cd infra/run && pulumi stack select $(STACK) && pulumi destroy --yes
+	cd infra/multipass && pulumi stack select $(STACK) && pulumi destroy --yes
+
+vm-check-env:
+	$(ON_CONTROL) 'sh check-env.sh'
+
+vm-unit:
+	$(ON_CONTROL) 'lein test'
+
+vm-console:
+	$(ON_CONTROL) -t 'bash -l'
