@@ -38,6 +38,27 @@
 
 (defn- instant ^java.time.Instant [s] (when s (java.time.Instant/parse s)))
 
+(defn- instant-ns [^java.time.Instant i] (+ (* 1000000000 (.getEpochSecond i)) (.getNano i)))
+
+(defn- node-ns
+  "When ev happened on its node, in ns, to compare with the node's other
+  events: by CLOCK_MONOTONIC, which a step of the real clock does not
+  move; by the real clock in runs logged before it. Whole: events a
+  millisecond apart keep their order."
+  [ev]
+  (if-let [m (:mono ev)]
+    (long m)
+    (instant-ns (instant (:t ev)))))
+
+(defn- ms-between [a b] (quot (- (node-ns b) (node-ns a)) 1000000))
+
+(defn- wall-offset
+  "Where the node's real clock stood when ev happened, against its
+  monotonic one, in ms: a step of the real clock moves it."
+  [ev]
+  (when (:mono ev)
+    (quot (- (instant-ns (instant (:t ev))) (long (:mono ev))) 1000000)))
+
 (defn process-node
   "The node a process's ops went to: Jepsen binds worker thread t to node
   t mod the node count, and a process crashed comes back as process plus
@@ -251,7 +272,7 @@
                (for [gf (filter (kind? "out") a-evs)
                      :when (gap-fill? gf)
                      tr truncations
-                     :when (not (.isAfter (instant (:t tr)) (instant (:t gf))))
+                     :when (<= (node-ns tr) (node-ns gf))
                      :let [r (filled gf tr)]
                      :when r]
                  r))
@@ -448,16 +469,32 @@
         ;; a frame before the observer does, once the frame before is
         ;; handled: the process paused in between perhaps, the clock
         ;; changed, more than once: stale by any offset the process had, at
-        ;; either end.
+        ;; either end. The real clock stepped too (system-clock): read
+        ;; between the frame before and the event after ev, by any offset
+        ;; against the monotonic clock the process was seen at meanwhile.
+        ;; A step made and undone with no event in between is not seen: a
+        ;; rejection then may be called a loss, a loss never excused.
+        system-clock? (contains? (:faults test) :system-clock)
         cut-short (set (for [inc-evs b-incs
                              :let [[after [ev & before]] (split-with (complement (kind? "in")) (reverse inc-evs))]
                              :when (and ev (:t ev) (:now ev))
-                             :let [hi (instant (:t ev))
-                                   lo (instant (:t (or (first (filter (kind? "in") before)) (last before) ev)))
-                                   offsets (into (hash-set 0 (- (.toEpochMilli (instant (:now ev))) (.toEpochMilli hi)))
+                             :let [lo-ev (or (first (filter (kind? "in") before)) (last before) ev)
+                                   hi (instant (:t ev))
+                                   lo (instant (:t lo-ev))
+                                   session (into (hash-set 0 (- (.toEpochMilli (instant (:now ev))) (.toEpochMilli hi)))
                                                  (mapcat (juxt #(:was_ms % 0) #(:offset_ms % 0)))
-                                                 (filter (kind? "clock") before))]
-                             :when (some (fn [o] (some #(stale-at? ev (.plusMillis ^java.time.Instant % (long o))) [lo hi])) offsets)
+                                                 (filter (kind? "clock") before))
+                                   ;; When the session may have read its
+                                   ;; clock, without and with the session's
+                                   ;; offsets.
+                                   reads (if (and system-clock? (:mono lo-ev) (:mono ev))
+                                           (let [end (or (last after) ev)
+                                                 seen (into #{} (keep #(when (<= (node-ns lo-ev) (node-ns %) (node-ns end)) (wall-offset %)))
+                                                            inc-evs)]
+                                             (for [m [(:mono lo-ev) (:mono ev)] w seen]
+                                               (java.time.Instant/ofEpochMilli (+ (quot (long m) 1000000) w))))
+                                           [lo hi])]
+                             :when (some (fn [o] (some #(stale-at? ev (.plusMillis ^java.time.Instant % (long o))) reads)) session)
                              :when (not-any? #(and ((kind? "rejected") %) (= [(:gen ev) (:seq ev)] [(:gen %) (:seq %)]))
                                              after)]
                          [(:gen ev) (:seq ev)]))
@@ -578,7 +615,7 @@
                         :when (str/includes? (str (:err ev)) retention-error)
                         :when (not-any? #(and (< (:end ev) (:begin % 0))
                                               (or (nil? (:gen ev)) (= (:gen ev) (:gen %)))
-                                              (not (.isAfter (instant (:t %)) (instant (:t ev)))))
+                                              (<= (node-ns %) (node-ns ev)))
                                         truncations)]
                     (select-keys ev [:inc :begin :end]))
 
@@ -609,8 +646,8 @@
         halts (for [inc-evs (incarnations a-evs)
                     :let [halt (first (filter (kind? "halt") inc-evs))]
                     :when halt
-                    :let [halted (instant (:t halt))
-                          after (filter #(.isAfter (instant (:t %)) halted) inc-evs)
+                    :let [halted (node-ns halt)
+                          after (filter #(< halted (node-ns %)) inc-evs)
                           began (set (for [ev after :when (and ((kind? "send") ev) (= "begin" (:phase ev)))] (:clordid ev)))]
                     problem (concat
                               (when-not (:disk-faults test) [{:problem :halted :err (:err halt)}])
@@ -629,20 +666,17 @@
         unhalted (for [inc-evs (incarnations a-evs)
                        :let [v (vec inc-evs)
                              halt (some #(when ((kind? "halt") %) %) v)
-                             last-t (instant (:t (peek v)))
+                             last-ev (peek v)
                              limit (long (+ (* 1.5 store-timeout-ms) 300))]
                        [i ev] (map-indexed vector v)
                        :when (and (= "store" (:kind ev)) (= "begin" (:phase ev))
                                   (#{"append" "set-next-target" "set-next-sender" "reset" "truncate"} (:call ev)))
-                       :let [began (instant (:t ev))
-                             end (some #(when (and (= "store" (:kind %)) (= "end" (:phase %)) (= (:call ev) (:call %))) %)
+                       :let [end (some #(when (and (= "store" (:kind %)) (= "end" (:phase %)) (= (:call ev) (:call %))) %)
                                        (subvec v (inc i)))
-                             ended (if end (instant (:t end)) last-t)
-                             ms (- (.toEpochMilli ended) (.toEpochMilli began))]
+                             ms (ms-between ev (or end last-ev))]
                        ;; Hung past the limit, its process alive that long.
                        :when (< limit ms)
-                       :when (or (nil? halt)
-                                 (< limit (- (.toEpochMilli (instant (:t halt))) (.toEpochMilli began))))]
+                       :when (or (nil? halt) (< limit (ms-between ev halt)))]
                    {:inc (:inc ev) :problem :not-halted-past-store-timeout :call (:call ev) :seq (:seq ev) :ran-ms ms})
 
         ;; Rejects of valid orders, but for their SendingTime.

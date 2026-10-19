@@ -61,7 +61,7 @@
             :store-timeout (if (and hang? (zero? (:store-timeout opts))) 2000 (:store-timeout opts))
             ;; Clock skews of seconds against a MaxLatency of 5s, unless
             ;; given; the checkers read the same.
-            :max-latency (or (:max-latency opts) (if (contains? faults :clock) 5 120))
+            :max-latency (or (:max-latency opts) (if (some #{:clock :system-clock} faults) 5 120))
             :os        os/noop
             ;; The interface named: jepsen.net shapes the first one `ip link`
             ;; lists, and Docker Desktop's kernel puts tunnel devices (tunl0,

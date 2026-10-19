@@ -1,5 +1,7 @@
 # Sets up a Jepsen node of the fix2 suite on Debian or Ubuntu, run as root
-# by jepsen-run: the tools the nemeses use, the kernel modules they need,
+# by jepsen-run: the tools the nemeses use (gcc and ntpdate for Jepsen's
+# clock nemesis, dmsetup for the device-mapper disks), the kernel modules
+# they need,
 # LazyFS where jepsen.lazyfs looks for it, the control host's key for root,
 # and the suite's hosts. Idempotent. Given: HOSTS (/etc/hosts lines),
 # CONTROL_KEY (an authorized_keys line), LAZYFS_VERSION.
@@ -13,8 +15,8 @@ trap 'echo "failed: see $log on $(hostname)" >&3; tail -20 "$log" >&3' EXIT
 say "packages"
 apt-get -qy update
 apt-get -qy install --no-install-recommends \
-	ca-certificates cmake curl e2fsprogs fuse3 g++ git iproute2 iptables iputils-ping libfuse3-dev make \
-	netcat-openbsd openssh-server pkg-config procps psmisc sqlite3 sudo tar util-linux
+	ca-certificates cmake curl dmsetup e2fsprogs fuse3 g++ gcc git iproute2 iptables iputils-ping libfuse3-dev make \
+	netcat-openbsd ntpsec-ntpdate openssh-server pkg-config procps psmisc sqlite3 sudo tar util-linux
 
 # Packet faults need netem, a prio qdisc and u32 filters; some kernels
 # keep them in a package of their own.

@@ -640,6 +640,66 @@
                              (update (clean) "n1" conj (ev "n1-1" "halt" :err "store")))
                       :halts)))))
 
+(defn- with-mono
+  "Each event's CLOCK_MONOTONIC, as the nodes log it now: its time, until
+  a step of the real clock."
+  [evs]
+  (update-vals evs (fn [es] (mapv #(assoc % :mono (* 1000000 (.toEpochMilli (java.time.Instant/parse (:t %))))) es))))
+
+(defn- step
+  "node's real clock stepped by ms from its event at index i on, its
+  monotonic clock not."
+  [evs node i ms]
+  (update evs node (fn [es] (into (subvec es 0 i)
+                                  (map #(assoc % :t (str (.plusMillis (java.time.Instant/parse (:t %)) ms))))
+                                  (subvec es i)))))
+
+(deftest system-clock
+  (let [day 86400000
+        hung (fn [end-wall-ms]
+               ;; A store write hung 10 s by the monotonic clock, its end
+               ;; logged after the real clock stepped.
+               (let [run (with-mono (clean))
+                     b (ev "n1-1" "store" :call "append" :phase "begin" :seq 9 :clordid "O9" :digest "d-O9")
+                     ms (.toEpochMilli (java.time.Instant/parse (:t b)))
+                     e (ev "n1-1" "store" :call "append" :phase "end" :seq 9 :err "timeout")]
+                 (-> run
+                     (update "n1" into [(assoc b :mono (* 1000000 ms))
+                                        (assoc e :t (str (java.time.Instant/ofEpochMilli (+ ms end-wall-ms)))
+                                                 :mono (* 1000000 (+ ms 10000)))]))))
+        t (assoc test-map :disk-faults true :store-timeout 2000)]
+    (testing "a node's real clock stepped a day, either way, mid-run: no verdict changes"
+      (doseq [node ["n1" "n2"]
+              ms [(- day) day]
+              :let [evs (with-mono (clean))
+                    i (quot (count (evs node)) 2)]]
+        (is (= (verdicts (c/analyze test-map (history) evs))
+               (verdicts (c/analyze test-map (history) (step evs node i ms))))
+            (str node " " ms "ms"))))
+    (testing "a store write's duration by the monotonic clock"
+      (is (false? (valid (check t (history) (hung (- day))) :halts)) "hung 10 s, the clock stepped back")
+      (is (false? (valid (check t (history) (hung 10)) :halts)) "hung 10 s, the clock stepped back to 10 ms after")
+      (let [run (with-mono (clean))
+            quick (-> run
+                      (update "n1" into (let [b (ev "n1-1" "store" :call "append" :phase "begin" :seq 9 :clordid "O9" :digest "d-O9")
+                                              ms (.toEpochMilli (java.time.Instant/parse (:t b)))]
+                                          [(assoc b :mono (* 1000000 ms))
+                                           (assoc (ev "n1-1" "store" :call "append" :phase "end" :seq 9)
+                                                  :t (str (java.time.Instant/ofEpochMilli (+ ms day)))
+                                                  :mono (* 1000000 (+ ms 5)))])))]
+        (is (true? (valid (check t (history) quick) :halts)) "5 ms, the clock stepped a day ahead")))
+    (testing "an append half a millisecond after a halt, in the same millisecond, follows it"
+      ;; The run first: events are stamped as they are made.
+      (let [run (with-mono (clean))
+            h (ev "n1-1" "halt" :err "store")
+            ms (.toEpochMilli (java.time.Instant/parse (:t h)))
+            a (ev "n1-1" "store" :call "append" :phase "begin" :seq 9 :clordid "O9" :digest "d-O9")
+            at (fn [ns] (update run "n1" into [(assoc h :mono (* 1000000 ms))
+                                               (assoc a :t (:t h) :mono (+ (* 1000000 ms) ns))]))]
+        (is (true? (valid (check t (history) (at 0)) :halts)) "at the halt's nanosecond: not after it")
+        (is (= [{:problem :appended-after-halt :seq 9 :inc "n1-1"}]
+               (get-in (check t (history) (at 500000)) [:halts "n1->n2" :problems])))))))
+
 (deftest phantoms
   (testing "a ClOrdID never sent"
     (is (false? (valid (check (update (clean) "n2" conj (delivered "n2-1" "NEVER" 6))) :phantoms))))

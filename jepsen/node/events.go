@@ -7,14 +7,18 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // Event is a line of a node's event log. Fields a kind does not use are
 // left out. Times are the node's real clock, T, and its session's clock,
-// Now, which a skew moves.
+// Now, which a skew moves; and Mono, which neither a skew nor a step of
+// the real clock moves, shared by the node's processes until it boots.
 type Event struct {
 	T    time.Time `json:"t"`
-	N    uint64    `json:"n"` // the event's place in its log, from 1: T may not rise with it
+	Mono int64     `json:"mono"` // CLOCK_MONOTONIC, in ns
+	N    uint64    `json:"n"`    // the event's place in its log, from 1: T may not rise with it
 	Inc  string    `json:"inc"`
 	Kind string    `json:"kind"`
 
@@ -120,7 +124,7 @@ func (e *Events) Log(ev Event) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.n++
-	ev.T, ev.N, ev.Inc = time.Now(), e.n, e.inc
+	ev.T, ev.Mono, ev.N, ev.Inc = time.Now(), mono(), e.n, e.inc
 	b, err := json.Marshal(ev)
 	if err != nil {
 		panic(fmt.Sprintf("event log: %v", err))
@@ -133,3 +137,13 @@ func (e *Events) Log(ev Event) {
 
 // Close closes the file.
 func (e *Events) Close() error { return e.f.Close() }
+
+// mono reads CLOCK_MONOTONIC: Go's own monotonic reading is its process's
+// alone, and the checkers compare the node's processes.
+func mono() int64 {
+	var ts unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts); err != nil {
+		panic(fmt.Sprintf("event log: CLOCK_MONOTONIC: %v", err))
+	}
+	return ts.Nano()
+}

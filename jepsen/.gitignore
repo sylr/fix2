@@ -5,3 +5,5 @@
 /.nrepl-port
 # A stack's config is its user's: Pulumi.yaml alone is the project's.
 /infra/*/Pulumi.*.yaml
+# What a go build in node/ leaves: the sources' archive would ship it.
+/node/node

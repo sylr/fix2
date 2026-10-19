@@ -207,7 +207,9 @@
     (c/su (cu/grepkill! :cont "lazyfs")) ; a hung disk left stopped
     ;; LazyFS, then the small filesystem, which may be its backing
     ;; directory: jepsen.lazyfs/umount! would remove that while mounted.
-    (c/su (c/exec :sh :-c (str "! mountpoint -q " data-dir " || fusermount -uz " data-dir)))
+    ;; umount, not fusermount: Ubuntu's AppArmor lets fusermount unmount
+    ;; under /tmp, /mnt and homes only, not the store.
+    (c/su (c/exec :sh :-c (str "! mountpoint -q " data-dir " || umount -l " data-dir)))
     (umount-disk!)
     (c/su (c/exec :rm :-rf dir "/var/lib/fix2")))
 

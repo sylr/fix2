@@ -34,7 +34,7 @@ for n in $NODES; do
 	*) echo "$n: binary does not run: $usage"; exit 1 ;;
 	esac
 	ssh "$n" "set -eu
-for c in iptables tc findmnt mountpoint fusermount fallocate losetup mkfs.ext4 start-stop-daemon pgrep; do
+for c in iptables tc findmnt mountpoint umount fallocate losetup mkfs.ext4 start-stop-daemon pgrep; do
 	command -v \$c >/dev/null || { echo \"missing \$c\"; exit 1; }
 done
 ip=\$(getent ahostsv4 $p | awk '{print \$1; exit}')
@@ -57,9 +57,11 @@ echo \"$n: tools ok: netem, prio and u32 on \$dev to $p, iptables, a loop-mounte
 done
 
 for n in $NODES; do
+	# Where the suite mounts the store, and unmounted as it does: AppArmor
+	# may allow FUSE unmounts under /tmp and not there.
 	ssh "$n" 'set -eu
-d=/tmp/lz l=/tmp/lz.lazyfs
-fusermount -uz $d 2>/dev/null || true
+d=/var/lib/fix2-check/lz l=/var/lib/fix2-check/lz.lazyfs
+! mountpoint -q $d || umount -l $d
 rm -rf $d $l
 mkdir -p $d $l/data
 touch $l/log
@@ -77,7 +79,7 @@ log_all_operations=false
 EOF
 cd /opt/jepsen/lazyfs/lazyfs
 scripts/mount-lazyfs.sh -c $l/config -m $d -r $l/data >/dev/null
-trap "fusermount -uz $d" EXIT
+trap "! mountpoint -q $d || umount -l $d" EXIT
 for i in $(seq 50); do findmnt $d | grep -q lazyfs && break; sleep 0.1; done
 findmnt $d | grep -q lazyfs
 # dd fsyncs the file; `sync FILE` does not everywhere: uutils calls sync(2),
@@ -88,6 +90,10 @@ echo lazyfs::clear-cache >$l/fifo
 sleep 0.5
 synced=$(cat $d/synced) unsynced=$(cat $d/unsynced)
 if [ "$synced" != kept ]; then echo "lazyfs lost a synced write: \"$synced\""; exit 1; fi
-if [ "$unsynced" = lost ]; then echo "lazyfs kept an unsynced write"; exit 1; fi'
-	echo "$n: lazyfs ok: the synced write kept, the unsynced one lost"
+if [ "$unsynced" = lost ]; then echo "lazyfs kept an unsynced write"; exit 1; fi
+trap - EXIT
+umount -l $d
+if mountpoint -q $d; then echo "lazyfs not unmounted"; exit 1; fi
+rm -rf /var/lib/fix2-check'
+	echo "$n: lazyfs ok: the synced write kept, the unsynced one lost, unmounted"
 done
