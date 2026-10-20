@@ -12,6 +12,9 @@ ignore:
   # The contribs, binancefix, binancemd, coinbasemd and the others: built
   # on the library, not part of it.
   - "contribs"
+  # The Jepsen suite: its node and its stacks test the library, and are
+  # not part of it.
+  - "jepsen"
   # Packages fix2gen generates for tests.
   - "fix/tests"
   # Test helpers.
