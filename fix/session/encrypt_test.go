@@ -446,3 +446,163 @@ func TestEncrypter_SecureDataNotAgreed(t *testing.T) {
 		}
 	})
 }
+
+// encryptedPair runs an initiator and an acceptor of FIX 4.4, with ini and
+// acc as their Encrypters.
+func encryptedPair(t *testing.T, ini, acc session.Encrypter) (is, as *session.Session, ir, ar *recorder) {
+	t.Helper()
+	l := mem.Listen("acceptor")
+	a := session.NewAcceptor(session.AcceptorOptions{})
+	ar = newRecorder()
+	as, err := a.Add(session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"},
+		Handler: ar, Encrypter: acc, LogoutTimeout: 200 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Listen(l)
+	i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond})
+	ir = newRecorder()
+	is, err = i.Add(session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+		Handler: ir, Encrypter: ini, LogoutTimeout: 200 * time.Millisecond}, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); a.Run(ctx) }()
+	go func() { defer wg.Done(); i.Run(ctx) }()
+	t.Cleanup(func() { cancel(); wg.Wait() })
+	return is, as, ir, ar
+}
+
+// Two sessions with the same Encrypter log on and talk, both ways; with
+// different Methods, they do not log on.
+func TestEncrypter_Pair(t *testing.T) {
+	t.Run("agreed", func(t *testing.T) {
+		ini, acc, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "7", "k"))
+		ir.wait(t, func() bool { return ir.logons == 1 })
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, id := range []string{"A", "B"} {
+			if _, err := ini.Send(ctx, fix.NewBuilder(session.FIX44, "D").SetString(11, id)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ar.wait(t, func() bool { return len(ar.apps) == 2 })
+		r, err := acc.Send(ctx, fix.NewBuilder(session.FIX44, "8").SetString(11, "A"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Acknowledged by a TestRequest and its Heartbeat, both sealed.
+		if err := r.Wait(ctx, session.Acknowledged); err != nil {
+			t.Fatalf("Wait(Acknowledged): %v", err)
+		}
+		ir.wait(t, func() bool { return len(ir.apps) == 1 })
+		if got := ar.apps; got[0] != "A" || got[1] != "B" {
+			t.Errorf("acceptor received %v", got)
+		}
+		for _, s := range []*session.Session{ini, acc} {
+			if n := s.Stats().RejectsSent.Load(); n != 0 {
+				t.Errorf("%s sent %d Rejects", s.ID(), n)
+			}
+		}
+		if err := ini.Logout(ctx, "bye"); err != nil {
+			t.Fatal(err)
+		}
+		ar.wait(t, func() bool { return len(ar.logouts) == 1 })
+	})
+	t.Run("Methods differ", func(t *testing.T) {
+		ini, _, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "6", "k"))
+		waitFor(t, func() bool { return ini.Stats().Connections.Load() >= 2 })
+		ir.mu.Lock()
+		ar.mu.Lock()
+		defer ir.mu.Unlock()
+		defer ar.mu.Unlock()
+		if ir.logons != 0 || ar.logons != 0 {
+			t.Errorf("logged on: initiator %d, acceptor %d times", ir.logons, ar.logons)
+		}
+	})
+}
+
+// A resend after a reconnection is sealed anew from the message stored in
+// clear, its PossDupFlag and OrigSendingTime in the clear header; the
+// GapFill over the Logon is sealed too.
+func TestEncrypter_ResendAfterReconnect(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	l := mem.Listen("acceptor")
+	s, rec := startInitiator(t, l, func(c *session.Config) { c.Encrypter = g })
+	p := acceptPeer(t, l)
+	p.expect("A", "34", "1", "98", "7")
+	p.write(from(session.FIX44, 1), "A", "98", "7", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "O1")); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := p.expectSealed(g, "D", "11", "O1")
+	p.conn.Close()
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+
+	p = acceptPeer(t, l)
+	if logon := p.expect("A", "34", "3", "98", "7"); logon.Get(91) != nil {
+		t.Error("Logon sealed")
+	}
+	p.write(from(session.FIX44, 2), "A", "98", "7", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 2 })
+	p.writeRaw(sealedMsg(t, g, 3, "2", "7", "2", "16", "0"))
+	m, plain := p.expectSealed(g, "D", "11", "O1")
+	if string(m.Get(34)) != "2" || string(m.Get(43)) != "Y" || !bytes.Equal(m.Get(122), first.Get(52)) {
+		t.Errorf("resent header: 34=%s 43=%s 122=%s, first sent at %s", m.Get(34), m.Get(43), m.Get(122), first.Get(52))
+	}
+	if strings.Contains(plain, "43=") || strings.Contains(plain, "122=") || bytes.Equal(m.Get(91), first.Get(91)) {
+		t.Errorf("resent SecureData %q not sealed anew", plain)
+	}
+	gf, _ := p.expectSealed(g, "4", "36", "4", "123", "Y")
+	if string(gf.Get(34)) != "3" || string(gf.Get(43)) != "Y" || gf.Get(122) == nil {
+		t.Errorf("GapFill header: 34=%s 43=%s 122=%s", gf.Get(34), gf.Get(43), gf.Get(122))
+	}
+}
+
+// A Logon resetting the sequence numbers on an established connection, and
+// its answer, are in clear; what follows them stays sealed.
+func TestEncrypter_ResetLogon(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, rec, p, _, _ := encryptedInitiator(t, g, nil)
+	p.write(from(session.FIX44, 1), "A", "98", "7", "108", "30", "141", "Y")
+	if answer := p.expect("A", "34", "1", "98", "7", "141", "Y"); answer.Get(91) != nil {
+		t.Error("Logon answer sealed")
+	}
+	waitFor(t, func() bool { return s.NextTargetSeqNum() == 2 && s.State() == session.StateLoggedOn })
+	if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "AFTER")); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := p.expectSealed(g, "D", "11", "AFTER"); string(m.Get(34)) != "2" {
+		t.Errorf("sent at %s, want 2", m.Get(34))
+	}
+	p.writeRaw(sealedMsg(t, g, 2, "D", "11", "IN"))
+	rec.wait(t, func() bool { return len(rec.apps) == 1 })
+}
+
+// failingSeal is an Encrypter whose Seal fails.
+type failingSeal struct{ *gcm }
+
+func (failingSeal) Seal([]byte, []byte) ([]byte, error) { return nil, errors.New("no key") }
+
+// A Seal error is a write error: the connection closes, the message
+// unwritten.
+func TestEncrypter_SealFailure(t *testing.T) {
+	l := mem.Listen("acceptor")
+	s, rec := startInitiator(t, l, func(c *session.Config) { c.Encrypter = failingSeal{newGCM(t, "7", "k")} })
+	p := acceptPeer(t, l)
+	p.expect("A", "98", "7")
+	p.write(from(session.FIX44, 1), "A", "98", "7", "108", "30")
+	rec.wait(t, func() bool { return rec.logons == 1 })
+	if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "O1")); err != nil {
+		t.Fatal(err)
+	}
+	p.expectSilentEnd()
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	if n := s.Stats().MessagesSent.Load(); n != 1 {
+		t.Errorf("MessagesSent = %d, want 1, the Logon", n)
+	}
+}
