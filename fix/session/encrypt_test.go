@@ -17,6 +17,7 @@ import (
 	"github.com/sylr/fix2/fix/session"
 	"github.com/sylr/fix2/fix/session/store"
 	"github.com/sylr/fix2/fix/session/store/memstore"
+	"github.com/sylr/fix2/fix/tests/dicts/fix44"
 	"github.com/sylr/fix2/transport/mem"
 )
 
@@ -74,11 +75,15 @@ func TestEncrypter_Validate(t *testing.T) {
 		{session.FIX44, "-1", false},
 		{session.FIX44, "07", false},
 		{session.FIX44, "+7", false},
+		{"dictionary", "7", false}, // FIX44 with a dictionary listing 0 only
 	} {
 		cfg := session.Config{
 			ID:        session.SessionID{BeginString: c.begin, SenderCompID: "INI", TargetCompID: "ACC"},
 			Handler:   newRecorder(),
 			Encrypter: newGCM(t, c.method, "k"),
+		}
+		if c.begin == "dictionary" {
+			cfg.ID.BeginString, cfg.Dictionaries.Session = session.FIX44, fix44.Dictionary()
 		}
 		if c.begin == session.FIXT11 {
 			cfg.Dictionaries.DefaultApplVerID = "9"
@@ -106,23 +111,48 @@ func (a adminSetter) ToAdmin(_ context.Context, _ *session.Session, msgType stri
 	return nil
 }
 
-// SecureDataLen (90) and SecureData (91) are the session's to write: neither
-// Send nor ToAdmin sets them.
+// With an Encrypter, SecureDataLen (90) and SecureData (91) are the
+// session's to write: neither Send, SendRaw nor ToAdmin sets them, and
+// SendRaw refuses a body it could not seal. Without, Send sets them as
+// before.
 func TestEncrypter_SecureDataReserved(t *testing.T) {
-	t.Run("Send", func(t *testing.T) {
-		s, _, _, _ := established(t, session.FIX44, func(c *session.Config) { c.LogoutTimeout = 200 * time.Millisecond })
-		for _, b := range []*fix.Builder{
+	builders := func() []*fix.Builder {
+		return []*fix.Builder{
 			fix.NewBuilder(session.FIX44, "D").SetString(11, "O2").SetData(90, 91, []byte("x")),
 			fix.NewBuilder(session.FIX44, "D").SetString(11, "O2").SetString(91, "x"),
-		} {
+		}
+	}
+	t.Run("Send", func(t *testing.T) {
+		g := newGCM(t, "7", "k")
+		s, _, p, _, _ := encryptedInitiator(t, g, nil)
+		for _, b := range builders() {
 			if _, err := s.Send(context.Background(), b); err == nil {
 				t.Error("Send with SecureData succeeded")
 			}
 		}
+		for _, body := range []string{"90=1\x0191=x\x0111=O2\x01", "11=O2\x0191=x\x01", "11=O2"} {
+			if _, err := s.SendRaw(context.Background(), "D", []byte(body)); err == nil {
+				t.Errorf("SendRaw of %q succeeded", body)
+			}
+		}
+		if _, err := s.SendRaw(context.Background(), "D", []byte("11=O3\x01")); err != nil {
+			t.Fatal(err)
+		}
+		if m, _ := p.expectSealed(g, "D", "11", "O3"); string(m.Get(34)) != "2" {
+			t.Errorf("sent at %s, want 2: a message refused took a MsgSeqNum", m.Get(34))
+		}
+	})
+	t.Run("Send, no Encrypter", func(t *testing.T) {
+		s, _, p, _ := established(t, session.FIX44, func(c *session.Config) { c.LogoutTimeout = 200 * time.Millisecond })
+		if _, err := s.Send(context.Background(), builders()[0]); err != nil {
+			t.Fatal(err)
+		}
+		p.expect("D", "11", "O2", "91", "x")
 	})
 	t.Run("ToAdmin", func(t *testing.T) {
 		l := mem.Listen("acceptor")
 		startInitiator(t, l, func(c *session.Config) {
+			c.Encrypter = newGCM(t, "7", "k")
 			c.Handler = adminSetter{newRecorder(), func(b *fix.Builder) { b.SetData(90, 91, []byte("x")) }}
 		})
 		p := acceptPeer(t, l)
@@ -376,17 +406,22 @@ func TestEncrypter_DecryptionProblem(t *testing.T) {
 	other := newGCM(t, "7", "another key")
 	for _, c := range []struct {
 		name  string
+		ref   string // RefTagID
 		frame func(g *gcm) []byte
 	}{
-		{"does not open", func(*gcm) []byte { return sealedMsg(t, other, 2, "D", "11", "BAD") }},
-		{"header differs", func(g *gcm) []byte { return sealedMsg(t, g, 2, "D", "34", "9", "11", "BAD") }},
-		{"CompID differs", func(g *gcm) []byte { return sealedMsg(t, g, 2, "D", "49", "EVE", "11", "BAD") }},
-		{"body in clear", func(*gcm) []byte { return from(session.FIX44, 2).build("D", "11", "BAD").Build() }},
-		{"body in clear beside SecureData", func(g *gcm) []byte {
+		{"does not open", "91", func(*gcm) []byte { return sealedMsg(t, other, 2, "D", "11", "BAD") }},
+		{"header differs", "91", func(g *gcm) []byte { return sealedMsg(t, g, 2, "D", "34", "9", "11", "BAD") }},
+		{"CompID differs", "91", func(g *gcm) []byte { return sealedMsg(t, g, 2, "D", "49", "EVE", "11", "BAD") }},
+		{"second hop differs", "91", func(g *gcm) []byte {
+			sealed, _ := g.Seal(nil, []byte("627=2\x01628=H1\x01628=EVE\x0111=BAD\x01"))
+			return from(session.FIX44, 2).build("D", "627", "2", "628", "H1", "628", "H2").SetData(90, 91, sealed).Build()
+		}},
+		{"body in clear", "11", func(*gcm) []byte { return from(session.FIX44, 2).build("D", "11", "BAD").Build() }},
+		{"body in clear beside SecureData", "1", func(g *gcm) []byte {
 			sealed, _ := g.Seal(nil, []byte("11=BAD\x01"))
 			return from(session.FIX44, 2).build("D", "1", "ACCT").SetData(90, 91, sealed).Build()
 		}},
-		{"not fields", func(g *gcm) []byte {
+		{"not fields", "91", func(g *gcm) []byte {
 			sealed, _ := g.Seal(nil, []byte("11=BAD"))
 			return from(session.FIX44, 2).build("D").SetData(90, 91, sealed).Build()
 		}},
@@ -395,7 +430,7 @@ func TestEncrypter_DecryptionProblem(t *testing.T) {
 			g := newGCM(t, "7", "k")
 			s, rec, p, _, _ := encryptedInitiator(t, g, nil)
 			p.writeRaw(c.frame(g))
-			_, plain := p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+			_, plain := p.expectSealed(g, "3", "45", "2", "371", c.ref, "373", "7")
 			if strings.Contains(plain, "BAD") || strings.Contains(plain, "EVE") {
 				t.Errorf("Reject shows the message: %q", plain)
 			}
@@ -448,14 +483,19 @@ func TestEncrypter_SecureDataNotAgreed(t *testing.T) {
 }
 
 // encryptedPair runs an initiator and an acceptor of FIX 4.4, with ini and
-// acc as their Encrypters.
-func encryptedPair(t *testing.T, ini, acc session.Encrypter) (is, as *session.Session, ir, ar *recorder) {
+// acc as their Encrypters, and the acceptor's configuration changed by
+// change if not nil.
+func encryptedPair(t *testing.T, ini, acc session.Encrypter, change func(*session.Config)) (is, as *session.Session, ir, ar *recorder) {
 	t.Helper()
 	l := mem.Listen("acceptor")
 	a := session.NewAcceptor(session.AcceptorOptions{})
 	ar = newRecorder()
-	as, err := a.Add(session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"},
-		Handler: ar, Encrypter: acc, LogoutTimeout: 200 * time.Millisecond})
+	cfg := session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"},
+		Handler: ar, Encrypter: acc, LogoutTimeout: 200 * time.Millisecond}
+	if change != nil {
+		change(&cfg)
+	}
+	as, err := a.Add(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +520,7 @@ func encryptedPair(t *testing.T, ini, acc session.Encrypter) (is, as *session.Se
 // different Methods, they do not log on.
 func TestEncrypter_Pair(t *testing.T) {
 	t.Run("agreed", func(t *testing.T) {
-		ini, acc, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "7", "k"))
+		ini, acc, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "7", "k"), nil)
 		ir.wait(t, func() bool { return ir.logons == 1 })
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -513,7 +553,7 @@ func TestEncrypter_Pair(t *testing.T) {
 		ar.wait(t, func() bool { return len(ar.logouts) == 1 })
 	})
 	t.Run("Methods differ", func(t *testing.T) {
-		ini, _, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "6", "k"))
+		ini, _, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "6", "k"), nil)
 		waitFor(t, func() bool { return ini.Stats().Connections.Load() >= 2 })
 		ir.mu.Lock()
 		ar.mu.Lock()
@@ -604,5 +644,121 @@ func TestEncrypter_SealFailure(t *testing.T) {
 	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
 	if n := s.Stats().MessagesSent.Load(); n != 1 {
 		t.Errorf("MessagesSent = %d, want 1, the Logon", n)
+	}
+}
+
+// A signature, SignatureLength (93) and Signature (89), ends the message in
+// clear, after SecureData, never within it, and arrives intact.
+func TestEncrypter_SignatureInClear(t *testing.T) {
+	sig := []byte("s\x01g")
+	t.Run("wire", func(t *testing.T) {
+		g := newGCM(t, "7", "k")
+		s, _, p, _, _ := encryptedInitiator(t, g, nil)
+		if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "SIGNED").SetData(93, 89, sig)); err != nil {
+			t.Fatal(err)
+		}
+		wire := p.expectRaw()
+		m, plain := unseal(t, g, wire)
+		if plain != "11=SIGNED\x01" || !bytes.Equal(m.Get(89), sig) {
+			t.Errorf("SecureData holds %q, Signature %q", plain, m.Get(89))
+		}
+		if i, j := bytes.Index(wire, []byte("\x0191=")), bytes.Index(wire, []byte("\x0193=3\x0189=s\x01g\x0110=")); i < 0 || j < i {
+			t.Errorf("signature not after SecureData, before CheckSum: %s", visible(wire))
+		}
+	})
+	t.Run("received", func(t *testing.T) {
+		seen := &observed{}
+		ini, _, ir, ar := encryptedPair(t, newGCM(t, "7", "k"), newGCM(t, "7", "k"), func(c *session.Config) { c.Observer = seen })
+		ir.wait(t, func() bool { return ir.logons == 1 })
+		if _, err := ini.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "SIGNED").SetData(93, 89, sig)); err != nil {
+			t.Fatal(err)
+		}
+		ar.wait(t, func() bool { return len(ar.apps) == 1 })
+		if in := seen.find(t, true, "\x0111=SIGNED\x01"); !bytes.HasSuffix(in[:len(in)-7], []byte("\x0111=SIGNED\x0193=3\x0189=s\x01g\x01")) {
+			t.Errorf("received %s", visible(in))
+		}
+	})
+}
+
+// A message that does not open, received ahead of a gap, is not kept: the
+// gap and it are asked for, and it is handled when it comes again.
+func TestEncrypter_UndecryptableTooHigh(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, rec, p, _, _ := encryptedInitiator(t, g, nil)
+	p.writeRaw(sealedMsg(t, newGCM(t, "7", "another key"), 4, "D", "11", "BAD"))
+	p.expectSealed(g, "2", "7", "2", "16", "0")
+	orig := string(fix.AppendUTCTimestamp(nil, time.Now().Add(-time.Second), fix.Milliseconds))
+	resent := func(seq int, msgType string, fields ...string) []byte {
+		var body []byte
+		for i := 0; i+1 < len(fields); i += 2 {
+			tag, _ := strconv.Atoi(fields[i])
+			body = fix.AppendTagValue(body, tag, fields[i+1])
+		}
+		sealed, err := g.Seal(nil, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return from(session.FIX44, seq).build(msgType, "43", "Y", "122", orig).SetData(90, 91, sealed).Build()
+	}
+	p.writeRaw(resent(2, "4", "123", "Y", "36", "4"))
+	p.writeRaw(resent(4, "D", "11", "GOOD"))
+	rec.wait(t, func() bool { return len(rec.apps) == 1 })
+	if rec.apps[0] != "GOOD" || s.NextTargetSeqNum() != 5 || s.Stats().RejectsSent.Load() != 0 {
+		t.Errorf("delivered %q, NextTargetSeqNum %d, %d Rejects", rec.apps, s.NextTargetSeqNum(), s.Stats().RejectsSent.Load())
+	}
+}
+
+// A header field only within SecureData, SendingTime here, is the message's:
+// checked and delivered.
+func TestEncrypter_SendingTimeSealed(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, rec, p, _, seen := encryptedInitiator(t, g, nil)
+	sent := string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds))
+	sealed, err := g.Seal(nil, []byte("52="+sent+"\x0111=IN\x01"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.writeRaw(fix.NewBuilder(session.FIX44, "D").SetString(49, "ACC").SetString(56, "INI").SetInt(34, 2).SetData(90, 91, sealed).Build())
+	rec.wait(t, func() bool { return len(rec.apps) == 1 })
+	m, err := fix.Parse(seen.find(t, true, "\x0111=IN\x01"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(m.Get(52)) != sent || s.Stats().RejectsSent.Load() != 0 {
+		t.Errorf("SendingTime %q, want %q; %d Rejects", m.Get(52), sent, s.Stats().RejectsSent.Load())
+	}
+}
+
+// Our Logout, once the Logons agreed, is sealed.
+func TestEncrypter_LogoutSealed(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, _, p, _, _ := encryptedInitiator(t, g, nil)
+	done := make(chan error, 1)
+	go func() { done <- s.Logout(context.Background(), "bye") }()
+	p.expectSealed(g, "5", "58", "bye")
+	p.writeRaw(from(session.FIX44, 2).build("5").Build())
+	if err := <-done; err != nil {
+		t.Error(err)
+	}
+}
+
+// bigOpen opens SecureData to more than a message may hold.
+type bigOpen struct{ *gcm }
+
+func (bigOpen) Open(dst, _ []byte) ([]byte, error) {
+	return append(dst, "11="+strings.Repeat("x", fix.MaxBodyLength)+"\x01"...), nil
+}
+
+// What Open returns is bounded: beyond fix.MaxBodyLength, the message is
+// rejected.
+func TestEncrypter_OpenTooLarge(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, rec, p, _, _ := encryptedInitiator(t, g, func(c *session.Config) { c.Encrypter = bigOpen{g} })
+	p.writeRaw(sealedMsg(t, g, 2, "D", "11", "BIG"))
+	p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if s.NextTargetSeqNum() != 3 || len(rec.apps) != 0 {
+		t.Errorf("NextTargetSeqNum %d, delivered %q", s.NextTargetSeqNum(), rec.apps)
 	}
 }

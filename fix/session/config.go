@@ -582,8 +582,18 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.Encrypter != nil {
-		if m := c.Encrypter.Method(); !validMethod(m) {
+		m := c.Encrypter.Method()
+		if !validMethod(m) {
 			add("Encrypter", "Method %q is not an EncryptMethod (98) other than 0, a positive integer", m)
+		}
+		// The Logons, validated against the session dictionary, would be
+		// refused.
+		if d := c.Dictionaries.Session; d != nil && d.Fields[tagEncryptMethod] != nil && len(d.Fields[tagEncryptMethod].Enums) > 0 {
+			enums := d.Fields[tagEncryptMethod].Enums
+			if _, ok := enums[m]; !ok {
+				add("Encrypter", "Method %q is not among the EncryptMethod (98) values of Dictionaries.Session (have %s)",
+					m, strings.Join(slices.Sorted(maps.Keys(enums)), ", "))
+			}
 		}
 	}
 	if len(errs) == 0 {

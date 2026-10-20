@@ -15,14 +15,15 @@ import (
 	"github.com/sylr/fix2/fix/session/store"
 )
 
-// logonTags are the tags of a Logon the session writes, on top of the
-// reserved ones: a ToAdmin callback cannot set them.
-func logonReserved(tag int) bool {
+// logonReserved reports whether tag is one of a Logon the session writes, on
+// top of the reserved ones (see Session.reservedTag): a ToAdmin callback
+// cannot set them.
+func (s *Session) logonReserved(tag int) bool {
 	switch tag {
 	case tagEncryptMethod, tagHeartBtInt, tagResetSeqNumFlag, tagNextExpectedMsgSeqNum, tagDefaultApplVerID:
 		return true
 	}
-	return reserved(tag)
+	return s.reservedTag(tag)
 }
 
 // toAdmin asks the handler for the extra fields of a Logon or Logout.
@@ -31,7 +32,7 @@ func (s *Session) toAdmin(msgType string) ([]byte, error) {
 	if err := s.handler.ToAdmin(s.callbackCtx(), s, msgType, b); err != nil {
 		return nil, err
 	}
-	return b.AppendBody(nil, s.dicts.adminProfile(), logonReserved)
+	return b.AppendBody(nil, s.dicts.adminProfile(), s.logonReserved)
 }
 
 // logon sends the initiator's Logon on c.
@@ -98,7 +99,7 @@ func (s *Session) signLogon(signer LogonSigner, seq uint64, sendingTime time.Tim
 	if err := signer.SignLogon(s.callbackCtx(), s, h, b); err != nil {
 		return nil, err
 	}
-	return b.AppendBody(nil, s.dicts.adminProfile(), logonReserved)
+	return b.AppendBody(nil, s.dicts.adminProfile(), s.logonReserved)
 }
 
 // logonBody returns the fields of our Logon: next is the NextExpectedMsgSeqNum

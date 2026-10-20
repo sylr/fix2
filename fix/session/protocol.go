@@ -104,9 +104,9 @@ func (c *conn) handleFrame(frame []byte) {
 	}
 	s.stats.MessagesReceived.Add(1)
 	s.stats.BytesReceived.Add(uint64(len(frame)))
-	if opened, plain, why := c.open(m, frame); why == "" {
+	if opened, plain, tag, why := c.open(m, frame); why == "" {
 		m, frame = opened, plain
-	} else if c.undecryptable(m, why, read, now) {
+	} else if c.undecryptable(m, tag, why, read, now) {
 		return
 	}
 	if obs := s.cfg.Observer; obs != nil {

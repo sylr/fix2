@@ -86,6 +86,9 @@ type Session struct {
 	handler Handler
 	store   store.Store
 	syncer  store.Syncer // the store, if its Appends are durable only once synced
+	// reservedTag reports whether the session writes a tag itself, which
+	// Send refuses: reserved, sealReserved with an Encrypter.
+	reservedTag func(tag int) bool
 
 	dicts dicts
 
@@ -229,6 +232,10 @@ func New(cfg Config) (*Session, error) {
 		store:   cfg.Store,
 		done:    make(chan struct{}),
 		stuckCh: make(chan struct{}),
+	}
+	s.reservedTag = reserved
+	if cfg.Encrypter != nil {
+		s.reservedTag = sealReserved
 	}
 	s.setHeartBtLocked(cfg.HeartBtInt)
 	s.log = cfg.Logger.With(slog.String("session", cfg.ID.String()))
@@ -508,7 +515,7 @@ func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 	// The counterparty parses it with the profile we parse its messages
 	// with: of our default application version, for FIXT, as no ApplVerID
 	// of ours tells another.
-	body, err := m.AppendBody((*bp)[:0], s.dicts.parse, reserved)
+	body, err := m.AppendBody((*bp)[:0], s.dicts.parse, s.reservedTag)
 	*bp = body[:0]
 	if err != nil {
 		return Receipt{}, fmt.Errorf("session %s: %w", s.id, err)
@@ -519,8 +526,14 @@ func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 // SendRaw sends a message of type msgType whose body, the fields after the
 // standard header, is already encoded, as a gateway forwarding messages
 // does. body must not hold the tags the session writes; msgType must not
-// hold SOH.
+// hold SOH. With an Encrypter, which seals the body, a body that does not
+// parse, or holds SecureDataLen (90) or SecureData (91), is refused.
 func (s *Session) SendRaw(ctx context.Context, msgType string, body []byte) (Receipt, error) {
+	if s.cfg.Encrypter != nil {
+		if err := s.checkSealable(msgType, body); err != nil {
+			return Receipt{}, fmt.Errorf("session %s: %w", s.id, err)
+		}
+	}
 	return s.send(ctx, msgType, body)
 }
 

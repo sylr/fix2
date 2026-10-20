@@ -57,7 +57,7 @@ func FuzzEncrypterOpen(f *testing.F) {
 			return
 		}
 		c := &conn{s: s, encrypted: true}
-		om, opened, why := c.open(&m, frame)
+		om, opened, _, why := c.open(&m, frame)
 		if why != "" {
 			if om != &m || !bytes.Equal(opened, frame) {
 				t.Fatalf("%q, not made out, changed", frame)
@@ -76,7 +76,7 @@ func FuzzEncrypterOpen(f *testing.F) {
 		if err := s.cfg.parseOptions().ParseInto(&again, resealed, s.dicts.parse); err != nil {
 			t.Fatalf("%q sealed as %q, which does not parse: %v", opened, resealed, err)
 		}
-		if _, reopened, why := c.open(&again, resealed); why != "" || !bytes.Equal(reopened, opened) {
+		if _, reopened, _, why := c.open(&again, resealed); why != "" || !bytes.Equal(reopened, opened) {
 			t.Fatalf("%q sealed as %q, opened again as %q (%s)", opened, resealed, reopened, why)
 		}
 	})

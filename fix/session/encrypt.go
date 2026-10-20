@@ -49,7 +49,10 @@ type Encrypter interface {
 	// must authenticate what it seals: what Open returns is trusted.
 	Seal(dst, plain []byte) ([]byte, error)
 	// Open appends to dst the fields sealed holds, as Seal was given them,
-	// and returns the result. An error rejects the message.
+	// and returns the result. An error rejects the message, as does a
+	// result, or the message rebuilt with it, longer than fix.MaxBodyLength,
+	// the most the session reads of a message: Open itself bounds what it
+	// allocates.
 	Open(dst, sealed []byte) ([]byte, error)
 }
 
@@ -67,7 +70,8 @@ func (s *Session) encryptMethod() string {
 // on encryption, and where each ends there: every one but a Logon, and those
 // without a body, has its body sealed into SecureData (91), which ends its
 // standard header, BodyLength and CheckSum written again. The header stays in
-// clear. It runs on the writer, which owns what it returns until its next
+// clear, and so does a signature ending the body, SignatureLength (93) and
+// Signature (89), after SecureData. It runs on the writer, which owns what it returns until its next
 // call; an error is the Encrypter's.
 func (c *conn) seal(buf []byte, frames []pendingFrame) ([]byte, []int, error) {
 	out, ends := reusable(c.wire, c.s.cfg.MaxPendingBytes), c.wireEnds[:0]
@@ -97,16 +101,24 @@ func (c *conn) sealFrame(dst, frame []byte) ([]byte, error) {
 	for body < last && s.dicts.inHeader(fields[body].Tag) {
 		body++
 	}
-	if body == last || bytes.Equal(fields[2].Value, msgLogon) {
+	// A signature, SignatureLength (93) and Signature (89), ends the message,
+	// never within SecureData: it stays in clear, after it.
+	end := last
+	for end > body && (fields[end-1].Tag == tagSignatureLength || fields[end-1].Tag == tagSignature) {
+		end--
+	}
+	if end == body || bytes.Equal(fields[2].Value, msgLogon) {
 		return append(dst, frame...), nil
 	}
 	from := fieldsLen(fields[:2])                      // MsgType's
 	bodyStart := len(frame) - fieldsLen(fields[body:]) // the body's first field
-	bodyEnd := len(frame) - fieldsLen(fields[last:])
-	var err error
-	if c.sealed, err = s.cfg.Encrypter.Seal(c.sealed[:0], frame[bodyStart:bodyEnd]); err != nil {
+	bodyEnd := len(frame) - fieldsLen(fields[end:])    // the signature's, or CheckSum's
+	trailer := frame[bodyEnd : len(frame)-fieldsLen(fields[last:])]
+	sealed, err := s.cfg.Encrypter.Seal(reusable(c.sealed, maxPooledBuffer), frame[bodyStart:bodyEnd])
+	if err != nil {
 		return dst, err
 	}
+	c.sealed = sealed
 	start := len(dst)
 	dst = fix.AppendTagValue(dst, 8, fields[0].Value)
 	dst = append(dst, "9="...)
@@ -117,7 +129,9 @@ func (c *conn) sealFrame(dst, frame []byte) ([]byte, error) {
 	dst = append(dst, frame[from:bodyStart]...)
 	dst = fix.AppendTagInt(dst, tagSecureDataLen, int64(len(c.sealed)))
 	dst = fix.AppendTagValue(dst, tagSecureData, c.sealed)
-	d := appendDecimal(nil, uint64(len(dst)-headerStart))
+	dst = append(dst, trailer...)
+	var digits [20]byte
+	d := appendDecimal(digits[:0], uint64(len(dst)-headerStart))
 	copy(dst[lenPos:], d)
 	dst[lenPos+len(d)] = 1
 	copy(dst[lenPos+len(d)+1:], dst[headerStart:])
@@ -132,16 +146,18 @@ func (c *conn) sealFrame(dst, frame []byte) ([]byte, error) {
 // within the SecureData field to serve as an integrity check of the clear
 // data", unverified), the other fields its body, and its frame is built
 // anew, parsed again into a message of the reader's. One without SecureData
-// has no body. It returns instead why m cannot be made out, its frame and m
-// left as they are: SecureData Open refuses, or whose fields do not parse, a
-// header field in it differing from the clear one, a body field in clear.
-// FIX 4.4 recommends, without requiring, that the whole body be encrypted:
-// fix2 requires it, fields in clear and sealed leaving their order unknown.
-// A signature, SignatureLength (93) and Signature (89), stays in clear, last.
-func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, string) {
+// has no body. It returns instead the tag and why m cannot be made out, its
+// frame and m left as they are: SecureData Open refuses, whose fields do not
+// parse, or which opens to more than fix.MaxBodyLength, a header field in it
+// differing from its clear one, the occurrences of a tag compared in order,
+// a body field in clear. FIX 4.4 recommends, without requiring, that the
+// whole body be encrypted: fix2 requires it, fields in clear and sealed
+// leaving their order unknown. A signature, SignatureLength (93) and
+// Signature (89), stays in clear, last.
+func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, int, string) {
 	s := c.s
 	if !c.encrypted || bytes.Equal(m.MsgType(), msgLogon) {
-		return m, frame, ""
+		return m, frame, 0, ""
 	}
 	fields := m.Fields()
 	fields = fields[3 : len(fields)-1] // after MsgType, before CheckSum
@@ -152,24 +168,27 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, string)
 			sealed = f.Value
 		case f.Tag == tagSignatureLength || f.Tag == tagSignature:
 		case !s.dicts.inHeader(f.Tag):
-			return m, frame, fmt.Sprintf("tag %d in clear: the body must be in SecureData (91)", f.Tag)
+			return m, frame, f.Tag, fmt.Sprintf("tag %d in clear: the body must be in SecureData (91)", f.Tag)
 		}
 	}
 	if sealed == nil {
-		return m, frame, ""
+		return m, frame, 0, ""
 	}
-	plain, err := s.cfg.Encrypter.Open(c.plain[:0], sealed)
+	plain, err := s.cfg.Encrypter.Open(reusable(c.plain, maxPooledBuffer), sealed)
 	if plain != nil {
 		c.plain = plain
 	}
-	if err != nil {
-		return m, frame, "SecureData (91) does not open: " + err.Error()
+	switch {
+	case err != nil:
+		return m, frame, tagSecureData, "SecureData (91) does not open: " + err.Error()
+	case len(plain) > fix.MaxBodyLength:
+		return m, frame, tagSecureData, fmt.Sprintf("SecureData (91) opens to %d bytes, more than %d", len(plain), fix.MaxBodyLength)
 	}
 	// The fields sealed, parsed behind a header of their own.
-	c.body = append(fix.AppendTagValue(c.body[:0], tagMsgType, m.MsgType()), plain...)
-	c.inner = wrapFrame(c.inner[:0], m.BeginString(), c.body)
+	c.body = append(fix.AppendTagValue(reusable(c.body, maxPooledBuffer), tagMsgType, m.MsgType()), plain...)
+	c.inner = wrapFrame(reusable(c.inner, maxPooledBuffer), m.BeginString(), c.body)
 	if err := s.cfg.parseOptions().ParseInto(&c.smsg, c.inner, s.dicts.parse); err != nil {
-		return m, frame, "SecureData (91) does not hold fields: " + err.Error()
+		return m, frame, tagSecureData, "SecureData (91) does not hold fields: " + err.Error()
 	}
 	inner := c.smsg.Fields()
 	inner = inner[3 : len(inner)-1]
@@ -181,13 +200,26 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, string)
 			body = fix.AppendTagValue(body, f.Tag, f.Value)
 		}
 	}
+	// The clear values of each tag, and the occurrences of each seen inside,
+	// once one is: the n-th inside is compared with the n-th in clear, a
+	// repeated group (NoHops) matching entry by entry.
+	var clear map[int][][]byte
+	var seen map[int]int
 	for _, f := range inner {
 		if !s.dicts.inHeader(f.Tag) {
 			continue
 		}
-		if v := m.Get(f.Tag); v != nil {
-			if !bytes.Equal(v, f.Value) {
-				return m, frame, fmt.Sprintf("tag %d in SecureData (91) differs from the one in clear", f.Tag)
+		if clear == nil {
+			clear, seen = make(map[int][][]byte), make(map[int]int)
+			for _, g := range m.Fields() {
+				clear[g.Tag] = append(clear[g.Tag], g.Value)
+			}
+		}
+		n := seen[f.Tag]
+		seen[f.Tag] = n + 1
+		if vs := clear[f.Tag]; n < len(vs) {
+			if !bytes.Equal(vs[n], f.Value) {
+				return m, frame, tagSecureData, fmt.Sprintf("tag %d in SecureData (91) differs from the one in clear", f.Tag)
 			}
 			continue
 		}
@@ -204,11 +236,14 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, string)
 		}
 	}
 	c.body = body
-	c.opened = wrapFrame(c.opened[:0], m.BeginString(), body)
-	if err := s.cfg.parseOptions().ParseInto(&c.omsg, c.opened, s.dicts.parse); err != nil {
-		return m, frame, "SecureData (91) does not hold fields: " + err.Error()
+	if len(body) > fix.MaxBodyLength {
+		return m, frame, tagSecureData, fmt.Sprintf("SecureData (91) opens to a message of %d bytes, more than %d", len(body), fix.MaxBodyLength)
 	}
-	return &c.omsg, c.opened, ""
+	c.opened = wrapFrame(reusable(c.opened, maxPooledBuffer), m.BeginString(), body)
+	if err := s.cfg.parseOptions().ParseInto(&c.omsg, c.opened, s.dicts.parse); err != nil {
+		return m, frame, tagSecureData, "SecureData (91) does not hold fields: " + err.Error()
+	}
+	return &c.omsg, c.opened, 0, ""
 }
 
 // wrapFrame appends to dst the frame of BeginString begin whose fields from
@@ -223,12 +258,12 @@ func wrapFrame(dst, begin, body []byte) []byte {
 // undecryptable handles m, received on c, which open could not make out, for
 // why: as a message parsed only up to a malformed tag (see unreadableLocked),
 // since SecureData (91) may hide any of its fields, it is rejected with
-// SessionRejectReason 7, Decryption problem, about SecureData, and counted if
+// SessionRejectReason 7, Decryption problem, about tag, and counted if
 // it is the one expected, not acted on (SL §4.5.4), a MsgSeqNum (34) it hides
 // logging out. The Observer does not see it. Before the session is logged on
 // it reports false: m is handled as any other message then, a Logout or
 // Reject refusing our Logon, anything else ending the connection.
-func (c *conn) undecryptable(m *fix.Message, why string, read, now time.Time) bool {
+func (c *conn) undecryptable(m *fix.Message, tag int, why string, read, now time.Time) bool {
 	s := c.s
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -244,12 +279,30 @@ func (c *conn) undecryptable(m *fix.Message, why string, read, now time.Time) bo
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "undecryptable message after the counterparty's Logout ignored")
 	} else {
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "message not decrypted", slog.String("reason", why))
-		s.unreadableLocked(c, m, dictionary.ReasonDecryptionProblem, tagSecureData, now)
+		s.unreadableLocked(c, m, dictionary.ReasonDecryptionProblem, tag, now)
 	}
 	if !c.closed {
 		s.armLocked(c)
 	}
 	return true
+}
+
+// checkSealable checks that body, of a message of msgType SendRaw is given,
+// can be sealed: its fields parse, and none is SecureDataLen (90) or
+// SecureData (91), which sealing writes. Otherwise the writer would fail to
+// seal it, or the counterparty reject it.
+func (s *Session) checkSealable(msgType string, body []byte) error {
+	b := append(fix.AppendTagValue(nil, tagMsgType, msgType), body...)
+	var m fix.Message
+	if err := fix.ParseInto(&m, wrapFrame(nil, []byte(s.id.BeginString), b), s.dicts.parse); err != nil {
+		return fmt.Errorf("body cannot be sealed: %w", err)
+	}
+	for _, f := range m.Fields() {
+		if f.Tag == tagSecureDataLen || f.Tag == tagSecureData {
+			return &fix.ReservedTagError{Tag: f.Tag}
+		}
+	}
+	return nil
 }
 
 // fieldsLen returns the bytes fields take in a frame, tag=value<SOH> each.

@@ -151,14 +151,20 @@ with the counterparty beforehand, out of band. Nothing is exchanged in
 RawData (95/96).
 
 - Both Logons declare the `Encrypter`'s `Method`; a Logon declaring another,
-  or none, is refused, the connection closed. A session dictionary must
-  list `Method` among EncryptMethod's values (FIX 4.4's lists 0 to 6), or
-  the Logons fail its validation.
+  or none, is refused, the connection closed. A session dictionary that
+  enumerates EncryptMethod's values (FIX 4.4's lists 0 to 6) must list
+  `Method`: `Config.Validate` checks it.
 - Logons go out in clear, reset Logons included, and so does a message
   without body. Every other message, once the Logons agreed, has its body
   sealed and its standard header in clear: CompIDs, MsgSeqNum,
-  SendingTime, PossDupFlag stay readable on the wire. Encryption is not
-  transport security: see [Transport security](#transport-security).
+  SendingTime, PossDupFlag stay readable on the wire, and so does a
+  signature, SignatureLength (93) and Signature (89), after SecureData.
+  Encryption is not transport security: see
+  [Transport security](#transport-security).
+- SecureDataLen (90) and SecureData (91) are then the session's: `Send`
+  and `ToAdmin` refuse them, and `SendRaw` refuses a body holding them, or
+  that does not parse, which it could not seal. Without an `Encrypter`,
+  sending them is left as it was.
 - The `Encrypter` must authenticate what it seals, an AEAD such as
   AES-GCM: a header field found inside SecureData is merged into the
   header, and a body opened is delivered, so a cipher a third party can
@@ -171,8 +177,10 @@ RawData (95/96).
   to be resent on the next. A message that does not open, holds no
   fields, repeats a header field with another value, or carries body
   fields in clear, is rejected with SessionRejectReason 7 and counted: it
-  is **lost** to the application, as any message rejected. One that hides
-  its MsgSeqNum logs out.
+  is **lost** to the application, as any message rejected. So is one whose
+  SecureData opens to more than `fix.MaxBodyLength`, the most a session
+  reads of a message: `Open` itself bounds what it allocates. One that
+  hides its MsgSeqNum logs out.
 - The store keeps messages in **clear**, and observers see them in clear,
   both ways: protect the store as the messages themselves, and redact
   observers by the tags of the body that matter, `SensitiveTags`' SecureData
