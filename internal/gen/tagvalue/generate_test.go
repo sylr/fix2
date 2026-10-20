@@ -46,16 +46,7 @@ func TestGenerate(t *testing.T) {
 	}
 
 	// Verify generated code compiles.
-	// We create a temporary go.mod that points fix2 at our local source.
-	modRoot, err := filepath.Abs("../../..")
-	if err != nil {
-		t.Fatalf("Abs: %v", err)
-	}
-
-	goMod := "module testgen\ngo 1.27\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
-	if err := os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(goMod), 0o644); err != nil {
-		t.Fatalf("write go.mod: %v", err)
-	}
+	writeTestModule(t, outDir)
 
 	// Create a main_test.go that exercises the generated code.
 	testCode := `package fix44
@@ -255,7 +246,7 @@ func TestEnumConstants(t *testing.T) {
 	}
 
 	// Run go test in the generated package.
-	cmd := exec.Command("go", "test", "-v", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "-v", "./...")
 	cmd.Dir = outDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -572,6 +563,31 @@ func TestGeneratedGroupSpecs(t *testing.T) {
 	}
 }
 
+// writeTestModule makes dir the module testgen, which builds against the
+// fix2 of the repository. What testgen imports of fix2 may need fix2's
+// dependencies, such as golang.org/x/sys on Linux, which testgen must then
+// require and have the sums of: fix2's go.sum goes with it, and go test runs
+// with -mod=mod, which adds the requirements at the versions fix2's go.mod
+// already selects.
+func writeTestModule(t *testing.T, dir string) {
+	t.Helper()
+	modRoot, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goMod := "module testgen\ngo 1.27\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goSum, err := os.ReadFile(filepath.Join(modRoot, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), goSum, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // runGenerated generates package pkg from dictionary xml in a temporary
 // module, adds testCode as a test file and runs go test there.
 func runGenerated(t *testing.T, xml, pkg, testCode string) {
@@ -589,18 +605,11 @@ func runGeneratedWith(t *testing.T, xml, pkg, testCode string, opts options) {
 	if err := generateWith(dict, pkg, outDir, opts); err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	modRoot, err := filepath.Abs("../../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	goMod := "module testgen\ngo 1.27\nrequire github.com/sylr/fix2 v0.0.0\nreplace github.com/sylr/fix2 => " + modRoot + "\n"
-	if err := os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(goMod), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestModule(t, outDir)
 	if err := os.WriteFile(filepath.Join(outDir, "gen_test.go"), []byte(testCode), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("go", "test", "./...")
+	cmd := exec.Command("go", "test", "-mod=mod", "./...")
 	cmd.Dir = outDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go test failed:\n%s\n%v", out, err)
