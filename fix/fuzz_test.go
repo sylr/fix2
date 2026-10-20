@@ -463,7 +463,7 @@ func FuzzBuilder(f *testing.F) {
 		if !bytes.Equal(out, b.AppendTo(nil)) || !bytes.Equal(out, b.BuildWith(nil)) {
 			t.Fatal("Build, AppendTo and BuildWith differ")
 		}
-		_, _ = b.AppendBody(nil, func(tag int) bool { return tag == 34 })
+		_, _ = b.AppendBody(nil, nil, func(tag int) bool { return tag == 34 })
 		m, err := Parse(out)
 		if !carriable(begin, msgType, want) {
 			return

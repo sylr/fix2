@@ -1830,6 +1830,157 @@ func TestCustomPair(t *testing.T) {
 `)
 }
 
+// TestGenerateCustomDataPairSent sends a custom DATA field holding SOH
+// between two sessions whose dictionary pairs it with its length: in a
+// NewOrderSingle's group entry, set by the generated setter, and on the
+// acceptor's Logon, set by hand from ToAdmin. The default profile, which
+// does not know the pair, refuses it.
+func TestGenerateCustomDataPairSent(t *testing.T) {
+	raw, err := os.ReadFile("../../../fix/dictionary/testdata/FIX44.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	xml := string(raw)
+	for _, r := range []struct{ old, new string }{
+		{"<fields>", `<fields>
+    <field number='50001' name='CustomBlobLen' type='LENGTH'/>
+    <field number='50002' name='CustomBlob' type='DATA'/>
+    <field number='50003' name='NoBlobs' type='NUMINGROUP'/>
+    <field number='50004' name='BlobName' type='STRING'/>`},
+		{"<field name='Password' required='N'/>", `<field name='Password' required='N'/>
+      <field name='CustomBlobLen' required='N'/>
+      <field name='CustomBlob' required='N'/>`},
+		{"<field name='Text' required='N'/>\n    </message>\n    <message name='BusinessMessageReject'", `<field name='Text' required='N'/>
+      <group name='NoBlobs' required='N'>
+        <field name='BlobName' required='N'/>
+        <field name='CustomBlobLen' required='N'/>
+        <field name='CustomBlob' required='N'/>
+      </group>
+    </message>
+    <message name='BusinessMessageReject'`},
+	} {
+		if strings.Count(xml, r.old) != 1 {
+			t.Fatalf("FIX44.xml: %q not found once", r.old)
+		}
+		xml = strings.Replace(xml, r.old, r.new, 1)
+	}
+	runGenerated(t, xml, "blobs", `package blobs
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/transport/mem"
+)
+
+// end is either session's handler: it adds CustomBlob to its Logon if
+// blob, and tells of the CustomBlob of the Logon and orders it receives,
+// and of rejects. The initiator's Logon has none: an acceptor parses the
+// first Logon with the default profile, to find its session.
+type end struct {
+	session.BaseHandler
+	blob         bool
+	logon, order chan []byte
+	logons       chan struct{}
+	rejects      chan string
+}
+
+func newEnd() *end {
+	return &end{logon: make(chan []byte, 1), order: make(chan []byte, 1), logons: make(chan struct{}, 1), rejects: make(chan string, 8)}
+}
+
+func (e *end) ToAdmin(_ context.Context, _ *session.Session, msgType string, b *fix.Builder) error {
+	if msgType == "A" && e.blob {
+		// By hand, not with SetData: the session dictionary pairs them.
+		b.SetInt(TagCustomBlobLen, 3).Set(TagCustomBlob, []byte("l\x01n"))
+	}
+	return nil
+}
+
+func (e *end) OnLogon(context.Context, *session.Session) { e.logons <- struct{}{} }
+
+func (e *end) FromAdmin(_ context.Context, _ *session.Session, m *fix.Message, _ session.Inbound) {
+	switch string(m.MsgType()) {
+	case "A":
+		e.logon <- bytes.Clone(m.Get(TagCustomBlob))
+	case "3":
+		e.rejects <- string(m.Get(58))
+	}
+}
+
+func (e *end) FromApp(_ context.Context, _ *session.Session, m *fix.Message, _ session.Inbound) error {
+	switch string(m.MsgType()) {
+	case "D":
+		for _, en := range WrapNewOrderSingle(m).NoBlobsEntries() {
+			v, _ := en.CustomBlob()
+			e.order <- bytes.Clone(v)
+		}
+	case "j":
+		e.rejects <- string(m.Get(58))
+	}
+	return nil
+}
+
+func receive[T any](t *testing.T, c <-chan T, rejects <-chan string) T {
+	t.Helper()
+	select {
+	case v := <-c:
+		return v
+	case r := <-rejects:
+		t.Fatalf("rejected: %s", r)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
+	var zero T
+	return zero
+}
+
+func TestCustomDataSent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	dicts := session.Dictionaries{Session: Dictionary()}
+	acc, ini := newEnd(), newEnd()
+	acc.blob = true
+	a := session.NewAcceptor(session.AcceptorOptions{})
+	if _, err := a.Add(session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "ACC", TargetCompID: "INI"}, Handler: acc, Dictionaries: dicts}); err != nil {
+		t.Fatal(err)
+	}
+	l := mem.Listen("blobs")
+	a.Listen(l)
+	go a.Run(ctx)
+	i := session.NewInitiator(session.InitiatorOptions{})
+	s, err := i.Add(session.Config{ID: session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}, Handler: ini, Dictionaries: dicts}, l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go i.Run(ctx)
+	if v := receive(t, ini.logon, ini.rejects); string(v) != "l\x01n" {
+		t.Errorf("Logon's CustomBlob = %q", v)
+	}
+	receive(t, ini.logons, ini.rejects)
+
+	o := BuildNewOrderSingle(session.FIX44).SetClOrdID("O1").SetSymbol("X").SetSide(SideBuy).
+		SetTransactTime(time.Now()).SetOrderQty(1).SetOrdType(OrdTypeLimit).SetPrice(1).
+		AddNoBlobsEntry(NewNoBlobsEntry().SetBlobName("b").SetCustomBlob([]byte("o\x01d")))
+	if _, err := s.Send(ctx, o); err != nil {
+		t.Fatal(err)
+	}
+	if v := receive(t, acc.order, ini.rejects); string(v) != "o\x01d" {
+		t.Errorf("order's CustomBlob = %q", v)
+	}
+	var serr *fix.SOHValueError
+	if _, err := o.AppendBody(nil, nil, nil); !errors.As(err, &serr) || serr.Tag != TagCustomBlob {
+		t.Errorf("AppendBody with the default profile = %v, want a SOHValueError for CustomBlob", err)
+	}
+}
+`)
+}
+
 // TestGenerateStandardDataPair covers RawData(96), which the parser reads by
 // the length RawDataLength(95) gives, whether the dictionary defines 95 or
 // not: builders write both, of messages and group entries, and readers read

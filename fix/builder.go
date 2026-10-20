@@ -22,8 +22,6 @@ type Builder struct {
 	groups   func(dst []Field) []Field // appends repeating groups, see SetGroups
 	counters []int                     // counter tags groups manages
 
-	data []DataPair // the DATA fields set with SetData, see AppendBody
-
 	header       []int                     // standard header tags, see SetSections
 	trailer      []int                     // standard trailer tags
 	headerGroups func(dst []Field) []Field // appends the header's repeating groups
@@ -109,17 +107,13 @@ func (b *Builder) ownFloat(v float64) []byte {
 // SetData sets a DATA field and the LENGTH field announcing it (see
 // DataLengthTag), computing the length and keeping the two adjacent as FIX
 // requires: any earlier value of either is removed and both are appended.
-// value is copied. It may hold SOH: AppendBody accepts one in a DATA field
-// set so, whatever pairs the default profile has (see DataTag).
+// value is copied.
 func (b *Builder) SetData(lengthTag, dataTag int, value []byte) *Builder {
 	for _, tag := range []int{lengthTag, dataTag} {
 		switch tag {
 		case tagBeginStr, tagBodyLen, tagMsgType, tagCheckSum:
 			panic(fmt.Sprintf("fix2: Builder: tag %d is managed by Build and cannot be a DATA field", tag))
 		}
-	}
-	if p := (DataPair{Length: lengthTag, Data: dataTag}); !slices.Contains(b.data, p) {
-		b.data = append(b.data, p)
 	}
 	b.fields = slices.DeleteFunc(b.fields, func(f Field) bool {
 		return f.Tag == lengthTag || f.Tag == dataTag
@@ -250,9 +244,9 @@ func (b *Builder) MsgType() string { return b.msgType }
 func (b *Builder) BeginString() string { return b.beginString }
 
 // Reset removes every field, keeping BeginString, MsgType, the registered
-// sections and groups, the DATA pairs of SetData, and the storage, so that
-// building message after message with one Builder stops allocating. It
-// calls the function registered with OnReset, if any.
+// sections and groups, and the storage, so that building message after
+// message with one Builder stops allocating. It calls the function
+// registered with OnReset, if any.
 func (b *Builder) Reset() {
 	clear(b.fields)
 	b.fields = b.fields[:0]
@@ -308,7 +302,7 @@ func (b *Builder) appendMessage(dst []byte, extra []Field) []byte {
 	dst = append(dst, soh)
 	bodyStart := len(dst)
 	dst = AppendTagValue(dst, tagMsgType, b.msgType)
-	dst, _ = b.appendBody(dst, extra, nil)
+	dst, _ = b.appendBody(dst, extra, defaultProfile, nil)
 	bodyLen := len(dst) - bodyStart
 	var digits [20]byte
 	n := strconv.AppendInt(digits[:0], int64(bodyLen), 10)
@@ -327,10 +321,14 @@ func (b *Builder) appendMessage(dst []byte, extra []Field) []byte {
 // fields. A field, group fields included, whose tag reserved reports as true
 // is an error and nothing is appended: the session layer writes those
 // itself. reserved may be nil. So is a value holding SOH, a *SOHValueError,
-// unless it is a DATA field right after the LENGTH field announcing its
-// length: SOH ends any other field.
-func (b *Builder) AppendBody(dst []byte, reserved func(tag int) bool) ([]byte, error) {
-	out, err := b.appendBody(dst, nil, reserved)
+// unless it is a DATA field of p, the profile the receiver parses the
+// message with, right after the LENGTH field announcing its length: SOH
+// ends any other field. A nil p is the default profile, Parse's.
+func (b *Builder) AppendBody(dst []byte, p *Profile, reserved func(tag int) bool) ([]byte, error) {
+	if p == nil {
+		p = defaultProfile
+	}
+	out, err := b.appendBody(dst, nil, p, reserved)
 	if err != nil {
 		return dst, err
 	}
@@ -349,7 +347,7 @@ func (e *ReservedTagError) Error() string {
 
 // SOHValueError reports a field AppendBody refused because its value holds
 // SOH, the field separator, and is not a DATA field announced by the LENGTH
-// field before it: the field would end at the SOH, and what follows be read
+// field before it, in the receiver's profile: the field would end at the SOH, and what follows be read
 // as fields of their own.
 type SOHValueError struct {
 	Tag int
@@ -360,9 +358,9 @@ func (e *SOHValueError) Error() string {
 }
 
 // appendBody appends the body fields after MsgType, with extra fields before
-// the trailer fields. A value holding SOH where AppendBody refuses one is
-// appended all the same, and reported.
-func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) bool) ([]byte, error) {
+// the trailer fields. A value holding SOH where AppendBody refuses one, p's
+// DATA fields telling, is appended all the same, and reported.
+func (b *Builder) appendBody(dst []byte, extra []Field, p *Profile, reserved func(tag int) bool) ([]byte, error) {
 	// The header's groups, then the message's, in the scratch slice: the
 	// first n fields are the header's.
 	b.scratch = b.scratch[:0]
@@ -397,7 +395,7 @@ func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) b
 			for _, tag := range b.trailer {
 				for _, f := range b.fields {
 					if f.Tag == tag && b.section(tag) == trailer && !b.managedCounter(tag, b.scratch) {
-						dst = b.appendChecked(dst, f, &prev, &bad)
+						dst = appendChecked(dst, f, p, &prev, &bad)
 					}
 				}
 			}
@@ -406,20 +404,20 @@ func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) b
 		for _, f := range b.fields {
 			// A raw counter is dropped when the groups carry their own.
 			if b.section(f.Tag) == section && !b.managedCounter(f.Tag, b.scratch) {
-				dst = b.appendChecked(dst, f, &prev, &bad)
+				dst = appendChecked(dst, f, p, &prev, &bad)
 			}
 		}
 		switch section {
 		case header:
 			for _, f := range b.scratch[:n] {
-				dst = b.appendChecked(dst, f, &prev, &bad)
+				dst = appendChecked(dst, f, p, &prev, &bad)
 			}
 		case body:
 			for _, f := range b.scratch[n:] {
-				dst = b.appendChecked(dst, f, &prev, &bad)
+				dst = appendChecked(dst, f, p, &prev, &bad)
 			}
 			for _, f := range extra {
-				dst = b.appendChecked(dst, f, &prev, &bad)
+				dst = appendChecked(dst, f, p, &prev, &bad)
 			}
 		}
 	}
@@ -428,20 +426,20 @@ func (b *Builder) appendBody(dst []byte, extra []Field, reserved func(tag int) b
 
 // appendChecked appends f to dst, as appendField does, prev being the field
 // appended before it, then f. It sets *bad, if not set yet, when f's value
-// holds SOH and prev does not announce it.
-func (b *Builder) appendChecked(dst []byte, f Field, prev *Field, bad *error) []byte {
-	if *bad == nil && bytes.IndexByte(f.Value, soh) >= 0 && !b.announces(*prev, f) {
+// holds SOH and prev does not announce it in p.
+func appendChecked(dst []byte, f Field, p *Profile, prev *Field, bad *error) []byte {
+	if *bad == nil && bytes.IndexByte(f.Value, soh) >= 0 && !announces(p, *prev, f) {
 		*bad = &SOHValueError{Tag: f.Tag}
 	}
 	*prev = f
 	return appendField(dst, f)
 }
 
-// announces reports whether prev is the LENGTH field of DATA field f, in the
-// default profile or as SetData paired them, and holds f's length: only
-// then can a parser read a value holding SOH.
-func (b *Builder) announces(prev, f Field) bool {
-	if DataTag(prev.Tag) != f.Tag && !slices.Contains(b.data, DataPair{Length: prev.Tag, Data: f.Tag}) {
+// announces reports whether prev is the LENGTH field of DATA field f in p,
+// and holds f's length: only then can a parser with p read a value holding
+// SOH.
+func announces(p *Profile, prev, f Field) bool {
+	if d := p.DataTag(prev.Tag); d == 0 || d != f.Tag {
 		return false
 	}
 	n, err := ParseInt(prev.Value)

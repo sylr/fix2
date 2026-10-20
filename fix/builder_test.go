@@ -388,7 +388,7 @@ func TestBuilder_AppendToMatchesBuild(t *testing.T) {
 func TestBuilder_AppendBody(t *testing.T) {
 	b := NewBuilder("FIX.4.4", "D").SetString(11, "ORD").SetString(115, "OBO").SetString(89, "SIG")
 	b.SetSections([]int{115}, []int{89}, nil)
-	body, err := b.AppendBody(nil, func(tag int) bool { return tag == 34 || tag == 52 })
+	body, err := b.AppendBody(nil, nil, func(tag int) bool { return tag == 34 || tag == 52 })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestBuilder_AppendBody(t *testing.T) {
 		t.Errorf("AppendBody = %q, want %q", got, want)
 	}
 	b.SetInt(34, 9)
-	_, err = b.AppendBody(nil, func(tag int) bool { return tag == 34 })
+	_, err = b.AppendBody(nil, nil, func(tag int) bool { return tag == 34 })
 	var rerr *ReservedTagError
 	if !errors.As(err, &rerr) || rerr.Tag != 34 {
 		t.Fatalf("AppendBody with a reserved tag set: err = %v, want a ReservedTagError for 34", err)
@@ -492,7 +492,7 @@ func BenchmarkBuilderAppendTo(b *testing.B) {
 func TestBuilder_AppendBodyReservedInGroups(t *testing.T) {
 	b := NewBuilder("FIX.4.4", "D")
 	b.SetSections(nil, nil, func(dst []Field) []Field { return append(dst, Field{Tag: 34, Value: []byte("9")}) })
-	got, err := b.AppendBody([]byte("x"), func(tag int) bool { return tag == 34 })
+	got, err := b.AppendBody([]byte("x"), nil, func(tag int) bool { return tag == 34 })
 	var rerr *ReservedTagError
 	if !errors.As(err, &rerr) || rerr.Tag != 34 || string(got) != "x" {
 		t.Fatalf("AppendBody = %q, %v; want nothing appended and a ReservedTagError for 34", got, err)
@@ -500,38 +500,53 @@ func TestBuilder_AppendBodyReservedInGroups(t *testing.T) {
 }
 
 // SOH ends a field: AppendBody refuses a value holding one unless it is a
-// DATA field right after the LENGTH field announcing its length, and
-// appends nothing.
+// DATA field of the receiver's profile right after the LENGTH field
+// announcing its length, and appends nothing.
 func TestBuilder_AppendBodySOH(t *testing.T) {
+	custom, err := NewProfile([]DataPair{{Length: 50001, Data: 50002}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name string
 		b    *Builder
-		tag  int // refused, 0 for accepted
+		p    *Profile // nil for the default one
+		tag  int      // refused, 0 for accepted
 	}{
-		{"string", NewBuilder("FIX.4.4", "D").SetString(11, "O1\x0158=forged"), 11},
-		{"bytes", NewBuilder("FIX.4.4", "D").Set(58, []byte("a\x01")), 58},
-		{"appended", NewBuilder("FIX.4.4", "D").AppendString(58, "\x01"), 58},
+		{"string", NewBuilder("FIX.4.4", "D").SetString(11, "O1\x0158=forged"), nil, 11},
+		{"bytes", NewBuilder("FIX.4.4", "D").Set(58, []byte("a\x01")), nil, 58},
+		{"appended", NewBuilder("FIX.4.4", "D").AppendString(58, "\x01"), nil, 58},
 		{"header", func() *Builder {
 			b := NewBuilder("FIX.4.4", "D").SetString(115, "a\x01b")
 			b.SetSections([]int{115}, nil, nil)
 			return b
-		}(), 115},
+		}(), nil, 115},
 		{"group", func() *Builder {
 			b := NewBuilder("FIX.4.4", "D")
 			b.SetGroups(func(dst []Field) []Field {
 				return append(AppendCount(dst, 78, 1), Field{Tag: 79, Value: []byte("A\x01")})
 			}, 78)
 			return b
-		}(), 79},
-		{"DATA", NewBuilder("FIX.4.4", "A").SetData(95, 96, []byte("a\x01b")), 0},
-		{"DATA set by hand", NewBuilder("FIX.4.4", "A").SetInt(95, 3).Set(96, []byte("a\x01b")), 0},
-		{"DATA of another pair", NewBuilder("FIX.4.4", "A").SetData(5001, 5002, []byte("\x01")), 0},
-		{"DATA with a wrong length", NewBuilder("FIX.4.4", "A").SetData(95, 96, []byte("a\x01b")).SetInt(95, 2), 96},
-		{"DATA after another field", NewBuilder("FIX.4.4", "A").SetInt(95, 3).SetString(58, "t").Set(96, []byte("a\x01b")), 96},
-		{"DATA tag not announced", NewBuilder("FIX.4.4", "A").Set(96, []byte("\x01")), 96},
+		}(), nil, 79},
+		{"DATA", NewBuilder("FIX.4.4", "A").SetData(95, 96, []byte("a\x01b")), nil, 0},
+		{"DATA set by hand", NewBuilder("FIX.4.4", "A").SetInt(95, 3).Set(96, []byte("a\x01b")), nil, 0},
+		{"DATA with a wrong length", NewBuilder("FIX.4.4", "A").SetData(95, 96, []byte("a\x01b")).SetInt(95, 2), nil, 96},
+		{"DATA after another field", NewBuilder("FIX.4.4", "A").SetInt(95, 3).SetString(58, "t").Set(96, []byte("a\x01b")), nil, 96},
+		{"DATA tag not announced", NewBuilder("FIX.4.4", "A").Set(96, []byte("\x01")), nil, 96},
+		// The receiver's profile decides, SetData whatever pair it is given.
+		{"pair the profile has", NewBuilder("FIX.4.4", "A").SetData(50001, 50002, []byte("\x01")), custom, 0},
+		{"pair the profile lacks", NewBuilder("FIX.4.4", "A").SetData(50001, 50002, []byte("\x01")), nil, 50002},
+		{"default pair the profile lacks", NewBuilder("FIX.4.4", "D").SetInt(1401, 12).SetString(1402, "O1\x0158=forged"), custom, 1402},
+		{"group pair the profile has", func() *Builder {
+			b := NewBuilder("FIX.4.4", "D")
+			b.SetGroups(func(dst []Field) []Field {
+				return append(AppendCount(dst, 78, 1), Field{Tag: 50001, Value: []byte("3")}, Field{Tag: 50002, Value: []byte("a\x01b")})
+			}, 78)
+			return b
+		}(), custom, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := tc.b.AppendBody([]byte("x"), nil)
+			got, err := tc.b.AppendBody([]byte("x"), tc.p, nil)
 			if tc.tag == 0 {
 				if err != nil {
 					t.Fatalf("AppendBody: %v", err)

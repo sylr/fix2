@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -66,10 +67,12 @@ const (
 // Outgoing is a message to send: fix.Builder and the builders fix2gen
 // generates, which embed it, are Outgoing. AppendBody appends the fields
 // after the standard header the session writes, and fails if a field's tag
-// is one reserved reports true for.
+// is one reserved reports true for, or if a value holds SOH but in a DATA
+// field of p, the profile the counterparty parses the message with, after
+// its LENGTH field (see fix.Builder.AppendBody).
 type Outgoing interface {
 	MsgType() string
-	AppendBody(dst []byte, reserved func(tag int) bool) ([]byte, error)
+	AppendBody(dst []byte, p *fix.Profile, reserved func(tag int) bool) ([]byte, error)
 }
 
 // Session is a FIX session. Create it with New and run it with an Initiator
@@ -480,8 +483,10 @@ const maxPooledBuffer = 64 << 10
 
 // Send sends m to the counterparty and returns its receipt. The session
 // writes the standard header: m must not set the tags it does (BeginString,
-// MsgSeqNum, the CompIDs, SendingTime...), nor a value holding SOH but in a
-// DATA field after its length (see fix.Builder.AppendBody). Send returns
+// MsgSeqNum, the CompIDs, SendingTime...), nor a MsgType or a value holding
+// SOH but in a DATA field after its length, the DATA fields being those of
+// the session's dictionaries, of the default application version for FIXT
+// (see fix.Builder.AppendBody). Send returns
 // once the message is sequenced and stored; it is written by the
 // connection's writer. If the outbound queue is full it waits for room
 // until ctx is done, unless Config.FailWhenFull is set or ctx is a handler
@@ -499,7 +504,10 @@ func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 			s.bodyPool.Put(bp)
 		}
 	}()
-	body, err := m.AppendBody((*bp)[:0], reserved)
+	// The counterparty parses it with the profile we parse its messages
+	// with: of our default application version, for FIXT, as no ApplVerID
+	// of ours tells another.
+	body, err := m.AppendBody((*bp)[:0], s.dicts.parse, reserved)
 	*bp = body[:0]
 	if err != nil {
 		return Receipt{}, fmt.Errorf("session %s: %w", s.id, err)
@@ -509,7 +517,8 @@ func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 
 // SendRaw sends a message of type msgType whose body, the fields after the
 // standard header, is already encoded, as a gateway forwarding messages
-// does. body must not hold the tags the session writes.
+// does. body must not hold the tags the session writes; msgType must not
+// hold SOH.
 func (s *Session) SendRaw(ctx context.Context, msgType string, body []byte) (Receipt, error) {
 	return s.send(ctx, msgType, body)
 }
@@ -518,6 +527,11 @@ func (s *Session) SendRaw(ctx context.Context, msgType string, body []byte) (Rec
 func (s *Session) send(ctx context.Context, msgType string, body []byte) (Receipt, error) {
 	if isAdmin([]byte(msgType)) {
 		return Receipt{}, fmt.Errorf("session %s: MsgType %q is a session-level message the session sends itself", s.id, msgType)
+	}
+	if strings.IndexByte(msgType, 1) >= 0 {
+		// The session writes MsgType in the header, apart from the body
+		// AppendBody checks: SOH would end it early.
+		return Receipt{}, fmt.Errorf("session %s: %w", s.id, &fix.SOHValueError{Tag: tagMsgType})
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -839,4 +853,13 @@ func (d *dicts) version(v []byte) string {
 // if v has no dictionary.
 func (d *dicts) appProfile(v string) *fix.Profile {
 	return cmp.Or(d.parseApps[v], d.parse)
+}
+
+// adminProfile returns the profile of session messages: the session
+// dictionary's, the default one without.
+func (d *dicts) adminProfile() *fix.Profile {
+	if d.session != nil {
+		return d.session.Profile()
+	}
+	return fix.DefaultProfile()
 }

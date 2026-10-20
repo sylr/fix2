@@ -31,7 +31,7 @@ func (s *Session) toAdmin(msgType string) ([]byte, error) {
 	if err := s.handler.ToAdmin(s.callbackCtx(), s, msgType, b); err != nil {
 		return nil, err
 	}
-	return b.AppendBody(nil, logonReserved)
+	return b.AppendBody(nil, s.dicts.adminProfile(), logonReserved)
 }
 
 // logon sends the initiator's Logon on c.
@@ -98,7 +98,7 @@ func (s *Session) signLogon(signer LogonSigner, seq uint64, sendingTime time.Tim
 	if err := signer.SignLogon(s.callbackCtx(), s, h, b); err != nil {
 		return nil, err
 	}
-	return b.AppendBody(nil, logonReserved)
+	return b.AppendBody(nil, s.dicts.adminProfile(), logonReserved)
 }
 
 // logonBody returns the fields of our Logon: next is the NextExpectedMsgSeqNum

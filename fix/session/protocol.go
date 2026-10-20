@@ -1342,7 +1342,10 @@ func (s *Session) businessRejectLocked(m *fix.Message, reason int, refID, text s
 	if strings.IndexByte(refID, 1) >= 0 {
 		// SOH would end BusinessRejectRefID early, what follows read as
 		// fields of their own: the reject goes without it, as a
-		// RejectError's reason the version does not have does.
+		// RejectError's reason the version does not have does, and as it
+		// goes when the handler gives none. It is conditionally required,
+		// but no RefID holding SOH can be the ID the counterparty sent: its
+		// fields other than DATA cannot hold one either.
 		s.log.LogAttrs(context.Background(), slog.LevelWarn, "BusinessRejectRefID holds SOH: left out",
 			s.msgTypeAttr(m), s.seqAttr(m))
 		refID = ""
