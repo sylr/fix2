@@ -499,7 +499,8 @@ const maxPooledBuffer = 64 << 10
 // connection's writer. If the outbound queue is full it waits for room
 // until ctx is done, unless Config.FailWhenFull is set or ctx is a handler
 // callback's, in which cases it fails with ErrSlowConsumer or
-// ErrInCallback.
+// ErrInCallback. With an Encrypter, which seals the body, a body that does
+// not parse is refused.
 func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 	bp, _ := s.bodyPool.Get().(*[]byte)
 	if bp == nil {
@@ -517,6 +518,12 @@ func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 	// of ours tells another.
 	body, err := m.AppendBody((*bp)[:0], s.dicts.parse, s.reservedTag)
 	*bp = body[:0]
+	if err == nil && s.cfg.Encrypter != nil {
+		// AppendBody refuses a SOH outside a DATA field; what else would not
+		// parse is refused before it is stored, as SendRaw refuses it, rather
+		// than failing to seal once written.
+		err = s.checkSealable(m.MsgType(), body)
+	}
 	if err != nil {
 		return Receipt{}, fmt.Errorf("session %s: %w", s.id, err)
 	}

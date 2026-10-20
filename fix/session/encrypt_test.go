@@ -130,6 +130,10 @@ func TestEncrypter_SecureDataReserved(t *testing.T) {
 				t.Error("Send with SecureData succeeded")
 			}
 		}
+		// A SOH in a value that is not DATA: the body does not parse.
+		if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "O2").SetString(58, "a\x01b")); err == nil {
+			t.Error("Send of a body that does not parse succeeded")
+		}
 		for _, body := range []string{"90=1\x0191=x\x0111=O2\x01", "11=O2\x0191=x\x01", "11=O2"} {
 			if _, err := s.SendRaw(context.Background(), "D", []byte(body)); err == nil {
 				t.Errorf("SendRaw of %q succeeded", body)
@@ -374,7 +378,7 @@ func (p *peer) expectSealed(g *gcm, msgType string, fields ...string) (*fix.Mess
 // The handler and the Observer see it in clear.
 func TestEncrypter_OpensOnRead(t *testing.T) {
 	g := newGCM(t, "7", "k")
-	_, rec, p, _, seen := encryptedInitiator(t, g, nil)
+	s, rec, p, _, seen := encryptedInitiator(t, g, nil)
 	// A Heartbeat without body needs no SecureData.
 	p.write(from(session.FIX44, 2), "0")
 	p.writeRaw(sealedMsg(t, g, 3, "D", "34", "3", "128", "DESK", "11", "IN-1", "95", "3", "96", "a\x01b"))
@@ -396,6 +400,17 @@ func TestEncrypter_OpensOnRead(t *testing.T) {
 	// A TestRequest sealed is answered, sealed.
 	p.writeRaw(sealedMsg(t, g, 4, "1", "112", "PING"))
 	p.expectSealed(g, "0", "112", "PING")
+	// A repeated header group, NoHops, in clear and repeated whole inside:
+	// each entry matches its own.
+	sealed, err := g.Seal(nil, []byte("627=2\x01628=H1\x01628=H2\x0111=IN-2\x01"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.writeRaw(from(session.FIX44, 5).build("D", "627", "2", "628", "H1", "628", "H2").SetData(90, 91, sealed).Build())
+	rec.wait(t, func() bool { return len(rec.apps) == 2 })
+	if rec.apps[1] != "IN-2" || s.Stats().RejectsSent.Load() != 0 {
+		t.Errorf("delivered %q, %d Rejects", rec.apps, s.Stats().RejectsSent.Load())
+	}
 }
 
 // A message that cannot be made out is rejected, SessionRejectReason 7,

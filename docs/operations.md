@@ -162,9 +162,10 @@ RawData (95/96).
   Encryption is not transport security: see
   [Transport security](#transport-security).
 - SecureDataLen (90) and SecureData (91) are then the session's: `Send`
-  and `ToAdmin` refuse them, and `SendRaw` refuses a body holding them, or
-  that does not parse, which it could not seal. Without an `Encrypter`,
-  sending them is left as it was.
+  and `ToAdmin` refuse them, and `SendRaw` refuses a body holding them.
+  `Send` and `SendRaw` refuse a body that does not parse, which the writer
+  could not seal: each parses the body once more, before storing it.
+  Without an `Encrypter`, none of this applies.
 - The `Encrypter` must authenticate what it seals, an AEAD such as
   AES-GCM: a header field found inside SecureData is merged into the
   header, and a body opened is delivered, so a cipher a third party can
