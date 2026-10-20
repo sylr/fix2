@@ -141,7 +141,9 @@ func (a *AsyncObserver) Close() {
 // SOH separators shown as "|". With one, it is logged as people read it:
 // header, body and trailer in a record each, as in "<- Body: 55(Symbol)=BTCUSDT,
 // 54(Side)=1(BUY)", every field named, its value described (see
-// dictionary.Dict.AppendField).
+// dictionary.Dict.AppendField). The records of a message follow each other,
+// those of a session's reader and writer not interleaving, with a handler
+// writing them as it is passed them: slog's own, zerolog's and zap's do.
 type SlogObserver struct {
 	Logger *slog.Logger
 	// Tags are the tags whose values are redacted, SensitiveTags if nil:
@@ -181,6 +183,10 @@ var sectionLabels = [...]string{
 	dictionary.SectionTrailer: "Trailer:",
 }
 
+// sectionsMu keeps the records of a message together: a session's reader
+// and writer log at the same time, and sessions may share a logger.
+var sectionsMu sync.Mutex
+
 // logFields logs raw, a message, field by field, in a record per section. It
 // reports false if raw does not parse.
 func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix.Profile, inbound bool, attrs []slog.Attr) bool {
@@ -201,6 +207,8 @@ func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix.Profile,
 	if inbound {
 		dir = "<- "
 	}
+	sectionsMu.Lock()
+	defer sectionsMu.Unlock()
 	for _, sec := range [...]dictionary.Section{dictionary.SectionHeader, dictionary.SectionBody, dictionary.SectionTrailer} {
 		if len(parts[sec]) > 0 {
 			o.Logger.LogAttrs(ctx, slog.LevelDebug, dir+sectionLabels[sec]+" "+string(parts[sec]), attrs...)

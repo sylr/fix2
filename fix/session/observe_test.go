@@ -161,3 +161,56 @@ func TestSlogObserverDictionary(t *testing.T) {
 		}
 	}
 }
+
+// The records of a message follow each other although the reader and the
+// writer of a session log at the same time.
+func TestSlogObserverDictionaryConcurrent(t *testing.T) {
+	d, err := xmldict.LoadFile("../dictionary/testdata/FIX44.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(Config{ID: SessionID{BeginString: FIX44, SenderCompID: "A", TargetCompID: "B"}, Handler: BaseHandler{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	o := SlogObserver{
+		Logger:     slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		Dictionary: d,
+	}
+	const n = 500
+	var wg sync.WaitGroup
+	for _, inbound := range []bool{true, false} {
+		wg.Go(func() {
+			for i := range n {
+				f := Frame{Raw: fix.NewBuilder(FIX44, "0").SetInt(34, i).SetString(112, "T").Build(), Seq: uint64(i)}
+				if inbound {
+					o.OnInbound(s, f)
+				} else {
+					o.OnOutbound(s, f)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2*n*3 {
+		t.Fatalf("%d records, want %d", len(lines), 2*n*3)
+	}
+	for i := 0; i < len(lines); i += 3 {
+		var first map[string]any
+		for j, label := range []string{"Header: ", "Body:   ", "Trailer:"} {
+			var rec map[string]any
+			if err := json.Unmarshal([]byte(lines[i+j]), &rec); err != nil {
+				t.Fatal(err)
+			}
+			msg, _ := rec["msg"].(string)
+			if j == 0 {
+				first = rec
+			}
+			if msg[3:3+len(label)] != label || msg[:3] != first["msg"].(string)[:3] || rec["seq"] != first["seq"] {
+				t.Fatalf("records %d to %d are not one message's:\n%s", i, i+2, strings.Join(lines[i:i+3], "\n"))
+			}
+		}
+	}
+}
