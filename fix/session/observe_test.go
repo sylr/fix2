@@ -124,6 +124,13 @@ func TestSlogObserver(t *testing.T) {
 	if got := buf.String(); !strings.Contains(got, "553=***") || !strings.Contains(got, "554=pw") {
 		t.Errorf("with Tags 553: %s", got)
 	}
+
+	buf.Reset()
+	o.Separator = "---"
+	o.OnInbound(s, Frame{Raw: fix.NewBuilder(FIX44, "0").Build(), Seq: 1})
+	if got := buf.String(); !strings.Contains(got, `"msg":"---"}`+"\n") || strings.Index(got, `"msg":"---"`) > strings.Index(got, `"msg":"FIX in"`) || strings.Contains(got, `\u001b`) {
+		t.Errorf("with a Separator: %s", got)
+	}
 }
 
 // With a dictionary, header, body and trailer are logged field by field.
@@ -149,7 +156,7 @@ func TestSlogObserverDictionary(t *testing.T) {
 	got := buf.String()
 	for _, want := range []string{
 		`msg="-> Header:  8(BeginString)=FIX.4.4, 9(BodyLength)=`,
-		`35(MsgType)=D(ORDER_SINGLE), 49(SenderCompID)=A, 56(TargetCompID)=B, 34(MsgSeqNum)=2"`,
+		`\x1b[38;5;147m35(MsgType)=D(ORDER_SINGLE)\x1b[0m, 49(SenderCompID)=A, 56(TargetCompID)=B, 34(MsgSeqNum)=2"`, // lavender, escaped by the text handler
 		`msg="-> Body:    11(ClOrdID)=O1, 54(Side)=1(BUY)"`,
 		`msg="-> Trailer: 10(CheckSum)=`,
 		`msg="<- Body:    554(Password)=***, 925=***"`, // redacted, known to the dictionary (Password) or not (NewPassword)
@@ -158,6 +165,34 @@ func TestSlogObserverDictionary(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log lacks %s:\n%s", want, got)
+		}
+	}
+
+	for _, tc := range []struct {
+		name       string
+		o          SlogObserver
+		want, lack []string
+	}{
+		{"NoColor", SlogObserver{NoColor: true, Colors: map[int]string{11: "1"}}, []string{`9(BodyLength)=31, 35(MsgType)=D(ORDER_SINGLE), 49`, `11(ClOrdID)=O1,`}, []string{`\x1b`}},
+		{"Colors", SlogObserver{Colors: map[int]string{11: "1"}}, []string{`31, 35(MsgType)=D(ORDER_SINGLE), 49`, `\x1b[1m11(ClOrdID)=O1\x1b[0m, 54`}, nil},
+		{"Separator", SlogObserver{Separator: "---"}, []string{"level=DEBUG msg=---\ntime="}, []string{"msg=--- session"}},
+	} {
+		buf.Reset()
+		tc.o.Logger, tc.o.Dictionary = o.Logger, d
+		tc.o.OnOutbound(s, Frame{Raw: order, Seq: 2})
+		got := buf.String()
+		for _, want := range tc.want {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: log lacks %s:\n%s", tc.name, want, got)
+			}
+		}
+		for _, lack := range tc.lack {
+			if strings.Contains(got, lack) {
+				t.Errorf("%s: log has %s:\n%s", tc.name, lack, got)
+			}
+		}
+		if tc.name == "Separator" && !strings.HasPrefix(got[strings.Index(got, "level="):], "level=DEBUG msg=---\n") {
+			t.Errorf("Separator: not logged first:\n%s", got)
 		}
 	}
 }
@@ -177,6 +212,7 @@ func TestSlogObserverDictionaryConcurrent(t *testing.T) {
 	o := SlogObserver{
 		Logger:     slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Dictionary: d,
+		Separator:  "---",
 	}
 	const n = 500
 	var wg sync.WaitGroup
@@ -194,14 +230,17 @@ func TestSlogObserverDictionaryConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 2*n*3 {
-		t.Fatalf("%d records, want %d", len(lines), 2*n*3)
+	if len(lines) != 2*n*4 {
+		t.Fatalf("%d records, want %d", len(lines), 2*n*4)
 	}
-	for i := 0; i < len(lines); i += 3 {
+	for i := 0; i < len(lines); i += 4 {
+		if !strings.Contains(lines[i], `"msg":"---"`) {
+			t.Fatalf("record %d is not the separator:\n%s", i, lines[i])
+		}
 		var first map[string]any
 		for j, label := range []string{"Header: ", "Body:   ", "Trailer:"} {
 			var rec map[string]any
-			if err := json.Unmarshal([]byte(lines[i+j]), &rec); err != nil {
+			if err := json.Unmarshal([]byte(lines[i+1+j]), &rec); err != nil {
 				t.Fatal(err)
 			}
 			msg, _ := rec["msg"].(string)
@@ -209,7 +248,7 @@ func TestSlogObserverDictionaryConcurrent(t *testing.T) {
 				first = rec
 			}
 			if msg[3:3+len(label)] != label || msg[:3] != first["msg"].(string)[:3] || rec["seq"] != first["seq"] {
-				t.Fatalf("records %d to %d are not one message's:\n%s", i, i+2, strings.Join(lines[i:i+3], "\n"))
+				t.Fatalf("records %d to %d are not one message's:\n%s", i, i+3, strings.Join(lines[i:i+4], "\n"))
 			}
 		}
 	}

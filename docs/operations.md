@@ -109,7 +109,9 @@ add to it, so `Tags: []int{553}` logs passwords. Extend the defaults,
 its API key. An observer's tags change only what that observer masks, not
 what sessions withhold from their logs. `SlogObserver` logs every frame at
 level Debug: leave Debug off in production, or log to a sink as protected
-as the messages.
+as the messages. With a `Dictionary`, it colors MsgType with an ANSI
+escape sequence, for a terminal: set `NoColor` when logging to a file or
+through slog's text or JSON handlers, which escape it.
 
 ## Observers and audit trails
 

@@ -141,9 +141,10 @@ func (a *AsyncObserver) Close() {
 // SOH separators shown as "|". With one, it is logged as people read it:
 // header, body and trailer in a record each, as in "<- Body: 55(Symbol)=BTCUSDT,
 // 54(Side)=1(BUY)", every field named, its value described (see
-// dictionary.Dict.AppendField). The records of a message follow each other,
-// those of a session's reader and writer not interleaving, with a handler
-// writing them as it is passed them: slog's own, zerolog's and zap's do.
+// dictionary.Dict.AppendField), and colored for a terminal unless NoColor
+// is set. The records of a message follow each other, those of a session's
+// reader and writer not interleaving, with a handler writing them as it is
+// passed them: slog's own, zerolog's and zap's do.
 type SlogObserver struct {
 	Logger *slog.Logger
 	// Tags are the tags whose values are redacted, SensitiveTags if nil:
@@ -151,7 +152,22 @@ type SlogObserver struct {
 	Tags []int
 	// Dictionary names the fields and describes their values, if set.
 	Dictionary *dictionary.Dict
+	// Separator, if set, is logged in a record of its own before every
+	// message, a horizontal rule as strings.Repeat("─", 80) for one.
+	Separator string
+	// Colors are the SGR parameters of the ANSI escape sequence a field is
+	// colored with, by tag, DefaultColors if nil. They need a handler that
+	// writes messages as they are, zerolog's console writer for one: slog's
+	// text and JSON handlers escape them. Fields are colored only with a
+	// Dictionary.
+	Colors map[int]string
+	// NoColor, if set, colors no field: for logs read other than in a
+	// terminal.
+	NoColor bool
 }
+
+// DefaultColors color MsgType (35) lavender blue.
+var DefaultColors = map[int]string{35: "38;5;147"}
 
 func (o SlogObserver) log(s *Session, f Frame, inbound bool) {
 	ctx := context.Background()
@@ -173,7 +189,17 @@ func (o SlogObserver) log(s *Session, f Frame, inbound bool) {
 	if inbound {
 		dir = "FIX in"
 	}
+	sectionsMu.Lock()
+	defer sectionsMu.Unlock()
+	o.logSeparator(ctx)
 	o.Logger.LogAttrs(ctx, slog.LevelDebug, dir, append(attrs, slog.String("frame", string(raw)))...)
+}
+
+// logSeparator logs the Separator, if set.
+func (o SlogObserver) logSeparator(ctx context.Context) {
+	if o.Separator != "" {
+		o.Logger.LogAttrs(ctx, slog.LevelDebug, o.Separator)
+	}
 }
 
 // sectionLabels label the records of a message's header, body and trailer.
@@ -183,8 +209,9 @@ var sectionLabels = [...]string{
 	dictionary.SectionTrailer: "Trailer:",
 }
 
-// sectionsMu keeps the records of a message together: a session's reader
-// and writer log at the same time, and sessions may share a logger.
+// sectionsMu keeps the records of a message, its separator's among them,
+// together: a session's reader and writer log at the same time, and
+// sessions may share a logger.
 var sectionsMu sync.Mutex
 
 // logFields logs raw, a message, field by field, in a record per section. It
@@ -194,6 +221,12 @@ func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix.Profile,
 	if err := fix.ParseInto(&m, raw, p); err != nil {
 		return false
 	}
+	colors := o.Colors
+	if o.NoColor {
+		colors = nil
+	} else if colors == nil {
+		colors = DefaultColors
+	}
 	var parts [len(sectionLabels)][]byte
 	sections := o.Dictionary.Sections(&m)
 	for i, f := range m.Fields() {
@@ -201,7 +234,14 @@ func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix.Profile,
 		if len(*b) > 0 {
 			*b = append(*b, ", "...)
 		}
+		c, ok := colors[f.Tag]
+		if ok {
+			*b = append(append(append(*b, "\x1b["...), c...), 'm')
+		}
 		*b = o.Dictionary.AppendField(*b, f.Tag, f.Value)
+		if ok {
+			*b = append(*b, "\x1b[0m"...)
+		}
 	}
 	dir := "-> "
 	if inbound {
@@ -209,6 +249,7 @@ func (o SlogObserver) logFields(ctx context.Context, raw []byte, p *fix.Profile,
 	}
 	sectionsMu.Lock()
 	defer sectionsMu.Unlock()
+	o.logSeparator(ctx)
 	for _, sec := range [...]dictionary.Section{dictionary.SectionHeader, dictionary.SectionBody, dictionary.SectionTrailer} {
 		if len(parts[sec]) > 0 {
 			o.Logger.LogAttrs(ctx, slog.LevelDebug, dir+sectionLabels[sec]+" "+string(parts[sec]), attrs...)
