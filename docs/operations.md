@@ -175,12 +175,17 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
   indexes', some 12 KiB in the store's tests, not the message alone: every
   message sent is a commit, and so are the records of messages received
   and each `Sync`. A replay reads the messages 512 (or 1 MiB) at a time,
-  each chunk in a short transaction, so a long resend holds back no
-  checkpoint: 6000 messages written during one kept the log near 13 MiB
-  on a fast disk, against 87 MiB when a replay was one transaction. The
-  log is reused, not truncated: its file stays as large as it ever grew,
-  by every commit made while a checkpoint runs, which a disk slow to flush
-  stretches.
+  each chunk in a short transaction, ended before the chunk is sent: a
+  replay holds no read transaction while it waits for the counterparty,
+  and checkpoints complete between chunks, where a replay in one
+  transaction held them all back until it ended. The log starts over at
+  the write after a checkpoint, unless a chunk is being read then, and
+  otherwise at the next checkpoint's, 1000 commits later: a replay that
+  spends most of its time reading, its counterparty taking messages as
+  fast as they are read, can hold it back as long, the log growing
+  meanwhile. The log is reused,
+  not truncated: its file stays as large as it ever grew, by every commit
+  made while a checkpoint runs, which a disk slow to flush stretches.
   The messages a replay is still to read stay on disk past a `Truncate`
   meanwhile, until the next `Truncate` or the store's next `Open`.
 - **A failed flush or checkpoint** leaves the store in doubt: every call

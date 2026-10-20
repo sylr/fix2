@@ -3,8 +3,11 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +17,12 @@ import (
 
 func open(t *testing.T) (*Store, store.State) {
 	t.Helper()
-	s, err := OpenFile(filepath.Join(t.TempDir(), "fix2.db"), "S")
+	return openFile(t, filepath.Join(t.TempDir(), "fix2.db"))
+}
+
+func openFile(t *testing.T, path string) (*Store, store.State) {
+	t.Helper()
+	s, err := OpenFile(path, "S")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,6 +123,113 @@ func TestCommitFailureSettles(t *testing.T) {
 	if st, _ := s.Open(ctx); st.NextTarget != 14 || st.NextSender != 3 {
 		t.Errorf("state = %+v, want NextTarget 14 and NextSender 3", st)
 	}
+}
+
+// The store checkpoints the write-ahead log, which starts over.
+func TestCheckpoint(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fix2.db")
+	s, st := openFile(t, path)
+	before := walCheckpoints(t, path)
+	raw := make([]byte, 200)
+	for seq := uint64(1); seq <= checkpointEvery+1; seq++ {
+		if seq == checkpointEvery+1 {
+			// The checkpoint over, this write copies the rest and starts
+			// the log over.
+			s.background.Wait()
+		}
+		if err := s.Append(ctx, st.Generation, seq, raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if walCheckpoints(t, path) == before {
+		t.Errorf("the write-ahead log did not start over after %d messages", checkpointEvery+1)
+	}
+}
+
+// A Range reads in short transactions, a chunk at a time: the checkpoints
+// that run while its callback waits complete, and the write-ahead log
+// starts over. A Range in one transaction would hold every checkpoint back;
+// begun with the log copied whole, reading the database file, it would let
+// the log start over once, at the first write.
+func TestRangeLetsCheckpointsRun(t *testing.T) {
+	for _, checkpointed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("checkpointed=%v", checkpointed), func(t *testing.T) {
+			ctx := context.Background()
+			path := filepath.Join(t.TempDir(), "fix2.db")
+			s, st := openFile(t, path)
+			raw := make([]byte, 200)
+			next := uint64(1)
+			write := func() error {
+				err := s.Append(ctx, st.Generation, next, raw)
+				next++
+				return err
+			}
+			const n = 6000
+			for range n {
+				if err := write(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// The log copied whole, a Range in one transaction would read
+			// the database file; a commit more, the log.
+			s.background.Wait()
+			if checkpointed {
+				if _, err := s.conn.ExecContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := write(); err != nil { // one the database file lacks
+				t.Fatal(err)
+			}
+			// A resend of n messages, during which as many are sent.
+			var before uint32
+			startedOver := false
+			err := s.Range(ctx, st.Generation, 1, n, func(seq uint64, _ []byte, _ store.Hole) error {
+				if err := write(); err != nil {
+					return err
+				}
+				switch seq {
+				case 1:
+					before = walCheckpoints(t, path)
+				case n:
+					// The last checkpoint over, the next write copies the
+					// rest and starts the log over, unless a reader holds it
+					// back.
+					s.background.Wait()
+					if err := write(); err != nil {
+						return err
+					}
+					startedOver = walCheckpoints(t, path) != before
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !startedOver {
+				t.Errorf("the write-ahead log did not start over during a Range, %d messages written meanwhile", n)
+			}
+		})
+	}
+}
+
+// walCheckpoints returns the checkpoint sequence number in the header of
+// the write-ahead log of the database at path: how many times the log
+// started over, once checkpointed whole. The log's size is no measure of
+// that: it is reused, not truncated, and grows by every commit made while a
+// checkpoint runs, as long as the disk makes it.
+func walCheckpoints(t *testing.T, path string) uint32 {
+	t.Helper()
+	f, err := os.Open(path + "-wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var hdr [16]byte
+	if _, err := io.ReadFull(f, hdr[:]); err != nil {
+		t.Fatal(err)
+	}
+	return binary.BigEndian.Uint32(hdr[12:])
 }
 
 // Checkpoints flush, whatever the DSN says.

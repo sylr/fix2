@@ -3,11 +3,8 @@ package sqlite3_test
 import (
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -80,66 +77,6 @@ func TestCloseDiscardsWriter(t *testing.T) {
 	if autocheckpoint == 0 {
 		t.Error("a connection of the pool does not checkpoint: the writer's came back")
 	}
-}
-
-// The store checkpoints the write-ahead log, which starts over.
-func TestCheckpoint(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "fix2.db")
-	s, st := open(t, path, "S")
-	before := walCheckpoints(t, path)
-	raw := make([]byte, 200)
-	seq := uint64(1)
-	write := func() error {
-		err := s.Append(ctx, st.Generation, seq, raw)
-		seq++
-		return err
-	}
-	for range 6000 {
-		if err := write(); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if !awaitCheckpoint(t, path, before, write) {
-		t.Errorf("the write-ahead log never started over in %d messages", seq-1)
-	}
-}
-
-// walCheckpoints returns the checkpoint sequence number in the header of
-// the write-ahead log of the database at path: how many times the log
-// started over, once checkpointed whole. The log's size is no measure of
-// that: it is reused, not truncated, and grows by every commit made while a
-// checkpoint runs, as long as the disk makes it.
-func walCheckpoints(t *testing.T, path string) uint32 {
-	t.Helper()
-	f, err := os.Open(path + "-wal")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	var hdr [16]byte
-	if _, err := io.ReadFull(f, hdr[:]); err != nil {
-		t.Fatal(err)
-	}
-	return binary.BigEndian.Uint32(hdr[12:])
-}
-
-// awaitCheckpoint calls write every 10ms until the write-ahead log of the
-// database at path starts over, its checkpoint sequence number moving from
-// before, or 10 seconds pass, and reports whether it did. A checkpoint takes
-// as long as the disk, and the log starts over at the write after it.
-func awaitCheckpoint(t *testing.T, path string, before uint32, write func() error) bool {
-	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); walCheckpoints(t, path) == before; {
-		if time.Now().After(deadline) {
-			return false
-		}
-		if err := write(); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return true
 }
 
 func openDB(t *testing.T, path string) *sql.DB {
@@ -491,45 +428,6 @@ func TestSchemaVersion1(t *testing.T) {
 	}
 	if got := userVersion(t, db); got != 1 {
 		t.Errorf("user_version = %d, want 1", got)
-	}
-}
-
-// A Range reads in short transactions, a chunk at a time: the writes its
-// callback waits through are checkpointed meanwhile, and the write-ahead
-// log starts over, which one transaction held throughout would prevent.
-func TestRangeLetsCheckpointsRun(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "fix2.db")
-	s, st := open(t, path, "S")
-	raw := make([]byte, 200)
-	const n = 6000
-	for seq := uint64(1); seq <= n; seq++ {
-		if err := s.Append(ctx, st.Generation, seq, raw); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// A resend of everything, during which as many messages are sent, and
-	// more after the last until the log starts over.
-	before := walCheckpoints(t, path)
-	next := uint64(n + 1)
-	write := func() error {
-		err := s.Append(ctx, st.Generation, next, raw)
-		next++
-		return err
-	}
-	startedOver := false
-	err := s.Range(ctx, st.Generation, 1, n, func(seq uint64, _ []byte, _ store.Hole) error {
-		if seq < n {
-			return write()
-		}
-		startedOver = awaitCheckpoint(t, path, before, write)
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !startedOver {
-		t.Errorf("the write-ahead log never started over during a Range, %d messages written meanwhile", next-n-1)
 	}
 }
 
