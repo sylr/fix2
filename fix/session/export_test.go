@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"time"
+
+	"github.com/sylr/fix2/internal/hrtimer"
 )
 
 // RetentionSweeps returns how many evictions s ran, for tests.
@@ -25,5 +27,15 @@ var ErrStoreTimeout = errStoreTimeout
 
 // WaitUntil waits until clock reaches t (see waitUntil).
 func WaitUntil(ctx context.Context, clock func() time.Time, t time.Time) bool {
-	return waitUntil(ctx, clock, t)
+	return waitUntil(ctx, clock, t, hrtimer.At)
+}
+
+// GoTimers makes c's session wait for schedule boundaries on Go timers
+// alone, as a session in a synctest bubble must.
+func GoTimers(c *Config) {
+	c.at = func(t time.Time) <-chan struct{} {
+		done := make(chan struct{})
+		time.AfterFunc(time.Until(t), func() { close(done) })
+		return done
+	}
 }

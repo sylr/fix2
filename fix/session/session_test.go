@@ -19,23 +19,32 @@ type recorder struct {
 	logouts  []error
 	apps     []string    // ClOrdID of each application message
 	received []time.Time // Inbound.Received of each application message
-	got      chan struct{}
+	got      chan struct{} // wakes wait; one pending wakeup is enough
 }
 
-func newRecorder() *recorder { return &recorder{got: make(chan struct{}, 100)} }
+func newRecorder() *recorder { return &recorder{got: make(chan struct{}, 1)} }
+
+// notify wakes wait without blocking: a callback blocked on a test nobody
+// waits on would outlive it, the delivery goroutine stuck.
+func (r *recorder) notify() {
+	select {
+	case r.got <- struct{}{}:
+	default:
+	}
+}
 
 func (r *recorder) OnLogon(context.Context, *session.Session) {
 	r.mu.Lock()
 	r.logons++
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 }
 
 func (r *recorder) OnLogout(_ context.Context, _ *session.Session, err error) {
 	r.mu.Lock()
 	r.logouts = append(r.logouts, err)
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 }
 
 func (r *recorder) FromApp(_ context.Context, _ *session.Session, m *fix.Message, in session.Inbound) error {
@@ -43,7 +52,7 @@ func (r *recorder) FromApp(_ context.Context, _ *session.Session, m *fix.Message
 	r.apps = append(r.apps, string(m.Get(11)))
 	r.received = append(r.received, in.Received)
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 	return nil
 }
 

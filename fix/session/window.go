@@ -9,7 +9,6 @@ import (
 
 	"github.com/sylr/fix2/fix"
 	"github.com/sylr/fix2/fix/session/schedule"
-	"github.com/sylr/fix2/internal/hrtimer"
 )
 
 // errOutsideWindow refuses a connection outside the session's schedule.
@@ -20,10 +19,11 @@ var errOutsideWindow = errors.New("session: outside the session's schedule windo
 const precisionWindow = 5 * time.Millisecond
 
 // waitUntil waits until clock, the wall clock if nil, reaches t or ctx is
-// done, reporting whether t was reached.
-func waitUntil(ctx context.Context, clock func() time.Time, t time.Time) bool {
+// done, reporting whether t was reached. at waits out the last
+// precisionWindow, hrtimer.At but in tests.
+func waitUntil(ctx context.Context, clock func() time.Time, t time.Time, at func(time.Time) <-chan struct{}) bool {
 	for {
-		at, d := t, time.Duration(0)
+		wall, d := t, time.Duration(0)
 		if clock == nil {
 			d = time.Until(t)
 		} else {
@@ -31,7 +31,7 @@ func waitUntil(ctx context.Context, clock func() time.Time, t time.Time) bool {
 			// clock, as far away, the wall clock read after clock, which
 			// may take its time.
 			d = t.Sub(clock())
-			at = time.Now().Add(d)
+			wall = time.Now().Add(d)
 		}
 		if d <= 0 {
 			return true
@@ -49,7 +49,7 @@ func waitUntil(ctx context.Context, clock func() time.Time, t time.Time) bool {
 			continue
 		}
 		select {
-		case <-hrtimer.At(at):
+		case <-at(wall):
 		case <-ctx.Done():
 			return false
 		}
@@ -90,13 +90,13 @@ func (s *Session) runSchedule(ctx context.Context) {
 		if !in {
 			s.closeWindow(w)
 			s.log.LogAttrs(ctx, slog.LevelInfo, "waiting for the next session window", slog.Time("start", w.Start), slog.Time("end", w.End))
-			if !waitUntil(ctx, s.cfg.Now, w.Start) {
+			if !waitUntil(ctx, s.cfg.Now, w.Start, s.cfg.at) {
 				return
 			}
 			continue
 		}
 		s.openWindow(w)
-		if !waitUntil(ctx, s.cfg.Now, w.End) {
+		if !waitUntil(ctx, s.cfg.Now, w.End, s.cfg.at) {
 			return
 		}
 		s.closeWindow(w)

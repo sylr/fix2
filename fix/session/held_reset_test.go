@@ -35,7 +35,7 @@ func (r *eventRecorder) OnRecoveryLoss(_ context.Context, _ *session.Session, be
 	r.mu.Lock()
 	r.events = append(r.events, fmt.Sprintf("loss %d-%d", begin, end))
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 }
 
 // waitEvents waits for want, then checks nothing else came.

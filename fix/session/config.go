@@ -13,6 +13,7 @@ import (
 	"github.com/sylr/fix2/fix/dictionary"
 	"github.com/sylr/fix2/fix/session/schedule"
 	"github.com/sylr/fix2/fix/session/store"
+	"github.com/sylr/fix2/internal/hrtimer"
 )
 
 // Dictionaries are the dictionaries a session validates messages with: one
@@ -380,6 +381,12 @@ type Config struct {
 	// Retention evicts sent messages from the store, which must then
 	// implement store.Truncater: none by default.
 	Retention Retention
+
+	// at waits out the last stretch before a schedule boundary, hrtimer.At
+	// if nil. Tests running the session in a synctest bubble set a Go timer:
+	// hrtimer sleeps on the kernel's clock and shares its waits across the
+	// process.
+	at func(time.Time) <-chan struct{}
 }
 
 // withDefaults returns c with its zero fields set to their defaults.
@@ -412,6 +419,9 @@ func (c Config) withDefaults() Config {
 	defInt(&c.MaxTrackedReceipts, 1<<20)
 	if c.Logger == nil {
 		c.Logger = slog.New(slog.DiscardHandler)
+	}
+	if c.at == nil {
+		c.at = hrtimer.At
 	}
 	return c
 }

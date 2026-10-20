@@ -28,7 +28,7 @@ func (r *lossRecorder) OnRecoveryLoss(_ context.Context, _ *session.Session, beg
 	r.mu.Lock()
 	r.losses = append(r.losses, loss{begin, end, cause})
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 }
 
 // retained returns an initiator session with retention r, logged on to a

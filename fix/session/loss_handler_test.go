@@ -23,7 +23,7 @@ func (r *genLosses) OnLoss(_ context.Context, _ *session.Session, l session.Reco
 	r.events = append(r.events, fmt.Sprintf("gen-loss %d-%d", l.Begin, l.End))
 	r.losses = append(r.losses, l)
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 }
 
 // A RecoveryLossHandler is told of the counterparty's messages reset past
@@ -107,7 +107,7 @@ func (r *lossesOf) OnLoss(_ context.Context, _ *session.Session, l session.Recov
 	r.mu.Lock()
 	r.full = append(r.full, l)
 	r.mu.Unlock()
-	r.got <- struct{}{}
+	r.notify()
 }
 
 // Our messages evicted and asked for again are ours, of their generation.
