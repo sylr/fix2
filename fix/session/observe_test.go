@@ -2,14 +2,17 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/dictionary"
 	"github.com/sylr/fix2/fix/dictionary/xmldict"
 )
 
@@ -197,9 +200,17 @@ func TestSlogObserverDictionary(t *testing.T) {
 	}
 }
 
-// The records of a message follow each other although the reader and the
-// writer of a session log at the same time.
-func TestSlogObserverDictionaryConcurrent(t *testing.T) {
+// yieldHandler yields between records, so that loggers racing interleave.
+type yieldHandler struct{ slog.Handler }
+
+func (h yieldHandler) Handle(ctx context.Context, r slog.Record) error {
+	runtime.Gosched()
+	return h.Handler.Handle(ctx, r)
+}
+
+// The records of a message, its separator's among them, follow each other
+// although the reader and the writer of a session log at the same time.
+func TestSlogObserverConcurrent(t *testing.T) {
 	d, err := xmldict.LoadFile("../dictionary/testdata/FIX44.xml")
 	if err != nil {
 		t.Fatal(err)
@@ -208,48 +219,68 @@ func TestSlogObserverDictionaryConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var buf bytes.Buffer
-	o := SlogObserver{
-		Logger:     slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
-		Dictionary: d,
-		Separator:  "---",
-	}
-	const n = 500
-	var wg sync.WaitGroup
-	for _, inbound := range []bool{true, false} {
-		wg.Go(func() {
-			for i := range n {
-				f := Frame{Raw: fix.NewBuilder(FIX44, "0").SetInt(34, i).SetString(112, "T").Build(), Seq: uint64(i)}
-				if inbound {
-					o.OnInbound(s, f)
-				} else {
-					o.OnOutbound(s, f)
+	for _, tc := range []struct {
+		name   string
+		d      *dictionary.Dict
+		sep    string
+		labels []string // of the records after the separator
+	}{
+		{"Dictionary", d, "---", []string{"Header: ", "Body:   ", "Trailer:"}},
+		{"DictionaryWithoutSeparator", d, "", []string{"Header: ", "Body:   ", "Trailer:"}},
+		{"Frame", nil, "---", []string{""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			o := SlogObserver{
+				Logger:     slog.New(yieldHandler{slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})}),
+				Dictionary: tc.d,
+				Separator:  tc.sep,
+			}
+			const n = 200
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			for _, inbound := range []bool{true, false} {
+				wg.Go(func() {
+					<-start
+					for i := range n {
+						f := Frame{Raw: fix.NewBuilder(FIX44, "0").SetInt(34, i).SetString(112, "T").Build(), Seq: uint64(i)}
+						if inbound {
+							o.OnInbound(s, f)
+						} else {
+							o.OnOutbound(s, f)
+						}
+					}
+				})
+			}
+			close(start)
+			wg.Wait()
+			lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+			per := len(tc.labels)
+			if tc.sep != "" {
+				per++
+			}
+			if len(lines) != 2*n*per {
+				t.Fatalf("%d records, want %d", len(lines), 2*n*per)
+			}
+			for i := 0; i < len(lines); i += per {
+				if tc.sep != "" && !strings.Contains(lines[i], `"msg":"---"`) {
+					t.Fatalf("record %d is not the separator:\n%s", i, strings.Join(lines[i:i+per], "\n"))
+				}
+				var first map[string]any
+				for j, label := range tc.labels {
+					var rec map[string]any
+					if err := json.Unmarshal([]byte(lines[i+per-len(tc.labels)+j]), &rec); err != nil {
+						t.Fatal(err)
+					}
+					msg, _ := rec["msg"].(string)
+					if j == 0 {
+						first = rec
+					}
+					if !strings.HasPrefix(msg, first["msg"].(string)[:3]+label) || rec["seq"] != first["seq"] {
+						t.Fatalf("records %d to %d are not one message's:\n%s", i, i+per-1, strings.Join(lines[i:i+per], "\n"))
+					}
 				}
 			}
 		})
-	}
-	wg.Wait()
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 2*n*4 {
-		t.Fatalf("%d records, want %d", len(lines), 2*n*4)
-	}
-	for i := 0; i < len(lines); i += 4 {
-		if !strings.Contains(lines[i], `"msg":"---"`) {
-			t.Fatalf("record %d is not the separator:\n%s", i, lines[i])
-		}
-		var first map[string]any
-		for j, label := range []string{"Header: ", "Body:   ", "Trailer:"} {
-			var rec map[string]any
-			if err := json.Unmarshal([]byte(lines[i+1+j]), &rec); err != nil {
-				t.Fatal(err)
-			}
-			msg, _ := rec["msg"].(string)
-			if j == 0 {
-				first = rec
-			}
-			if msg[3:3+len(label)] != label || msg[:3] != first["msg"].(string)[:3] || rec["seq"] != first["seq"] {
-				t.Fatalf("records %d to %d are not one message's:\n%s", i, i+3, strings.Join(lines[i:i+4], "\n"))
-			}
-		}
 	}
 }

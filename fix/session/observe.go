@@ -145,6 +145,13 @@ func (a *AsyncObserver) Close() {
 // is set. The records of a message follow each other, those of a session's
 // reader and writer not interleaving, with a handler writing them as it is
 // passed them: slog's own, zerolog's and zap's do.
+//
+// To keep them together, all SlogObservers share a lock while they log a
+// message of more than one record: a slow handler slows every session
+// logging at level Debug, and a handler waiting on a session, to send
+// through it for one, deadlocks. An AsyncObserver in front of a
+// SlogObserver logs from a goroutine of its own, the session's reader and
+// writer waiting on neither.
 type SlogObserver struct {
 	Logger *slog.Logger
 	// Tags are the tags whose values are redacted, SensitiveTags if nil:
@@ -189,9 +196,11 @@ func (o SlogObserver) log(s *Session, f Frame, inbound bool) {
 	if inbound {
 		dir = "FIX in"
 	}
-	sectionsMu.Lock()
-	defer sectionsMu.Unlock()
-	o.logSeparator(ctx)
+	if o.Separator != "" {
+		sectionsMu.Lock()
+		defer sectionsMu.Unlock()
+		o.logSeparator(ctx)
+	}
 	o.Logger.LogAttrs(ctx, slog.LevelDebug, dir, append(attrs, slog.String("frame", string(raw)))...)
 }
 
