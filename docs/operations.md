@@ -138,8 +138,53 @@ the `transport.Conn` the dialer or listener returns, and record what its
 `Read` and `Write` pass.
 
 The store holds the messages sent as they were sent: Logons with their
-passwords, passphrases and signatures, unredacted. Protect a store's files,
+passwords, passphrases and signatures, unredacted, and bodies in clear even
+when an `Encrypter` seals them on the wire. Protect a store's files,
 the SQLite database, its write-ahead log and their backups, as credentials.
+
+## Encrypting message bodies
+
+`Config.Encrypter` seals the body of a FIX 4.x session's messages into
+SecureData (91), for an EncryptMethod (98) other than 0. fix2 ships no
+cipher: the `Encrypter` is the application's, and so are its keys, agreed
+with the counterparty beforehand, out of band. Nothing is exchanged in
+RawData (95/96).
+
+- Both Logons declare the `Encrypter`'s `Method`; a Logon declaring another,
+  or none, is refused, the connection closed. A session dictionary must
+  list `Method` among EncryptMethod's values (FIX 4.4's lists 0 to 6), or
+  the Logons fail its validation.
+- Logons go out in clear, reset Logons included, and so does a message
+  without body. Every other message, once the Logons agreed, has its body
+  sealed and its standard header in clear: CompIDs, MsgSeqNum,
+  SendingTime, PossDupFlag stay readable on the wire. Encryption is not
+  transport security: see [Transport security](#transport-security).
+- The `Encrypter` must authenticate what it seals, an AEAD such as
+  AES-GCM: a header field found inside SecureData is merged into the
+  header, and a body opened is delivered, so a cipher a third party can
+  alter undetected lets it forge fields.
+- On one session, `Seal` runs on the connection's writer and `Open` on its
+  reader: they may run at the same time, never two `Seal`s, nor two
+  `Open`s. An `Encrypter` shared by several sessions sees as many of each
+  as there are sessions.
+- A `Seal` error closes the connection, what it was to write unwritten,
+  to be resent on the next. A message that does not open, holds no
+  fields, repeats a header field with another value, or carries body
+  fields in clear, is rejected with SessionRejectReason 7 and counted: it
+  is **lost** to the application, as any message rejected. One that hides
+  its MsgSeqNum logs out.
+- The store keeps messages in **clear**, and observers see them in clear,
+  both ways: protect the store as the messages themselves, and redact
+  observers by the tags of the body that matter, `SensitiveTags`' SecureData
+  being there only before opening.
+- Resends are sealed when written, by the `Encrypter` as it is then. What
+  holds across a key change is therefore only what the counterparty can
+  open with the key in use on the connection: change keys between
+  connections, both sides together, the store untouched. A message sealed
+  with the old key and read after the change does not open: it is
+  rejected, and lost, as above. The `Encrypter` is the session's for its
+  life, across reconnects and sequence resets: one that changes keys does
+  so itself, or the session is removed and added again with another.
 
 ## The SQLite store
 

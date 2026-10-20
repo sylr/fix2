@@ -25,16 +25,31 @@ import (
 // "EncyptionMethod(98) must be present in the Logon(35=A) message and set to
 // “0” when application layer encryption is not in use.").
 //
-// Seal and Open may run at the same time.
+// Once the Logons agreed, every message but a Logon, reset ones included, and
+// those without a body, has its body sealed into SecureData (91), its
+// standard header in clear, as FIX 4.4 recommends: "it is recommended but not
+// required that all fields within the message body be encrypted"
+// (unverified). Messages received are opened alike, the header fields found
+// in SecureData merged with the clear ones, which they must equal: "The clear
+// (unencrypted) fields can be repeated within the SecureData field to serve as
+// an integrity check of the clear data" (unverified). One that does not open,
+// differs, or has body fields in clear, is rejected with SessionRejectReason
+// 7, Decryption problem, and counted. The store keeps messages in clear, and
+// the Observer sees them so, both ways: a resend is sealed when written.
+//
+// On one session, Seal runs on the connection's writer goroutine and Open on
+// its reader: they may run at the same time, never two Seals, nor two Opens.
 type Encrypter interface {
 	// Method returns the EncryptMethod (98) the session's Logons declare: a
 	// positive integer, which Config.Validate checks.
 	Method() string
 	// Seal appends to dst the sealed form of plain, the fields of a
-	// message's body, tag=value<SOH> each, and returns the result.
+	// message's body, tag=value<SOH> each, and returns the result. An error
+	// closes the connection, the messages it was to write unwritten. It
+	// must authenticate what it seals: what Open returns is trusted.
 	Seal(dst, plain []byte) ([]byte, error)
 	// Open appends to dst the fields sealed holds, as Seal was given them,
-	// and returns the result.
+	// and returns the result. An error rejects the message.
 	Open(dst, sealed []byte) ([]byte, error)
 }
 

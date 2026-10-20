@@ -158,7 +158,8 @@ func (BaseHandler) FromApp(context.Context, *Session, *fix.Message, Inbound) err
 func (BaseHandler) OnResend(context.Context, *Session, uint64, *fix.Message) bool   { return true }
 func (BaseHandler) OnRecoveryLoss(context.Context, *Session, uint64, uint64, error) {}
 
-// Frame is a message as it went over the wire, for a MessageObserver.
+// Frame is a message as it went over the wire, for a MessageObserver: in
+// clear, if the session sealed it or opened it (see Encrypter).
 type Frame struct {
 	Raw        []byte // the whole message, valid during the call
 	Seq        uint64
@@ -171,6 +172,8 @@ type Frame struct {
 // for an audit log. Its methods run synchronously on the connection's reader
 // and writer goroutines: they must neither block nor take locks a Send
 // caller may hold. OnOutbound runs once the message is completely written.
+// Both see messages in clear, those a session seals or opens included (see
+// Encrypter); OnInbound not those it cannot decrypt.
 type MessageObserver interface {
 	OnInbound(s *Session, f Frame)
 	OnOutbound(s *Session, f Frame)
