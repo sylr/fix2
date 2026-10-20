@@ -81,7 +81,7 @@ func (s *Session) startReplayLocked(c *conn, begin, end uint64, keepPending bool
 func (c *conn) runReplay(job *replayJob) {
 	s := c.s
 	s.mu.Lock()
-	gen, epoch := s.st.Generation, c.epoch
+	gen, epoch, sealing := s.st.Generation, c.epoch, c.encrypted
 	s.mu.Unlock()
 	if s.syncer != nil {
 		// What is resent may not be durable yet: the messages taken from
@@ -112,9 +112,19 @@ func (c *conn) runReplay(job *replayJob) {
 			buf, frames, covered = buf[:0], frames[:0], covered[:0]
 			return
 		}
+		wire, ends := buf, []int(nil)
+		if sealing {
+			var err error
+			if wire, ends, err = c.seal(buf, frames); err != nil {
+				// As a write failure: the connection closes.
+				writeErr = err
+				buf, frames, covered = buf[:0], frames[:0], covered[:0]
+				return
+			}
+		}
 		c.tc.SetWriteDeadline(time.Now().Add(s.cfg.WriteTimeout))
-		n, err := c.tc.Write(buf)
-		c.wrote(buf, frames, n, gen, epoch, true)
+		n, err := c.tc.Write(wire)
+		n = c.wrote(buf, frames, ends, n, gen, epoch, true)
 		for _, r := range covered {
 			if r.end <= n {
 				lost = append(lost, r.run)

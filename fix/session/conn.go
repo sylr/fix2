@@ -37,6 +37,12 @@ type conn struct {
 	framer *fix.Framer
 	msg    fix.Message // reader-owned
 	rmsg   fix.Message // writer-owned, for replays
+	// wmsg, wire, wireEnds and sealed are the writer's, for sealing (see
+	// seal).
+	wmsg     fix.Message
+	wire     []byte
+	wireEnds []int
+	sealed   []byte
 	// ctx is cancelled when the connection closes. syncCtx, the writer's
 	// Syncs', is cancelled by it too, and by watchSync once a Sync runs
 	// for WriteTimeout: syncs counts the Syncs started and ended, odd while
@@ -79,6 +85,10 @@ type conn struct {
 
 	logonExtra []byte // fields the handler added to the Logon we answer with
 	loggedOn   bool   // the connection got to log on
+	// encrypted tells the Logon exchange agreed on an EncryptMethod (98)
+	// other than 0: every message but a Logon is sealed (see seal). Set by
+	// the reader, which reads it without the lock.
+	encrypted bool
 	// byDefault tells BaseHandler's Authenticate accepted the Logon, and
 	// transportAuth that the transport authenticated the counterparty.
 	byDefault, transportAuth bool
@@ -395,18 +405,23 @@ func (c *conn) writeLoop() {
 			}
 		}
 		c.signalRoomLocked()
-		gen, epoch := s.st.Generation, c.epoch
+		gen, epoch, sealing := s.st.Generation, c.epoch, c.encrypted
 		s.mu.Unlock()
 
 		var err error
 		if s.syncer != nil {
 			err = c.sync(gen, frames[len(frames)-1].seq)
 		}
+		wire, ends := buf, []int(nil)
+		if err == nil && sealing {
+			// An Encrypter's failure is the write's: the connection closes.
+			wire, ends, err = c.seal(buf, frames)
+		}
 		if err == nil {
 			c.tc.SetWriteDeadline(time.Now().Add(s.cfg.WriteTimeout))
 			var n int
-			n, err = c.tc.Write(buf)
-			c.wrote(buf, frames, n, gen, epoch, false)
+			n, err = c.tc.Write(wire)
+			c.wrote(buf, frames, ends, n, gen, epoch, false)
 		}
 
 		s.mu.Lock()
@@ -497,27 +512,34 @@ func (c *conn) watchSync(seen uint64, times int) {
 	time.AfterFunc(max(c.s.cfg.WriteTimeout/2, time.Millisecond), func() { c.watchSync(seen, times) })
 }
 
-// wrote accounts for frames of buf, of which the first n bytes were written:
-// the frames written completely, and only those, are Written, or, a
-// replay's GapFills, skip the messages they stand for.
-func (c *conn) wrote(buf []byte, frames []pendingFrame, n int, gen, epoch uint64, resend bool) {
+// wrote accounts for frames of buf, which went on the wire ending at ends,
+// sealed (see seal), or as they are if ends is nil, and of which the first n
+// bytes were written: the frames written completely, and only those, are
+// Written, or, a replay's GapFills, skip the messages they stand for. The
+// Observer sees them as buf holds them, in clear. It returns the bytes of buf
+// they take.
+func (c *conn) wrote(buf []byte, frames []pendingFrame, ends []int, n int, gen, epoch uint64, resend bool) int {
 	s := c.s
-	start, done := 0, 0
-	for _, f := range frames {
-		if f.end > n {
+	start, sent, done := 0, 0, 0
+	for i, f := range frames {
+		end := f.end
+		if ends != nil {
+			end = ends[i]
+		}
+		if end > n {
 			break
 		}
 		if s.cfg.Observer != nil {
 			s.cfg.Observer.OnOutbound(s, Frame{Raw: buf[start:f.end], Seq: f.seq, Generation: gen, Epoch: epoch, Resend: resend})
 		}
-		start = f.end
+		start, sent = f.end, end
 		done++
 	}
 	if done == 0 {
-		return
+		return 0
 	}
 	s.stats.MessagesSent.Add(uint64(done))
-	s.stats.BytesSent.Add(uint64(start))
+	s.stats.BytesSent.Add(uint64(sent))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c.lastWrite = time.Now()
@@ -543,6 +565,7 @@ func (c *conn) wrote(buf []byte, frames []pendingFrame, n int, gen, epoch uint64
 	if !c.closed {
 		s.armLocked(c)
 	}
+	return start
 }
 
 // signalRoomLocked wakes the Sends waiting for room, if there is some.

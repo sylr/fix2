@@ -718,8 +718,9 @@ type dicts struct {
 	parseApps map[string]*fix.Profile
 	// versions are the keys of parseApps.
 	versions []string
-	// header tells, by tag, the fields of the FIXT standard header, which
-	// headerProf reads: a message's ApplVerID is looked for there.
+	// header tells, by tag, the fields of the standard header: for FIXT,
+	// those headerProf reads, a message's ApplVerID looked for there; for
+	// FIX 4.x, those sealing keeps in clear (see seal).
 	header     []bool
 	headerProf *fix.Profile
 }
@@ -730,6 +731,18 @@ func newDicts(cfg Config, p *profile) (dicts, error) {
 		d.parse = d.session.Profile()
 	}
 	if !p.fixt {
+		// FIX 4.4's standard header, as FIXT 1.1's but for ApplVerID and the
+		// like, FIX 4.2 and 4.3's 370, and the session dictionary's.
+		tags := append(fixtHeader[:], anyHeader[:]...)
+		if d.session != nil {
+			for _, f := range d.session.Header {
+				tags = append(tags, f.Tag)
+			}
+		}
+		d.header = make([]bool, slices.Max(tags)+1)
+		for _, tag := range tags {
+			d.header[tag] = true
+		}
 		return d, nil
 	}
 	if d.session == nil {
@@ -848,6 +861,11 @@ func (d *dicts) headerApplVerID(m *fix.Message) (v []byte, ok bool) {
 		}
 	}
 	return nil, false
+}
+
+// inHeader reports whether tag is a field of the standard header.
+func (d *dicts) inHeader(tag int) bool {
+	return tag >= 0 && tag < len(d.header) && d.header[tag]
 }
 
 // version returns v as a string, without allocating if it has a dictionary.

@@ -167,6 +167,11 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 		s.disconnectLocked(c, &LogoutError{Text: "Logon refused: " + p.text})
 		return
 	}
+	if s.initiator {
+		// The answer agrees on our EncryptMethod (see checkLogon): what the
+		// counterparty sends after it is sealed, and so is what we send.
+		c.encrypted = s.cfg.Encrypter != nil
+	}
 	if s.prof.fixt && s.dicts.apps != nil && s.dicts.apps[peerApplVerID] == nil {
 		// TolerateUnsupportedDefaultApplVerID, as QuickFIX: accepted, its
 		// messages validated with our own default version.
@@ -258,6 +263,9 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 		}
 		b := s.logonBody(reset || announce, next)
 		b = append(b, c.logonExtra...)
+		// Our answer agrees on the counterparty's EncryptMethod (see
+		// checkLogon): what follows it, both ways, is sealed.
+		c.encrypted = s.cfg.Encrypter != nil
 		s.sendAdminLocked(&header{msgType: "A"}, b)
 		if c.closed || s.c != c {
 			// The answer could not be stored: disconnected, not logged on.
