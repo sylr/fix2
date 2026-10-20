@@ -474,7 +474,7 @@ follows it again.
   mounting the filesystem again, or rebooting, before the store is
   reopened. The suite now checks and mounts the filesystem again before
   each start under flaky-disk; that checks the filesystem, not SQLite's
-  database.
+  database. `docs/operations.md` says so now.
 - Fixed (4575f8e), found writing J1's tests: `MaxPendingAge` was enforced
   only when the connection's timer fired for another reason, up to a
   heartbeat interval late, since queueing a message never armed it.

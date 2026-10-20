@@ -180,9 +180,24 @@ mode, through cgo (`github.com/mattn/go-sqlite3`).
   meanwhile, until the next `Truncate` or the store's next `Open`.
 - **A failed flush or checkpoint** leaves the store in doubt: every call
   from then on fails with `store.ErrUnknownOutcome`, and the session
-  halts (`Session.Err`). It does not reconnect: check the database,
-  then remove the session from its `Initiator` or `Acceptor` and add it
-  again, or restart the process.
+  halts (`Session.Err`). It does not reconnect. Opening the database again
+  can lose more: on Linux (ext4, for one), a page the disk failed to write
+  stays in the page cache, marked clean, and a later flush need not report
+  it. A store opened on the database again, by this process or another,
+  reads that page and builds on it, every `Sync` succeeding; when SQLite
+  next recovers the write-ahead log from the disk, it can ignore the
+  transactions from the stale frame on, synced ones included, and their
+  sequence numbers are used again. Before opening the database again:
+  - stop all that has it open, the halted session's store included (remove
+    the session, or stop the process), other sessions and processes on the
+    database too, and keep whatever restarts them off;
+  - mend what failed the disk, then unmount the database's filesystem,
+    wholly, not lazily, check it (`fsck`) and mount it again; or reboot the
+    host;
+  - check the database (`PRAGMA integrity_check`), which finds damage to
+    its structure, not transactions lost whole: reconcile the sessions'
+    sequence numbers and messages with the counterparty, and with your own
+    records, before adding the sessions again or restarting the process.
 
 ## A disk that stops answering
 
@@ -211,7 +226,9 @@ The goroutines waiting for the lock stay blocked until the disk answers:
 Once the write returns, the session stays halted, as for any store failure
 that leaves its state in doubt (see `Session.Err`): check the store, then
 remove the session and add it again, or restart the process; with the
-SQLite store, it resumes from what reached the disk. A `StoreTimeout` too
+SQLite store, it resumes from what reached the disk, and a write that
+failed requires dropping the page cache first (see [the SQLite
+store](#the-sqlite-store)). A `StoreTimeout` too
 short halts sessions on writes that were only slow: leave it well above
 what a `Reset` or `Truncate` of your largest sessions takes.
 
