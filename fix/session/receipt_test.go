@@ -359,6 +359,15 @@ func TestSend_Errors(t *testing.T) {
 	if _, err := s.Send(context.Background(), order("O1").SetInt(34, 99)); !errors.As(err, &rerr) || rerr.Tag != 34 {
 		t.Errorf("Send with MsgSeqNum set = %v, want a ReservedTagError", err)
 	}
+	var serr *fix.SOHValueError
+	if _, err := s.Send(context.Background(), order("O1\x0158=forged")); !errors.As(err, &serr) || serr.Tag != 11 {
+		t.Errorf("Send with SOH in ClOrdID = %v, want a SOHValueError", err)
+	}
+	// Neither sequenced nor sent.
+	if _, err := s.Send(context.Background(), order("O2")); err != nil {
+		t.Fatal(err)
+	}
+	p.expect("D", "34", "2", "11", "O2")
 	if _, err := s.SendRaw(context.Background(), "0", nil); err == nil {
 		t.Error("SendRaw of a Heartbeat succeeded: the session sends those")
 	}
@@ -386,6 +395,64 @@ type unsupported struct{ *recorder }
 
 func (unsupported) FromApp(_ context.Context, _ *session.Session, m *fix.Message, _ session.Inbound) error {
 	return fmt.Errorf("%w: %s", fix.ErrUnsupportedMessageType, m.MsgType())
+}
+
+// A handler's BusinessRejectError whose RefID holds SOH.
+type sohRefID struct{ *recorder }
+
+func (sohRefID) FromApp(context.Context, *session.Session, *fix.Message, session.Inbound) error {
+	return &session.BusinessRejectError{Reason: session.BusinessRejectUnknownID, RefID: "O1\x0158=forged", Text: "unknown order"}
+}
+
+// A RefID holding SOH would end BusinessRejectRefID (379) early, the rest
+// read as fields of their own: the BusinessMessageReject goes without it.
+func TestBusinessRejectRefIDWithSOH(t *testing.T) {
+	_, _, p := loggedOn(t, func(c *session.Config) { c.Handler = sohRefID{c.Handler.(*recorder)} })
+	p.send("D", 0, "11", "O1")
+	rej := p.expect("j", "45", "2", "372", "D", "380", "1", "58", "unknown order")
+	if rej.Get(379) != nil {
+		t.Errorf("BusinessRejectRefID sent: %q", rej.Get(379))
+	}
+	n := 0
+	for _, f := range rej.Fields() {
+		if f.Tag == 58 {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d Text fields, want 1", n)
+	}
+	// The session goes on.
+	p.send("0", 0)
+	p.send("1", 0, "112", "T1")
+	p.expect("0", "112", "T1")
+}
+
+// A ToAdmin setting a value holding SOH cancels the Logon, as a ToAdmin
+// error does: nothing is sent.
+func TestToAdminSOH(t *testing.T) {
+	l := mem.Listen("acceptor")
+	startInitiator(t, l, func(c *session.Config) { c.Handler = user{c.Handler.(*recorder), "a\x0158=forged"} })
+	p := acceptPeer(t, l)
+	select {
+	case ev := <-p.frames:
+		if ev.err == nil {
+			t.Fatalf("got %s, want no Logon", visible(ev.frame))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("connection still open")
+	}
+}
+
+// The identities the session writes in every header cannot hold SOH.
+func TestConfigSOH(t *testing.T) {
+	_, err := session.New(session.Config{
+		ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC", TargetSubID: "a\x01b"},
+		Handler: session.BaseHandler{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "ID.TargetSubID") {
+		t.Errorf("New = %v, want an error about ID.TargetSubID", err)
+	}
 }
 
 func TestUnsupportedMessageType(t *testing.T) {

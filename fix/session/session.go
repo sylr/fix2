@@ -480,11 +480,13 @@ const maxPooledBuffer = 64 << 10
 
 // Send sends m to the counterparty and returns its receipt. The session
 // writes the standard header: m must not set the tags it does (BeginString,
-// MsgSeqNum, the CompIDs, SendingTime...). Send returns once the message is
-// sequenced and stored; it is written by the connection's writer. If the
-// outbound queue is full it waits for room until ctx is done, unless
-// Config.FailWhenFull is set or ctx is a handler callback's, in which cases
-// it fails with ErrSlowConsumer or ErrInCallback.
+// MsgSeqNum, the CompIDs, SendingTime...), nor a value holding SOH but in a
+// DATA field after its length (see fix.Builder.AppendBody). Send returns
+// once the message is sequenced and stored; it is written by the
+// connection's writer. If the outbound queue is full it waits for room
+// until ctx is done, unless Config.FailWhenFull is set or ctx is a handler
+// callback's, in which cases it fails with ErrSlowConsumer or
+// ErrInCallback.
 func (s *Session) Send(ctx context.Context, m Outgoing) (Receipt, error) {
 	bp, _ := s.bodyPool.Get().(*[]byte)
 	if bp == nil {

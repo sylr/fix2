@@ -1339,6 +1339,14 @@ func (s *Session) businessRejectLocked(m *fix.Message, reason int, refID, text s
 		return
 	}
 	text = withhold(m, noTag, text, "value withheld")
+	if strings.IndexByte(refID, 1) >= 0 {
+		// SOH would end BusinessRejectRefID early, what follows read as
+		// fields of their own: the reject goes without it, as a
+		// RejectError's reason the version does not have does.
+		s.log.LogAttrs(context.Background(), slog.LevelWarn, "BusinessRejectRefID holds SOH: left out",
+			s.msgTypeAttr(m), s.seqAttr(m))
+		refID = ""
+	}
 	s.stats.RejectsSent.Add(1)
 	b := adminBody(nil)
 	if ref := m.Get(tagMsgSeqNum); ref != nil {

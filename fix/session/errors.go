@@ -61,7 +61,9 @@ func (e *RejectError) Error() string {
 // BusinessRejectError, returned by Handler.FromApp, makes the session reject
 // the message with a BusinessMessageReject (35=j) carrying Reason
 // (BusinessRejectReason, 380), RefID (BusinessRejectRefID, 379) and Text.
-// Before FIX 4.2, which has no BusinessMessageReject, a Reject is sent.
+// Before FIX 4.2, which has no BusinessMessageReject, a Reject is sent. A
+// RefID holding SOH, which would end the field early, is left out, with a
+// warning; Text has its control characters escaped.
 type BusinessRejectError struct {
 	Reason int
 	RefID  string

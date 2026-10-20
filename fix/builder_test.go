@@ -498,3 +498,59 @@ func TestBuilder_AppendBodyReservedInGroups(t *testing.T) {
 		t.Fatalf("AppendBody = %q, %v; want nothing appended and a ReservedTagError for 34", got, err)
 	}
 }
+
+// SOH ends a field: AppendBody refuses a value holding one unless it is a
+// DATA field right after the LENGTH field announcing its length, and
+// appends nothing.
+func TestBuilder_AppendBodySOH(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		b    *Builder
+		tag  int // refused, 0 for accepted
+	}{
+		{"string", NewBuilder("FIX.4.4", "D").SetString(11, "O1\x0158=forged"), 11},
+		{"bytes", NewBuilder("FIX.4.4", "D").Set(58, []byte("a\x01")), 58},
+		{"appended", NewBuilder("FIX.4.4", "D").AppendString(58, "\x01"), 58},
+		{"header", func() *Builder {
+			b := NewBuilder("FIX.4.4", "D").SetString(115, "a\x01b")
+			b.SetSections([]int{115}, nil, nil)
+			return b
+		}(), 115},
+		{"group", func() *Builder {
+			b := NewBuilder("FIX.4.4", "D")
+			b.SetGroups(func(dst []Field) []Field {
+				return append(AppendCount(dst, 78, 1), Field{Tag: 79, Value: []byte("A\x01")})
+			}, 78)
+			return b
+		}(), 79},
+		{"DATA", NewBuilder("FIX.4.4", "A").SetData(95, 96, []byte("a\x01b")), 0},
+		{"DATA set by hand", NewBuilder("FIX.4.4", "A").SetInt(95, 3).Set(96, []byte("a\x01b")), 0},
+		{"DATA of another pair", NewBuilder("FIX.4.4", "A").SetData(5001, 5002, []byte("\x01")), 0},
+		{"DATA with a wrong length", NewBuilder("FIX.4.4", "A").SetData(95, 96, []byte("a\x01b")).SetInt(95, 2), 96},
+		{"DATA after another field", NewBuilder("FIX.4.4", "A").SetInt(95, 3).SetString(58, "t").Set(96, []byte("a\x01b")), 96},
+		{"DATA tag not announced", NewBuilder("FIX.4.4", "A").Set(96, []byte("\x01")), 96},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.b.AppendBody([]byte("x"), nil)
+			if tc.tag == 0 {
+				if err != nil {
+					t.Fatalf("AppendBody: %v", err)
+				}
+				return
+			}
+			var serr *SOHValueError
+			if !errors.As(err, &serr) || serr.Tag != tc.tag || string(got) != "x" {
+				t.Fatalf("AppendBody = %q, %v; want nothing appended and a SOHValueError for %d", got, err, tc.tag)
+			}
+		})
+	}
+}
+
+// Build writes a value holding SOH as it is, as a test crafting a
+// malformed message needs.
+func TestBuilder_BuildWritesSOH(t *testing.T) {
+	raw := NewBuilder("FIX.4.4", "D").SetString(11, "O1\x0158=forged").Build()
+	if !bytes.Contains(raw, []byte("\x0111=O1\x0158=forged\x01")) {
+		t.Errorf("Build = %q", raw)
+	}
+}

@@ -487,6 +487,17 @@ func (c *Config) Validate() error {
 	if c.ID.TargetCompID == "" {
 		add("ID.TargetCompID", "required")
 	}
+	// The values the session writes in every header, and in its Logon: SOH
+	// would end their field early.
+	for _, v := range []struct{ field, v string }{
+		{"ID.SenderCompID", c.ID.SenderCompID}, {"ID.SenderSubID", c.ID.SenderSubID}, {"ID.SenderLocationID", c.ID.SenderLocationID},
+		{"ID.TargetCompID", c.ID.TargetCompID}, {"ID.TargetSubID", c.ID.TargetSubID}, {"ID.TargetLocationID", c.ID.TargetLocationID},
+		{"Dictionaries.DefaultApplVerID", c.Dictionaries.DefaultApplVerID},
+	} {
+		if strings.IndexByte(v.v, 1) >= 0 {
+			add(v.field, "%q holds SOH, the field separator", v.v)
+		}
+	}
 	if c.Handler == nil {
 		add("Handler", "required (embed session.BaseHandler for defaults)")
 	}
