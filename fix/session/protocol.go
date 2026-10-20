@@ -715,9 +715,10 @@ func (s *Session) checkSeqLocked(c *conn, m *fix.Message, in Inbound) seqVerdict
 	return seqIgnore
 }
 
-// origTimeOK checks the OrigSendingTime of a PossDup message: missing, or
-// later than its SendingTime, it is rejected, the latter with a Logout. A
-// message in sequence then counts as received.
+// origTimeOK checks the OrigSendingTime of a PossDup message: missing,
+// malformed, or later than its SendingTime, it is rejected, the latter with a
+// Logout. A message in sequence then counts as received. One unseen (see
+// unseen) is not judged; a SendingTime unseen leaves out the comparison only.
 func (s *Session) origTimeOK(c *conn, m *fix.Message, inSequence bool) bool {
 	consumed := func() {
 		if inSequence {
@@ -727,10 +728,11 @@ func (s *Session) origTimeOK(c *conn, m *fix.Message, inSequence bool) bool {
 			s.gapFillCountedLocked(c, m)
 		}
 	}
-	if s.unseen(m, tagOrigSendingTime) || s.unseen(m, tagSendingTime) {
-		// It may follow the malformed tag: the two cannot be compared.
+	if s.unseen(m, tagOrigSendingTime) {
+		// It may follow the malformed tag, or be within SecureData.
 		return true
 	}
+	sentUnseen := s.unseen(m, tagSendingTime)
 	orig := m.Get(tagOrigSendingTime)
 	if orig == nil {
 		if s.cfg.TolerateSequenceResetWithoutOrigSendingTime && bytes.Equal(m.MsgType(), []byte("4")) {
@@ -742,7 +744,11 @@ func (s *Session) origTimeOK(c *conn, m *fix.Message, inSequence bool) bool {
 		return false
 	}
 	ot, err1 := fix.ParseUTCTimestamp(orig)
-	st, err2 := fix.ParseUTCTimestamp(m.Get(tagSendingTime))
+	var st time.Time
+	var err2 error
+	if !sentUnseen {
+		st, err2 = fix.ParseUTCTimestamp(m.Get(tagSendingTime))
+	}
 	if err1 != nil || err2 != nil {
 		s.rejectLocked(m, dictionary.ReasonIncorrectDataFormat, tagOrigSendingTime,
 			rejectText(dictionary.ReasonIncorrectDataFormat, fieldDesc(nil, tagOrigSendingTime)+" is "+quoteValue(orig)))
@@ -755,7 +761,7 @@ func (s *Session) origTimeOK(c *conn, m *fix.Message, inSequence bool) bool {
 		consumed()
 		return false
 	}
-	if st.Before(ot) {
+	if !sentUnseen && st.Before(ot) {
 		s.rejectLocked(m, dictionary.ReasonSendingTimeAccuracyProblem, noTag, rejectText(dictionary.ReasonSendingTimeAccuracyProblem,
 			fmt.Sprintf("OrigSendingTime %s is after SendingTime %s", orig, m.Get(tagSendingTime))))
 		s.logoutLocked(c, "")

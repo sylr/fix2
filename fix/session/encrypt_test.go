@@ -950,3 +950,35 @@ func TestEncrypter_SealFailureResending(t *testing.T) {
 		t.Errorf("Resent = %d, want 0", n)
 	}
 }
+
+// A PossDup message whose SendingTime SecureData hides, and does not open,
+// still has a readable OrigSendingTime checked on its own: malformed, or
+// finer than the version allows, it is rejected for it (SessionRejectReason
+// 6, RefTagID 122) and counted; only its comparison with SendingTime is
+// left out.
+func TestEncrypter_OrigSendingTimeWithSendingTimeHidden(t *testing.T) {
+	g, other := newGCM(t, "7", "k"), newGCM(t, "7", "another key")
+	for _, c := range []struct {
+		name, begin, orig string
+	}{
+		{"malformed", session.FIX44, "BAD"},
+		{"too fine", session.FIX43, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Microseconds))},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			l := mem.Listen("acceptor")
+			s, _ := startInitiator(t, l, func(cfg *session.Config) { cfg.ID.BeginString, cfg.Encrypter = c.begin, g })
+			p := acceptPeer(t, l)
+			p.expect("A", "98", "7")
+			p.write(from(c.begin, 1), "A", "98", "7", "108", "30")
+			waitFor(t, func() bool { return s.State() == session.StateLoggedOn })
+			sealed, err := other.Seal(nil, []byte("52="+string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds))+"\x0111=BAD\x01"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.writeRaw(fix.NewBuilder(c.begin, "D").SetString(49, "ACC").SetString(56, "INI").SetInt(34, 2).
+				SetString(43, "Y").SetString(122, c.orig).SetData(90, 91, sealed).Build())
+			p.expectSealed(g, "3", "45", "2", "371", "122", "373", "6")
+			waitFor(t, func() bool { return s.NextTargetSeqNum() == 3 })
+		})
+	}
+}
