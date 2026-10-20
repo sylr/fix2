@@ -179,10 +179,13 @@ func (c *tapConn) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// Write records p before writing it: recorded once written, a message
+// could follow the answer the reader already recorded. A write that fails
+// leaves it recorded, sent or not; the connection then ends, and its error
+// tells.
 func (c *tapConn) Write(p []byte) (int, error) {
-	n, err := c.Conn.Write(p)
-	c.out.feed(p[:n])
-	return n, err
+	c.out.feed(p)
+	return c.Conn.Write(p)
 }
 
 // frames cuts a byte stream into frames, and records their messages.
