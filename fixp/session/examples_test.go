@@ -495,7 +495,10 @@ func TestExample_7_4_1_3_and_7_4_3_Heartbeats(t *testing.T) {
 		{"7.4.3", fixp.Unsequenced, codec.UnsequencedHeartbeatTemplateID, &codec.UnsequencedHeartbeat{}},
 	} {
 		t.Run(tc.example, func(t *testing.T) {
-			r, h, _, _ := rawClient(t, tc.flow, tc.flow, 50)
+			// The raw client only answers the server's heartbeats, every
+			// 50ms: with its own interval at 50ms too, the server would
+			// cut it off after 75ms of silence, a runner's hiccup of 25ms.
+			r, h, _, _ := rawClient(t, tc.flow, tc.flow, 1000)
 			for range 10 {
 				hd, msg := r.read()
 				if hd.SchemaId != codec.SchemaID || hd.TemplateId != tc.template {
