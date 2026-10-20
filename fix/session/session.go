@@ -162,9 +162,12 @@ type Session struct {
 	// so nothing taken from it is logged, as garbled logs nothing (see
 	// withholdLocked). headerCut tells the tag is within its header: a
 	// header field it lacks may follow the tag rather than be missing (see
-	// unseen).
-	partial   *fix.Message
-	headerCut bool
+	// unseen). It is also the message being handled if its SecureData (91)
+	// could not be made out: sealedHeader then tells a header field it lacks
+	// may be within it, unless FIX keeps that one in clear (see alwaysClear).
+	partial      *fix.Message
+	headerCut    bool
+	sealedHeader bool
 	// rejected lists the messages rejected (see rejectLocked) while session
 	// messages are handled: one rejected does not reach Handler.FromAdmin.
 	// Those held ahead of a gap, handled meanwhile, are listed after it.

@@ -176,8 +176,10 @@ RawData (95/96).
   as there are sessions.
 - A `Seal` error closes the connection, what it was to write unwritten,
   to be resent on the next. A message that does not open, holds no
-  fields, repeats a header field with another value, or carries body
-  fields in clear, is rejected with SessionRejectReason 7 and counted: it
+  fields, repeats a header field with another value, carries body fields
+  in clear or SecureData twice, or holds within SecureData a field FIX
+  keeps in clear (the CompIDs, the signature...) without its clear copy,
+  is rejected with SessionRejectReason 7 and counted: it
   is **lost** to the application, as any message rejected. So is one whose
   SecureData opens to more than `fix.MaxBodyLength`, the most a session
   reads of a message: `Open` itself bounds what it allocates. One that

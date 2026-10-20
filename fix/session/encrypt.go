@@ -16,7 +16,10 @@ import (
 // an EncryptMethod (98) other than 0, with keys the counterparties agreed
 // beforehand, out of band, as FIX 4.4 has it: "The previously agreed upon
 // encryption methodology is declared in the Logon message" (unverified: no
-// FIX 4.4 text is pinned). FIX 4.x only: FIXT 1.1 deprecated it.
+// FIX 4.4 text is pinned). FIX 4.x only: SL §4.8.4, note 12: "The use of
+// SecureData(91) and its associated length field SecureDataLen(90) were
+// deprecated with the introduction of the FIXT.1.1 Session Layer
+// specification."
 //
 // Each side's Logon declares Method, the other's must declare the same: an
 // acceptor refuses a Logon declaring another, or none, disconnecting without
@@ -162,16 +165,21 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, int, st
 	fields := m.Fields()
 	fields = fields[3 : len(fields)-1] // after MsgType, before CheckSum
 	var sealed []byte
+	found := false
 	for _, f := range fields {
 		switch {
+		case f.Tag == tagSecureData && found:
+			// Which one would the message be? Both removed, validation
+			// would see neither.
+			return m, frame, tagSecureData, "SecureData (91) more than once"
 		case f.Tag == tagSecureData:
-			sealed = f.Value
+			sealed, found = f.Value, true
 		case f.Tag == tagSignatureLength || f.Tag == tagSignature:
 		case !s.dicts.inHeader(f.Tag):
 			return m, frame, f.Tag, fmt.Sprintf("tag %d in clear: the body must be in SecureData (91)", f.Tag)
 		}
 	}
-	if sealed == nil {
+	if !found {
 		return m, frame, 0, ""
 	}
 	plain, err := s.cfg.Encrypter.Open(reusable(c.plain, maxPooledBuffer), sealed)
@@ -202,10 +210,16 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, int, st
 	}
 	// The clear values of each tag, and the occurrences of each seen inside,
 	// once one is: the n-th inside is compared with the n-th in clear, a
-	// repeated group (NoHops) matching entry by entry.
+	// repeated group (NoHops) matching entry by entry. A field FIX keeps in
+	// clear may be repeated inside, never be there alone; SecureData itself,
+	// the signature and CheckSum are never inside.
 	var clear map[int][][]byte
 	var seen map[int]int
 	for _, f := range inner {
+		switch f.Tag {
+		case tagSecureDataLen, tagSecureData, tagSignatureLength, tagSignature, 10:
+			return m, frame, tagSecureData, fmt.Sprintf("tag %d in SecureData (91), where it never is", f.Tag)
+		}
 		if !s.dicts.inHeader(f.Tag) {
 			continue
 		}
@@ -222,6 +236,9 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, int, st
 				return m, frame, tagSecureData, fmt.Sprintf("tag %d in SecureData (91) differs from the one in clear", f.Tag)
 			}
 			continue
+		}
+		if alwaysClear(f.Tag) {
+			return m, frame, f.Tag, fmt.Sprintf("tag %d in SecureData (91) only, where it is always in clear", f.Tag)
 		}
 		body = fix.AppendTagValue(body, f.Tag, f.Value)
 	}
@@ -315,6 +332,21 @@ func fieldsLen(fields []fix.Field) int {
 		}
 	}
 	return n
+}
+
+// alwaysClear reports whether FIX keeps tag out of SecureData (91): SL §8.5
+// has SenderCompID (49) and TargetCompID (56) "(Always unencrypted)", and
+// "SecureDataLen(90) must be present and unencrypted if SecureData(91) is
+// present in the message", §8.6 "SignatureLength(93) must not be included
+// as part of the encrypted content in SecureData(91)", as Signature (89);
+// BeginString (8), BodyLength (9), MsgType (35) and CheckSum (10) frame the
+// message.
+func alwaysClear(tag int) bool {
+	switch tag {
+	case 8, 9, tagMsgType, tagSenderCompID, tagTargetCompID, tagSecureDataLen, tagSecureData, tagSignatureLength, tagSignature, 10:
+		return true
+	}
+	return false
 }
 
 // validMethod reports whether v is an EncryptMethod (98) other than 0: a

@@ -205,16 +205,18 @@ func badTagNumber(frame []byte, m *fix.Message, err error) (int, bool) {
 
 // unreadableLocked handles m, of which only some fields are known, on a
 // logged on session: parsed only up to tag, not a valid tag number, for
-// reason 0, or with fields SecureData (91), tag, hides, for reason 7 (see
-// undecryptable). As any message, in the same order, its BeginString, its
-// header and its MsgSeqNum are checked, then it is rejected for reason and
-// counted as received if it is the one expected. The header fields it lacks,
-// if what is unknown may be within the header, are not judged missing (see
-// unseen), but for PossDupFlag, which one too low must show, and a
-// SequenceReset's NewSeqNo is not trusted.
+// reason 0, or, for reason 7, not made out for its SecureData (91), or for
+// tag in clear (see undecryptable). As any message, in the same order, its
+// BeginString, its header and its MsgSeqNum are checked, then it is rejected
+// for reason and counted as received if it is the one expected. The header
+// fields it lacks, if what is unknown may hold them, the rest of its header
+// or its SecureData, are not judged missing (see unseen), but for
+// PossDupFlag, which one too low must show, and a SequenceReset's NewSeqNo
+// is not trusted.
 func (s *Session) unreadableLocked(c *conn, m *fix.Message, reason dictionary.RejectReason, tag int, now time.Time) {
 	s.partial, s.headerCut = m, s.cutInHeader(m)
-	defer func() { s.partial, s.headerCut = nil, false }()
+	s.sealedHeader = reason == dictionary.ReasonDecryptionProblem && m.Get(tagSecureData) != nil
+	defer func() { s.partial, s.headerCut, s.sealedHeader = nil, false, false }()
 	seq, ok := s.msgSeqNumLocked(c, m)
 	if !ok {
 		return
@@ -267,10 +269,14 @@ func (s *Session) cutInHeader(m *fix.Message) bool {
 var anyHeader = [...]int{370}
 
 // unseen tells whether m lacks its header field tag only for being parsed up
-// to a malformed tag within its header: the field may follow the tag. Such a
-// field is not judged missing.
+// to a malformed tag within its header, the field may follow the tag, or for
+// its SecureData (91) not being made out, the field may be within it, if FIX
+// lets it be. Such a field is not judged missing.
 func (s *Session) unseen(m *fix.Message, tag int) bool {
-	return m == s.partial && s.headerCut && m.Get(tag) == nil
+	if m != s.partial || m.Get(tag) != nil {
+		return false
+	}
+	return s.headerCut || s.sealedHeader && !alwaysClear(tag)
 }
 
 // resetMode tells whether m is a SequenceReset in Reset mode, without

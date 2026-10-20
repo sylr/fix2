@@ -440,6 +440,19 @@ func TestEncrypter_DecryptionProblem(t *testing.T) {
 			sealed, _ := g.Seal(nil, []byte("11=BAD"))
 			return from(session.FIX44, 2).build("D").SetData(90, 91, sealed).Build()
 		}},
+		{"SecureData twice", "91", func(g *gcm) []byte {
+			sealed, _ := g.Seal(nil, []byte("11=BAD\x01"))
+			return from(session.FIX44, 2).build("D", "90", "1", "91", "x", "90", strconv.Itoa(len(sealed)), "91", string(sealed)).Build()
+		}},
+		{"signature sealed", "91", func(g *gcm) []byte {
+			return sealedMsg(t, g, 2, "D", "11", "BAD", "93", "1", "89", "s")
+		}},
+		{"SecureData sealed", "91", func(g *gcm) []byte {
+			return sealedMsg(t, g, 2, "D", "11", "BAD", "90", "1", "91", "x")
+		}},
+		{"CheckSum sealed", "91", func(g *gcm) []byte {
+			return sealedMsg(t, g, 2, "D", "11", "BAD", "10", "000")
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			g := newGCM(t, "7", "k")
@@ -776,4 +789,85 @@ func TestEncrypter_OpenTooLarge(t *testing.T) {
 	if s.NextTargetSeqNum() != 3 || len(rec.apps) != 0 {
 		t.Errorf("NextTargetSeqNum %d, delivered %q", s.NextTargetSeqNum(), rec.apps)
 	}
+}
+
+// concealed returns the peer's message seq of msgType whose header has, in
+// clear, the CompIDs, MsgSeqNum and clear's fields, and whose SecureData,
+// sealed by g, holds fields.
+func concealed(t *testing.T, g *gcm, seq int, msgType string, clear, fields []string) []byte {
+	t.Helper()
+	b := fix.NewBuilder(session.FIX44, msgType).SetString(49, "ACC").SetString(56, "INI").SetInt(34, seq)
+	for i := 0; i+1 < len(clear); i += 2 {
+		tag, _ := strconv.Atoi(clear[i])
+		b.Append(tag, []byte(clear[i+1]))
+	}
+	var body []byte
+	for i := 0; i+1 < len(fields); i += 2 {
+		tag, _ := strconv.Atoi(fields[i])
+		body = fix.AppendTagValue(body, tag, fields[i+1])
+	}
+	sealed, err := g.Seal(nil, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b.SetData(90, 91, sealed).Build()
+}
+
+// A message that does not open may hide header fields that are not always
+// in clear: SendingTime, a SubID, OrigSendingTime. Their absence is not
+// judged: it is rejected for its SecureData, counted in sequence, asked for
+// again ahead of a gap. Those it shows are still checked.
+func TestEncrypter_UndecryptableHidesHeader(t *testing.T) {
+	g, other := newGCM(t, "7", "k"), newGCM(t, "7", "another key")
+	now := func() string { return string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds)) }
+	t.Run("SendingTime", func(t *testing.T) {
+		s, rec, p, _, _ := encryptedInitiator(t, g, nil)
+		p.writeRaw(concealed(t, other, 2, "D", nil, []string{"52", now(), "11", "BAD"}))
+		p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+		p.writeRaw(sealedMsg(t, g, 3, "D", "11", "GOOD"))
+		rec.wait(t, func() bool { return len(rec.apps) == 1 })
+		if got := s.NextTargetSeqNum(); got != 4 {
+			t.Errorf("NextTargetSeqNum = %d, want 4", got)
+		}
+	})
+	t.Run("SenderSubID", func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		s, rec := startInitiator(t, l, func(c *session.Config) { c.Encrypter, c.ID.TargetSubID = g, "DESK" })
+		p := acceptPeer(t, l)
+		p.expect("A", "57", "DESK")
+		p.write(from(session.FIX44, 1), "A", "50", "DESK", "98", "7", "108", "30")
+		rec.wait(t, func() bool { return rec.logons == 1 })
+		p.writeRaw(concealed(t, other, 2, "D", []string{"52", now()}, []string{"50", "DESK", "11", "BAD"}))
+		p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+		p.writeRaw(concealed(t, g, 3, "D", []string{"52", now()}, []string{"50", "DESK", "11", "GOOD"}))
+		rec.wait(t, func() bool { return len(rec.apps) == 1 })
+		if got := s.NextTargetSeqNum(); got != 4 || s.State() != session.StateLoggedOn {
+			t.Errorf("NextTargetSeqNum = %d, want 4; %s", got, s.State())
+		}
+	})
+	t.Run("SendingTime, ahead of a gap", func(t *testing.T) {
+		_, _, p, _, _ := encryptedInitiator(t, g, nil)
+		p.writeRaw(concealed(t, other, 4, "D", nil, []string{"52", now(), "11", "BAD"}))
+		p.expectSealed(g, "2", "7", "2", "16", "0")
+	})
+	t.Run("OrigSendingTime of a PossDup", func(t *testing.T) {
+		s, _, p, _, _ := encryptedInitiator(t, g, nil)
+		p.writeRaw(concealed(t, other, 2, "D", []string{"43", "Y", "52", now()}, []string{"122", now(), "11", "BAD"}))
+		p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+		waitFor(t, func() bool { return s.NextTargetSeqNum() == 3 })
+	})
+	t.Run("CompIDs only within SecureData", func(t *testing.T) {
+		_, rec, p, _, _ := encryptedInitiator(t, g, nil)
+		sealed, err := g.Seal(nil, []byte("49=ACC\x0156=INI\x0111=BAD\x01"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.writeRaw(fix.NewBuilder(session.FIX44, "D").SetInt(34, 2).SetString(52, now()).SetData(90, 91, sealed).Build())
+		p.expectSealed(g, "3", "45", "2", "371", "49", "373", "1")
+		p.writeRaw(sealedMsg(t, g, 3, "D", "11", "GOOD"))
+		rec.wait(t, func() bool { return len(rec.apps) == 1 })
+		if rec.apps[0] != "GOOD" {
+			t.Errorf("delivered %q", rec.apps)
+		}
+	})
 }
