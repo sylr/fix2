@@ -302,7 +302,7 @@ func (b *Builder) appendMessage(dst []byte, extra []Field) []byte {
 	dst = append(dst, soh)
 	bodyStart := len(dst)
 	dst = AppendTagValue(dst, tagMsgType, b.msgType)
-	dst, _ = b.appendBody(dst, extra, defaultProfile, nil)
+	dst, _ = b.appendBody(dst, extra, nil, nil)
 	bodyLen := len(dst) - bodyStart
 	var digits [20]byte
 	n := strconv.AppendInt(digits[:0], int64(bodyLen), 10)
@@ -359,7 +359,8 @@ func (e *SOHValueError) Error() string {
 
 // appendBody appends the body fields after MsgType, with extra fields before
 // the trailer fields. A value holding SOH where AppendBody refuses one, p's
-// DATA fields telling, is appended all the same, and reported.
+// DATA fields telling, is appended all the same, and reported; with a nil
+// p, as Build writes values, none is looked for.
 func (b *Builder) appendBody(dst []byte, extra []Field, p *Profile, reserved func(tag int) bool) ([]byte, error) {
 	// The header's groups, then the message's, in the scratch slice: the
 	// first n fields are the header's.
@@ -426,9 +427,9 @@ func (b *Builder) appendBody(dst []byte, extra []Field, p *Profile, reserved fun
 
 // appendChecked appends f to dst, as appendField does, prev being the field
 // appended before it, then f. It sets *bad, if not set yet, when f's value
-// holds SOH and prev does not announce it in p.
+// holds SOH and prev does not announce it in p, unless p is nil.
 func appendChecked(dst []byte, f Field, p *Profile, prev *Field, bad *error) []byte {
-	if *bad == nil && bytes.IndexByte(f.Value, soh) >= 0 && !announces(p, *prev, f) {
+	if p != nil && *bad == nil && bytes.IndexByte(f.Value, soh) >= 0 && !announces(p, *prev, f) {
 		*bad = &SOHValueError{Tag: f.Tag}
 	}
 	*prev = f

@@ -568,4 +568,10 @@ func TestBuilder_BuildWritesSOH(t *testing.T) {
 	if !bytes.Contains(raw, []byte("\x0111=O1\x0158=forged\x01")) {
 		t.Errorf("Build = %q", raw)
 	}
+	// Nor does it look for one: no error is made, to be dropped.
+	b := NewBuilder("FIX.4.4", "D").SetString(11, "O1\x0158=forged")
+	buf := make([]byte, 0, 256)
+	if allocs := testing.AllocsPerRun(100, func() { buf = b.AppendTo(buf[:0]) }); allocs != 0 {
+		t.Errorf("AppendTo of a value holding SOH: %v allocations, want 0", allocs)
+	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/sylr/fix2/fix/dictionary"
 	"github.com/sylr/fix2/fix/dictionary/xmldict"
 	"github.com/sylr/fix2/fix/session"
+	"github.com/sylr/fix2/fix/tests/dicts/fix50sp2"
 	"github.com/sylr/fix2/transport/mem"
 )
 
@@ -232,6 +233,55 @@ func (p *peer) expectNoLogon() {
 		}
 	case <-time.After(5 * time.Second):
 		p.t.Fatal("connection still open")
+	}
+}
+
+// A FIXT application dictionary may not read a field of the session
+// dictionary as another kind of field: session messages are written with
+// the session dictionary's DATA fields and parsed with the application
+// version's, a DATA value holding SOH, as a ToAdmin may send, split
+// otherwise.
+func TestSessionDataFieldRetypedRefused(t *testing.T) {
+	raw, err := os.ReadFile("../dictionary/testdata/FIXT11.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	xml := strings.Replace(strings.Replace(string(raw), "<fields>", `<fields>
+    <field number='50001' name='CustomBlobLen' type='LENGTH'/>
+    <field number='50002' name='CustomBlob' type='DATA'/>`, 1),
+		"<field name='HeartBtInt' required='Y'/>", `<field name='HeartBtInt' required='Y'/>
+      <field name='CustomBlobLen' required='N'/>
+      <field name='CustomBlob' required='N'/>`, 1)
+	transport, err := xmldict.Load(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transport.Profile().DataTag(50001) != 50002 {
+		t.Fatal("transport dictionary: CustomBlob is not DATA")
+	}
+	app, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="5" minor="0" servicepack="2">
+  <header/><trailer/>
+  <messages><message name="News" msgtype="B" msgcat="app"><field name="CustomBlob" required="Y"/></message></messages>
+  <components/>
+  <fields><field number="50002" name="CustomBlob" type="STRING"/></fields>
+</fix>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := func(app *dictionary.Dict) session.Config {
+		return session.Config{
+			ID:           session.SessionID{BeginString: session.FIXT11, SenderCompID: "INI", TargetCompID: "ACC"},
+			Handler:      session.BaseHandler{},
+			Dictionaries: session.Dictionaries{Session: transport, DefaultApplVerID: "9", Apps: map[string]*dictionary.Dict{"9": app}},
+		}
+	}
+	// CustomBlobLen announces a field that is no DATA field any more.
+	if _, err := session.New(cfg(app)); err == nil || !strings.Contains(err.Error(), "session field 50001") {
+		t.Errorf("New = %v, want an error about session field 50001", err)
+	}
+	// An application dictionary leaving the field alone is accepted.
+	if _, err := session.New(cfg(fix50sp2.Dictionary())); err != nil {
+		t.Errorf("New with FIX 5.0 SP2: %v", err)
 	}
 }
 

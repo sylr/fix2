@@ -764,13 +764,24 @@ func newDicts(cfg Config, p *profile) (dicts, error) {
 	}
 	d.headerProf = d.session.Profile()
 	// A message's header is read before its version is known: every version
-	// must read it alike.
+	// must read it alike. So must it the session dictionary's other fields:
+	// a session message is parsed with its version's profile, and written
+	// with the session dictionary's (see adminProfile), a DATA value
+	// holding SOH split otherwise.
+	same := func(p *fix.Profile, tag int) bool {
+		return p.DataTag(tag) == d.headerProf.DataTag(tag) && p.DataLengthTag(tag) == d.headerProf.DataLengthTag(tag)
+	}
 	d.versions = slices.Sorted(maps.Keys(d.parseApps))
 	for _, v := range d.versions {
 		p := d.parseApps[v]
 		for tag, in := range d.header {
-			if in && (p.DataTag(tag) != d.headerProf.DataTag(tag) || p.DataLengthTag(tag) != d.headerProf.DataLengthTag(tag)) {
+			if in && !same(p, tag) {
 				return d, fmt.Errorf("Dictionaries.Apps[%q] changes whether standard header field %d is a LENGTH or DATA field, which Dictionaries.Session decides", v, tag)
+			}
+		}
+		for _, tag := range slices.Sorted(maps.Keys(d.session.Fields)) {
+			if !same(p, tag) {
+				return d, fmt.Errorf("Dictionaries.Apps[%q] changes whether session field %d is a LENGTH or DATA field, or the field it pairs with, which Dictionaries.Session decides", v, tag)
 			}
 		}
 	}
