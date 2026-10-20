@@ -258,10 +258,11 @@ func (c *conn) open(m *fix.Message, frame []byte) (*fix.Message, []byte, int, st
 	}
 	c.opened = wrapFrame(reusable(c.opened, maxPooledBuffer), m.BeginString(), body)
 	if err := s.cfg.parseOptions().ParseInto(&c.omsg, c.opened, s.dicts.parse); err != nil {
-		// Not reached: every field was parsed with this profile, and is
-		// written as it was read, a LENGTH field and its DATA field kept
-		// together (see newDicts). Kept rather than handing on a message
-		// half parsed.
+		// Not reached with the standard pairs: every field was parsed with
+		// this profile, and is written as it was read, a LENGTH field and
+		// its DATA field kept together (see newDicts). A dictionary pairing
+		// SignatureLength (93) with a DATA tag other than 89 reaches it:
+		// 93 moves to the trailer, its DATA field stays where it was.
 		return m, frame, tagSecureData, "SecureData (91) does not hold fields: " + err.Error()
 	}
 	return &c.omsg, c.opened, 0, ""
