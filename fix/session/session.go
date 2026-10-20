@@ -763,6 +763,16 @@ func newDicts(cfg Config, p *profile) (dicts, error) {
 				tags = append(tags, f.Tag)
 			}
 		}
+		// A LENGTH field and its DATA field are on the same side: open
+		// keeps them together.
+		for _, tag := range tags {
+			if t := d.parse.DataTag(tag); t != 0 {
+				tags = append(tags, t)
+			}
+			if t := d.parse.DataLengthTag(tag); t != 0 {
+				tags = append(tags, t)
+			}
+		}
 		d.header = make([]bool, slices.Max(tags)+1)
 		for _, tag := range tags {
 			d.header[tag] = true

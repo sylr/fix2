@@ -2,8 +2,13 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"log/slog"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/sylr/fix2/fix"
 )
@@ -21,6 +26,78 @@ func (plainEncrypter) Open(dst, sealed []byte) ([]byte, error) {
 		return dst, errors.New("does not open")
 	}
 	return append(dst, sealed...), nil
+}
+
+// lines is a slog.Handler keeping the messages it is given.
+type lines struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (l *lines) Enabled(context.Context, slog.Level) bool { return true }
+func (l *lines) WithAttrs([]slog.Attr) slog.Handler       { return l }
+func (l *lines) WithGroup(string) slog.Handler            { return l }
+
+func (l *lines) Handle(_ context.Context, r slog.Record) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.msgs = append(l.msgs, r.Level.String()+" "+r.Message)
+	return nil
+}
+
+// undecryptable acts only on the current connection, logged on: before
+// logon it leaves the message to be handled as any other; on a connection
+// closed, or no longer the session's, it drops it; after the counterparty's
+// Logout it ignores it, with an Info log. None rejects it.
+func TestUndecryptableGuards(t *testing.T) {
+	frame := wrapFrame(nil, []byte(FIX44), []byte("35=D\x0134=2\x0149=A\x0152=20260101-00:00:00.000\x0156=B\x0190=1\x0191=!\x01"))
+	for _, c := range []struct {
+		name    string
+		phase   phase
+		current bool // the session's connection
+		closed  bool
+		peerOut bool // after the counterparty's Logout
+		handled bool
+		logged  string
+	}{
+		{name: "awaiting logon", phase: phaseAwaitingLogon, current: true},
+		{name: "logon sent", phase: phaseLogonSent, current: true},
+		{name: "not the session's", phase: phaseEstablished, handled: true},
+		{name: "closed", phase: phaseEstablished, current: true, closed: true, handled: true},
+		{name: "after the counterparty's Logout", phase: phaseLogoutSent, current: true, peerOut: true, handled: true,
+			logged: "INFO undecryptable message after the counterparty's Logout ignored"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			log := &lines{}
+			s, err := New(Config{ID: SessionID{BeginString: FIX44, SenderCompID: "B", TargetCompID: "A"}, Handler: BaseHandler{},
+				Encrypter: plainEncrypter{}, Logger: slog.New(log)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cn := &conn{s: s, encrypted: true, closed: c.closed, peerLoggedOut: c.peerOut, timer: time.NewTimer(time.Hour)}
+			defer cn.timer.Stop()
+			s.phase = c.phase
+			if c.current {
+				s.c = cn
+			}
+			var m fix.Message
+			if err := fix.ParseInto(&m, frame, s.dicts.parse); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now()
+			if got := cn.undecryptable(&m, tagSecureData, "does not open", now, now); got != c.handled {
+				t.Errorf("undecryptable = %v, want %v", got, c.handled)
+			}
+			if n := s.stats.RejectsSent.Load(); n != 0 {
+				t.Errorf("%d Rejects sent", n)
+			}
+			log.mu.Lock()
+			defer log.mu.Unlock()
+			if got := strings.Join(log.msgs, "; "); got != c.logged {
+				t.Errorf("logged %q, want %q", got, c.logged)
+			}
+		})
+	}
 }
 
 // FuzzEncrypterOpen feeds open a message received on a connection that

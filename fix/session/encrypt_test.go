@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -870,4 +871,82 @@ func TestEncrypter_UndecryptableHidesHeader(t *testing.T) {
 			t.Errorf("delivered %q", rec.apps)
 		}
 	})
+}
+
+// businessRejecter rejects every application message with a
+// BusinessMessageReject whose BusinessRejectRefID is refID.
+type businessRejecter struct {
+	*recorder
+	refID string
+}
+
+func (b businessRejecter) FromApp(context.Context, *session.Session, *fix.Message, session.Inbound) error {
+	return &session.BusinessRejectError{Reason: session.BusinessRejectOther, RefID: b.refID, Text: "no"}
+}
+
+// A message of ours that does not parse cannot be sealed: the connection
+// closes, as on a write failure. A handler's BusinessRejectRefID holding a
+// SOH makes one.
+func TestEncrypter_UnparsableOwnMessage(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, _, p, _, _ := encryptedInitiator(t, g, func(c *session.Config) {
+		c.Handler = businessRejecter{c.Handler.(*recorder), "a\x01b"}
+	})
+	p.writeRaw(sealedMsg(t, g, 2, "D", "11", "IN"))
+	p.expectSilentEnd()
+	waitFor(t, func() bool { return s.State() != session.StateLoggedOn })
+}
+
+// fullOpen opens SecureData to as much as a message may hold, which the
+// clear header then takes past it.
+type fullOpen struct{ *gcm }
+
+func (fullOpen) Open(dst, _ []byte) ([]byte, error) {
+	return append(dst, "11="+strings.Repeat("x", fix.MaxBodyLength-4)+"\x01"...), nil
+}
+
+// The message rebuilt from what Open returns is bounded too: Open's result
+// within fix.MaxBodyLength, the header beside it past it, it is rejected.
+func TestEncrypter_OpenedMessageTooLarge(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	s, rec, p, _, _ := encryptedInitiator(t, g, func(c *session.Config) { c.Encrypter = fullOpen{g} })
+	p.writeRaw(sealedMsg(t, g, 2, "D", "11", "BIG"))
+	p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if s.NextTargetSeqNum() != 3 || len(rec.apps) != 0 {
+		t.Errorf("NextTargetSeqNum %d, delivered %q", s.NextTargetSeqNum(), rec.apps)
+	}
+}
+
+// failLater is an Encrypter whose Seal fails once fail is set.
+type failLater struct {
+	*gcm
+	fail *atomic.Bool
+}
+
+func (f failLater) Seal(dst, plain []byte) ([]byte, error) {
+	if f.fail.Load() {
+		return dst, errors.New("key gone")
+	}
+	return f.gcm.Seal(dst, plain)
+}
+
+// A Seal error while resending is a write error too: the connection closes,
+// nothing resent.
+func TestEncrypter_SealFailureResending(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	var fail atomic.Bool
+	s, rec, p, _, _ := encryptedInitiator(t, g, func(c *session.Config) { c.Encrypter = failLater{g, &fail} })
+	if _, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D").SetString(11, "O1")); err != nil {
+		t.Fatal(err)
+	}
+	p.expectSealed(g, "D", "11", "O1")
+	fail.Store(true)
+	p.writeRaw(sealedMsg(t, g, 2, "2", "7", "2", "16", "0"))
+	p.expectSilentEnd()
+	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+	if n := s.Stats().Resent.Load(); n != 0 {
+		t.Errorf("Resent = %d, want 0", n)
+	}
 }
