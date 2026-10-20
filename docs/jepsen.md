@@ -364,6 +364,12 @@ Results go to `jepsen/store`, ignored by git.
 
 ### On virtual machines
 
+`jepsen/flake.nix`'s shell has what runs them from here: the control
+node's JDK, Leiningen (the checker's tests run there too: `lein test`) and
+Pulumi, from its GitHub release, at `infra/go.mod`'s SDK version; direnv
+enters it in `jepsen/` (`.envrc`). Go and Multipass are not in it:
+installed apart, nixpkgs' Go lagging.
+
 Two Pulumi programs in Go, under `jepsen/infra`, state on the local
 backend (`pulumi login --local`):
 
