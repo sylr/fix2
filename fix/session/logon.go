@@ -104,7 +104,7 @@ func (s *Session) signLogon(signer LogonSigner, seq uint64, sendingTime time.Tim
 // logonBody returns the fields of our Logon: next is the NextExpectedMsgSeqNum
 // to announce, if used.
 func (s *Session) logonBody(reset bool, next uint64) adminBody {
-	b := adminBody(nil).str(tagEncryptMethod, "0").int(tagHeartBtInt, uint64(s.heartBt/time.Second))
+	b := adminBody(nil).str(tagEncryptMethod, s.encryptMethod()).int(tagHeartBtInt, uint64(s.heartBt/time.Second))
 	if reset && s.prof.resetSeqNum {
 		b = b.str(tagResetSeqNumFlag, "Y")
 	}
@@ -307,8 +307,9 @@ type logonProblem struct {
 // FIX requires EncryptMethod of every Logon: an acceptor requires it of the
 // counterparty's, as an initiator does of the Logon answer unless
 // TolerateLogonWithoutEncryptMethod, as some venues leave it out (Binance's
-// dictionary has it optional); a reset Logon on an established session
-// always needs it (see resetLogonProblem). It returns the HeartBtInt and the
+// dictionary has it optional), and never with an Encrypter; a reset Logon on
+// an established session always needs it (see resetLogonProblem). It must
+// be the one our Logons declare (see Encrypter). It returns the HeartBtInt and the
 // DefaultApplVerID, which may have no dictionary with
 // TolerateUnsupportedDefaultApplVerID, or the problem, its text withheld if
 // it may show a credential: it is logged.
@@ -319,11 +320,15 @@ func (s *Session) checkLogon(m *fix.Message, now time.Time) (int, string, *logon
 	if reason, tag, text := s.compIDOrTimeProblem(m, now); text != "" {
 		return 0, "", newLogonProblem(m, reason, tag, text)
 	}
+	method, none := s.encryptMethod(), " (none)"
+	if s.cfg.Encrypter != nil {
+		none = ""
+	}
 	switch v := m.Get(tagEncryptMethod); {
-	case v == nil && (!s.initiator || !s.cfg.TolerateLogonWithoutEncryptMethod):
+	case v == nil && (!s.initiator || !s.cfg.TolerateLogonWithoutEncryptMethod || s.cfg.Encrypter != nil):
 		return problem(dictionary.ReasonRequiredTagMissing, tagEncryptMethod, "%s", fieldDesc(nil, tagEncryptMethod))
-	case v != nil && string(v) != "0":
-		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only 0 (none)", quoteValue(v))
+	case v != nil && string(v) != method:
+		return problem(dictionary.ReasonValueIsIncorrect, tagEncryptMethod, "EncryptMethod (98) %s not supported, only %s%s", quoteValue(v), method, none)
 	}
 	v := m.Get(tagHeartBtInt)
 	hb, err := fix.ParseInt(v)

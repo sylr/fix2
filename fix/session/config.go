@@ -64,7 +64,8 @@ const (
 type Tolerations struct {
 	// TolerateLogonWithoutEncryptMethod lets an initiator accept a Logon
 	// answer without EncryptMethod (98), which FIX requires of every Logon,
-	// as venues whose dictionaries make it optional send (Binance's).
+	// as venues whose dictionaries make it optional send (Binance's). Not
+	// with an Encrypter: such an answer declares no encryption.
 	TolerateLogonWithoutEncryptMethod bool
 	// TolerateUnsupportedDefaultApplVerID accepts, for FIXT 1.1, a Logon
 	// whose DefaultApplVerID (1137) has no dictionary in Dictionaries.Apps:
@@ -239,6 +240,10 @@ type Config struct {
 	Observer MessageObserver
 	// Handler receives the session's events and application messages.
 	Handler Handler
+	// Encrypter seals and opens SecureData (91), for an EncryptMethod (98)
+	// other than 0, FIX 4.x only: nil declares 0 and refuses any other (see
+	// Encrypter).
+	Encrypter Encrypter
 
 	// Timestamps is the precision of SendingTime and OrigSendingTime. One
 	// finer than the session's FIX version allows is a configuration error:
@@ -571,6 +576,14 @@ func (c *Config) Validate() error {
 		}
 		if t := c.Timestamps.precision(); c.Timestamps != DefaultTimestamps && t > p.precision {
 			add("Timestamps", "%s timestamps have %d fraction digits at most, not %d", c.ID.BeginString, p.precision, t)
+		}
+		if c.Encrypter != nil && p.fixt {
+			add("Encrypter", "SecureData (91) encryption is for FIX 4.x: FIXT.1.1 deprecated it")
+		}
+	}
+	if c.Encrypter != nil {
+		if m := c.Encrypter.Method(); !validMethod(m) {
+			add("Encrypter", "Method %q is not an EncryptMethod (98) other than 0, a positive integer", m)
 		}
 	}
 	if len(errs) == 0 {

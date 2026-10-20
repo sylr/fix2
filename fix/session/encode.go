@@ -21,6 +21,8 @@ const (
 	tagTargetCompID           = 56
 	tagTargetSubID            = 57
 	tagText                   = 58
+	tagSecureDataLen          = 90
+	tagSecureData             = 91
 	tagPossResend             = 97
 	tagEncryptMethod          = 98
 	tagHeartBtInt             = 108
@@ -45,8 +47,13 @@ const (
 // an application message setting one is refused.
 var reservedTags = [...]int{8, 9, 10, 34, 35, 43, 49, 50, 52, 56, 57, 122, 142, 143, 369, 1128}
 
-// reserved reports whether the session writes tag itself.
+// reserved reports whether the session writes tag itself: one of
+// reservedTags, or SecureDataLen (90) and SecureData (91), which it writes
+// when it seals a message (see Encrypter).
 func reserved(tag int) bool {
+	if tag == tagSecureDataLen || tag == tagSecureData {
+		return true
+	}
 	for _, t := range reservedTags {
 		if t == tag {
 			return true
