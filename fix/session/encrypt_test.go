@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -304,4 +305,144 @@ func TestEncrypter_SealsOnWrite(t *testing.T) {
 		t.Errorf("stored %s", visible(stored))
 	}
 	seen.find(t, false, "\x0111=SECRET-1\x01")
+}
+
+// sealedMsg returns the peer's message seq of msgType, the fields after its
+// header sealed by g into SecureData (91).
+func sealedMsg(t *testing.T, g *gcm, seq int, msgType string, fields ...string) []byte {
+	t.Helper()
+	var body []byte
+	for i := 0; i+1 < len(fields); i += 2 {
+		tag, _ := strconv.Atoi(fields[i])
+		body = fix.AppendTagValue(body, tag, fields[i+1])
+	}
+	sealed, err := g.Seal(nil, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return from(session.FIX44, seq).build(msgType).SetData(90, 91, sealed).Build()
+}
+
+// expectSealed reads the next message, sealed by g, checks its MsgType and
+// that what it seals holds each of fields, tag=value<SOH>, and returns it.
+func (p *peer) expectSealed(g *gcm, msgType string, fields ...string) (*fix.Message, string) {
+	p.t.Helper()
+	m, plain := unseal(p.t, g, p.expectRaw())
+	if string(m.MsgType()) != msgType {
+		p.t.Fatalf("got MsgType %s, sealing %q, want %s", m.MsgType(), plain, msgType)
+	}
+	for i := 0; i+1 < len(fields); i += 2 {
+		if f := fields[i] + "=" + fields[i+1] + "\x01"; !strings.HasPrefix(plain, f) && !strings.Contains(plain, "\x01"+f) {
+			p.t.Fatalf("%s seals %q, without %q", msgType, plain, f)
+		}
+	}
+	return m, plain
+}
+
+// Once the Logons agreed, the SecureData of a message received is opened:
+// the header fields in it merged with those in clear, the others its body.
+// The handler and the Observer see it in clear.
+func TestEncrypter_OpensOnRead(t *testing.T) {
+	g := newGCM(t, "7", "k")
+	_, rec, p, _, seen := encryptedInitiator(t, g, nil)
+	// A Heartbeat without body needs no SecureData.
+	p.write(from(session.FIX44, 2), "0")
+	p.writeRaw(sealedMsg(t, g, 3, "D", "34", "3", "128", "DESK", "11", "IN-1", "95", "3", "96", "a\x01b"))
+	rec.wait(t, func() bool { return len(rec.apps) == 1 })
+	if rec.apps[0] != "IN-1" {
+		t.Errorf("delivered %q", rec.apps)
+	}
+	in := seen.find(t, true, "\x0111=IN-1\x01")
+	m, err := fix.Parse(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Get(91) != nil || m.Get(90) != nil || string(m.Get(128)) != "DESK" || string(m.Get(96)) != "a\x01b" {
+		t.Errorf("observed %s", visible(in))
+	}
+	if i := bytes.Index(in, []byte("\x01128=")); i < 0 || i > bytes.Index(in, []byte("\x0111=")) {
+		t.Errorf("DeliverToCompID not in the header: %s", visible(in))
+	}
+	// A TestRequest sealed is answered, sealed.
+	p.writeRaw(sealedMsg(t, g, 4, "1", "112", "PING"))
+	p.expectSealed(g, "0", "112", "PING")
+}
+
+// A message that cannot be made out is rejected, SessionRejectReason 7,
+// counted, and not delivered: SecureData that does not open, a header field
+// in it differing from the clear one, a body in clear. The next one is
+// handled.
+func TestEncrypter_DecryptionProblem(t *testing.T) {
+	other := newGCM(t, "7", "another key")
+	for _, c := range []struct {
+		name  string
+		frame func(g *gcm) []byte
+	}{
+		{"does not open", func(*gcm) []byte { return sealedMsg(t, other, 2, "D", "11", "BAD") }},
+		{"header differs", func(g *gcm) []byte { return sealedMsg(t, g, 2, "D", "34", "9", "11", "BAD") }},
+		{"CompID differs", func(g *gcm) []byte { return sealedMsg(t, g, 2, "D", "49", "EVE", "11", "BAD") }},
+		{"body in clear", func(*gcm) []byte { return from(session.FIX44, 2).build("D", "11", "BAD").Build() }},
+		{"body in clear beside SecureData", func(g *gcm) []byte {
+			sealed, _ := g.Seal(nil, []byte("11=BAD\x01"))
+			return from(session.FIX44, 2).build("D", "1", "ACCT").SetData(90, 91, sealed).Build()
+		}},
+		{"not fields", func(g *gcm) []byte {
+			sealed, _ := g.Seal(nil, []byte("11=BAD"))
+			return from(session.FIX44, 2).build("D").SetData(90, 91, sealed).Build()
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			g := newGCM(t, "7", "k")
+			s, rec, p, _, _ := encryptedInitiator(t, g, nil)
+			p.writeRaw(c.frame(g))
+			_, plain := p.expectSealed(g, "3", "45", "2", "371", "91", "373", "7")
+			if strings.Contains(plain, "BAD") || strings.Contains(plain, "EVE") {
+				t.Errorf("Reject shows the message: %q", plain)
+			}
+			p.writeRaw(sealedMsg(t, g, 3, "D", "11", "GOOD"))
+			rec.wait(t, func() bool { return len(rec.apps) == 1 })
+			if rec.apps[0] != "GOOD" {
+				t.Errorf("delivered %q", rec.apps)
+			}
+			if got := s.NextTargetSeqNum(); got != 4 {
+				t.Errorf("NextTargetSeqNum = %d, want 4", got)
+			}
+		})
+	}
+	t.Run("MsgSeqNum hidden", func(t *testing.T) {
+		g := newGCM(t, "7", "k")
+		_, _, p, _, _ := encryptedInitiator(t, g, nil)
+		sealed, _ := other.Seal(nil, []byte("34=2\x0111=BAD\x01"))
+		p.writeRaw(fix.NewBuilder(session.FIX44, "D").SetString(49, "ACC").SetString(56, "INI").
+			SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds))).SetData(90, 91, sealed).Build())
+		p.expectSealed(g, "5")
+	})
+}
+
+// SecureData where no encryption was agreed is a decryption problem: on a
+// Logon, or on a session without Encrypter.
+func TestEncrypter_SecureDataNotAgreed(t *testing.T) {
+	t.Run("message", func(t *testing.T) {
+		s, rec, p, _ := established(t, session.FIX44, func(c *session.Config) { c.LogoutTimeout = 200 * time.Millisecond })
+		p.write(from(session.FIX44, 5), "D", "90", "1", "91", "x", "11", "BAD")
+		p.expect("3", "45", "5", "371", "91", "373", "7")
+		p.write(from(session.FIX44, 6), "D", "11", "GOOD")
+		rec.wait(t, func() bool { return len(rec.apps) == 1 })
+		if rec.apps[0] != "GOOD" || s.NextTargetSeqNum() != 7 {
+			t.Errorf("delivered %q, NextTargetSeqNum %d", rec.apps, s.NextTargetSeqNum())
+		}
+	})
+	t.Run("Logon", func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		_, rec := startInitiator(t, l, func(c *session.Config) { c.Encrypter = newGCM(t, "7", "k") })
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.write(from(session.FIX44, 1), "A", "98", "7", "108", "30", "90", "1", "91", "x")
+		p.expectSilentEnd()
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if rec.logons != 0 {
+			t.Error("logged on")
+		}
+	})
 }

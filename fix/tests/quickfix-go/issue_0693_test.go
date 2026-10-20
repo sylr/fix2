@@ -69,15 +69,18 @@ func TestIssue693_DataFieldsInHeaderAndTrailerBuiltAndReceived(t *testing.T) {
 			t.Errorf("SecureData %q and Signature %q, want %q and %q", m.Get(91), m.Get(89), secure, sig)
 		}
 	})
+	// SecureData without an EncryptMethod (98) agreed is refused, read by
+	// its length, as a decryption problem: nothing could open it.
 	t.Run("session", func(t *testing.T) {
 		_, rec, p := acceptedPeer(t, nil)
-		p.send("D", 0, "90", "11", "91", string(secure), "212", "12", "213", "<x>\x0110=0</x>",
+		p.send("D", 0, "90", "11", "91", string(secure), "11", "0", "55", "SYM", "54", "1", "38", "100", "40", "1")
+		if r := p.skipUntil("3"); string(r.Get(373)) != "7" || string(r.Get(371)) != "91" {
+			t.Errorf("Reject with SessionRejectReason %q, RefTagID %q, want 7 and 91", r.Get(373), r.Get(371))
+		}
+		p.send("D", 0, "212", "12", "213", "<x>\x0110=0</x>",
 			"11", "1", "55", "SYM", "54", "1", "38", "100", "40", "1",
 			"93", "10", "89", string(sig))
 		rec.wait(t, "the order", func() bool { return len(rec.apps) == 1 })
-		if got := rec.appValues(91); got[0] != string(secure) {
-			t.Errorf("SecureData %q, want %q", got[0], secure)
-		}
 		if got := rec.appValues(213); got[0] != "<x>\x0110=0</x>" {
 			t.Errorf("XmlData %q, want %q", got[0], "<x>\x0110=0</x>")
 		}

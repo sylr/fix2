@@ -23,6 +23,8 @@ const (
 	tagText                   = 58
 	tagSecureDataLen          = 90
 	tagSecureData             = 91
+	tagSignature              = 89
+	tagSignatureLength        = 93
 	tagPossResend             = 97
 	tagEncryptMethod          = 98
 	tagHeartBtInt             = 108

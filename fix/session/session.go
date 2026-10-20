@@ -197,7 +197,8 @@ type Stats struct {
 	// ignored after the counterparty's Logout included, and those rejected
 	// for a malformed tag, which the Observer does not see: it would show
 	// what follows the tag, where the session cannot tell a credential (see
-	// garbled).
+	// garbled). Nor does it see those that could not be decrypted (see
+	// Encrypter). BytesReceived counts the bytes read, sealed or not.
 	MessagesSent, MessagesReceived atomic.Uint64
 	BytesSent, BytesReceived       atomic.Uint64
 	RejectsSent, Garbled           atomic.Uint64

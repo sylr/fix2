@@ -88,7 +88,7 @@ func (c *conn) handleFrame(frame []byte) {
 					// As a message whole (see below).
 					s.log.LogAttrs(context.Background(), slog.LevelInfo, "malformed message after the counterparty's Logout ignored")
 				} else {
-					s.invalidTagLocked(c, m, tag, now)
+					s.unreadableLocked(c, m, dictionary.ReasonInvalidTagNumber, tag, now)
 				}
 				if !c.closed {
 					s.armLocked(c)
@@ -104,6 +104,11 @@ func (c *conn) handleFrame(frame []byte) {
 	}
 	s.stats.MessagesReceived.Add(1)
 	s.stats.BytesReceived.Add(uint64(len(frame)))
+	if opened, plain, why := c.open(m, frame); why == "" {
+		m, frame = opened, plain
+	} else if c.undecryptable(m, why, read, now) {
+		return
+	}
 	if obs := s.cfg.Observer; obs != nil {
 		seq, _ := fix.ParseInt(m.Get(tagMsgSeqNum))
 		obs.OnInbound(s, Frame{Raw: frame, Seq: uint64(max(seq, 0)), Generation: s.generation(), Epoch: c.epoch, Resend: bytes.Equal(m.Get(tagPossDupFlag), yes)})
@@ -198,14 +203,16 @@ func badTagNumber(frame []byte, m *fix.Message, err error) (int, bool) {
 	return tag, true
 }
 
-// invalidTagLocked handles m, parsed only up to tag, not a valid tag number,
-// on a logged on session: as any message, in the same order, its
-// BeginString, its header and its MsgSeqNum are checked, then it is rejected
-// and counted as received if it is the one expected. Only the fields before
-// tag are known: the header fields after it, if it is within the header,
-// are not judged missing (see unseen), but for PossDupFlag, which one too
-// low must show, and a SequenceReset's NewSeqNo is not trusted.
-func (s *Session) invalidTagLocked(c *conn, m *fix.Message, tag int, now time.Time) {
+// unreadableLocked handles m, of which only some fields are known, on a
+// logged on session: parsed only up to tag, not a valid tag number, for
+// reason 0, or with fields SecureData (91), tag, hides, for reason 7 (see
+// undecryptable). As any message, in the same order, its BeginString, its
+// header and its MsgSeqNum are checked, then it is rejected for reason and
+// counted as received if it is the one expected. The header fields it lacks,
+// if what is unknown may be within the header, are not judged missing (see
+// unseen), but for PossDupFlag, which one too low must show, and a
+// SequenceReset's NewSeqNo is not trusted.
+func (s *Session) unreadableLocked(c *conn, m *fix.Message, reason dictionary.RejectReason, tag int, now time.Time) {
 	s.partial, s.headerCut = m, s.cutInHeader(m)
 	defer func() { s.partial, s.headerCut = nil, false }()
 	seq, ok := s.msgSeqNumLocked(c, m)
@@ -219,15 +226,15 @@ func (s *Session) invalidTagLocked(c *conn, m *fix.Message, tag int, now time.Ti
 	if !s.checkHeaderLocked(c, m, seq, now) {
 		return
 	}
-	text := rejectText(dictionary.ReasonInvalidTagNumber, "")
+	text := rejectText(reason, "")
 	if s.resetMode(m) {
-		s.rejectLocked(m, dictionary.ReasonInvalidTagNumber, tag, text)
+		s.rejectLocked(m, reason, tag, text)
 		return
 	}
 	in := Inbound{Seq: seq, Generation: s.st.Generation, PossDup: bytes.Equal(m.Get(tagPossDupFlag), yes), Received: now}
 	switch s.checkSeqLocked(c, m, in) {
 	case seqTooHigh:
-		// Not kept, it would not parse again: asked for again with those
+		// Not kept, it would not be read again: asked for again with those
 		// missing before it, it is rejected in sequence.
 		s.tooHighLocked(c, m, in, nil)
 		return
@@ -235,7 +242,7 @@ func (s *Session) invalidTagLocked(c *conn, m *fix.Message, tag int, now time.Ti
 		return
 	}
 	// Rejected, it acknowledges nothing of ours.
-	s.rejectLocked(m, dictionary.ReasonInvalidTagNumber, tag, text)
+	s.rejectLocked(m, reason, tag, text)
 	s.markLocked(seq)
 	s.advanceLocked(c, seq+1)
 	s.gapFillCountedLocked(c, m)
@@ -1077,6 +1084,9 @@ func (s *Session) validateLocked(m *fix.Message, applVerID string) *dictionary.V
 	if isAdmin(m.MsgType()) {
 		return s.validateAdmin(m)
 	}
+	if verr := s.secureDataProblem(m); verr != nil {
+		return verr
+	}
 	d := s.dicts.session
 	if s.prof.fixt && s.dicts.apps != nil {
 		if d = s.dicts.apps[applVerID]; d == nil {
@@ -1098,8 +1108,12 @@ func (s *Session) validateLocked(m *fix.Message, applVerID string) *dictionary.V
 // NextExpectedMsgSeqNum (789), with TolerateMalformedNextExpectedMsgSeqNum; a
 // PossDup SequenceReset without OrigSendingTime (122), with
 // TolerateSequenceResetWithoutOrigSendingTime. A copy of m, the field mended,
-// is validated again for anything else wrong. It needs no lock.
+// is validated again for anything else wrong. SecureData (91) left sealed is
+// refused first, dictionary or not (see secureDataProblem). It needs no lock.
 func (s *Session) validateAdmin(m *fix.Message) *dictionary.ValidationError {
+	if verr := s.secureDataProblem(m); verr != nil {
+		return verr
+	}
 	d := s.dicts.session
 	if d == nil {
 		return nil
@@ -1122,6 +1136,20 @@ func (s *Session) validateAdmin(m *fix.Message) *dictionary.ValidationError {
 		verr = s.validateWith(d, m)
 	}
 	return verr
+}
+
+// secureDataProblem returns the problem of m, of a FIX 4.x session, if it
+// holds SecureData (91) left sealed: on a Logon, which is never sealed, or on
+// a connection whose Logons did not agree on encryption (see open). It is a
+// decryption problem (SessionRejectReason 7), whatever a dictionary
+// declaring 91 in the standard header accepts: nothing could read it. FIXT
+// 1.1, which deprecated encryption, leaves SecureData to its dictionaries.
+func (s *Session) secureDataProblem(m *fix.Message) *dictionary.ValidationError {
+	if s.prof.fixt || m.Get(tagSecureData) == nil {
+		return nil
+	}
+	return &dictionary.ValidationError{Err: dictionary.ErrValidation, Tag: tagSecureData, Reason: dictionary.ReasonDecryptionProblem,
+		Msg: "SecureData (91) where no encryption is agreed: on a Logon, or without an EncryptMethod (98) other than 0"}
 }
 
 // toleratedField tells whether verr, about session message m, is one a

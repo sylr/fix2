@@ -36,7 +36,11 @@ type conn struct {
 	epoch  uint64
 	framer *fix.Framer
 	msg    fix.Message // reader-owned
-	rmsg   fix.Message // writer-owned, for replays
+	// omsg, smsg, plain, inner, body and opened are the reader's, for
+	// opening (see open).
+	omsg, smsg                 fix.Message
+	plain, inner, body, opened []byte
+	rmsg                       fix.Message // writer-owned, for replays
 	// wmsg, wire, wireEnds and sealed are the writer's, for sealing (see
 	// seal).
 	wmsg     fix.Message
@@ -86,8 +90,8 @@ type conn struct {
 	logonExtra []byte // fields the handler added to the Logon we answer with
 	loggedOn   bool   // the connection got to log on
 	// encrypted tells the Logon exchange agreed on an EncryptMethod (98)
-	// other than 0: every message but a Logon is sealed (see seal). Set by
-	// the reader, which reads it without the lock.
+	// other than 0: every message but a Logon is sealed (see seal) and
+	// opened (see open). Set by the reader, which reads it without the lock.
 	encrypted bool
 	// byDefault tells BaseHandler's Authenticate accepted the Logon, and
 	// transportAuth that the transport authenticated the counterparty.
