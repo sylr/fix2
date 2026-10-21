@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -102,50 +103,57 @@ func respond(r *raw, lostTo uint64) {
 // its every store write: first is the first instance's script, done tells
 // it completed; the restarted server is established on with NextSeqNo
 // next, second its script, which ends delivering next; check verifies
-// both instances' events.
+// both instances' events. Each case on synctest's fake clock: on the real
+// one, stopping a server waits the raw client's keepalive, a second, for
+// the answer to its Terminate.
 func crashRecovery(t *testing.T, commit bool, clientFlow, serverFlow fixp.FlowType,
 	first func(r *raw), done func(*eventLog) bool, next uint64, second func(r *raw),
 	check func(t *testing.T, a, b []string, st *crashStore, id fixp.SessionID)) {
 	for failAt := 1; ; failAt++ {
 		passed := t.Run(fmt.Sprintf("write %d", failAt), func(t *testing.T) {
-			ss := newCrashStore(failAt)
-			ss.commit = commit
-			log1 := &eventLog{}
-			l := mem.Listen("server")
-			srv, cancel, srvDone := newServer(t, l, ss, log1, serverFlow, nil)
-			r := dialRaw(t, l)
-			halted := func() bool { s := srv.Session(r.id); return s != nil && s.State() == StateStopped }
-			established := rawHandshake(r, clientFlow, codec.Some(uint64(1)))
-			if established {
-				r.mayEnd = true // the server crashing at any of its writes
-				first(r)
-				eventually(t, func() bool { return done(log1) || halted() })
-			}
-			crashed := halted()
-			cancel()
-			<-srvDone
-			if !crashed {
+			synctest.Test(t, func(t *testing.T) {
+				ss := newCrashStore(failAt)
+				ss.commit = commit
+				log1 := &eventLog{}
+				l := mem.Listen("server")
+				srv, cancel, srvDone := newServer(t, l, ss, log1, serverFlow, nil)
+				// Stopped once, on a failure too: a bubble must end with none
+				// of its goroutines left.
+				stopSrv := sync.OnceFunc(func() { cancel(); <-srvDone })
+				defer func() { stopSrv() }()
+				r := dialRaw(t, l)
+				halted := func() bool { s := srv.Session(r.id); return s != nil && s.State() == StateStopped }
+				established := rawHandshake(r, clientFlow, codec.Some(uint64(1)))
 				if established {
-					skipRest = true
+					r.mayEnd = true // the server crashing at any of its writes
+					first(r)
+					eventually(t, func() bool { return done(log1) || halted() })
 				}
-				return // or the negotiation refused: no session
-			}
-			l2 := mem.Listen("server")
-			log2 := &eventLog{}
-			restarted := ss.crash()
-			srv2, cancel2, srvDone2 := newServer(t, l2, restarted, log2, serverFlow, nil)
-			defer func() { cancel2(); <-srvDone2 }()
-			if srv2.Session(r.id) == nil {
-				return
-			}
-			r2 := dialRaw(t, l2)
-			r2.id = r.id
-			if h, _, _ := codec.ReadHeader(r2.establish(1000, codec.Some(next), "user:alice")); h.TemplateId != codec.EstablishmentAckTemplateID {
-				t.Fatalf("restarted: establishment refused")
-			}
-			second(r2)
-			eventually(t, func() bool { return log2.has(fmt.Sprintf("d%d", next)) })
-			check(t, log1.get(), log2.get(), restarted, r.id)
+				crashed := halted()
+				stopSrv()
+				if !crashed {
+					if established {
+						skipRest = true
+					}
+					return // or the negotiation refused: no session
+				}
+				l2 := mem.Listen("server")
+				log2 := &eventLog{}
+				restarted := ss.crash()
+				srv2, cancel2, srvDone2 := newServer(t, l2, restarted, log2, serverFlow, nil)
+				defer func() { cancel2(); <-srvDone2 }()
+				if srv2.Session(r.id) == nil {
+					return
+				}
+				r2 := dialRaw(t, l2)
+				r2.id = r.id
+				if h, _, _ := codec.ReadHeader(r2.establish(1000, codec.Some(next), "user:alice")); h.TemplateId != codec.EstablishmentAckTemplateID {
+					t.Fatalf("restarted: establishment refused")
+				}
+				second(r2)
+				eventually(t, func() bool { return log2.has(fmt.Sprintf("d%d", next)) })
+				check(t, log1.get(), log2.get(), restarted, r.id)
+			})
 		})
 		if !passed || skipRest || failAt > 200 {
 			skipRest = false

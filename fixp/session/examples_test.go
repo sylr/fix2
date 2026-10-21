@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -137,7 +138,9 @@ func (r *raw) readEstablish() codec.Establish {
 // field, for each pair of flows the examples negotiate and establish. The
 // raw client sends a sequenced flow's NextSeqNo on the first
 // establishment, as the examples do: accepted. The ack carries a
-// Recoverable server flow's, not an Idempotent one's (§4.3.2).
+// Recoverable server flow's, not an Idempotent one's (§4.3.2). Each case
+// on synctest's fake clock: on the real one, stopping the server waits the
+// raw client's keepalive, a second, for the answer to its Terminate.
 func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 	for _, tc := range []struct {
 		example            string
@@ -152,36 +155,38 @@ func TestExample_7_1_and_7_2_Handshakes(t *testing.T) {
 		{"7.1.5", fixp.Unsequenced, fixp.Recoverable},
 	} {
 		t.Run(tc.example, func(t *testing.T) {
-			l := mem.Listen("server")
-			h := newRecorder()
-			_, cancel, done := newServer(t, l, memstore.New(), h, tc.serverFlow, nil)
-			defer func() { cancel(); <-done }()
-			r := dialRaw(t, l)
-			var resp codec.NegotiationResponse
-			if _, err := resp.Decode(r.negotiate(tc.client, "user:alice")); err != nil {
-				t.Fatal(err)
-			}
-			if resp.SessionId != r.id || resp.RequestTimestamp != r.ts || fixp.FlowType(resp.ServerFlow) != tc.serverFlow {
-				t.Fatalf("NegotiationResponse %+v", resp)
-			}
-			var next codec.Optional[uint64]
-			if tc.client.Sequenced() {
-				next = codec.Some(uint64(1))
-			}
-			var ack codec.EstablishmentAck
-			if _, err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
-				t.Fatal(err)
-			}
-			// A Recoverable server flow's only, the first establishment
-			// included (§4.3.2).
-			wantNext := codec.Optional[uint64]{}
-			if tc.serverFlow == fixp.Recoverable {
-				wantNext = codec.Some(uint64(1))
-			}
-			if ack.SessionId != r.id || ack.RequestTimestamp != r.ts || ack.KeepaliveInterval != 50 || ack.NextSeqNo != wantNext {
-				t.Fatalf("EstablishmentAck %+v", ack)
-			}
-			h.expect(t, "established")
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("server")
+				h := newRecorder()
+				_, cancel, done := newServer(t, l, memstore.New(), h, tc.serverFlow, nil)
+				defer func() { cancel(); <-done }()
+				r := dialRaw(t, l)
+				var resp codec.NegotiationResponse
+				if _, err := resp.Decode(r.negotiate(tc.client, "user:alice")); err != nil {
+					t.Fatal(err)
+				}
+				if resp.SessionId != r.id || resp.RequestTimestamp != r.ts || fixp.FlowType(resp.ServerFlow) != tc.serverFlow {
+					t.Fatalf("NegotiationResponse %+v", resp)
+				}
+				var next codec.Optional[uint64]
+				if tc.client.Sequenced() {
+					next = codec.Some(uint64(1))
+				}
+				var ack codec.EstablishmentAck
+				if _, err := ack.Decode(r.establish(1000, next, "user:alice")); err != nil {
+					t.Fatal(err)
+				}
+				// A Recoverable server flow's only, the first establishment
+				// included (§4.3.2).
+				wantNext := codec.Optional[uint64]{}
+				if tc.serverFlow == fixp.Recoverable {
+					wantNext = codec.Some(uint64(1))
+				}
+				if ack.SessionId != r.id || ack.RequestTimestamp != r.ts || ack.KeepaliveInterval != 50 || ack.NextSeqNo != wantNext {
+					t.Fatalf("EstablishmentAck %+v", ack)
+				}
+				h.expect(t, "established")
+			})
 		})
 	}
 }
