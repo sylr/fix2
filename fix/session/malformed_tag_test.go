@@ -45,27 +45,27 @@ func TestMalformedTagRejected(t *testing.T) {
 // is after the header or within it: a wrong CompID or an inaccurate
 // SendingTime is rejected and logs out, as in a well-formed message.
 func TestMalformedTagHeaderChecked(t *testing.T) {
-	now := sendingTime()
-	stale := string(fix.AppendUTCTimestamp(nil, time.Now().Add(-time.Hour), fix.Milliseconds))
 	for _, tc := range []struct {
 		name, fields string
 		reason       string
 	}{
-		{"wrong SenderCompID", "49=OTHER|56=INI|34=2|52=" + now + "|11=O1|abc=1|", "9"},
-		{"wrong SenderCompID, tag within the header", "49=OTHER|56=INI|34=2|abc=1|52=" + now + "|11=O1|", "9"},
-		{"wrong TargetCompID", "49=ACC|56=OTHER|34=2|52=" + now + "|11=O1|abc=1|", "9"},
-		{"wrong TargetCompID, tag within the header", "49=ACC|56=OTHER|34=2|abc=1|52=" + now + "|11=O1|", "9"},
-		{"inaccurate SendingTime", "49=ACC|56=INI|34=2|52=" + stale + "|11=O1|abc=1|", "10"},
-		{"inaccurate SendingTime, tag within the header", "49=ACC|56=INI|34=2|52=" + stale + "|abc=1|11=O1|", "10"},
+		{"wrong SenderCompID", "49=OTHER|56=INI|34=2|52=$T|11=O1|abc=1|", "9"},
+		{"wrong SenderCompID, tag within the header", "49=OTHER|56=INI|34=2|abc=1|52=$T|11=O1|", "9"},
+		{"wrong TargetCompID", "49=ACC|56=OTHER|34=2|52=$T|11=O1|abc=1|", "9"},
+		{"wrong TargetCompID, tag within the header", "49=ACC|56=OTHER|34=2|abc=1|52=$T|11=O1|", "9"},
+		{"inaccurate SendingTime", "49=ACC|56=INI|34=2|52=$H|11=O1|abc=1|", "10"},
+		{"inaccurate SendingTime, tag within the header", "49=ACC|56=INI|34=2|52=$H|abc=1|11=O1|", "10"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, nil)
-			p.writeRaw(rawFrame("35=D|"+tc.fields, ""))
-			p.expect("3", "45", "2", "373", tc.reason)
-			p.expect("5")
-			if got := s.NextTargetSeqNum(); got != 3 {
-				t.Errorf("NextTargetSeqNum = %d, want 3", got)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, nil)
+				p.writeRaw(rawFrame("35=D|"+stamped(tc.fields), ""))
+				p.expect("3", "45", "2", "373", tc.reason)
+				p.expect("5")
+				if got := s.NextTargetSeqNum(); got != 3 {
+					t.Errorf("NextTargetSeqNum = %d, want 3", got)
+				}
+			})
 		})
 	}
 }
@@ -74,25 +74,26 @@ func TestMalformedTagHeaderChecked(t *testing.T) {
 // was parsed, FIX putting the header first; if the malformed tag is within
 // the header, it may follow the tag, and is not judged.
 func TestMalformedTagAbsentHeaderField(t *testing.T) {
-	now := sendingTime()
 	for _, tc := range []struct {
 		name, fields string
 		reject       []string // the Reject's fields
 	}{
-		{"SendingTime missing", "49=ACC|56=INI|34=2|11=O1|abc=1|52=" + now + "|", []string{"371", "52", "373", "1"}},
-		{"SendingTime after the tag", "49=ACC|56=INI|34=2|abc=1|52=" + now + "|11=O1|", []string{"373", "0"}},
-		{"OrigSendingTime missing", "49=ACC|56=INI|34=2|52=" + now + "|43=Y|11=O1|abc=1|", []string{"371", "122", "373", "1"}},
-		{"OrigSendingTime after the tag", "49=ACC|56=INI|34=2|52=" + now + "|43=Y|abc=1|122=" + now + "|11=O1|", []string{"373", "0"}},
+		{"SendingTime missing", "49=ACC|56=INI|34=2|11=O1|abc=1|52=$T|", []string{"371", "52", "373", "1"}},
+		{"SendingTime after the tag", "49=ACC|56=INI|34=2|abc=1|52=$T|11=O1|", []string{"373", "0"}},
+		{"OrigSendingTime missing", "49=ACC|56=INI|34=2|52=$T|43=Y|11=O1|abc=1|", []string{"371", "122", "373", "1"}},
+		{"OrigSendingTime after the tag", "49=ACC|56=INI|34=2|52=$T|43=Y|abc=1|122=$T|11=O1|", []string{"373", "0"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, nil)
-			p.writeRaw(rawFrame("35=D|"+tc.fields, ""))
-			p.expect("3", append([]string{"45", "2"}, tc.reject...)...)
-			p.write(from(session.FIX44, 3), "1", "112", "AFTER")
-			p.expect("0", "112", "AFTER")
-			if got := s.NextTargetSeqNum(); got != 4 {
-				t.Errorf("NextTargetSeqNum = %d, want 4", got)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, nil)
+				p.writeRaw(rawFrame("35=D|"+stamped(tc.fields), ""))
+				p.expect("3", append([]string{"45", "2"}, tc.reject...)...)
+				p.write(from(session.FIX44, 3), "1", "112", "AFTER")
+				p.expect("0", "112", "AFTER")
+				if got := s.NextTargetSeqNum(); got != 4 {
+					t.Errorf("NextTargetSeqNum = %d, want 4", got)
+				}
+			})
 		})
 	}
 }
@@ -101,36 +102,37 @@ func TestMalformedTagAbsentHeaderField(t *testing.T) {
 // as its CompIDs are: missing once a field after the header was parsed, not
 // judged if they may follow a malformed tag within it.
 func TestMalformedTagSubAndLocationIDs(t *testing.T) {
-	now := sendingTime()
 	for _, tc := range []struct {
 		name, fields string
 		reason       string
 		logout       bool
 	}{
-		{"before the tag", "49=ACC|56=INI|50=SUB|142=LOC|34=2|52=" + now + "|11=O1|abc=1|", "0", false},
-		{"after the tag, within the header", "49=ACC|56=INI|34=2|52=" + now + "|abc=1|50=SUB|142=LOC|11=O1|", "0", false},
-		{"missing", "49=ACC|56=INI|34=2|52=" + now + "|11=O1|abc=1|50=SUB|142=LOC|", "9", true},
-		{"wrong SubID, tag within the header", "49=ACC|56=INI|50=OTHER|34=2|52=" + now + "|abc=1|142=LOC|", "9", true},
-		{"wrong LocationID, tag within the header", "49=ACC|56=INI|50=SUB|142=OTHER|34=2|52=" + now + "|abc=1|", "9", true},
+		{"before the tag", "49=ACC|56=INI|50=SUB|142=LOC|34=2|52=$T|11=O1|abc=1|", "0", false},
+		{"after the tag, within the header", "49=ACC|56=INI|34=2|52=$T|abc=1|50=SUB|142=LOC|11=O1|", "0", false},
+		{"missing", "49=ACC|56=INI|34=2|52=$T|11=O1|abc=1|50=SUB|142=LOC|", "9", true},
+		{"wrong SubID, tag within the header", "49=ACC|56=INI|50=OTHER|34=2|52=$T|abc=1|142=LOC|", "9", true},
+		{"wrong LocationID, tag within the header", "49=ACC|56=INI|50=SUB|142=OTHER|34=2|52=$T|abc=1|", "9", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			l := mem.Listen("acceptor")
-			s, rec := startInitiator(t, l, func(c *session.Config) { c.ID.TargetSubID, c.ID.TargetLocationID = "SUB", "LOC" })
-			p := acceptPeer(t, l)
-			p.expect("A")
-			p.send("A", 0, "50", "SUB", "142", "LOC", "98", "0", "108", "30")
-			rec.wait(t, func() bool { return rec.logons == 1 })
-			p.writeRaw(rawFrame("35=D|"+tc.fields, ""))
-			p.expect("3", "45", "2", "373", tc.reason)
-			if tc.logout {
-				p.expect("5")
-				return
-			}
-			p.writeRaw(rawFrame("35=1|49=ACC|56=INI|50=SUB|142=LOC|34=3|52="+sendingTime()+"|112=AFTER|", ""))
-			p.expect("0", "112", "AFTER")
-			if got := s.NextTargetSeqNum(); got != 4 {
-				t.Errorf("NextTargetSeqNum = %d, want 4", got)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("acceptor")
+				s, rec := startInitiator(t, l, func(c *session.Config) { c.ID.TargetSubID, c.ID.TargetLocationID = "SUB", "LOC" })
+				p := acceptPeer(t, l)
+				p.expect("A")
+				p.send("A", 0, "50", "SUB", "142", "LOC", "98", "0", "108", "30")
+				rec.wait(t, func() bool { return rec.logons == 1 })
+				p.writeRaw(rawFrame("35=D|"+stamped(tc.fields), ""))
+				p.expect("3", "45", "2", "373", tc.reason)
+				if tc.logout {
+					p.expect("5")
+					return
+				}
+				p.writeRaw(rawFrame("35=1|49=ACC|56=INI|50=SUB|142=LOC|34=3|52="+sendingTime()+"|112=AFTER|", ""))
+				p.expect("0", "112", "AFTER")
+				if got := s.NextTargetSeqNum(); got != 4 {
+					t.Errorf("NextTargetSeqNum = %d, want 4", got)
+				}
+			})
 		})
 	}
 }
@@ -159,37 +161,48 @@ func origSendingTime() string {
 	return string(fix.AppendUTCTimestamp(nil, time.Now().Add(-time.Second), fix.Milliseconds))
 }
 
+// stamped returns a table's fields with $T replaced by a SendingTime of
+// now, $H by one an hour ago and $O by an OrigSendingTime: the times taken
+// by the subtest, on its own clock.
+func stamped(fields string) string {
+	stale := string(fix.AppendUTCTimestamp(nil, time.Now().Add(-time.Hour), fix.Milliseconds))
+	return strings.NewReplacer("$T", sendingTime(), "$H", stale, "$O", origSendingTime()).Replace(fields)
+}
+
 // One received too low without PossDupFlag logs out, as any other, one
 // whose PossDupFlag may follow a malformed tag within its header too: it is
 // not garbled, which FIX would have disregarded, and it does not show
 // PossDupFlag = Y. One showing it before the tag is ignored, as a
 // retransmission is.
 func TestMalformedTagTooLow(t *testing.T) {
-	now := sendingTime()
 	for _, tc := range []struct {
 		name, header string
 	}{
-		{"PossDupFlag missing", "34=1|52=" + now + "|11=O1|abc=1|"},
-		{"PossDupFlag after the tag", "34=1|52=" + now + "|abc=1|43=Y|122=" + now + "|11=O1|"},
+		{"PossDupFlag missing", "34=1|52=$T|11=O1|abc=1|"},
+		{"PossDupFlag after the tag", "34=1|52=$T|abc=1|43=Y|122=$T|11=O1|"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, nil)
-			p.writeRaw(rawFrame("35=D|49=ACC|56=INI|"+tc.header, ""))
-			p.expect("5", "58", "MsgSeqNum too low")
-			if got := s.NextTargetSeqNum(); got != 2 {
-				t.Errorf("NextTargetSeqNum = %d, want 2", got)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, nil)
+				p.writeRaw(rawFrame("35=D|49=ACC|56=INI|"+stamped(tc.header), ""))
+				p.expect("5", "58", "MsgSeqNum too low")
+				if got := s.NextTargetSeqNum(); got != 2 {
+					t.Errorf("NextTargetSeqNum = %d, want 2", got)
+				}
+			})
 		})
 	}
 	t.Run("PossDupFlag before the tag", func(t *testing.T) {
-		s, _, p := loggedOn(t, nil)
-		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=1|43=Y|52="+sendingTime()+"|122="+origSendingTime()+"|abc=1|11=O1|", ""))
-		// Nothing answers it: the TestRequest is answered first.
-		p.write(from(session.FIX44, 2), "1", "112", "AFTER")
-		p.expect("0", "112", "AFTER")
-		if got := s.NextTargetSeqNum(); got != 3 {
-			t.Errorf("NextTargetSeqNum = %d, want 3", got)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			s, _, p := loggedOn(t, nil)
+			p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=1|43=Y|52="+sendingTime()+"|122="+origSendingTime()+"|abc=1|11=O1|", ""))
+			// Nothing answers it: the TestRequest is answered first.
+			p.write(from(session.FIX44, 2), "1", "112", "AFTER")
+			p.expect("0", "112", "AFTER")
+			if got := s.NextTargetSeqNum(); got != 3 {
+				t.Errorf("NextTargetSeqNum = %d, want 3", got)
+			}
+		})
 	})
 }
 
@@ -370,31 +383,32 @@ func TestMalformedTagSequenceResetWithoutGapFillFlag(t *testing.T) {
 // recovery: what it stood for, up to the message held, is asked for again,
 // malformed tag or not, or the recovery would wait for it for good.
 func TestUnusableGapFillAsksAgain(t *testing.T) {
-	now, orig := sendingTime(), origSendingTime()
 	for _, tc := range []struct {
 		name, fields string
 		reject       []string // the Reject's fields
 	}{
-		{"OrigSendingTime missing", "52=" + now + "|43=Y|123=Y|36=5|", []string{"371", "122", "373", "1"}},
-		{"SendingTime missing", "43=Y|122=" + orig + "|123=Y|36=5|", []string{"371", "52", "373", "1"}},
-		{"NewSeqNo invalid", "52=" + now + "|43=Y|122=" + orig + "|123=Y|36=x|", []string{"371", "36", "373", "6"}},
-		{"malformed tag, OrigSendingTime missing", "52=" + now + "|43=Y|123=Y|abc=1|36=5|", []string{"371", "122", "373", "1"}},
-		{"malformed tag, SendingTime missing", "43=Y|122=" + orig + "|123=Y|abc=1|36=5|", []string{"371", "52", "373", "1"}},
-		{"malformed tag", "52=" + now + "|43=Y|122=" + orig + "|123=Y|abc=1|36=5|", []string{"373", "0"}},
+		{"OrigSendingTime missing", "52=$T|43=Y|123=Y|36=5|", []string{"371", "122", "373", "1"}},
+		{"SendingTime missing", "43=Y|122=$O|123=Y|36=5|", []string{"371", "52", "373", "1"}},
+		{"NewSeqNo invalid", "52=$T|43=Y|122=$O|123=Y|36=x|", []string{"371", "36", "373", "6"}},
+		{"malformed tag, OrigSendingTime missing", "52=$T|43=Y|123=Y|abc=1|36=5|", []string{"371", "122", "373", "1"}},
+		{"malformed tag, SendingTime missing", "43=Y|122=$O|123=Y|abc=1|36=5|", []string{"371", "52", "373", "1"}},
+		{"malformed tag", "52=$T|43=Y|122=$O|123=Y|abc=1|36=5|", []string{"373", "0"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, nil)
-			p.write(from(session.FIX44, 5), "0")
-			p.expect("2", "7", "2", "16", "0")
-			p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=2|"+tc.fields, ""))
-			p.expect("3", append([]string{"45", "2"}, tc.reject...)...)
-			p.expect("2", "7", "3", "16", "4")
-			p.write(from(session.FIX44, 3), "4", "43", "Y", "122", origSendingTime(), "123", "Y", "36", "5")
-			p.write(from(session.FIX44, 6), "1", "112", "AFTER")
-			p.expect("0", "112", "AFTER")
-			if got := s.NextTargetSeqNum(); got != 7 {
-				t.Errorf("NextTargetSeqNum = %d, want 7", got)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, nil)
+				p.write(from(session.FIX44, 5), "0")
+				p.expect("2", "7", "2", "16", "0")
+				p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=2|"+stamped(tc.fields), ""))
+				p.expect("3", append([]string{"45", "2"}, tc.reject...)...)
+				p.expect("2", "7", "3", "16", "4")
+				p.write(from(session.FIX44, 3), "4", "43", "Y", "122", origSendingTime(), "123", "Y", "36", "5")
+				p.write(from(session.FIX44, 6), "1", "112", "AFTER")
+				p.expect("0", "112", "AFTER")
+				if got := s.NextTargetSeqNum(); got != 7 {
+					t.Errorf("NextTargetSeqNum = %d, want 7", got)
+				}
+			})
 		})
 	}
 }
@@ -507,28 +521,30 @@ func TestUnusableGapFillsWarned(t *testing.T) {
 		leniency     bool
 	}{
 		{"OrigSendingTime missing", "43=Y|123=Y|36=10|", true},
-		{"malformed tag", "43=Y|122=" + origSendingTime() + "|123=Y|abc=1|36=10|", false},
+		{"malformed tag", "43=Y|122=$O|123=Y|abc=1|36=10|", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			buf := &logBuffer{}
-			_, _, p := loggedOn(t, func(c *session.Config) { c.Logger = slog.New(slog.NewTextHandler(buf, nil)) })
-			p.write(from(session.FIX44, 10), "0")
-			p.expect("2", "7", "2", "16", "0")
-			for seq := 2; seq < 7; seq++ {
-				p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34="+strconv.Itoa(seq)+"|52="+sendingTime()+"|"+tc.fields, ""))
-				p.expect("3", "45", strconv.Itoa(seq))
-				p.expect("2", "7", strconv.Itoa(seq+1), "16", "9")
-			}
-			p.write(from(session.FIX44, 7), "4", "43", "Y", "122", origSendingTime(), "123", "Y", "36", "10")
-			p.write(from(session.FIX44, 11), "1", "112", "AFTER")
-			p.expect("0", "112", "AFTER")
-			out := buf.String()
-			if n := strings.Count(out, "GapFills are unusable"); n != 1 {
-				t.Errorf("warned %d times, want 1:\n%s", n, out)
-			}
-			if got := strings.Contains(out, "TolerateSequenceResetWithoutOrigSendingTime"); got != tc.leniency {
-				t.Errorf("leniency named: %v, want %v:\n%s", got, tc.leniency, out)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				buf := &logBuffer{}
+				_, _, p := loggedOn(t, func(c *session.Config) { c.Logger = slog.New(slog.NewTextHandler(buf, nil)) })
+				p.write(from(session.FIX44, 10), "0")
+				p.expect("2", "7", "2", "16", "0")
+				for seq := 2; seq < 7; seq++ {
+					p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34="+strconv.Itoa(seq)+"|52="+sendingTime()+"|"+stamped(tc.fields), ""))
+					p.expect("3", "45", strconv.Itoa(seq))
+					p.expect("2", "7", strconv.Itoa(seq+1), "16", "9")
+				}
+				p.write(from(session.FIX44, 7), "4", "43", "Y", "122", origSendingTime(), "123", "Y", "36", "10")
+				p.write(from(session.FIX44, 11), "1", "112", "AFTER")
+				p.expect("0", "112", "AFTER")
+				out := buf.String()
+				if n := strings.Count(out, "GapFills are unusable"); n != 1 {
+					t.Errorf("warned %d times, want 1:\n%s", n, out)
+				}
+				if got := strings.Contains(out, "TolerateSequenceResetWithoutOrigSendingTime"); got != tc.leniency {
+					t.Errorf("leniency named: %v, want %v:\n%s", got, tc.leniency, out)
+				}
+			})
 		})
 	}
 }

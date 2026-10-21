@@ -388,33 +388,35 @@ func TestRejectWithInaccurateSendingTime(t *testing.T) {
 // Reset-mode SequenceReset, whose MsgSeqNum does not count, is not counted.
 func TestHeaderProblemCountsTheMessage(t *testing.T) {
 	for _, tc := range []struct {
-		name        string
-		msgType     string
-		fields      []string
-		sender      string
-		sendingTime time.Time
-		ahead       bool // a TestRequest kept ahead of the message
-		reason      string
-		next        uint64
+		name    string
+		msgType string
+		fields  []string
+		sender  string
+		skew    time.Duration // of SendingTime
+		ahead   bool          // a TestRequest kept ahead of the message
+		reason  string
+		next    uint64
 	}{
-		{"wrong CompID", "D", []string{"11", "O1"}, "OTHER", time.Now(), false, "9", 3},
-		{"inaccurate SendingTime", "D", []string{"11", "O1"}, "ACC", time.Now().Add(-time.Hour), false, "10", 3},
-		{"wrong CompID, a message kept ahead", "D", []string{"11", "O1"}, "OTHER", time.Now(), true, "9", 3},
-		{"Reset-mode SequenceReset", "4", []string{"36", "10"}, "ACC", time.Now().Add(-time.Hour), false, "10", 2},
+		{"wrong CompID", "D", []string{"11", "O1"}, "OTHER", 0, false, "9", 3},
+		{"inaccurate SendingTime", "D", []string{"11", "O1"}, "ACC", -time.Hour, false, "10", 3},
+		{"wrong CompID, a message kept ahead", "D", []string{"11", "O1"}, "OTHER", 0, true, "9", 3},
+		{"Reset-mode SequenceReset", "4", []string{"36", "10"}, "ACC", -time.Hour, false, "10", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, nil)
-			if tc.ahead {
-				p.send("1", p.seq+1, "112", "AHEAD")
-				p.expect("2", "7", "2")
-			}
-			p.sendWithHeader(tc.msgType, tc.sender, p.seq, tc.sendingTime, tc.fields...)
-			p.seq++
-			p.expect("3", "45", "2", "373", tc.reason)
-			p.expect("5")
-			if got := s.NextTargetSeqNum(); got != tc.next {
-				t.Errorf("NextTargetSeqNum = %d, want %d", got, tc.next)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, nil)
+				if tc.ahead {
+					p.send("1", p.seq+1, "112", "AHEAD")
+					p.expect("2", "7", "2")
+				}
+				p.sendWithHeader(tc.msgType, tc.sender, p.seq, time.Now().Add(tc.skew), tc.fields...)
+				p.seq++
+				p.expect("3", "45", "2", "373", tc.reason)
+				p.expect("5")
+				if got := s.NextTargetSeqNum(); got != tc.next {
+					t.Errorf("NextTargetSeqNum = %d, want %d", got, tc.next)
+				}
+			})
 		})
 	}
 }
