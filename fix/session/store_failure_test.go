@@ -1211,6 +1211,11 @@ func TestStoreWindowResetBeforeRecording(t *testing.T) {
 			t.Fatal(err)
 		}
 		p.expect("D")
+		// The Logon recorded first: the failure comes amid the orders.
+		waitFor(t, func() bool {
+			st, _ := fs.Store.Open(context.Background())
+			return st.NextTarget == s.NextTargetSeqNum()
+		})
 		fs.failGen.Store(r.Generation())
 		p.sendOrders(100)
 		p.expectEnd(5 * time.Second)
