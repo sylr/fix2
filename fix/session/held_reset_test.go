@@ -307,6 +307,10 @@ func recordingFails(t *testing.T, n int, change func(*session.Config)) (*session
 	for i := range n {
 		p.order(4+i, fmt.Sprint("O", i))
 	}
+	// The orders read and held, and what the session records of them
+	// recorded: the failure comes with the reset. Its callers run in a
+	// bubble.
+	synctest.Wait()
 	fs.fail.Store(true)
 	p.resetTo(n+4, n+5)
 	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
