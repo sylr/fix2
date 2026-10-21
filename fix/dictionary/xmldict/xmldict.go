@@ -122,19 +122,47 @@ const maxDictSize = 64 << 20
 // and the structure of their fields, components and groups: see
 // decodeOrchestra for how they are translated.
 func Load(r io.Reader) (*dictionary.Dict, error) {
-	lr := &io.LimitedReader{R: r, N: maxDictSize + 1}
-	xd, err := decode(lr)
+	return load(r, defaultLimits())
+}
+
+// limits bounds what load reads and builds: Load's are defaultLimits, a
+// test's smaller, for a small input to reach each.
+type limits struct {
+	size              int64 // see maxDictSize
+	elements          int   // see maxElements
+	orchestraElements int   // see maxOrchestraElements
+	visits            int   // see maxVisits
+	orchestraVisits   int   // see maxOrchestraVisits
+	orchestraEnums    int   // see maxOrchestraEnumValues
+}
+
+// defaultLimits returns the limits of Load.
+func defaultLimits() limits {
+	return limits{
+		size:              maxDictSize,
+		elements:          maxElements,
+		orchestraElements: maxOrchestraElements,
+		visits:            maxVisits,
+		orchestraVisits:   maxOrchestraVisits,
+		orchestraEnums:    maxOrchestraEnumValues,
+	}
+}
+
+// load is Load within lim.
+func load(r io.Reader, lim limits) (*dictionary.Dict, error) {
+	lr := &io.LimitedReader{R: r, N: lim.size + 1}
+	xd, err := decode(lr, lim)
 	// Reading the extra byte means the input is over the limit, whether or
 	// not the decoder managed to finish.
 	if lr.N <= 0 {
-		return nil, fmt.Errorf("dictionary: larger than %d bytes", maxDictSize)
+		return nil, fmt.Errorf("dictionary: larger than %d bytes", lim.size)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("dictionary: %w", err)
 	}
-	budget := maxVisits
+	budget := lim.visits
 	if xd.orchestra {
-		budget = maxOrchestraVisits
+		budget = lim.orchestraVisits
 	}
 	return resolve(xd, budget)
 }

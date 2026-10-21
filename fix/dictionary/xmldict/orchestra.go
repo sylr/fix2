@@ -216,8 +216,8 @@ func (dec *decoder) orchestra(root xml.StartElement) (*xmlDict, error) {
 		}
 		fd := xmlFieldDef{Number: f.id, Name: f.name, Type: strings.ToUpper(f.typ)}
 		if cs := byName[f.typ]; cs != nil {
-			if enumValues += len(cs.codes); enumValues > maxOrchestraEnumValues {
-				return nil, fmt.Errorf("fields have more than %d enum values: code sets are used too many times", maxOrchestraEnumValues)
+			if enumValues += len(cs.codes); enumValues > dec.lim.orchestraEnums {
+				return nil, fmt.Errorf("fields have more than %d enum values: code sets are used too many times", dec.lim.orchestraEnums)
 			}
 			fd.Type = strings.ToUpper(cs.typ)
 			fd.Values = cs.codes

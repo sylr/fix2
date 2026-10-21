@@ -3,7 +3,9 @@ package dictionary_test
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +44,79 @@ func wideGroupDict(tb testing.TB, width int) *dictionary.Dict {
 		tb.Fatal(err)
 	}
 	return d
+}
+
+// wideGroupLiteral returns the dictionary of wideGroupDict as a Dict
+// literal: at 65,536 tags, loading it takes seconds under -race.
+// TestWideGroupLiteral checks the two agree.
+func wideGroupLiteral(width int) *dictionary.Dict {
+	fields := map[int]*dictionary.FieldDef{
+		35: {Tag: 35, Name: "MsgType", Type: "STRING"},
+		73: {Tag: 73, Name: "NoG", Type: "NUMINGROUP"},
+	}
+	entry := make([]dictionary.FieldRef, width)
+	layout := make([]int, width)
+	for i := range width {
+		tag := 1000 + i
+		fields[tag] = &dictionary.FieldDef{Tag: tag, Name: fmt.Sprintf("F%d", tag), Type: "STRING"}
+		entry[i], layout[i] = dictionary.FieldRef{Tag: tag}, tag
+	}
+	return dictionary.New(&dictionary.Dict{
+		Type: "FIX", Major: "4", Minor: "4",
+		Fields: fields,
+		Header: []dictionary.FieldRef{{Tag: 35, Required: true}},
+		Messages: map[string]*dictionary.MessageDef{"Z": {
+			Name: "M", MsgType: "Z",
+			Fields: append([]dictionary.FieldRef{{Tag: 73, Required: true}}, entry...),
+			Groups: []dictionary.GroupDef{{
+				CounterTag: 73, Name: "NoG", Required: true, DelimTag: 1000,
+				Fields: slices.Clone(entry), Layout: layout,
+				Conditions: []dictionary.Condition{{Component: "C", Activation: slices.Clone(layout[width/2:]), Required: []int{1000 + width/2}}},
+			}},
+		}},
+	})
+}
+
+// The literal of wideGroupLiteral is the dictionary wideGroupDict loads.
+func TestWideGroupLiteral(t *testing.T) {
+	for _, width := range []int{4, 64, 600} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			want, got := wideGroupDict(t, width), wideGroupLiteral(width)
+			if !sameDict(got, want) {
+				t.Errorf("wideGroupLiteral(%d) differs from wideGroupDict's", width)
+			}
+		})
+	}
+}
+
+// sameDict reports whether a and b's exported fields are equal, nil and
+// empty slices or maps alike: Dict and MessageDef hold compiled tables too.
+func sameDict(a, b *dictionary.Dict) bool {
+	sameField := func(a, b *dictionary.FieldDef) bool {
+		return a.Tag == b.Tag && a.Name == b.Name && a.Type == b.Type && maps.Equal(a.Enums, b.Enums)
+	}
+	sameConditions := func(a, b []dictionary.Condition) bool {
+		return slices.EqualFunc(a, b, func(a, b dictionary.Condition) bool {
+			return a.Component == b.Component && slices.Equal(a.Activation, b.Activation) && slices.Equal(a.Required, b.Required)
+		})
+	}
+	var sameGroups func(a, b []dictionary.GroupDef) bool
+	sameGroups = func(a, b []dictionary.GroupDef) bool {
+		return slices.EqualFunc(a, b, func(a, b dictionary.GroupDef) bool {
+			return a.CounterTag == b.CounterTag && a.Name == b.Name && a.Required == b.Required && a.DelimTag == b.DelimTag &&
+				slices.Equal(a.Fields, b.Fields) && sameGroups(a.Groups, b.Groups) && slices.Equal(a.Layout, b.Layout) &&
+				sameConditions(a.Conditions, b.Conditions)
+		})
+	}
+	sameMessage := func(a, b *dictionary.MessageDef) bool {
+		return a.Name == b.Name && a.MsgType == b.MsgType && a.MsgCat == b.MsgCat && slices.Equal(a.Fields, b.Fields) &&
+			sameGroups(a.Groups, b.Groups) && sameConditions(a.Conditions, b.Conditions)
+	}
+	return a.Type == b.Type && a.Major == b.Major && a.Minor == b.Minor && a.ServicePack == b.ServicePack &&
+		maps.EqualFunc(a.Fields, b.Fields, sameField) && maps.EqualFunc(a.Messages, b.Messages, sameMessage) &&
+		slices.Equal(a.Header, b.Header) && slices.Equal(a.Trailer, b.Trailer) &&
+		sameGroups(a.HeaderGroups, b.HeaderGroups) && sameGroups(a.TrailerGroups, b.TrailerGroups) &&
+		sameConditions(a.HeaderConditions, b.HeaderConditions) && sameConditions(a.TrailerConditions, b.TrailerConditions)
 }
 
 // wideGroupMsg returns a message Z of d, of a group as wideGroupDict's of
@@ -112,15 +187,16 @@ func TestValidateWith_WideGroupEntries(t *testing.T) {
 // interleaved and after a collection of the dictionaries' garbage, with a
 // margin wide enough for -race and a loaded machine: a linear tag lookup or
 // a scan of the component's activation tags left would cost over 160 times
-// as much. Clearing the whole bitset per entry, which costs about twice as
+// as much. The dictionaries are literals, the widest taking seconds to load
+// under -race. Clearing the whole bitset per entry, which costs about twice as
 // much at that width, is left to BenchmarkValidateWith_WideGroup.
 func TestValidateWith_WideGroupCost(t *testing.T) {
-	const entries = 20000
-	widths := []int{64, 4096, 65536}
+	const entries = 5000
+	widths := []int{64, 65536}
 	dicts := make([]*dictionary.Dict, len(widths))
 	msgs := make([]*fix.Message, len(widths))
 	for i, width := range widths {
-		dicts[i] = wideGroupDict(t, width)
+		dicts[i] = wideGroupLiteral(width)
 		msgs[i] = wideGroupMsg(t, dicts[i], width, entries)
 	}
 	runtime.GC()

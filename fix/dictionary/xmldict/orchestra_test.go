@@ -195,11 +195,11 @@ func TestLoadOrchestraFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	whole, err := decode(strings.NewReader(string(data)))
+	whole, err := decode(strings.NewReader(string(data)), defaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
-	bytes, err := decode(iotest.OneByteReader(strings.NewReader(string(data))))
+	bytes, err := decode(iotest.OneByteReader(strings.NewReader(string(data))), defaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,33 +300,45 @@ func TestLoadOrchestraScenarios(t *testing.T) {
 	}
 }
 
+// The expansion of an Orchestra repository is bounded by its budget, larger
+// than a QuickFIX dictionary's: at budgets of 1,000 and 100,000, not
+// 1,000,000 and 4,000,000. Its element limit is tested with the QuickFIX
+// one, in TestLoad_ElementLimit.
 func TestLoadOrchestraLimits(t *testing.T) {
-	// Skipped elements count, up to the larger Orchestra limit.
-	repo := func(elements int) string {
-		return fmt.Sprintf(`<fixr:repository xmlns:fixr="%s" name="FIX.4.4">`, orchestraNS) + strings.Repeat("<x/>", elements-1) + `</fixr:repository>`
-	}
-	if _, err := Load(strings.NewReader(repo(maxOrchestraElements))); err != nil {
-		t.Errorf("maxOrchestraElements elements: %v", err)
-	}
-	if _, err := Load(strings.NewReader(repo(maxOrchestraElements + 1))); err == nil || !strings.Contains(err.Error(), "more than") {
-		t.Errorf("maxOrchestraElements+1 elements: got %v, want element limit error", err)
-	}
-
-	// Each group references the previous one twice: 2^n items.
-	var fields, groups strings.Builder
-	fields.WriteString(`<fixr:field id="1" name="F" type="String"/>`)
-	groups.WriteString(`<fixr:group id="100" name="G0"><fixr:numInGroup id="200"/><fixr:fieldRef id="1"/></fixr:group>`)
-	fmt.Fprintf(&fields, `<fixr:field id="200" name="N0" type="NumInGroup"/>`)
-	const levels = 30
-	for i := 1; i <= levels; i++ {
-		fmt.Fprintf(&fields, `<fixr:field id="%d" name="N%d" type="NumInGroup"/>`, 200+i, i)
-		fmt.Fprintf(&groups, `<fixr:group id="%d" name="G%d"><fixr:numInGroup id="%d"/><fixr:fieldRef id="1"/><fixr:groupRef id="%d"/><fixr:groupRef id="%d"/></fixr:group>`, 100+i, i, 200+i, 99+i, 99+i)
-	}
-	xml := fmt.Sprintf(`<fixr:repository xmlns:fixr="%s" name="FIX.4.4"><fixr:fields>%s</fixr:fields><fixr:groups>%s</fixr:groups>
+	// Each group references the previous one twice: 2^levels items.
+	repo := func(levels int) string {
+		var fields, groups strings.Builder
+		fields.WriteString(`<fixr:field id="1" name="F" type="String"/>`)
+		groups.WriteString(`<fixr:group id="100" name="G0"><fixr:numInGroup id="200"/><fixr:fieldRef id="1"/></fixr:group>`)
+		fmt.Fprintf(&fields, `<fixr:field id="200" name="N0" type="NumInGroup"/>`)
+		for i := 1; i <= levels; i++ {
+			fmt.Fprintf(&fields, `<fixr:field id="%d" name="N%d" type="NumInGroup"/>`, 200+i, i)
+			fmt.Fprintf(&groups, `<fixr:group id="%d" name="G%d"><fixr:numInGroup id="%d"/><fixr:fieldRef id="1"/><fixr:groupRef id="%d"/><fixr:groupRef id="%d"/></fixr:group>`, 100+i, i, 200+i, 99+i, 99+i)
+		}
+		return fmt.Sprintf(`<fixr:repository xmlns:fixr="%s" name="FIX.4.4"><fixr:fields>%s</fixr:fields><fixr:groups>%s</fixr:groups>
 <fixr:messages><fixr:message name="M" msgType="M"><fixr:structure><fixr:groupRef id="%d"/></fixr:structure></fixr:message></fixr:messages></fixr:repository>`,
-		orchestraNS, fields.String(), groups.String(), 100+levels)
-	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("expansion exceeds %d", maxOrchestraVisits)) {
-		t.Fatalf("expected expansion error, got %v", err)
+			orchestraNS, fields.String(), groups.String(), 100+levels)
+	}
+	lim := defaultLimits()
+	lim.visits, lim.orchestraVisits = 1_000, 100_000
+	loadAt := func(xml string, lim limits) error {
+		return within(t, func() error {
+			_, err := load(strings.NewReader(xml), lim)
+			return err
+		})
+	}
+	if err := loadAt(repo(30), lim); err == nil || !strings.Contains(err.Error(), "expansion exceeds 100000") {
+		t.Fatalf("2^30 items: got %v, want an expansion error", err)
+	}
+	// Past the QuickFIX budget, within the Orchestra one: loaded.
+	between := repo(8)
+	quickfix := lim
+	quickfix.orchestraVisits = lim.visits
+	if err := loadAt(between, quickfix); err == nil || !strings.Contains(err.Error(), "expansion exceeds 1000") {
+		t.Fatalf("2^8 items at the QuickFIX budget: got %v, want an expansion error", err)
+	}
+	if err := loadAt(between, lim); err != nil {
+		t.Fatalf("2^8 items: %v", err)
 	}
 }
 
@@ -346,12 +358,15 @@ func TestLoadOrchestraEnumLimit(t *testing.T) {
 		b.WriteString(`</fixr:fields></fixr:repository>`)
 		return b.String()
 	}
-	if _, err := Load(strings.NewReader(repo(1024, maxOrchestraEnumValues/1024))); err != nil {
-		t.Errorf("maxOrchestraEnumValues values: %v", err)
+	// At a limit of 1,024 values, not 2^18.
+	lim := defaultLimits()
+	lim.orchestraEnums = 1024
+	if _, err := load(strings.NewReader(repo(64, 16)), lim); err != nil {
+		t.Errorf("1024 values: %v", err)
 	}
-	err := loadWithin(t, repo(1024, maxOrchestraEnumValues/1024+1))
-	if err == nil || !strings.Contains(err.Error(), "enum values") {
-		t.Errorf("maxOrchestraEnumValues+1024 values: got %v, want enum values limit error", err)
+	_, err := load(strings.NewReader(repo(64, 17)), lim)
+	if err == nil || !strings.Contains(err.Error(), "more than 1024 enum values") {
+		t.Errorf("1088 values: got %v, want enum values limit error", err)
 	}
 }
 

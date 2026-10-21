@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -321,9 +322,9 @@ func TestLoad_DeepNesting(t *testing.T) {
 </fix>`, n, comps.String())
 	}
 	for name, xml := range map[string]string{
-		"known leaf":   chain(10_000, "F"),
-		"unknown leaf": chain(10_000, "Missing"), // error wrapping must not grow with depth
-		"at the limit": chain(maxDepth-1, "F"),   // C(n) ... C0 is n+1 component levels
+		"known leaf":   chain(1_000, "F"),
+		"unknown leaf": chain(1_000, "Missing"), // error wrapping must not grow with depth
+		"at the limit": chain(maxDepth-1, "F"),  // C(n) ... C0 is n+1 component levels
 		"one past":     chain(maxDepth, "F"),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -369,7 +370,7 @@ func TestLoad_NestedGroupCopiesCharged(t *testing.T) {
   <fields>%s</fields>
 </fix>`, levels, c0.String(), comps.String(), defs.String())
 
-	xd, err := decode(strings.NewReader(xml))
+	xd, err := decode(strings.NewReader(xml), defaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,19 +383,12 @@ func TestLoad_NestedGroupCopiesCharged(t *testing.T) {
 	}
 }
 
-func TestLoad_TooLarge(t *testing.T) {
-	// An XML comment that never ends: Load must stop after maxDictSize bytes.
-	r := io.MultiReader(strings.NewReader("<fix><!--"), endless{})
-	_, err := Load(r)
-	if err == nil || !strings.Contains(err.Error(), "larger than") {
-		t.Fatalf("expected size error, got %v", err)
-	}
-}
-
 func TestLoad_ConditionTrackingCharged(t *testing.T) {
-	// 60 nested optional components around 20,000 fields: few items are
-	// visited, but each field is recorded in all 60 enclosing conditions.
-	const fields, levels = 20_000, 60
+	// 61 nested optional components, C60 to C0, around 201 fields: about
+	// 300 items are visited, but each field is recorded in all 61 enclosing
+	// conditions, 12,261 times in all: past a budget of 3,000, within one of
+	// 20,000.
+	const fields, levels = 200, 60
 	var defs, c0, comps strings.Builder
 	c0.WriteString(`<component name="C0"><field name="R" required="Y"/>`)
 	defs.WriteString(`<field number="999" name="R" type="STRING"/>`)
@@ -413,30 +407,83 @@ func TestLoad_ConditionTrackingCharged(t *testing.T) {
   <fields>%s</fields>
 </fix>`, levels, c0.String(), comps.String(), defs.String())
 
-	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+	if err := resolveWithin(t, xml, 3_000); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
 		t.Fatalf("expected expansion error, got %v", err)
+	}
+	if err := resolveWithin(t, xml, 20_000); err != nil {
+		t.Fatalf("within budget: %v", err)
 	}
 }
 
-func TestLoad_SizeBoundary(t *testing.T) {
-	const head = `<fix type="FIX" major="4" minor="4"><header/><trailer/><messages/><components/><fields/><!--`
-	const tail = `--></fix>`
-	dict := func(size int) string {
-		return head + strings.Repeat("a", size-len(head)-len(tail)) + tail
+// Load's limits are the documented ones; the tests of each lower it, for a
+// small input to reach it.
+func TestLimitsDefault(t *testing.T) {
+	want := limits{size: 64 << 20, elements: 1 << 18, orchestraElements: 1 << 20, visits: 1_000_000, orchestraVisits: 4_000_000, orchestraEnums: 1 << 18}
+	if got := defaultLimits(); got != want {
+		t.Errorf("defaultLimits() = %+v, want %+v", got, want)
 	}
-	if _, err := Load(strings.NewReader(dict(maxDictSize))); err != nil {
-		t.Errorf("dictionary of exactly maxDictSize bytes: %v", err)
+}
+
+// Load reads no more than its limit and the byte past it, which tells the
+// input is larger, whatever the size of the reads and what the XML decoder
+// buffers ahead: a dictionary of exactly the limit loads, of a byte more
+// does not, nor one whose comment never ends. Each at a limit of one of the
+// decoder's buffers and of several, not 64 MiB, which -race takes minutes
+// to decode.
+func TestLoad_SizeLimit(t *testing.T) {
+	const head = `<fix type="FIX" major="4" minor="4"><header/><trailer/><messages/><components/><fields/>`
+	padded := func(size int) io.Reader {
+		const open, end = `<!--`, `--></fix>`
+		return strings.NewReader(head + open + strings.Repeat("a", size-len(head)-len(open)-len(end)) + end)
 	}
-	// Valid XML that decodes successfully but is one byte over the limit.
-	if _, err := Load(strings.NewReader(dict(maxDictSize + 1))); err == nil || !strings.Contains(err.Error(), "larger than") {
-		t.Errorf("dictionary of maxDictSize+1 bytes: got %v, want size error", err)
+	reads := map[string]func(io.Reader) io.Reader{
+		"whole":    func(r io.Reader) io.Reader { return r },
+		"one byte": iotest.OneByteReader,
+		"halves":   iotest.HalfReader,
+	}
+	for _, size := range []int{4096, 20_000} {
+		lim := defaultLimits()
+		lim.size = int64(size)
+		for read, wrap := range reads {
+			for _, tc := range []struct {
+				name string
+				r    io.Reader
+				want string // "" loads, "larger than" does not, "either" may do both
+			}{
+				{"exactly the limit", padded(size), ""},
+				{"one byte over", padded(size + 1), "larger than"},
+				{"endless comment", io.MultiReader(strings.NewReader("<fix><!--"), endless{}), "larger than"},
+				// Whether the decoder reads ahead past the limit once the
+				// root ends depends on the reads.
+				{"root then space past the limit", strings.NewReader(head + `</fix>` + strings.Repeat(" ", size+100)), "either"},
+			} {
+				t.Run(fmt.Sprintf("%d/%s/%s", size, read, tc.name), func(t *testing.T) {
+					c := &countingReader{r: wrap(tc.r)}
+					_, err := load(c, lim)
+					if c.n > int64(size)+1 {
+						t.Errorf("read %d bytes, the limit is %d", c.n, size)
+					}
+					tooLarge := err != nil && strings.Contains(err.Error(), "larger than")
+					switch {
+					case tc.want == "" && err != nil:
+						t.Errorf("got %v, want no error", err)
+					case tc.want == "larger than" && !tooLarge:
+						t.Errorf("got %v, want a size error", err)
+					case tc.want == "either" && err != nil && !tooLarge:
+						t.Errorf("got %v, want none or a size error", err)
+					}
+				})
+			}
+		}
 	}
 }
 
 func TestLoad_GroupConditionTrackingCharged(t *testing.T) {
-	// A group of 30,000 fields inside 40 nested optional components: every
-	// group child is recorded in all 40 enclosing conditions.
-	const fields, levels = 30_000, 40
+	// A group of 300 fields inside 41 nested optional components, C40 to
+	// C0: about 350 items are visited and 300 copied, but its counter and
+	// every child are recorded in all 41 enclosing conditions, 12,341 times
+	// in all: past a budget of 4,000, within one of 30,000.
+	const fields, levels = 300, 40
 	var defs, c0, comps strings.Builder
 	defs.WriteString(`<field number="998" name="NoG" type="NUMINGROUP"/><field number="999" name="R" type="STRING"/>`)
 	c0.WriteString(`<component name="C0"><field name="R" required="Y"/><group name="NoG" required="N">`)
@@ -455,8 +502,11 @@ func TestLoad_GroupConditionTrackingCharged(t *testing.T) {
   <fields>%s</fields>
 </fix>`, levels, c0.String(), comps.String(), defs.String())
 
-	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+	if err := resolveWithin(t, xml, 4_000); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
 		t.Fatalf("expected expansion error, got %v", err)
+	}
+	if err := resolveWithin(t, xml, 30_000); err != nil {
+		t.Fatalf("within budget: %v", err)
 	}
 }
 
@@ -598,21 +648,43 @@ func TestLoad_ReferenceChildrenRejected(t *testing.T) {
 	}
 }
 
+// Unknown elements are skipped, but still counted, up to the limit of a
+// QuickFIX dictionary, or the larger one of an Orchestra repository. Nested,
+// they are skipped without recursion. At limits of 64 and 256, not 2^18 and
+// 2^20.
 func TestLoad_ElementLimit(t *testing.T) {
-	// Unknown elements are skipped, but still counted.
-	dict := func(elements int) string {
-		return `<fix major="4" minor="4">` + strings.Repeat("<x/>", elements-1) + `</fix>`
+	lim := defaultLimits()
+	lim.elements, lim.orchestraElements = 64, 256
+	const quickfix, orchestra = `<fix major="4" minor="4">`, `<fixr:repository xmlns:fixr="` + orchestraNS + `" name="FIX.4.4">`
+	flat := func(root, end string, elements int) string {
+		return root + strings.Repeat("<x/>", elements-1) + end
 	}
-	if _, err := Load(strings.NewReader(dict(maxElements))); err != nil {
-		t.Errorf("maxElements elements: %v", err)
+	nested := func(root, end string, elements int) string {
+		return root + strings.Repeat("<x>", elements-1) + strings.Repeat("</x>", elements-1) + end
 	}
-	if _, err := Load(strings.NewReader(dict(maxElements + 1))); err == nil || !strings.Contains(err.Error(), "more than") {
-		t.Errorf("maxElements+1 elements: got %v, want element limit error", err)
-	}
-	// Nested unknown elements are skipped without recursion.
-	nested := `<fix>` + strings.Repeat("<x>", maxElements) + strings.Repeat("</x>", maxElements) + `</fix>`
-	if _, err := Load(strings.NewReader(nested)); err == nil || !strings.Contains(err.Error(), "more than") {
-		t.Errorf("nested elements: got %v, want element limit error", err)
+	for _, tc := range []struct {
+		name string
+		xml  string
+		ok   bool
+	}{
+		{"QuickFIX at the limit", flat(quickfix, `</fix>`, 64), true},
+		{"QuickFIX past it", flat(quickfix, `</fix>`, 65), false},
+		{"QuickFIX nested past it", nested(quickfix, `</fix>`, 65), false},
+		{"QuickFIX between the limits", flat(quickfix, `</fix>`, 100), false},
+		{"Orchestra between the limits", flat(orchestra, `</fixr:repository>`, 100), true},
+		{"Orchestra at its limit", flat(orchestra, `</fixr:repository>`, 256), true},
+		{"Orchestra past it", flat(orchestra, `</fixr:repository>`, 257), false},
+		{"Orchestra nested past it", nested(orchestra, `</fixr:repository>`, 257), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := load(strings.NewReader(tc.xml), lim)
+			if tc.ok && err != nil {
+				t.Errorf("got %v, want no error", err)
+			}
+			if !tc.ok && (err == nil || !strings.Contains(err.Error(), "more than")) {
+				t.Errorf("got %v, want an element limit error", err)
+			}
+		})
 	}
 }
 
@@ -742,7 +814,8 @@ const nestedDictXML = `<fix type="FIX" major="5" minor="0" servicepack="2">
 
 func testExponentialExpansion(t *testing.T, c0 string) {
 	// Each Cn references C(n-1) twice, so M expands to 2^30 copies of C0
-	// although the dictionary is tiny and acyclic.
+	// although the dictionary is tiny and acyclic: past a budget of 10,000
+	// as past maxVisits, reached sooner.
 	const depth = 30
 	var comps strings.Builder
 	comps.WriteString(c0)
@@ -756,7 +829,7 @@ func testExponentialExpansion(t *testing.T, c0 string) {
   <fields><field number="1" name="F" type="STRING"/></fields>
 </fix>`, depth, comps.String())
 
-	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+	if err := resolveWithin(t, xml, 10_000); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
 		t.Fatalf("expected expansion error, got %v", err)
 	}
 }
@@ -766,11 +839,31 @@ func testExponentialExpansion(t *testing.T, c0 string) {
 // the whole test binary.
 func loadWithin(t *testing.T, xml string) error {
 	t.Helper()
-	done := make(chan error, 1)
-	go func() {
+	return within(t, func() error {
 		_, err := Load(strings.NewReader(xml))
-		done <- err
-	}()
+		return err
+	})
+}
+
+// resolveWithin decodes a dictionary and resolves it within budget, failing
+// the test as loadWithin does.
+func resolveWithin(t *testing.T, xml string, budget int) error {
+	t.Helper()
+	xd, err := decode(strings.NewReader(xml), defaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return within(t, func() error {
+		_, err := resolve(xd, budget)
+		return err
+	})
+}
+
+// within runs f, failing the test if it does not return within 10 seconds.
+func within(t *testing.T, f func() error) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- f() }()
 	select {
 	case err := <-done:
 		return err
@@ -778,6 +871,18 @@ func loadWithin(t *testing.T, xml string) error {
 		t.Fatal("Load did not return within 10s")
 		return nil
 	}
+}
+
+// countingReader counts the bytes read from r.
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // endless yields 'a' forever.

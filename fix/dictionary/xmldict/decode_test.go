@@ -66,9 +66,9 @@ func TestDecodeMatchesEncodingXML(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var want xmlDict
 			werr := xml.Unmarshal([]byte(doc), &want)
-			got, err := decode(strings.NewReader(doc))
+			got, err := decode(strings.NewReader(doc), defaultLimits())
 			checkSame(t, "whole", &want, werr, got, err)
-			got, err = decode(iotest.OneByteReader(strings.NewReader(doc)))
+			got, err = decode(iotest.OneByteReader(strings.NewReader(doc)), defaultLimits())
 			checkSame(t, "byte by byte", &want, werr, got, err)
 		})
 	}
@@ -94,7 +94,7 @@ func TestDecodeNumberLikeEncodingXML(t *testing.T) {
 		doc := `<fix xmlns:g="urn:g"><fields><field ` + number + ` name="A"/></fields></fix>`
 		var want xmlDict
 		werr := xml.Unmarshal([]byte(doc), &want)
-		got, err := decode(strings.NewReader(doc))
+		got, err := decode(strings.NewReader(doc), defaultLimits())
 		checkSame(t, number, &want, werr, got, err)
 	}
 }
@@ -123,10 +123,11 @@ func TestMarkupLimits(t *testing.T) {
 		{"DOCTYPE with a quote in a comment", `<!DOCTYPE fix [<!-- ' -->]><fix>` + strings.Repeat("x", maxTagLen) + `</fix>`, "not supported"},
 		{"invalid <! sequence", `<fix><!-x></fix>`, "not supported"},
 		{"invalid CDATA opening", `<fix><![CDAT x]]></fix>`, "not supported"},
-		{"long comment", `<!--` + strings.Repeat("<a b='c'>", maxTagLen) + `--><fix/>`, ""},
-		{"long CDATA", `<fix><![CDATA[` + strings.Repeat("<a b='c'>", maxTagLen) + `]]></fix>`, ""},
-		{"long PI", `<?pi ` + strings.Repeat("<a b='c'>", maxTagLen) + `?><fix/>`, ""},
-		{"long text", `<fix>` + strings.Repeat("a=b ", maxTagLen) + `</fix>`, ""},
+		// Longer than a tag may be: the limit is not theirs.
+		{"long comment", `<!--` + strings.Repeat("<a b='c'>", maxTagLen/9+1) + `--><fix/>`, ""},
+		{"long CDATA", `<fix><![CDATA[` + strings.Repeat("<a b='c'>", maxTagLen/9+1) + `]]></fix>`, ""},
+		{"long PI", `<?pi ` + strings.Repeat("<a b='c'>", maxTagLen/9+1) + `?><fix/>`, ""},
+		{"long text", `<fix>` + strings.Repeat("a=b ", maxTagLen/4+1) + `</fix>`, ""},
 		{"comment with dashes", `<!-- a-b- -x- --><fix` + attrs(maxAttrs) + `/>`, ""},
 		{"comment then too many attributes", `<!-- a-b- --><fix` + attrs(maxAttrs+1) + `/>`, "more than 16 attributes"},
 		{"CDATA ending in ]]]>", `<fix><![CDATA[ x ]]]><x` + attrs(maxAttrs+1) + `/></fix>`, "more than 16 attributes"},
@@ -139,7 +140,7 @@ func TestMarkupLimits(t *testing.T) {
 				if oneByte {
 					r = iotest.OneByteReader(r)
 				}
-				_, err := decode(r)
+				_, err := decode(r, defaultLimits())
 				if tt.err == "" && err != nil {
 					t.Errorf("oneByte=%v: unexpected error %v", oneByte, err)
 				}

@@ -24,15 +24,16 @@ const maxOrchestraElements = 1 << 20
 // nesting as it reads them.
 type decoder struct {
 	d        *xml.Decoder
+	lim      limits
 	elements int
-	limit    int // elements allowed
+	limit    int // elements allowed: lim's, of a QuickFIX dictionary or an Orchestra repository
 }
 
 // decode reads a QuickFIX dictionary, or an Orchestra repository (see
 // decodeOrchestra). Like encoding/xml, it takes the first element whatever
-// its name as the root, and skips unknown elements.
-func decode(r io.Reader) (*xmlDict, error) {
-	dec := &decoder{d: xml.NewDecoder(&markupLimiter{r: r}), limit: maxElements}
+// its name as the root, and skips unknown elements, within lim.
+func decode(r io.Reader, lim limits) (*xmlDict, error) {
+	dec := &decoder{d: xml.NewDecoder(&markupLimiter{r: r}), lim: lim, limit: lim.elements}
 	var root xml.StartElement
 	for {
 		tok, err := dec.d.Token()
@@ -48,7 +49,7 @@ func decode(r io.Reader) (*xmlDict, error) {
 	if ok, err := isOrchestra(root); err != nil {
 		return nil, err
 	} else if ok {
-		dec.limit = maxOrchestraElements
+		dec.limit = lim.orchestraElements
 		return dec.orchestra(root)
 	}
 	xd := &xmlDict{

@@ -1154,8 +1154,8 @@ func TestValidate_EnvelopeActivationPerMessage(t *testing.T) {
 
 func TestValidate_ManyGroupsIsLinear(t *testing.T) {
 	// The same message, 8,000 repetitions of an allowed field before a
-	// group counter, validated against a message with 500 optional groups
-	// or 16,000: each field's counter lookup is one table lookup, not a
+	// group counter, validated against a message with 128 optional groups
+	// or 4,096: each field's counter lookup is one table lookup, not a
 	// scan of the group specs.
 	load := func(n int) *dictionary.Dict {
 		var groups, fields strings.Builder
@@ -1176,7 +1176,7 @@ func TestValidate_ManyGroupsIsLinear(t *testing.T) {
 	// collection, or a busy spell of the machine, cannot fall on every
 	// round of one and none of the other, as it could timed one after the
 	// other.
-	small, large := load(500), load(16000)
+	small, large := load(128), load(4096)
 	runtime.GC()
 	time1 := func(d *dictionary.Dict) time.Duration {
 		start := time.Now()
