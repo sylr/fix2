@@ -60,6 +60,9 @@ func TestStoreTimeout(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		hs := newHangStore()
 		s, p := hangingSession(t, hs)
+		// The session settled first: none of its goroutines may wait on its
+		// lock, held across the hung write, where fake time cannot pass.
+		synctest.Wait()
 		hs.hang.Store(true)
 		sent := make(chan error, 1)
 		go func() {
@@ -111,6 +114,9 @@ func TestStoreTimeout_StopsLogoutHanging(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		hs := newHangStore()
 		s, _ := hangingSession(t, hs)
+		// The session settled first: none of its goroutines may wait on its
+		// lock, held across the hung write, where fake time cannot pass.
+		synctest.Wait()
 		hs.hang.Store(true)
 		stopped := make(chan error, 1)
 		go func() { stopped <- s.Stop(context.Background()) }()
@@ -240,6 +246,9 @@ func TestStoreTimeout_LoggerHangs(t *testing.T) {
 		})
 		t.Cleanup(hs.unblock)
 		t.Cleanup(func() { close(logged) })
+		// The session settled first: none of its goroutines may wait on its
+		// lock, held across the hung write, where fake time cannot pass.
+		synctest.Wait()
 		hs.hang.Store(true)
 		go s.Send(context.Background(), order("O1"))
 		p.expectEnd(5 * time.Second)

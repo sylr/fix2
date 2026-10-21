@@ -635,8 +635,17 @@ func TestStoreTargetDivergenceHalts(t *testing.T) {
 func TestStoreTargetBatching(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fs := &targetStore{Store: memstore.New()}
-		s, rec, p := loggedOn(t, func(c *session.Config) { c.Store = fs })
+		gate := make(chan struct{})
+		s, rec, p := loggedOn(t, func(c *session.Config) {
+			c.Store = fs
+			c.Handler = gatedApps{recorder: c.Handler.(*recorder), gate: gate}
+		})
 		p.sendOrders(300)
+		// All read before any is delivered: a backlog, which delivery
+		// would otherwise not always have, each order delivered and its
+		// queue idle before the next is read.
+		synctest.Wait()
+		close(gate)
 		rec.wait(t, func() bool { return len(rec.apps) == 300 })
 		waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
 		fs.mu.Lock()
@@ -650,6 +659,17 @@ func TestStoreTargetBatching(t *testing.T) {
 			t.Errorf("NextTarget recorded %d times for 300 messages", len(fs.sets))
 		}
 	})
+}
+
+// gatedApps delivers application messages once gate is closed.
+type gatedApps struct {
+	*recorder
+	gate chan struct{}
+}
+
+func (g gatedApps) FromApp(ctx context.Context, s *session.Session, m *fix.Message, in session.Inbound) error {
+	<-g.gate
+	return g.recorder.FromApp(ctx, s, m, in)
 }
 
 // resetStore makes Reset, or the Open reloading the state after it, fail
