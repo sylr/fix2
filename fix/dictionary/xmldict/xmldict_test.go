@@ -345,10 +345,12 @@ func TestLoad_DeepNesting(t *testing.T) {
 }
 
 func TestLoad_NestedGroupCopiesCharged(t *testing.T) {
-	// C0 holds 40,000 fields and each Ci wraps C(i-1) in a group. Few items
-	// are visited, but every group level copies all its descendants into its
-	// parent: about 30 x 40,000 copied refs, above maxVisits.
-	const fields, levels = 40_000, 30
+	// C0 holds 400 fields and each Ci wraps C(i-1) in a group. About 500
+	// items are visited, but every group level copies all its descendants
+	// into its parent: about 30 x 400 copied refs, above a budget of 10,000.
+	// The components are required: an optional one would charge its
+	// condition's bookkeeping as much, hiding a copy not charged.
+	const fields, levels, budget = 400, 30, 10_000
 	var defs, c0, comps strings.Builder
 	c0.WriteString(`<component name="C0">`)
 	for i := range fields {
@@ -358,17 +360,25 @@ func TestLoad_NestedGroupCopiesCharged(t *testing.T) {
 	c0.WriteString(`</component>`)
 	for i := 1; i <= levels; i++ {
 		fmt.Fprintf(&defs, `<field number="%d" name="NoG%d" type="NUMINGROUP"/>`, 100+i, i)
-		fmt.Fprintf(&comps, `<component name="C%d"><group name="NoG%d" required="N"><component name="C%d" required="N"/></group></component>`, i, i, i-1)
+		fmt.Fprintf(&comps, `<component name="C%d"><group name="NoG%d" required="N"><component name="C%d" required="Y"/></group></component>`, i, i, i-1)
 	}
 	xml := fmt.Sprintf(`<fix type="FIX" major="4" minor="4">
   <header/><trailer/>
-  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="N"/></message></messages>
+  <messages><message name="M" msgtype="M" msgcat="app"><component name="C%d" required="Y"/></message></messages>
   <components>%s%s</components>
   <fields>%s</fields>
 </fix>`, levels, c0.String(), comps.String(), defs.String())
 
-	if err := loadWithin(t, xml); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
+	xd, err := decode(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolve(xd, budget); err == nil || !strings.Contains(err.Error(), "expansion exceeds") {
 		t.Fatalf("expected expansion error, got %v", err)
+	}
+	// Within maxVisits, it loads.
+	if _, err := Load(strings.NewReader(xml)); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -132,7 +132,11 @@ func Load(r io.Reader) (*dictionary.Dict, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dictionary: %w", err)
 	}
-	return resolve(xd)
+	budget := maxVisits
+	if xd.orchestra {
+		budget = maxOrchestraVisits
+	}
+	return resolve(xd, budget)
 }
 
 // LoadFile parses a QuickFIX XML dictionary, or an Orchestra repository, from
@@ -150,7 +154,9 @@ func LoadFile(path string) (*dictionary.Dict, error) {
 // Resolution
 // ---------------------------------------------------------------------------
 
-func resolve(xd *xmlDict) (*dictionary.Dict, error) {
+// resolve flattens xd into a dictionary, visiting budget items at most (see
+// maxVisits).
+func resolve(xd *xmlDict, budget int) (*dictionary.Dict, error) {
 	d := &dictionary.Dict{
 		Type:        xd.Type,
 		Major:       xd.Major,
@@ -203,10 +209,7 @@ func resolve(xd *xmlDict) (*dictionary.Dict, error) {
 		groupMap[g.Name] = g
 	}
 
-	r := &resolver{byName: byName, compMap: compMap, groupMap: groupMap, visiting: map[visit]bool{}, maxVisits: maxVisits}
-	if xd.orchestra {
-		r.maxVisits = maxOrchestraVisits
-	}
+	r := &resolver{byName: byName, compMap: compMap, groupMap: groupMap, visiting: map[visit]bool{}, maxVisits: budget}
 
 	// 3. Flatten header.
 	header, err := r.resolve(xd.Header.Items)

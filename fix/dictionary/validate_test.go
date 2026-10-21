@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -1171,19 +1172,25 @@ func TestValidate_ManyGroupsIsLinear(t *testing.T) {
 		return d
 	}
 	msg := parseMsg(t, buildFIXMsg("35=M\x01"+strings.Repeat("100=f\x01", 8000)+"1000=0\x01"))
-	best := func(groups int) time.Duration {
-		d := load(groups)
-		best := time.Duration(math.MaxInt64)
-		for range 5 {
-			start := time.Now()
-			if err := d.ValidateWith(&msg, unknownTags); err != nil {
-				t.Fatal(err)
-			}
-			best = min(best, time.Since(start))
+	// Both loaded and their garbage collected first, then timed in turn: a
+	// collection, or a busy spell of the machine, cannot fall on every
+	// round of one and none of the other, as it could timed one after the
+	// other.
+	small, large := load(500), load(16000)
+	runtime.GC()
+	time1 := func(d *dictionary.Dict) time.Duration {
+		start := time.Now()
+		if err := d.ValidateWith(&msg, unknownTags); err != nil {
+			t.Fatal(err)
 		}
-		return best
+		return time.Since(start)
 	}
-	if r := float64(best(16000)) / float64(best(500)); r > 8 {
+	bestSmall, bestLarge := time.Duration(math.MaxInt64), time.Duration(math.MaxInt64)
+	for range 20 {
+		bestSmall = min(bestSmall, time1(small))
+		bestLarge = min(bestLarge, time1(large))
+	}
+	if r := float64(bestLarge) / float64(bestSmall); r > 8 {
 		t.Errorf("32x the groups took %.1fx longer for the same message", r)
 	}
 }
