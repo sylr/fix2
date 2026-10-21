@@ -60,6 +60,11 @@ type conn struct {
 	// (finishedExchange); repetitions of the peer's FinishedSending share
 	// one queued or being written.
 	finRecv finRecvState
+	// owed is set when the connection began with the peer's flow recorded
+	// finished: our last FinishedReceiving may not have reached it, and
+	// no Terminate exchange finalizes until one is written here
+	// (startFinish, finishedExchange).
+	owed bool
 	// ours is our Terminate, queued or written; peers the peer's, when it
 	// terminated first.
 	ours, peers *fixp.TerminatedError

@@ -208,12 +208,13 @@ func TestFinishResumedOnReconnect(t *testing.T) {
 	r2 := dialRaw(t, l)
 	r2.id = r.id
 	r2.establish(1000, codec.Optional[uint64]{}, "user:alice")
-	// The server's FinishedSending again; ours, unanswered here, answered
-	// again.
+	// The server's FinishedSending again, and its FinishedReceiving, which
+	// it cannot know reached us; ours, repeated, answered again.
 	var fs codec.FinishedSending
 	if _, err := fs.Decode(r2.readTemplate(codec.FinishedSendingTemplateID)); err != nil || !fs.LastSeqNo.Valid || fs.LastSeqNo.Value != 0 {
 		t.Fatalf("FinishedSending: %+v, %v", fs, err)
 	}
+	r2.readTemplate(codec.FinishedReceivingTemplateID)
 	r2.send(&codec.FinishedSending{SessionId: r2.id})
 	r2.readTemplate(codec.FinishedReceivingTemplateID)
 	r2.send(&codec.FinishedReceiving{SessionId: r2.id})
@@ -223,6 +224,102 @@ func TestFinishResumedOnReconnect(t *testing.T) {
 	if srv.Session(r.id) != nil {
 		t.Error("finalized session still served")
 	}
+}
+
+// Both flows recorded finished, our FinishedReceiving lost with the
+// connection: on the next establishment, it comes again before the
+// Terminate, or the peer, its flow unanswered, could not finalize, the
+// session finalized here on the Terminate exchange.
+func TestFinishedReceivingAgainOnReconnect(t *testing.T) {
+	l := mem.Listen("server")
+	h := newRecorder()
+	srv, cancel, done := newServer(t, l, memstore.New(), h, fixp.Idempotent, nil)
+	defer func() { cancel(); <-done }()
+	id := loseFinishedReceiving(t, l, h, srv)
+
+	r := dialRaw(t, l)
+	r.id = id
+	r.establish(1000, codec.Optional[uint64]{}, "user:alice")
+	r.readTemplate(codec.FinishedReceivingTemplateID)
+	r.terminated(fixp.TerminationFinished, "finished")
+	r.send(&codec.Terminate{SessionId: r.id, Code: codec.TerminationCodeFinished})
+	h.skipUntil(t, "finalized")
+}
+
+// The FinishedReceiving owed, but OnEstablished terminating first, leaving
+// no room for it: that connection's Terminate exchange, ours answered or
+// the peer's crossing it, does not finalize the session, the next
+// establishment answering.
+func TestFinishedReceivingOwedNotFinalized(t *testing.T) {
+	for _, peerFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("peer first=%v", peerFirst), func(t *testing.T) { finishedReceivingOwed(t, peerFirst) })
+	}
+}
+
+func finishedReceivingOwed(t *testing.T, peerFirst bool) {
+	l := mem.Listen("server")
+	h := &terminatingOnEstablished{recorder: newRecorder(), at: 2}
+	srv, cancel, done := newServer(t, l, memstore.New(), h, fixp.Idempotent, nil)
+	defer func() { cancel(); <-done }()
+	id := loseFinishedReceiving(t, l, h.recorder, srv)
+
+	r := dialRaw(t, l)
+	r.id = id
+	r.establish(1000, codec.Optional[uint64]{}, "user:alice")
+	if peerFirst {
+		// Ours, a graceful unbinding, is Finished too (§7.3.4).
+		r.send(&codec.Terminate{SessionId: r.id, Code: codec.TerminationCodeFinished})
+		r.until(codec.TerminateTemplateID)
+	} else {
+		r.terminated(fixp.TerminationFinished, "bye")
+		r.send(&codec.Terminate{SessionId: r.id, Code: codec.TerminationCodeFinished})
+	}
+	h.skipUntil(t, "unbound")
+
+	// Finalized, or finalizing, it would refuse this establishment.
+	r = dialRaw(t, l)
+	r.id = id
+	r.establish(1000, codec.Optional[uint64]{}, "user:alice")
+	r.readTemplate(codec.FinishedReceivingTemplateID)
+	r.terminated(fixp.TerminationFinished, "finished")
+	r.send(&codec.Terminate{SessionId: r.id, Code: codec.TerminationCodeFinished})
+	h.skipUntil(t, "finalized")
+}
+
+// terminatingOnEstablished terminates the session on its at-th
+// establishment, from OnEstablished.
+type terminatingOnEstablished struct {
+	*recorder
+	n  atomic.Int32
+	at int32
+}
+
+func (h *terminatingOnEstablished) OnEstablished(ctx context.Context, s *Session) {
+	h.recorder.OnEstablished(ctx, s)
+	if h.n.Add(1) == h.at {
+		s.Terminate(ctx, "bye")
+	}
+}
+
+// loseFinishedReceiving establishes a session with a raw client on srv,
+// whose flows both finish, the server's FinishedReceiving never read, then
+// closes the connection. It returns the session's ID.
+func loseFinishedReceiving(t *testing.T, l *mem.Listener, h *recorder, srv *Server) fixp.SessionID {
+	t.Helper()
+	r := dialRaw(t, l)
+	if !rawHandshake(r, fixp.Unsequenced, codec.Optional[uint64]{}) {
+		t.Fatal("handshake")
+	}
+	h.expect(t, "established")
+	r.send(&codec.FinishedSending{SessionId: r.id})
+	r.readTemplate(codec.FinishedSendingTemplateID)
+	// The server's flow acknowledged, its FinishedReceiving never read.
+	r.send(&codec.FinishedReceiving{SessionId: r.id})
+	s := srv.Session(r.id)
+	eventually(t, func() bool { out, in := s.finishes(); return out.Finished && in.Finished })
+	r.c.Close()
+	h.skipUntil(t, "unbound")
+	return r.id
 }
 
 func TestFinishViolations(t *testing.T) {

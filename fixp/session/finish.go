@@ -136,12 +136,25 @@ func (s *Session) finishedSendingFrame() []byte {
 }
 
 // startFinish resumes finalization on a new connection: our FinishedSending
-// again if unanswered, the Terminate if both flows finished.
+// again if unanswered; our FinishedReceiving again if the peer's flow is
+// recorded finished, the last one possibly lost with the connection, or
+// with a crash, before it was written: the peer, unanswered, could not
+// finalize, and our Terminate would leave no room for the answer to its
+// FinishedSending repeated (queueFinishedReceiving); then the Terminate if
+// both flows finished. A Terminate queued already, by OnEstablished, leaves
+// no room for it either: owed, the session is not finalized on that
+// connection's Terminate exchange, whoever began it (finishedExchange).
 func (c *conn) startFinish() error {
 	s := c.s
-	out, _ := s.finishes()
+	out, in := s.finishes()
 	if out.Finishing && !out.Finished {
 		s.q.pushFinish(c, s.finishedSendingFrame(), false)
+	}
+	if in.Finished {
+		c.mu.Lock()
+		c.owed = true
+		c.mu.Unlock()
+		c.queueFinishedReceiving()
 	}
 	return c.maybeTerminate()
 }
@@ -349,13 +362,16 @@ func (c *conn) finishedExchange() bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.finRecv == finRecvQueued || c.finRecv == finRecvWriting {
-		// Our answer to the peer's flow not written: the peer never heard
-		// it, whatever Terminate came; re-establishable.
+	if c.finRecv == finRecvQueued || c.finRecv == finRecvWriting || c.owed && c.finRecv != finRecvWritten {
+		// Our answer to the peer's flow not written, here or, owed, on
+		// the connection it was lost with: the peer may never have heard
+		// it, whatever Terminate came (a graceful one is Finished too,
+		// §7.3.4); re-establishable.
 		return false
 	}
-	// Ours written whole and answered, or the peer's, sent once it heard
-	// our FinishedReceiving.
+	// Ours written whole and answered, or the peer's answered: our
+	// FinishedReceiving, if any here, was written before either, the
+	// answer to the peer's writing a queued one first (takeUrgent).
 	return c.answered && c.sent || c.peers != nil && c.peers.Code == fixp.TerminationFinished
 }
 
