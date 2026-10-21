@@ -342,6 +342,25 @@ func TestStop(t *testing.T) {
 	}
 }
 
+// Stop from OnLogon logs out, the connection finding the LogonAck and the
+// Stop both there or not: logged on, it is ended by a Logout.
+func TestStopFromOnLogon(t *testing.T) {
+	for range 50 {
+		f, h := newFake(t), newRecorder()
+		c, done := start(t, testConfig(f, h), time.Hour, func(c *Client) {
+			h.onLogon = func(LogonEvent) { c.Stop() }
+		})
+		p := f.accept()
+		p.logon(t, &c.cfg)
+		p.expect(t, fixsbe.LogoutTemplateID)
+		p.send(t, &fixsbe.Logout{Text: []byte("Logout acknowledgment.")})
+		p.ended(t)
+		if err := runErr(t, done); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+}
+
 // Run's context done logs out too.
 func TestContextDone(t *testing.T) {
 	f, h := newFake(t), newRecorder()

@@ -283,18 +283,26 @@ func (k *conn) run(ctx context.Context) result {
 	logonTimer := time.NewTimer(cfg.LogonTimeout)
 	defer logonTimer.Stop()
 	early := false
+	// Logged on already, another case ready too, as a Stop from OnLogon
+	// before this select is reached: the way below, which logs out.
 	select {
 	case <-k.loggedOn:
 	case <-k.ended:
 	case <-logonTimer.C:
-		k.end(ErrLogonTimeout, false)
-		early = true
+		if !k.isLoggedOn() {
+			k.end(ErrLogonTimeout, false)
+			early = true
+		}
 	case <-ctx.Done():
-		k.end(nil, false)
-		early, res.stopped = true, true
+		if !k.isLoggedOn() {
+			k.end(nil, false)
+			early, res.stopped = true, true
+		}
 	case <-c.stop:
-		k.end(nil, false)
-		early, res.stopped = true, true
+		if !k.isLoggedOn() {
+			k.end(nil, false)
+			early, res.stopped = true, true
+		}
 	}
 	if early || !k.isLoggedOn() {
 		// Ended before the Logon was answered, or as it was. Once
@@ -352,19 +360,28 @@ wait:
 		}
 		k.logout(text, reason)
 		t := time.NewTimer(cfg.LogoutTimeout)
+		written := false
 		select {
 		case <-k.logoutWritten:
-			if waitPeer {
-				select {
-				case <-k.peerLogout:
-				case <-k.readerDone:
-				case <-t.C:
-					log.LogAttrs(ctx, slog.LevelWarn, "no Logout answering ours")
-				}
-			}
+			written = true
 		case <-k.writerDone:
+			// The writer ends once the Logout is written, which it tells
+			// first: both may be ready.
+			select {
+			case <-k.logoutWritten:
+				written = true
+			default:
+			}
 		case <-t.C:
 			log.LogAttrs(ctx, slog.LevelWarn, "our Logout not written in time")
+		}
+		if written && waitPeer {
+			select {
+			case <-k.peerLogout:
+			case <-k.readerDone:
+			case <-t.C:
+				log.LogAttrs(ctx, slog.LevelWarn, "no Logout answering ours")
+			}
 		}
 		t.Stop()
 	}
