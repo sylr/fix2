@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -44,15 +45,19 @@ func TestUnsequenced(t *testing.T) {
 	}
 }
 
+// On synctest's fake clock: on the real one, a heartbeat written late
+// under load lapses the peer's 75ms, which is not what this checks.
 func TestKeepalive(t *testing.T) {
-	p := newPair(t, pairOptions{clientFlow: fixp.Unsequenced, serverFlow: fixp.Idempotent})
-	// Idle for ten intervals: heartbeats keep both ends up.
-	p.clientH.quiet(t, 500*time.Millisecond)
-	p.srvH.quiet(t, 0)
-	cs, ss := p.client.Session(), p.serverSession(t)
-	if cs.Stats().HeartbeatsSent.Load() < 5 || ss.Stats().HeartbeatsSent.Load() < 5 {
-		t.Errorf("heartbeats: client %d, server %d", cs.Stats().HeartbeatsSent.Load(), ss.Stats().HeartbeatsSent.Load())
-	}
+	synctest.Test(t, func(t *testing.T) {
+		p := newPair(t, pairOptions{clientFlow: fixp.Unsequenced, serverFlow: fixp.Idempotent})
+		// Idle for ten intervals: heartbeats keep both ends up.
+		p.clientH.quiet(t, 500*time.Millisecond)
+		p.srvH.quiet(t, 0)
+		cs, ss := p.client.Session(), p.serverSession(t)
+		if cs.Stats().HeartbeatsSent.Load() < 5 || ss.Stats().HeartbeatsSent.Load() < 5 {
+			t.Errorf("heartbeats: client %d, server %d", cs.Stats().HeartbeatsSent.Load(), ss.Stats().HeartbeatsSent.Load())
+		}
+	})
 }
 
 func TestSequenced(t *testing.T) {

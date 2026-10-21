@@ -264,6 +264,7 @@ func TestRetransmissionBatches(t *testing.T) {
 			rr := r.request(2, 6)
 			r.batch(rr.Timestamp, 2, 2)
 			rr2 := r.request(4, 4)
+			r.mayEnd = true // terminated on the Retransmission, its messages unread
 			tc.send(r, rr.Timestamp, rr2.Timestamp)
 			r.terminated(fixp.TerminationUnspecifiedError, tc.reason)
 		})

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -774,30 +775,34 @@ func TestPartialWriteObserved(t *testing.T) {
 
 // A queue never empty, each message waiting for a slow Sync, still
 // writes within a quarter of a keepalive interval: the peer sees traffic.
+// On synctest's fake clock: on the real one, a heartbeat or a Sync late
+// under load lapses an end's interval, which is not what this checks.
 func TestBatchAgeBounded(t *testing.T) {
-	l := mem.Listen("server")
-	srvH := &countingHandler{}
-	_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
-	defer func() { cancelSrv(); <-srvDone }()
-	cliH := newRecorder()
-	c := newClient(t, l, slowSyncStore{memstore.New(), 10 * time.Millisecond}, cliH, fixp.Recoverable, func(c *ClientConfig) {
-		c.KeepaliveInterval = 100 * time.Millisecond
-		c.KeepaliveLeniency = 1.5
+	synctest.Test(t, func(t *testing.T) {
+		l := mem.Listen("server")
+		srvH := &countingHandler{}
+		_, cancelSrv, srvDone := newServer(t, l, memstore.New(), srvH, fixp.Unsequenced, nil)
+		defer func() { cancelSrv(); <-srvDone }()
+		cliH := newRecorder()
+		c := newClient(t, l, slowSyncStore{memstore.New(), 10 * time.Millisecond}, cliH, fixp.Recoverable, func(c *ClientConfig) {
+			c.KeepaliveInterval = 100 * time.Millisecond
+			c.KeepaliveLeniency = 1.5
+		})
+		cancelCli, cliDone := runClient(c)
+		defer func() { cancelCli(); <-cliDone }()
+		cliH.expect(t, "established")
+		ctx, stop := context.WithTimeout(bg, time.Second)
+		defer stop()
+		// A message a millisecond: some come during each Sync, the queue
+		// never empty, 64 KiB seconds away.
+		for ctx.Err() == nil {
+			c.Session().Send(ctx, appMsg{1, "x"})
+			time.Sleep(time.Millisecond)
+		}
+		if srvH.unbound.Load() != 0 || srvH.n.Load() == 0 {
+			t.Fatalf("%d unbindings, %d messages received", srvH.unbound.Load(), srvH.n.Load())
+		}
 	})
-	cancelCli, cliDone := runClient(c)
-	defer func() { cancelCli(); <-cliDone }()
-	cliH.expect(t, "established")
-	ctx, stop := context.WithTimeout(bg, time.Second)
-	defer stop()
-	// A message a millisecond: some come during each Sync, the queue never
-	// empty, 64 KiB seconds away.
-	for ctx.Err() == nil {
-		c.Session().Send(ctx, appMsg{1, "x"})
-		time.Sleep(time.Millisecond)
-	}
-	if srvH.unbound.Load() != 0 || srvH.n.Load() == 0 {
-		t.Fatalf("%d unbindings, %d messages received", srvH.unbound.Load(), srvH.n.Load())
-	}
 }
 
 // countingHandler counts the messages and unbindings.
