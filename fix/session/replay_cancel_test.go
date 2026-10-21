@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -211,21 +212,23 @@ func TestReplayCancelledByDisconnect(t *testing.T) {
 		{"waiting once read", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			st := newWaitingRangeStore(tc.at)
-			w := replayWaiting(t, st, order("O1"))
-			st.wait.Store(false)
-			w.p.conn.Close()
-			w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
+			synctest.Test(t, func(t *testing.T) {
+				st := newWaitingRangeStore(tc.at)
+				w := replayWaiting(t, st, order("O1"))
+				st.wait.Store(false)
+				w.p.conn.Close()
+				w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
 
-			p := acceptPeer(t, w.d.l)
-			p.seq = w.p.seq
-			p.expect("A", "34", "3")
-			p.send("A", 0, "98", "0", "108", "30")
-			w.h.wait(t, func() bool { return w.h.logons == 2 })
-			w.checkRetired(t, 0, 0)
-			p.send("2", 0, "7", "1", "16", "0")
-			p.expect("4", "34", "1", "36", "2", "123", "Y")
-			p.expect("D", "34", "2", "43", "Y", "11", "O1")
+				p := acceptPeer(t, w.d.l)
+				p.seq = w.p.seq
+				p.expect("A", "34", "3")
+				p.send("A", 0, "98", "0", "108", "30")
+				w.h.wait(t, func() bool { return w.h.logons == 2 })
+				w.checkRetired(t, 0, 0)
+				p.send("2", 0, "7", "1", "16", "0")
+				p.expect("4", "34", "1", "36", "2", "123", "Y")
+				p.expect("D", "34", "2", "43", "Y", "11", "O1")
+			})
 		})
 	}
 }
@@ -234,34 +237,36 @@ func TestReplayCancelledByDisconnect(t *testing.T) {
 // the messages it resent and gap-filled, and the loss of those beyond
 // retention a GapFill in it covered; not for what it read after.
 func TestReplayCancelledAfterChunk(t *testing.T) {
-	// The Logon, then O2 and O7 beyond retention, O3 to O6 filling more
-	// than a chunk: the replay waits at O7.
-	st := newWaitingRangeStore(7)
-	st.holes = map[uint64]bool{2: true, 7: true}
-	big := strings.Repeat("x", 20<<10)
-	w := replayWaiting(t, st, order("O2"),
-		order("O3").SetString(58, big), order("O4").SetString(58, big), order("O5").SetString(58, big), order("O6").SetString(58, big),
-		order("O7"), order("O8"))
-	w.p.expect("4", "34", "1", "36", "3", "123", "Y")
-	for seq := 3; seq <= 6; seq++ {
-		w.p.expect("D", "34", fmt.Sprint(seq), "43", "Y")
-	}
-	w.p.conn.Close()
-
-	p := acceptPeer(t, w.d.l)
-	p.seq = w.p.seq
-	p.expect("A", "34", "9")
-	p.send("A", 0, "98", "0", "108", "30")
-	w.h.wait(t, func() bool { return w.h.logons == 2 })
-	w.checkRetired(t, 4, 2, [2]uint64{2, 2})
-	if err := w.receipts[0].Err(); !errors.Is(err, session.ErrSkipped) {
-		t.Errorf("O2, gap-filled: Err = %v, want %v", err, session.ErrSkipped)
-	}
-	for _, r := range w.receipts[1:] {
-		if err := r.Err(); err != nil {
-			t.Errorf("an order resent or not read: Err = %v, want nil", err)
+	synctest.Test(t, func(t *testing.T) {
+		// The Logon, then O2 and O7 beyond retention, O3 to O6 filling more
+		// than a chunk: the replay waits at O7.
+		st := newWaitingRangeStore(7)
+		st.holes = map[uint64]bool{2: true, 7: true}
+		big := strings.Repeat("x", 20<<10)
+		w := replayWaiting(t, st, order("O2"),
+			order("O3").SetString(58, big), order("O4").SetString(58, big), order("O5").SetString(58, big), order("O6").SetString(58, big),
+			order("O7"), order("O8"))
+		w.p.expect("4", "34", "1", "36", "3", "123", "Y")
+		for seq := 3; seq <= 6; seq++ {
+			w.p.expect("D", "34", fmt.Sprint(seq), "43", "Y")
 		}
-	}
+		w.p.conn.Close()
+
+		p := acceptPeer(t, w.d.l)
+		p.seq = w.p.seq
+		p.expect("A", "34", "9")
+		p.send("A", 0, "98", "0", "108", "30")
+		w.h.wait(t, func() bool { return w.h.logons == 2 })
+		w.checkRetired(t, 4, 2, [2]uint64{2, 2})
+		if err := w.receipts[0].Err(); !errors.Is(err, session.ErrSkipped) {
+			t.Errorf("O2, gap-filled: Err = %v, want %v", err, session.ErrSkipped)
+		}
+		for _, r := range w.receipts[1:] {
+			if err := r.Err(); err != nil {
+				t.Errorf("an order resent or not read: Err = %v, want nil", err)
+			}
+		}
+	})
 }
 
 // A replay waiting in Range holds back neither Stop nor Run: the end of its
@@ -275,25 +280,27 @@ func TestReplayCancelledByStop(t *testing.T) {
 		{"Run cancelled", func(w *waitingReplay) error { w.cancel(); <-w.ran; return nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w := replayWaiting(t, newWaitingRangeStore(1), order("O1"))
-			stopped := make(chan error, 1)
-			go func() { stopped <- tc.stop(w) }()
-			select {
-			case err := <-stopped:
-				if err != nil {
-					t.Errorf("Stop = %v", err)
+			synctest.Test(t, func(t *testing.T) {
+				w := replayWaiting(t, newWaitingRangeStore(1), order("O1"))
+				stopped := make(chan error, 1)
+				go func() { stopped <- tc.stop(w) }()
+				select {
+				case err := <-stopped:
+					if err != nil {
+						t.Errorf("Stop = %v", err)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("stopping waited for the replay")
 				}
-			case <-time.After(5 * time.Second):
-				t.Fatal("stopping waited for the replay")
-			}
-			waitDone(t, w.s)
-			w.cancel()
-			select {
-			case <-w.ran:
-			case <-time.After(5 * time.Second):
-				t.Fatal("Run waited for the replay")
-			}
-			w.checkRetired(t, 0, 0)
+				waitDone(t, w.s)
+				w.cancel()
+				select {
+				case <-w.ran:
+				case <-time.After(5 * time.Second):
+					t.Fatal("Run waited for the replay")
+				}
+				w.checkRetired(t, 0, 0)
+			})
 		})
 	}
 }
@@ -310,49 +317,51 @@ func TestReplayWaitingHoldsBackLogout(t *testing.T) {
 			name = "crossing Logouts"
 		}
 		t.Run(name, func(t *testing.T) {
-			st := newWaitingRangeStore(1)
-			w := replayWaiting(t, st, order("O1"))
-			done := make(chan error, 1)
-			if crossing {
-				go func() { done <- w.s.Logout(context.Background(), "end of day") }()
-				waitFor(t, func() bool { return w.s.State() == session.StateLoggingOut })
-				w.p.send("5", 0)
-			} else {
-				w.p.send("5", 0, "58", "bye")
-				waitFor(t, func() bool { return w.s.State() == session.StateLoggingOut })
-				go func() { done <- w.s.Stop(context.Background()) }()
-			}
-			select {
-			case err := <-done:
-				if err != nil {
-					t.Errorf("logging out: %v", err)
+			synctest.Test(t, func(t *testing.T) {
+				st := newWaitingRangeStore(1)
+				w := replayWaiting(t, st, order("O1"))
+				done := make(chan error, 1)
+				if crossing {
+					go func() { done <- w.s.Logout(context.Background(), "end of day") }()
+					waitFor(t, func() bool { return w.s.State() == session.StateLoggingOut })
+					w.p.send("5", 0)
+				} else {
+					w.p.send("5", 0, "58", "bye")
+					waitFor(t, func() bool { return w.s.State() == session.StateLoggingOut })
+					go func() { done <- w.s.Stop(context.Background()) }()
 				}
-			case <-time.After(5 * time.Second):
-				t.Fatal("logging out waited for the replay")
-			}
-			w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
-			w.h.mu.Lock()
-			reason := w.h.logouts[0]
-			w.h.mu.Unlock()
-			var le *session.LogoutError
-			if !errors.As(reason, &le) || le.ByCounterparty == crossing || le.Err == nil || !strings.Contains(le.Err.Error(), "held back behind a resend") {
-				t.Errorf("logout reason %v, want the Logout's, held back behind the resend", reason)
-			}
-			if !crossing {
-				waitDone(t, w.s)
+				select {
+				case err := <-done:
+					if err != nil {
+						t.Errorf("logging out: %v", err)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("logging out waited for the replay")
+				}
+				w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
+				w.h.mu.Lock()
+				reason := w.h.logouts[0]
+				w.h.mu.Unlock()
+				var le *session.LogoutError
+				if !errors.As(reason, &le) || le.ByCounterparty == crossing || le.Err == nil || !strings.Contains(le.Err.Error(), "held back behind a resend") {
+					t.Errorf("logout reason %v, want the Logout's, held back behind the resend", reason)
+				}
+				if !crossing {
+					waitDone(t, w.s)
+					w.checkRetired(t, 0, 0)
+					return
+				}
+				st.wait.Store(false)
+				p := acceptPeer(t, w.d.l)
+				p.seq = w.p.seq
+				p.expect("A", "34", "4")
+				p.send("A", 0, "98", "0", "108", "30")
+				w.h.wait(t, func() bool { return w.h.logons == 2 })
 				w.checkRetired(t, 0, 0)
-				return
-			}
-			st.wait.Store(false)
-			p := acceptPeer(t, w.d.l)
-			p.seq = w.p.seq
-			p.expect("A", "34", "4")
-			p.send("A", 0, "98", "0", "108", "30")
-			w.h.wait(t, func() bool { return w.h.logons == 2 })
-			w.checkRetired(t, 0, 0)
-			p.send("2", 0, "7", "1", "16", "0")
-			p.expect("4", "34", "1", "36", "2", "123", "Y")
-			p.expect("D", "34", "2", "43", "Y", "11", "O1")
+				p.send("2", 0, "7", "1", "16", "0")
+				p.expect("4", "34", "1", "36", "2", "123", "Y")
+				p.expect("D", "34", "2", "43", "Y", "11", "O1")
+			})
 		})
 	}
 }
@@ -378,54 +387,56 @@ func (h *blockingResend) OnResend(context.Context, *session.Session, uint64, *fi
 // A replay whose connection ends while OnResend runs writes nothing to it
 // once ended: not the chunk the message it goes on to rewrite fills.
 func TestReplayCancelledInOnResend(t *testing.T) {
-	h := &blockingResend{lossRecorder: &lossRecorder{recorder: newRecorder()}, entered: make(chan struct{}, 1), release: make(chan struct{})}
-	w := &waitingReplay{h: h.lossRecorder, d: &endDialer{l: mem.Listen("acceptor")}, st: newWaitingRangeStore(0), ran: make(chan struct{})}
-	i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
-	var err error
-	w.s, err = i.Add(session.Config{
-		ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
-		Handler:       h,
-		Store:         w.st,
-		LogoutTimeout: 200 * time.Millisecond,
-	}, w.d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var ctx context.Context
-	ctx, w.cancel = context.WithCancel(context.Background())
-	go func() { defer close(w.ran); i.Run(ctx) }()
-	t.Cleanup(func() { w.cancel(); <-w.ran })
-	// Before the cleanup above, which would wait for OnResend.
-	release := sync.OnceFunc(func() { close(h.release) })
-	t.Cleanup(release)
-	w.p = acceptPeer(t, w.d.l)
-	w.p.expect("A")
-	w.p.send("A", 0, "98", "0", "108", "30")
-	w.h.wait(t, func() bool { return w.h.logons == 1 })
-	// More than a chunk on its own: written as soon as rewritten.
-	if _, err := w.s.Send(context.Background(), order("O1").SetString(58, strings.Repeat("x", 70<<10))); err != nil {
-		t.Fatal(err)
-	}
-	w.p.expect("D", "34", "2")
-	h.block.Store(true)
-	w.p.send("2", 0, "7", "1", "16", "0")
-	select {
-	case <-h.entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("OnResend not called")
-	}
-	w.p.conn.Close()
-	w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
-	h.block.Store(false)
-	release()
+	synctest.Test(t, func(t *testing.T) {
+		h := &blockingResend{lossRecorder: &lossRecorder{recorder: newRecorder()}, entered: make(chan struct{}, 1), release: make(chan struct{})}
+		w := &waitingReplay{h: h.lossRecorder, d: &endDialer{l: mem.Listen("acceptor")}, st: newWaitingRangeStore(0), ran: make(chan struct{})}
+		i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
+		var err error
+		w.s, err = i.Add(session.Config{
+			ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+			Handler:       h,
+			Store:         w.st,
+			LogoutTimeout: 200 * time.Millisecond,
+		}, w.d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ctx context.Context
+		ctx, w.cancel = context.WithCancel(context.Background())
+		go func() { defer close(w.ran); i.Run(ctx) }()
+		t.Cleanup(func() { w.cancel(); <-w.ran })
+		// Before the cleanup above, which would wait for OnResend.
+		release := sync.OnceFunc(func() { close(h.release) })
+		t.Cleanup(release)
+		w.p = acceptPeer(t, w.d.l)
+		w.p.expect("A")
+		w.p.send("A", 0, "98", "0", "108", "30")
+		w.h.wait(t, func() bool { return w.h.logons == 1 })
+		// More than a chunk on its own: written as soon as rewritten.
+		if _, err := w.s.Send(context.Background(), order("O1").SetString(58, strings.Repeat("x", 70<<10))); err != nil {
+			t.Fatal(err)
+		}
+		w.p.expect("D", "34", "2")
+		h.block.Store(true)
+		w.p.send("2", 0, "7", "1", "16", "0")
+		select {
+		case <-h.entered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("OnResend not called")
+		}
+		w.p.conn.Close()
+		w.h.wait(t, func() bool { return len(w.h.logouts) == 1 })
+		h.block.Store(false)
+		release()
 
-	// The next connection waits for the replay of the one ended.
-	p := acceptPeer(t, w.d.l)
-	p.seq = w.p.seq
-	p.expect("A", "34", "3")
-	p.send("A", 0, "98", "0", "108", "30")
-	w.h.wait(t, func() bool { return w.h.logons == 2 })
-	w.checkRetired(t, 0, 0)
+		// The next connection waits for the replay of the one ended.
+		p := acceptPeer(t, w.d.l)
+		p.seq = w.p.seq
+		p.expect("A", "34", "3")
+		p.send("A", 0, "98", "0", "108", "30")
+		w.h.wait(t, func() bool { return w.h.logons == 2 })
+		w.checkRetired(t, 0, 0)
+	})
 }
 
 // A Logon with ResetSeqNumFlag received once a stalled handler's Logout is
@@ -433,42 +444,44 @@ func TestReplayCancelledInOnResend(t *testing.T) {
 // reset would drop that Logout and the replay holding it back, and escape
 // the close deadline.
 func TestStallLogoutIgnoresResetLogon(t *testing.T) {
-	st := newWaitingRangeStore(1)
-	h := &stuck{recorder: newRecorder(), release: make(chan struct{})}
-	l := mem.Listen("acceptor")
-	s, _ := startInitiator(t, l, func(c *session.Config) {
-		c.Store, c.Handler, c.DeliveryQueue = st, h, 1
-		c.MaxDeliveryStall, c.LogoutTimeout = 50*time.Millisecond, 300*time.Millisecond
+	synctest.Test(t, func(t *testing.T) {
+		st := newWaitingRangeStore(1)
+		h := &stuck{recorder: newRecorder(), release: make(chan struct{})}
+		l := mem.Listen("acceptor")
+		s, _ := startInitiator(t, l, func(c *session.Config) {
+			c.Store, c.Handler, c.DeliveryQueue = st, h, 1
+			c.MaxDeliveryStall, c.LogoutTimeout = 50*time.Millisecond, 300*time.Millisecond
+		})
+		release := sync.OnceFunc(func() { close(h.release) })
+		t.Cleanup(release)
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.send("A", 0, "98", "0", "108", "30")
+		h.wait(t, func() bool { return h.logons == 1 })
+		if _, err := s.Send(context.Background(), order("O1")); err != nil {
+			t.Fatal(err)
+		}
+		p.expect("D")
+		st.wait.Store(true)
+		p.send("2", 0, "7", "1", "16", "0")
+		st.waitRange(t)
+		for i := range 5 {
+			p.send("D", 0, "11", strconv.Itoa(i))
+		}
+		waitFor(t, func() bool { return s.State() == session.StateStalled })
+		// The reader, room made, reads the reset.
+		release()
+		p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+		p.expectSilentEnd()
+		if s.State() == session.StateResettingSeqs {
+			t.Error("reset accepted after our Logout")
+		}
+		state, err := st.Open(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.Generation != 1 {
+			t.Errorf("store generation %d, want 1: reset after our Logout", state.Generation)
+		}
 	})
-	release := sync.OnceFunc(func() { close(h.release) })
-	t.Cleanup(release)
-	p := acceptPeer(t, l)
-	p.expect("A")
-	p.send("A", 0, "98", "0", "108", "30")
-	h.wait(t, func() bool { return h.logons == 1 })
-	if _, err := s.Send(context.Background(), order("O1")); err != nil {
-		t.Fatal(err)
-	}
-	p.expect("D")
-	st.wait.Store(true)
-	p.send("2", 0, "7", "1", "16", "0")
-	st.waitRange(t)
-	for i := range 5 {
-		p.send("D", 0, "11", strconv.Itoa(i))
-	}
-	waitFor(t, func() bool { return s.State() == session.StateStalled })
-	// The reader, room made, reads the reset.
-	release()
-	p.send("A", 1, "98", "0", "108", "30", "141", "Y")
-	p.expectSilentEnd()
-	if s.State() == session.StateResettingSeqs {
-		t.Error("reset accepted after our Logout")
-	}
-	state, err := st.Open(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if state.Generation != 1 {
-		t.Errorf("store generation %d, want 1: reset after our Logout", state.Generation)
-	}
 }

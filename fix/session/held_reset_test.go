@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -89,112 +90,128 @@ func origTime() string {
 // A Reset past messages held ahead of several gaps delivers them in
 // sequence, reporting only the gaps lost, one range each.
 func TestResetPastHeld_SeveralGaps(t *testing.T) {
-	s, rec, p := heldGap(t, 3, nil)
-	p.order(4, "A")
-	p.order(6, "B")
-	p.order(9, "C")
-	p.resetTo(10, 11)
-	rec.waitEvents(t, "loss 1-2", "app A", "loss 5-5", "app B", "loss 7-8", "app C")
-	if n := s.NextTargetSeqNum(); n != 11 {
-		t.Errorf("NextTargetSeqNum = %d, want 11", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, rec, p := heldGap(t, 3, nil)
+		p.order(4, "A")
+		p.order(6, "B")
+		p.order(9, "C")
+		p.resetTo(10, 11)
+		rec.waitEvents(t, "loss 1-2", "app A", "loss 5-5", "app B", "loss 7-8", "app C")
+		if n := s.NextTargetSeqNum(); n != 11 {
+			t.Errorf("NextTargetSeqNum = %d, want 11", n)
+		}
+	})
 }
 
 // Held administrative messages are processed, not delivered, nor reported
 // lost; nor is the Reset's own MsgSeqNum.
 func TestResetPastHeld_AdminMessages(t *testing.T) {
-	s, rec, p := heldGap(t, 3, nil)
-	p.send("0", 4)
-	p.order(5, "A")
-	p.send("0", 6)
-	p.resetTo(7, 8)
-	rec.waitEvents(t, "loss 1-2", "app A")
-	if n := s.NextTargetSeqNum(); n != 8 {
-		t.Errorf("NextTargetSeqNum = %d, want 8", n)
-	}
-	p.order(8, "B")
-	rec.waitEvents(t, "loss 1-2", "app A", "app B")
+	synctest.Test(t, func(t *testing.T) {
+		s, rec, p := heldGap(t, 3, nil)
+		p.send("0", 4)
+		p.order(5, "A")
+		p.send("0", 6)
+		p.resetTo(7, 8)
+		rec.waitEvents(t, "loss 1-2", "app A")
+		if n := s.NextTargetSeqNum(); n != 8 {
+			t.Errorf("NextTargetSeqNum = %d, want 8", n)
+		}
+		p.order(8, "B")
+		rec.waitEvents(t, "loss 1-2", "app A", "app B")
+	})
 }
 
 // A Reset into the held range delivers those below its NewSeqNo, then those
 // from it in sequence.
 func TestResetPastHeld_IntoHeldRange(t *testing.T) {
-	s, rec, p := heldGap(t, 3, nil)
-	p.order(4, "A")
-	p.order(5, "B")
-	p.order(6, "C")
-	p.resetTo(7, 5)
-	rec.waitEvents(t, "loss 1-2", "app A", "app B", "app C")
-	if n := s.NextTargetSeqNum(); n != 7 {
-		t.Errorf("NextTargetSeqNum = %d, want 7", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, rec, p := heldGap(t, 3, nil)
+		p.order(4, "A")
+		p.order(5, "B")
+		p.order(6, "C")
+		p.resetTo(7, 5)
+		rec.waitEvents(t, "loss 1-2", "app A", "app B", "app C")
+		if n := s.NextTargetSeqNum(); n != 7 {
+			t.Errorf("NextTargetSeqNum = %d, want 7", n)
+		}
+	})
 }
 
 // A Reset to the first message held gives up the gap before it only.
 func TestResetPastHeld_ToFirstHeld(t *testing.T) {
-	s, rec, p := heldGap(t, 3, nil)
-	p.order(4, "A")
-	p.order(5, "B")
-	p.resetTo(6, 3)
-	rec.waitEvents(t, "loss 1-2", "app A", "app B")
-	if n := s.NextTargetSeqNum(); n != 6 {
-		t.Errorf("NextTargetSeqNum = %d, want 6", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, rec, p := heldGap(t, 3, nil)
+		p.order(4, "A")
+		p.order(5, "B")
+		p.resetTo(6, 3)
+		rec.waitEvents(t, "loss 1-2", "app A", "app B")
+		if n := s.NextTargetSeqNum(); n != 6 {
+			t.Errorf("NextTargetSeqNum = %d, want 6", n)
+		}
+	})
 }
 
 // A Reset to the MsgSeqNum expected changes nothing: the messages held wait
 // for the gap to be filled, nothing is lost.
 func TestResetPastHeld_ToExpected(t *testing.T) {
-	s, rec, p := heldGap(t, 3, nil)
-	p.order(4, "A")
-	p.resetTo(5, 1)
-	time.Sleep(20 * time.Millisecond)
-	if n := s.NextTargetSeqNum(); n != 1 {
-		t.Errorf("NextTargetSeqNum = %d, want 1", n)
-	}
-	p.send("4", 1, "43", "Y", "122", origTime(), "123", "Y", "36", "3")
-	rec.waitEvents(t, "app A")
-	if n := s.NextTargetSeqNum(); n != 5 {
-		t.Errorf("NextTargetSeqNum = %d, want 5", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, rec, p := heldGap(t, 3, nil)
+		p.order(4, "A")
+		p.resetTo(5, 1)
+		time.Sleep(20 * time.Millisecond)
+		if n := s.NextTargetSeqNum(); n != 1 {
+			t.Errorf("NextTargetSeqNum = %d, want 1", n)
+		}
+		p.send("4", 1, "43", "Y", "122", origTime(), "123", "Y", "36", "3")
+		rec.waitEvents(t, "app A")
+		if n := s.NextTargetSeqNum(); n != 5 {
+			t.Errorf("NextTargetSeqNum = %d, want 5", n)
+		}
+	})
 }
 
 // A message dropped for want of room among those held is reported lost.
 func TestResetPastHeld_DroppedForRoom(t *testing.T) {
-	_, rec, p := heldGap(t, 3, func(c *session.Config) { c.MaxStash = 2 })
-	p.order(4, "A")
-	p.order(5, "B") // no room: the Logon's marker and A fill it
-	p.order(6, "C")
-	p.resetTo(7, 8)
-	rec.waitEvents(t, "loss 1-2", "app A", "loss 5-6")
+	synctest.Test(t, func(t *testing.T) {
+		_, rec, p := heldGap(t, 3, func(c *session.Config) { c.MaxStash = 2 })
+		p.order(4, "A")
+		p.order(5, "B") // no room: the Logon's marker and A fill it
+		p.order(6, "C")
+		p.resetTo(7, 8)
+		rec.waitEvents(t, "loss 1-2", "app A", "loss 5-6")
+	})
 }
 
 // The messages delivered are not delivered again when the counterparty
 // resends them after all.
 func TestResetPastHeld_NoDuplicates(t *testing.T) {
-	_, rec, p := heldGap(t, 3, nil)
-	p.order(4, "A")
-	p.order(5, "B")
-	p.resetTo(6, 7)
-	rec.waitEvents(t, "loss 1-2", "app A", "app B")
-	p.send("D", 4, "43", "Y", "122", origTime(), "11", "A", "55", "X")
-	p.send("D", 5, "43", "Y", "122", origTime(), "11", "B", "55", "X")
-	p.order(7, "C")
-	rec.waitEvents(t, "loss 1-2", "app A", "app B", "app C")
+	synctest.Test(t, func(t *testing.T) {
+		_, rec, p := heldGap(t, 3, nil)
+		p.order(4, "A")
+		p.order(5, "B")
+		p.resetTo(6, 7)
+		rec.waitEvents(t, "loss 1-2", "app A", "app B")
+		p.send("D", 4, "43", "Y", "122", origTime(), "11", "A", "55", "X")
+		p.send("D", 5, "43", "Y", "122", origTime(), "11", "B", "55", "X")
+		p.order(7, "C")
+		rec.waitEvents(t, "loss 1-2", "app A", "app B", "app C")
+	})
 }
 
 // Held messages more numerous than the delivery queue holds are all
 // delivered, in order.
 func TestResetPastHeld_SmallDeliveryQueue(t *testing.T) {
-	_, rec, p := heldGap(t, 3, func(c *session.Config) { c.DeliveryQueue = 2 })
-	want := []string{"loss 1-2"}
-	for i := range 20 {
-		id := fmt.Sprint("O", i)
-		p.order(4+i, id)
-		want = append(want, "app "+id)
-	}
-	p.resetTo(24, 25)
-	rec.waitEvents(t, want...)
+	synctest.Test(t, func(t *testing.T) {
+		_, rec, p := heldGap(t, 3, func(c *session.Config) { c.DeliveryQueue = 2 })
+		want := []string{"loss 1-2"}
+		for i := range 20 {
+			id := fmt.Sprint("O", i)
+			p.order(4+i, id)
+			want = append(want, "app "+id)
+		}
+		p.resetTo(24, 25)
+		rec.waitEvents(t, want...)
+	})
 }
 
 // targetLog is a Store recording the NextTarget values it is set to.
@@ -233,34 +250,36 @@ func (h *lossGate) OnRecoveryLoss(context.Context, *session.Session, uint64, uin
 // OnRecoveryLoss has told of them: a crash in between would lose the
 // notification for good.
 func TestResetPastHeld_LossBeforeCommit(t *testing.T) {
-	st := &targetLog{Store: memstore.New()}
-	h := &lossGate{recorder: newRecorder(), entered: make(chan struct{}), release: make(chan struct{})}
-	l := mem.Listen("acceptor")
-	s, _ := startInitiator(t, l, func(c *session.Config) { c.Handler = h; c.Store = st })
-	released := false
-	t.Cleanup(func() {
-		if !released {
-			close(h.release)
+	synctest.Test(t, func(t *testing.T) {
+		st := &targetLog{Store: memstore.New()}
+		h := &lossGate{recorder: newRecorder(), entered: make(chan struct{}), release: make(chan struct{})}
+		l := mem.Listen("acceptor")
+		s, _ := startInitiator(t, l, func(c *session.Config) { c.Handler = h; c.Store = st })
+		released := false
+		t.Cleanup(func() {
+			if !released {
+				close(h.release)
+			}
+		})
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.send("A", 101, "98", "0", "108", "30")
+		h.wait(t, func() bool { return h.logons == 1 })
+		p.expect("2", "7", "1", "16", "0")
+		p.resetTo(102, 102)
+		select {
+		case <-h.entered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("OnRecoveryLoss not called")
 		}
+		waitFor(t, func() bool { return s.NextTargetSeqNum() == 102 })
+		if n := st.highest(); n > 1 {
+			t.Errorf("NextTarget %d recorded before OnRecoveryLoss(1, 100) returned", n)
+		}
+		released = true
+		close(h.release)
+		waitFor(t, func() bool { return st.highest() == 102 })
 	})
-	p := acceptPeer(t, l)
-	p.expect("A")
-	p.send("A", 101, "98", "0", "108", "30")
-	h.wait(t, func() bool { return h.logons == 1 })
-	p.expect("2", "7", "1", "16", "0")
-	p.resetTo(102, 102)
-	select {
-	case <-h.entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("OnRecoveryLoss not called")
-	}
-	waitFor(t, func() bool { return s.NextTargetSeqNum() == 102 })
-	if n := st.highest(); n > 1 {
-		t.Errorf("NextTarget %d recorded before OnRecoveryLoss(1, 100) returned", n)
-	}
-	released = true
-	close(h.release)
-	waitFor(t, func() bool { return st.highest() == 102 })
 }
 
 // recordingFails logs an initiator recording through fs on to a peer whose
@@ -340,27 +359,29 @@ func TestResetPastHeld_RecordingFails(t *testing.T) {
 		}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, rec, fs, l := recordingFails(t, n, nil)
-			expectHeld(t, rec)
-			if next := s.NextTargetSeqNum(); next != n+5 {
-				t.Errorf("NextTargetSeqNum = %d, want %d: the orders received are not asked for again", next, n+5)
-			}
-			// No connection until recording works again.
-			p2 := acceptPeer(t, l)
-			p2.expectSilentEnd()
-			fs.fail.Store(false)
-			p3 := acceptPeer(t, l)
-			p3.expect("A")
-			// Recorded, they are delivered.
-			rec.wait(t, func() bool { return len(rec.apps) == n })
-			// The counterparty sent 205 to 209 meanwhile, which were lost.
-			p3.send("A", n+10, "98", "0", "108", "30")
-			p3.expect("2", "7", fmt.Sprint(n+5), "16", "0")
-			tc.answer(p3)
-			p3.order(n+11, "AFTER")
-			want := heldEvents(n, append(tc.extra, "app AFTER")...)
-			rec.waitEvents(t, want...)
-			waitFor(t, func() bool { return fs.persisted() == uint64(n+12) })
+			synctest.Test(t, func(t *testing.T) {
+				s, rec, fs, l := recordingFails(t, n, nil)
+				expectHeld(t, rec)
+				if next := s.NextTargetSeqNum(); next != n+5 {
+					t.Errorf("NextTargetSeqNum = %d, want %d: the orders received are not asked for again", next, n+5)
+				}
+				// No connection until recording works again.
+				p2 := acceptPeer(t, l)
+				p2.expectSilentEnd()
+				fs.fail.Store(false)
+				p3 := acceptPeer(t, l)
+				p3.expect("A")
+				// Recorded, they are delivered.
+				rec.wait(t, func() bool { return len(rec.apps) == n })
+				// The counterparty sent 205 to 209 meanwhile, which were lost.
+				p3.send("A", n+10, "98", "0", "108", "30")
+				p3.expect("2", "7", fmt.Sprint(n+5), "16", "0")
+				tc.answer(p3)
+				p3.order(n+11, "AFTER")
+				want := heldEvents(n, append(tc.extra, "app AFTER")...)
+				rec.waitEvents(t, want...)
+				waitFor(t, func() bool { return fs.persisted() == uint64(n+12) })
+			})
 		})
 	}
 }
@@ -371,26 +392,30 @@ func TestResetPastHeld_RecordingFails(t *testing.T) {
 func TestResetPastHeld_RecordingFailsThenReset(t *testing.T) {
 	const n = 200
 	t.Run("ResetOnDisconnect", func(t *testing.T) {
-		_, rec, fs, l := recordingFails(t, n, func(c *session.Config) { c.ResetOnDisconnect = true })
-		rec.wait(t, func() bool { return len(rec.apps) == n })
-		fs.fail.Store(false)
-		p := acceptPeer(t, l)
-		p.expect("A", "34", "1")
-		p.send("A", 1, "98", "0", "108", "30")
-		p.order(2, "AFTER")
-		rec.waitEvents(t, heldEvents(n, "app AFTER")...)
-		waitFor(t, func() bool { return fs.persisted() == 3 })
+		synctest.Test(t, func(t *testing.T) {
+			_, rec, fs, l := recordingFails(t, n, func(c *session.Config) { c.ResetOnDisconnect = true })
+			rec.wait(t, func() bool { return len(rec.apps) == n })
+			fs.fail.Store(false)
+			p := acceptPeer(t, l)
+			p.expect("A", "34", "1")
+			p.send("A", 1, "98", "0", "108", "30")
+			p.order(2, "AFTER")
+			rec.waitEvents(t, heldEvents(n, "app AFTER")...)
+			waitFor(t, func() bool { return fs.persisted() == 3 })
+		})
 	})
 	t.Run("counterparty's ResetSeqNumFlag", func(t *testing.T) {
-		_, rec, fs, l := recordingFails(t, n, nil)
-		expectHeld(t, rec)
-		fs.fail.Store(false)
-		p := acceptPeer(t, l)
-		p.expect("A")
-		p.send("A", 1, "98", "0", "108", "30", "141", "Y")
-		p.order(2, "AFTER")
-		rec.waitEvents(t, heldEvents(n, "app AFTER")...)
-		waitFor(t, func() bool { return fs.persisted() == 3 })
+		synctest.Test(t, func(t *testing.T) {
+			_, rec, fs, l := recordingFails(t, n, nil)
+			expectHeld(t, rec)
+			fs.fail.Store(false)
+			p := acceptPeer(t, l)
+			p.expect("A")
+			p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+			p.order(2, "AFTER")
+			rec.waitEvents(t, heldEvents(n, "app AFTER")...)
+			waitFor(t, func() bool { return fs.persisted() == 3 })
+		})
 	})
 }
 
@@ -398,46 +423,52 @@ func TestResetPastHeld_RecordingFailsThenReset(t *testing.T) {
 // behind the failure: they may be delivered again after a restart, not
 // lost.
 func TestResetPastHeld_StopWhileRecordingFails(t *testing.T) {
-	const n = 200
-	s, rec, _, _ := recordingFails(t, n, nil)
-	expectHeld(t, rec)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- s.Stop(ctx) }()
-	rec.waitEvents(t, heldEvents(n)...)
-	if err := <-done; err != nil {
-		t.Logf("Stop = %v", err)
-	}
-	select {
-	case <-s.Done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("Done not closed")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		const n = 200
+		s, rec, _, _ := recordingFails(t, n, nil)
+		expectHeld(t, rec)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		done := make(chan error, 1)
+		go func() { done <- s.Stop(ctx) }()
+		rec.waitEvents(t, heldEvents(n)...)
+		if err := <-done; err != nil {
+			t.Logf("Stop = %v", err)
+		}
+		select {
+		case <-s.Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("Done not closed")
+		}
+	})
 }
 
 // A Reset past many messages held between gaps looks at each once.
 func TestResetPastHeld_ScanBounded(t *testing.T) {
-	const n = 1000
-	s, rec, p := heldGap(t, 2, nil)
-	// Held at 4, 6, ..., after the Logon's marker at 2: a gap before each.
-	for i := range n {
-		p.order(4+2*i, fmt.Sprint("O", i))
-	}
-	p.resetTo(2*n+3, 2*n+4)
-	rec.wait(t, func() bool { return len(rec.apps) == n })
-	if got, bound := session.HeldScanned(s), uint64(2*(n+1)); got > bound {
-		t.Errorf("%d held messages looked at for %d held, want at most %d", got, n+1, bound)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		const n = 1000
+		s, rec, p := heldGap(t, 2, nil)
+		// Held at 4, 6, ..., after the Logon's marker at 2: a gap before each.
+		for i := range n {
+			p.order(4+2*i, fmt.Sprint("O", i))
+		}
+		p.resetTo(2*n+3, 2*n+4)
+		rec.wait(t, func() bool { return len(rec.apps) == n })
+		if got, bound := session.HeldScanned(s), uint64(2*(n+1)); got > bound {
+			t.Errorf("%d held messages looked at for %d held, want at most %d", got, n+1, bound)
+		}
+	})
 }
 
 // A message dropped for want of bytes among those held is reported lost;
 // one after it that fits is kept.
 func TestResetPastHeld_DroppedForBytes(t *testing.T) {
-	_, rec, p := heldGap(t, 3, func(c *session.Config) { c.MaxStashBytes = 400 })
-	p.order(4, "A")
-	p.send("D", 5, "11", "B", "55", "X", "58", strings.Repeat("x", 500)) // no room for its bytes
-	p.order(6, "C")
-	p.resetTo(7, 8)
-	rec.waitEvents(t, "loss 1-2", "app A", "loss 5-5", "app C")
+	synctest.Test(t, func(t *testing.T) {
+		_, rec, p := heldGap(t, 3, func(c *session.Config) { c.MaxStashBytes = 400 })
+		p.order(4, "A")
+		p.send("D", 5, "11", "B", "55", "X", "58", strings.Repeat("x", 500)) // no room for its bytes
+		p.order(6, "C")
+		p.resetTo(7, 8)
+		rec.waitEvents(t, "loss 1-2", "app A", "loss 5-5", "app C")
+	})
 }

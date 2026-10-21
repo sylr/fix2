@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix/session"
@@ -70,72 +71,80 @@ func settle(t *testing.T, s *session.Session) {
 // Acknowledged messages beyond Keep are evicted; asked for again, they are
 // gap-filled and reported lost, while those kept are resent.
 func TestRetention_EvictsAcknowledged(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond, Keep: 2}
-	s, h, p := retained(t, r, 10, nil) // our Logon is 1, the orders 2 to 11
-	p.send("0", 0, "369", "8")
-	// Acknowledged up to 8, the last 2 kept: 1 to 8 go.
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 8 })
-	settle(t, s)
-	if n := s.Stats().Evicted.Load(); n != 8 {
-		t.Fatalf("Evicted = %d, want 8", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond, Keep: 2}
+		s, h, p := retained(t, r, 10, nil) // our Logon is 1, the orders 2 to 11
+		p.send("0", 0, "369", "8")
+		// Acknowledged up to 8, the last 2 kept: 1 to 8 go.
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 8 })
+		settle(t, s)
+		if n := s.Stats().Evicted.Load(); n != 8 {
+			t.Fatalf("Evicted = %d, want 8", n)
+		}
 
-	p.send("2", 0, "7", "2", "16", "0")
-	p.expect("4", "34", "2", "36", "9", "123", "Y", "43", "Y")
-	for _, seq := range []string{"9", "10", "11"} {
-		p.expect("D", "34", seq, "43", "Y")
-	}
-	h.wait(t, func() bool { return len(h.losses) == 1 })
-	if l := h.losses[0]; l.begin != 2 || l.end != 8 || !errors.Is(l.cause, session.ErrBeyondRetention) {
-		t.Errorf("loss = %+v, want 2 to 8, ErrBeyondRetention", l)
-	}
-	if n := s.Stats().BeyondRetention.Load(); n != 7 {
-		t.Errorf("BeyondRetention = %d, want 7", n)
-	}
+		p.send("2", 0, "7", "2", "16", "0")
+		p.expect("4", "34", "2", "36", "9", "123", "Y", "43", "Y")
+		for _, seq := range []string{"9", "10", "11"} {
+			p.expect("D", "34", seq, "43", "Y")
+		}
+		h.wait(t, func() bool { return len(h.losses) == 1 })
+		if l := h.losses[0]; l.begin != 2 || l.end != 8 || !errors.Is(l.cause, session.ErrBeyondRetention) {
+			t.Errorf("loss = %+v, want 2 to 8, ErrBeyondRetention", l)
+		}
+		if n := s.Stats().BeyondRetention.Load(); n != 7 {
+			t.Errorf("BeyondRetention = %d, want 7", n)
+		}
+	})
 }
 
 // Without acknowledgement, every message is kept.
 func TestRetention_KeepsUnacknowledged(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	s, _, _ := retained(t, r, 10, nil)
-	settle(t, s)
-	if n := s.Stats().Evicted.Load(); n != 0 {
-		t.Fatalf("Evicted = %d, want 0", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		s, _, _ := retained(t, r, 10, nil)
+		settle(t, s)
+		if n := s.Stats().Evicted.Load(); n != 0 {
+			t.Fatalf("Evicted = %d, want 0", n)
+		}
+	})
 }
 
 // Beyond Max, messages go, acknowledged or not.
 func TestRetention_Max(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond, Keep: 3, Max: 10}
-	s, _, p := retained(t, r, 15, nil)
-	// Our messages 1 to 16: the last 10 kept.
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 6 })
-	// Acknowledged up to 12, the last 3 kept: 1 to 12 go.
-	p.send("0", 0, "369", "12")
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 12 })
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond, Keep: 3, Max: 10}
+		s, _, p := retained(t, r, 15, nil)
+		// Our messages 1 to 16: the last 10 kept.
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 6 })
+		// Acknowledged up to 12, the last 3 kept: 1 to 12 go.
+		p.send("0", 0, "369", "12")
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 12 })
+	})
 }
 
 // A first ResendRequest acknowledges the messages before the first it asks
 // for; a later one never moves the acknowledgement forward.
 func TestRetention_ResendRequest(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	s, _, p := retained(t, r, 10, nil)
-	p.send("2", 0, "7", "5", "16", "5")
-	p.expect("D", "34", "5", "43", "Y")
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 4 })
-	settle(t, s)
-	if n := s.Stats().Evicted.Load(); n != 4 {
-		t.Fatalf("Evicted = %d after a ResendRequest from 5, want 4", n)
-	}
-	p.send("0", 0, "369", "6")
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 6 })
-	p.send("2", 0, "7", "10", "16", "11")
-	p.expect("D", "34", "10", "43", "Y")
-	p.expect("D", "34", "11", "43", "Y")
-	settle(t, s)
-	if n := s.Stats().Evicted.Load(); n != 6 {
-		t.Fatalf("Evicted = %d after a ResendRequest from 10, want 6", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		s, _, p := retained(t, r, 10, nil)
+		p.send("2", 0, "7", "5", "16", "5")
+		p.expect("D", "34", "5", "43", "Y")
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 4 })
+		settle(t, s)
+		if n := s.Stats().Evicted.Load(); n != 4 {
+			t.Fatalf("Evicted = %d after a ResendRequest from 5, want 4", n)
+		}
+		p.send("0", 0, "369", "6")
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 6 })
+		p.send("2", 0, "7", "10", "16", "11")
+		p.expect("D", "34", "10", "43", "Y")
+		p.expect("D", "34", "11", "43", "Y")
+		settle(t, s)
+		if n := s.Stats().Evicted.Load(); n != 6 {
+			t.Fatalf("Evicted = %d after a ResendRequest from 10, want 6", n)
+		}
+	})
 }
 
 // missingStore reports one message missing from a memstore.
@@ -155,87 +164,97 @@ func (m missingStore) Range(ctx context.Context, gen, begin, end uint64, fn func
 
 // Messages beyond retention gap-filled before a resend aborts are reported.
 func TestRetention_LossBeforeAbortedResend(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	s, h, p := retained(t, r, 10, func(c *session.Config) {
-		c.Store = missingStore{Store: memstore.New(), missing: 10}
-	})
-	p.send("0", 0, "369", "8")
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 8 })
-	p.send("2", 0, "7", "2", "16", "0")
-	p.expect("4", "34", "2", "36", "9")
-	p.expect("D", "34", "9", "43", "Y")
-	p.expect("5")
-	h.wait(t, func() bool { return len(h.losses) == 2 })
-	for _, l := range h.losses {
-		switch l.begin {
-		case 2:
-			if l.end != 8 || !errors.Is(l.cause, session.ErrBeyondRetention) {
-				t.Errorf("loss = %+v, want 2 to 8, ErrBeyondRetention", l)
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		s, h, p := retained(t, r, 10, func(c *session.Config) {
+			c.Store = missingStore{Store: memstore.New(), missing: 10}
+		})
+		p.send("0", 0, "369", "8")
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 8 })
+		p.send("2", 0, "7", "2", "16", "0")
+		p.expect("4", "34", "2", "36", "9")
+		p.expect("D", "34", "9", "43", "Y")
+		p.expect("5")
+		h.wait(t, func() bool { return len(h.losses) == 2 })
+		for _, l := range h.losses {
+			switch l.begin {
+			case 2:
+				if l.end != 8 || !errors.Is(l.cause, session.ErrBeyondRetention) {
+					t.Errorf("loss = %+v, want 2 to 8, ErrBeyondRetention", l)
+				}
+			case 10:
+			default:
+				t.Errorf("unexpected loss %+v", l)
 			}
-		case 10:
-		default:
-			t.Errorf("unexpected loss %+v", l)
 		}
-	}
+	})
 }
 
 // The LastMsgSeqNumProcessed of a retransmission, and one above our last
 // message, are ignored.
 func TestRetention_IgnoresStaleAndBogusAcks(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	s, _, p := retained(t, r, 10, nil)
-	orig := time.Now().Add(-time.Second).UTC().Format("20060102-15:04:05.000")
-	p.send("0", 0, "43", "Y", "122", orig, "369", "8")
-	p.send("0", 0, "369", "1000")
-	p.send("1", 0, "112", "sync")
-	p.expect("0", "112", "sync") // both heartbeats handled
-	settle(t, s)
-	if n := s.Stats().Evicted.Load(); n != 0 {
-		t.Fatalf("Evicted = %d, want 0", n)
-	}
-	p.send("0", 0, "369", "4")
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 4 })
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		s, _, p := retained(t, r, 10, nil)
+		orig := time.Now().Add(-time.Second).UTC().Format("20060102-15:04:05.000")
+		p.send("0", 0, "43", "Y", "122", orig, "369", "8")
+		p.send("0", 0, "369", "1000")
+		p.send("1", 0, "112", "sync")
+		p.expect("0", "112", "sync") // both heartbeats handled
+		settle(t, s)
+		if n := s.Stats().Evicted.Load(); n != 0 {
+			t.Fatalf("Evicted = %d, want 0", n)
+		}
+		p.send("0", 0, "369", "4")
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 4 })
+	})
 }
 
 // LastMsgSeqNumProcessed counts on session-level messages too: a
 // ResendRequest's moves the acknowledgement back before its BeginSeqNo does.
 func TestRetention_SessionLevelLastMsgSeqNumProcessed(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	s, _, p := retained(t, r, 10, nil)
-	p.send("2", 0, "7", "5", "16", "5", "369", "2")
-	p.expect("D", "34", "5", "43", "Y")
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 2 })
-	settle(t, s)
-	if n := s.Stats().Evicted.Load(); n != 2 {
-		t.Fatalf("Evicted = %d, want 2", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		s, _, p := retained(t, r, 10, nil)
+		p.send("2", 0, "7", "5", "16", "5", "369", "2")
+		p.expect("D", "34", "5", "43", "Y")
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 2 })
+		settle(t, s)
+		if n := s.Stats().Evicted.Load(); n != 2 {
+			t.Fatalf("Evicted = %d, want 2", n)
+		}
+	})
 }
 
 // LastMsgSeqNumProcessed on the counterparty's Logon acknowledges.
 func TestRetention_LogonLastMsgSeqNumProcessed(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	l := mem.Listen("acceptor")
-	s, rec := startInitiator(t, l, func(c *session.Config) { c.Retention = r })
-	p := acceptPeer(t, l)
-	p.expect("A")
-	p.send("A", 0, "98", "0", "108", "30", "369", "1")
-	rec.wait(t, func() bool { return rec.logons == 1 })
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 1 })
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		l := mem.Listen("acceptor")
+		s, rec := startInitiator(t, l, func(c *session.Config) { c.Retention = r })
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.send("A", 0, "98", "0", "108", "30", "369", "1")
+		rec.wait(t, func() bool { return rec.logons == 1 })
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 1 })
+	})
 }
 
 // NextExpectedMsgSeqNum on the counterparty's Logon acknowledges.
 func TestRetention_NextExpectedMsgSeqNum(t *testing.T) {
-	r := session.Retention{Interval: 10 * time.Millisecond}
-	l := mem.Listen("acceptor")
-	s, rec := startInitiator(t, l, func(c *session.Config) {
-		c.Retention = r
-		c.NextExpectedMsgSeqNum = true
+	synctest.Test(t, func(t *testing.T) {
+		r := session.Retention{Interval: 10 * time.Millisecond}
+		l := mem.Listen("acceptor")
+		s, rec := startInitiator(t, l, func(c *session.Config) {
+			c.Retention = r
+			c.NextExpectedMsgSeqNum = true
+		})
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.send("A", 0, "98", "0", "108", "30", "789", "2")
+		rec.wait(t, func() bool { return rec.logons == 1 })
+		waitFor(t, func() bool { return s.Stats().Evicted.Load() == 1 })
 	})
-	p := acceptPeer(t, l)
-	p.expect("A")
-	p.send("A", 0, "98", "0", "108", "30", "789", "2")
-	rec.wait(t, func() bool { return rec.logons == 1 })
-	waitFor(t, func() bool { return s.Stats().Evicted.Load() == 1 })
 }
 
 // notTruncater is a store that cannot evict.
@@ -266,15 +285,17 @@ func TestRetention_Validate(t *testing.T) {
 		{"store", session.Retention{Interval: time.Minute}, notTruncater{}, "does not implement store.Truncater"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := base
-			cfg.Retention, cfg.Store = tc.r, tc.st
-			err := cfg.Validate()
-			switch {
-			case tc.want == "" && err != nil:
-				t.Fatalf("Validate = %v", err)
-			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
-				t.Fatalf("Validate = %v, want %q", err, tc.want)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				cfg := base
+				cfg.Retention, cfg.Store = tc.r, tc.st
+				err := cfg.Validate()
+				switch {
+				case tc.want == "" && err != nil:
+					t.Fatalf("Validate = %v", err)
+				case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+					t.Fatalf("Validate = %v, want %q", err, tc.want)
+				}
+			})
 		})
 	}
 }

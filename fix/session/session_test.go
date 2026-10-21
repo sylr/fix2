@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -17,8 +18,8 @@ type recorder struct {
 	mu       sync.Mutex
 	logons   int
 	logouts  []error
-	apps     []string    // ClOrdID of each application message
-	received []time.Time // Inbound.Received of each application message
+	apps     []string      // ClOrdID of each application message
+	received []time.Time   // Inbound.Received of each application message
 	got      chan struct{} // wakes wait; one pending wakeup is enough
 }
 
@@ -106,40 +107,42 @@ func pair(t *testing.T, beginString string) (ini, acc *session.Session, ir, ar *
 }
 
 func TestLogonSendLogout(t *testing.T) {
-	ini, acc, ir, ar := pair(t, session.FIX44)
-	ir.wait(t, func() bool { return ir.logons == 1 })
-	ar.wait(t, func() bool { return ar.logons == 1 })
+	synctest.Test(t, func(t *testing.T) {
+		ini, acc, ir, ar := pair(t, session.FIX44)
+		ir.wait(t, func() bool { return ir.logons == 1 })
+		ar.wait(t, func() bool { return ar.logons == 1 })
 
-	ctx := context.Background()
-	for _, id := range []string{"A", "B", "C"} {
-		r, err := ini.Send(ctx, fix.NewBuilder(session.FIX44, "D").SetString(11, id).SetString(55, "X"))
+		ctx := context.Background()
+		for _, id := range []string{"A", "B", "C"} {
+			r, err := ini.Send(ctx, fix.NewBuilder(session.FIX44, "D").SetString(11, id).SetString(55, "X"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ar.wait(t, func() bool { return len(ar.apps) == 3 })
+		if got := ar.apps; got[0] != "A" || got[1] != "B" || got[2] != "C" {
+			t.Errorf("acceptor received %v", got)
+		}
+		r, err := acc.Send(ctx, fix.NewBuilder(session.FIX44, "8").SetString(11, "A"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := r.Wait(ctx, session.Written); err != nil {
+		wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := r.Wait(wctx, session.Acknowledged); err != nil {
+			t.Fatalf("Wait(Acknowledged): %v", err)
+		}
+		ir.wait(t, func() bool { return len(ir.apps) == 1 })
+
+		if err := ini.Logout(ctx, "bye"); err != nil {
 			t.Fatal(err)
 		}
-	}
-	ar.wait(t, func() bool { return len(ar.apps) == 3 })
-	if got := ar.apps; got[0] != "A" || got[1] != "B" || got[2] != "C" {
-		t.Errorf("acceptor received %v", got)
-	}
-	r, err := acc.Send(ctx, fix.NewBuilder(session.FIX44, "8").SetString(11, "A"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := r.Wait(wctx, session.Acknowledged); err != nil {
-		t.Fatalf("Wait(Acknowledged): %v", err)
-	}
-	ir.wait(t, func() bool { return len(ir.apps) == 1 })
-
-	if err := ini.Logout(ctx, "bye"); err != nil {
-		t.Fatal(err)
-	}
-	ar.wait(t, func() bool { return len(ar.logouts) == 1 })
-	if got := ini.NextSenderSeqNum(); got != 6 { // Logon, 3 orders, Logout... and a heartbeat answer
-		t.Logf("initiator next sender = %d", got)
-	}
+		ar.wait(t, func() bool { return len(ar.logouts) == 1 })
+		if got := ini.NextSenderSeqNum(); got != 6 { // Logon, 3 orders, Logout... and a heartbeat answer
+			t.Logf("initiator next sender = %d", got)
+		}
+	})
 }

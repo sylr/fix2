@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -57,60 +58,62 @@ func TestStopFromCallback(t *testing.T) {
 	for _, in := range []string{"OnLogon", "FromAdmin", "FromApp"} {
 		for _, how := range []string{"Stop", "Remove"} {
 			t.Run(how+" from "+in, func(t *testing.T) {
-				l := mem.Listen("acceptor")
-				i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
-				h := &stopper{recorder: newRecorder(), in: in, cancels: make(chan context.CancelFunc, 1), stopped: make(chan error, 1)}
-				h.stop = func(ctx context.Context, s *session.Session) error {
-					if how == "Remove" {
-						return i.Remove(ctx, s.ID())
+				synctest.Test(t, func(t *testing.T) {
+					l := mem.Listen("acceptor")
+					i := session.NewInitiator(session.InitiatorOptions{ReconnectMin: 50 * time.Millisecond, ReconnectMax: 100 * time.Millisecond})
+					h := &stopper{recorder: newRecorder(), in: in, cancels: make(chan context.CancelFunc, 1), stopped: make(chan error, 1)}
+					h.stop = func(ctx context.Context, s *session.Session) error {
+						if how == "Remove" {
+							return i.Remove(ctx, s.ID())
+						}
+						return s.Stop(ctx)
 					}
-					return s.Stop(ctx)
-				}
-				s, err := i.Add(session.Config{
-					ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
-					Handler:       h,
-					LogoutTimeout: 100 * time.Millisecond,
-				}, l)
-				if err != nil {
-					t.Fatal(err)
-				}
-				runUntilCleanup(t, i.Run)
-				p := acceptPeer(t, l)
-				p.expect("A")
-				p.send("A", 0, "98", "0", "108", "30")
-				switch in {
-				case "FromAdmin":
-					p.send("0", 0)
-				case "FromApp":
-					p.sendOrders(1)
-				}
-
-				var cancel context.CancelFunc
-				select {
-				case cancel = <-h.cancels:
-				case <-time.After(5 * time.Second):
-					t.Fatalf("%s not called", in)
-				}
-				defer cancel()
-				select {
-				case err := <-h.stopped:
+					s, err := i.Add(session.Config{
+						ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+						Handler:       h,
+						LogoutTimeout: 100 * time.Millisecond,
+					}, l)
 					if err != nil {
-						t.Errorf("%s from %s: %v", how, in, err)
+						t.Fatal(err)
 					}
-				case <-time.After(2 * time.Second):
-					t.Errorf("%s from %s waits for %s to return", how, in, in)
-					cancel()
+					runUntilCleanup(t, i.Run)
+					p := acceptPeer(t, l)
+					p.expect("A")
+					p.send("A", 0, "98", "0", "108", "30")
+					switch in {
+					case "FromAdmin":
+						p.send("0", 0)
+					case "FromApp":
+						p.sendOrders(1)
+					}
+
+					var cancel context.CancelFunc
 					select {
-					case <-h.stopped:
+					case cancel = <-h.cancels:
 					case <-time.After(5 * time.Second):
-						t.Fatalf("%s from %s stuck once its ctx ended", how, in)
+						t.Fatalf("%s not called", in)
 					}
-				}
-				p.expect("5")
-				waitDone(t, s)
-				if i.Session(s.ID()) != nil && how == "Remove" {
-					t.Error("session not removed")
-				}
+					defer cancel()
+					select {
+					case err := <-h.stopped:
+						if err != nil {
+							t.Errorf("%s from %s: %v", how, in, err)
+						}
+					case <-time.After(2 * time.Second):
+						t.Errorf("%s from %s waits for %s to return", how, in, in)
+						cancel()
+						select {
+						case <-h.stopped:
+						case <-time.After(5 * time.Second):
+							t.Fatalf("%s from %s stuck once its ctx ended", how, in)
+						}
+					}
+					p.expect("5")
+					waitDone(t, s)
+					if i.Session(s.ID()) != nil && how == "Remove" {
+						t.Error("session not removed")
+					}
+				})
 			})
 		}
 	}

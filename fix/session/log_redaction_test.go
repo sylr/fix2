@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -336,69 +337,75 @@ func TestRejectRedaction(t *testing.T) {
 // withheld if it may show a credential: without dictionaries, any value is
 // accepted.
 func TestActiveResetDefaultApplVerIDRedaction(t *testing.T) {
-	const secret = "S3CRET-VALUE"
-	buf := &logBuffer{}
-	_, _, p := fixtSession(t, "9", func(c *session.Config) {
-		c.Dictionaries = session.Dictionaries{DefaultApplVerID: "9"}
-		c.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	synctest.Test(t, func(t *testing.T) {
+		const secret = "S3CRET-VALUE"
+		buf := &logBuffer{}
+		_, _, p := fixtSession(t, "9", func(c *session.Config) {
+			c.Dictionaries = session.Dictionaries{DefaultApplVerID: "9"}
+			c.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		})
+		p.write(from(session.FIXT11, 1), "A", "98", "0", "108", "30", "141", "Y", "1137", secret, "554", secret)
+		p.expect("A", "141", "Y")
+		if out := buf.String(); strings.Contains(out, secret) {
+			t.Errorf("secret logged:\n%s", out)
+		}
 	})
-	p.write(from(session.FIXT11, 1), "A", "98", "0", "108", "30", "141", "Y", "1137", secret, "554", secret)
-	p.expect("A", "141", "Y")
-	if out := buf.String(); strings.Contains(out, secret) {
-		t.Errorf("secret logged:\n%s", out)
-	}
 }
 
 // A LastMsgSeqNumProcessed acknowledging messages never sent is logged
 // withheld if it may show a credential.
 func TestAckRedaction(t *testing.T) {
-	const secret = "42424242"
-	logon := rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|", "")
-	msg := rawFrame("35=0|49=C|56=S|34=2|52="+sendingTime()+"|369="+secret+"|554="+secret+"|", "")
-	out := logged(t, func(c *session.Config) { c.Retention.Interval = time.Hour }, logon,
-		func(_ *session.Session, log string) bool {
-			return strings.Contains(log, "acknowledges messages we never sent")
-		}, msg)
-	for l := range strings.SplitSeq(out, "\n") {
-		if strings.Contains(l, secret) && !strings.Contains(l, `msg="FIX in"`) {
-			t.Errorf("secret logged: %s", l)
+	synctest.Test(t, func(t *testing.T) {
+		const secret = "42424242"
+		logon := rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|", "")
+		msg := rawFrame("35=0|49=C|56=S|34=2|52="+sendingTime()+"|369="+secret+"|554="+secret+"|", "")
+		out := logged(t, func(c *session.Config) { c.Retention.Interval = time.Hour }, logon,
+			func(_ *session.Session, log string) bool {
+				return strings.Contains(log, "acknowledges messages we never sent")
+			}, msg)
+		for l := range strings.SplitSeq(out, "\n") {
+			if strings.Contains(l, secret) && !strings.Contains(l, `msg="FIX in"`) {
+				t.Errorf("secret logged: %s", l)
+			}
 		}
-	}
+	})
 }
 
 // An acceptor refusing a Logon, whatever the reason, does not log a
 // credential it holds, though the reason quotes its fields: a dynamic
 // session Resolve gives identities the Logon does not have.
 func TestAcceptorRefusalRedaction(t *testing.T) {
-	const secret = "S3CRET-VALUE"
-	buf := &logBuffer{}
-	a := session.NewAcceptor(session.AcceptorOptions{
-		Logger: slog.New(slog.NewTextHandler(buf, nil)),
-		Resolve: func(_ context.Context, req *session.LogonRequest) (*session.Config, error) {
-			id := req.ID
-			id.SenderCompID = "WRONG"
-			return &session.Config{ID: id}, nil
-		},
+	synctest.Test(t, func(t *testing.T) {
+		const secret = "S3CRET-VALUE"
+		buf := &logBuffer{}
+		a := session.NewAcceptor(session.AcceptorOptions{
+			Logger: slog.New(slog.NewTextHandler(buf, nil)),
+			Resolve: func(_ context.Context, req *session.LogonRequest) (*session.Config, error) {
+				id := req.ID
+				id.SenderCompID = "WRONG"
+				return &session.Config{ID: id}, nil
+			},
+		})
+		l := mem.Listen("acceptor")
+		a.Listen(l)
+		ctx, cancel := context.WithCancel(context.Background())
+		stopped := make(chan struct{})
+		go func() { defer close(stopped); a.Run(ctx) }()
+		defer func() { cancel(); <-stopped }()
+		c, err := l.Dial(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		go discard(c)
+		if _, err := c.Write(rawFrame("35=A|49="+secret+"|56=S|34=1|52="+sendingTime()+"|98=0|108=30|554="+secret+"|", "")); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, func() bool { return strings.Contains(buf.String(), "connection refused") })
+		if out := buf.String(); strings.Contains(out, secret) {
+			t.Errorf("secret logged:\n%s", out)
+		}
 	})
-	l := mem.Listen("acceptor")
-	a.Listen(l)
-	ctx, cancel := context.WithCancel(context.Background())
-	stopped := make(chan struct{})
-	go func() { defer close(stopped); a.Run(ctx) }()
-	defer func() { cancel(); <-stopped }()
-	c, err := l.Dial(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	go discard(c)
-	if _, err := c.Write(rawFrame("35=A|49="+secret+"|56=S|34=1|52="+sendingTime()+"|98=0|108=30|554="+secret+"|", "")); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, func() bool { return strings.Contains(buf.String(), "connection refused") })
-	if out := buf.String(); strings.Contains(out, secret) {
-		t.Errorf("secret logged:\n%s", out)
-	}
 }
 
 // valuerError is an error which a handler logs otherwise than its text, as
@@ -431,31 +438,33 @@ func TestAcceptorRefusalAttrRedaction(t *testing.T) {
 		{"LogValuer group", valuerError{slog.GroupValue(slog.String("cause", secret))}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			buf := &logBuffer{}
-			a := session.NewAcceptor(session.AcceptorOptions{Logger: slog.New(slog.NewJSONHandler(buf, nil))})
-			id := session.SessionID{BeginString: session.FIX44, SenderCompID: "S", TargetCompID: "C"}
-			if _, err := a.Add(session.Config{ID: id, Handler: refusingHandler{err: tc.err}}); err != nil {
-				t.Fatal(err)
-			}
-			l := mem.Listen("acceptor")
-			a.Listen(l)
-			ctx, cancel := context.WithCancel(context.Background())
-			stopped := make(chan struct{})
-			go func() { defer close(stopped); a.Run(ctx) }()
-			defer func() { cancel(); <-stopped }()
-			c, err := l.Dial(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer c.Close()
-			go discard(c)
-			if _, err := c.Write(rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|554="+secret+"|", "")); err != nil {
-				t.Fatal(err)
-			}
-			waitFor(t, func() bool { return strings.Contains(buf.String(), "connection refused") })
-			if out := buf.String(); strings.Contains(out, secret) {
-				t.Errorf("secret logged:\n%s", out)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				buf := &logBuffer{}
+				a := session.NewAcceptor(session.AcceptorOptions{Logger: slog.New(slog.NewJSONHandler(buf, nil))})
+				id := session.SessionID{BeginString: session.FIX44, SenderCompID: "S", TargetCompID: "C"}
+				if _, err := a.Add(session.Config{ID: id, Handler: refusingHandler{err: tc.err}}); err != nil {
+					t.Fatal(err)
+				}
+				l := mem.Listen("acceptor")
+				a.Listen(l)
+				ctx, cancel := context.WithCancel(context.Background())
+				stopped := make(chan struct{})
+				go func() { defer close(stopped); a.Run(ctx) }()
+				defer func() { cancel(); <-stopped }()
+				c, err := l.Dial(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer c.Close()
+				go discard(c)
+				if _, err := c.Write(rawFrame("35=A|49=C|56=S|34=1|52="+sendingTime()+"|98=0|108=30|554="+secret+"|", "")); err != nil {
+					t.Fatal(err)
+				}
+				waitFor(t, func() bool { return strings.Contains(buf.String(), "connection refused") })
+				if out := buf.String(); strings.Contains(out, secret) {
+					t.Errorf("secret logged:\n%s", out)
+				}
+			})
 		})
 	}
 }

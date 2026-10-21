@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -300,34 +301,36 @@ func expectHalted(t *testing.T, s *session.Session, want error) {
 // Every message, Logon included, is durable before it is written, whatever
 // the batches the writer makes.
 func TestStoreSyncedBeforeWrite(t *testing.T) {
-	st := newSyncStore()
-	s, _, p, d := syncedSession(t, st, false)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	const n = 50
-	rs := make([]session.Receipt, n)
-	for i := range rs {
-		r, err := s.Send(ctx, order(fmt.Sprintf("O%d", i)))
-		if err != nil {
-			t.Fatal(err)
+	synctest.Test(t, func(t *testing.T) {
+		st := newSyncStore()
+		s, _, p, d := syncedSession(t, st, false)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		const n = 50
+		rs := make([]session.Receipt, n)
+		for i := range rs {
+			r, err := s.Send(ctx, order(fmt.Sprintf("O%d", i)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			rs[i] = r
 		}
-		rs[i] = r
-	}
-	for _, r := range rs {
-		if err := r.Wait(ctx, session.Written); err != nil {
-			t.Fatal(err)
+		for _, r := range rs {
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Fatal(err)
+			}
 		}
-	}
-	for i := range n {
-		p.expect("D", "11", fmt.Sprintf("O%d", i))
-	}
-	d.verify(t)
-	if got, want := st.durable(), s.NextSenderSeqNum(); got != want {
-		t.Errorf("durable NextSender = %d, want %d", got, want)
-	}
-	if syncs, sent := st.syncCount(), int(s.NextSenderSeqNum()-1); syncs == 0 || syncs > sent {
-		t.Errorf("%d Syncs for %d messages, want at least one and at most one a message", syncs, sent)
-	}
+		for i := range n {
+			p.expect("D", "11", fmt.Sprintf("O%d", i))
+		}
+		d.verify(t)
+		if got, want := st.durable(), s.NextSenderSeqNum(); got != want {
+			t.Errorf("durable NextSender = %d, want %d", got, want)
+		}
+		if syncs, sent := st.syncCount(), int(s.NextSenderSeqNum()-1); syncs == 0 || syncs > sent {
+			t.Errorf("%d Syncs for %d messages, want at least one and at most one a message", syncs, sent)
+		}
+	})
 }
 
 // A Sync failing keeps its batch from being written: the connection drops,
@@ -344,54 +347,58 @@ func TestStoreSyncFailure(t *testing.T) {
 		{"generation gone", store.ErrGenerationGone, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			st := newSyncStore()
-			s, rec, p, d := syncedSession(t, st, false)
-			st.failSyncs(tc.err)
-			r, err := s.Send(context.Background(), order("O1"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			p.expectSilentEnd()
-			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
-			wctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-			defer cancel()
-			if err := r.Wait(wctx, session.Written); err == nil {
-				t.Error("Written although never written")
-			}
-			if tc.halt {
-				expectHalted(t, s, tc.err)
-				expectNoRedial(t, d.l)
-				return
-			}
-			if err := s.Err(); err != nil {
-				t.Errorf("Err = %v, want nil: the next Sync covers the message again", err)
-			}
-			st.failSyncs(nil)
-			p2 := acceptPeer(t, d.l)
-			p2.expect("A", "34", "3")
-			d.verify(t)
+			synctest.Test(t, func(t *testing.T) {
+				st := newSyncStore()
+				s, rec, p, d := syncedSession(t, st, false)
+				st.failSyncs(tc.err)
+				r, err := s.Send(context.Background(), order("O1"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				p.expectSilentEnd()
+				rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+				wctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				defer cancel()
+				if err := r.Wait(wctx, session.Written); err == nil {
+					t.Error("Written although never written")
+				}
+				if tc.halt {
+					expectHalted(t, s, tc.err)
+					expectNoRedial(t, d.l)
+					return
+				}
+				if err := s.Err(); err != nil {
+					t.Errorf("Err = %v, want nil: the next Sync covers the message again", err)
+				}
+				st.failSyncs(nil)
+				p2 := acceptPeer(t, d.l)
+				p2.expect("A", "34", "3")
+				d.verify(t)
+			})
 		})
 	}
 }
 
 // A replay syncs what it resends first; it is not written if Sync fails.
 func TestStoreSyncReplay(t *testing.T) {
-	st := newSyncStore()
-	s, _, p, d := syncedSession(t, st, false)
-	if _, err := s.Send(context.Background(), order("O1")); err != nil {
-		t.Fatal(err)
-	}
-	p.expect("D", "34", "2")
-	p.send("2", 0, "7", "2", "16", "0")
-	p.expect("D", "34", "2", "43", "Y")
-	before := st.syncCount()
-	st.failSyncs(errors.New("disk busy"))
-	p.send("2", 0, "7", "2", "16", "0")
-	p.expectSilentEnd()
-	if st.syncCount() == before {
-		t.Error("the replay did not Sync")
-	}
-	d.verify(t)
+	synctest.Test(t, func(t *testing.T) {
+		st := newSyncStore()
+		s, _, p, d := syncedSession(t, st, false)
+		if _, err := s.Send(context.Background(), order("O1")); err != nil {
+			t.Fatal(err)
+		}
+		p.expect("D", "34", "2")
+		p.send("2", 0, "7", "2", "16", "0")
+		p.expect("D", "34", "2", "43", "Y")
+		before := st.syncCount()
+		st.failSyncs(errors.New("disk busy"))
+		p.send("2", 0, "7", "2", "16", "0")
+		p.expectSilentEnd()
+		if st.syncCount() == before {
+			t.Error("the replay did not Sync")
+		}
+		d.verify(t)
+	})
 }
 
 // Stop syncs what was stored but not yet synced before closing the store,
@@ -405,27 +412,29 @@ func TestStoreSyncOnStop(t *testing.T) {
 		{"sync fails", errors.New("disk gone")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			st := newSyncStore()
-			s, _, p, _ := syncedSession(t, st, true)
-			st.failSyncs(errors.New("disk busy"))
-			if _, err := s.Send(context.Background(), order("O1")); err != nil {
-				t.Fatal(err)
-			}
-			p.expectSilentEnd()
-			st.failSyncs(tc.err)
-			err := s.Stop(context.Background())
-			if tc.err != nil {
-				if !errors.Is(err, tc.err) {
-					t.Errorf("Stop = %v, want the Sync error", err)
+			synctest.Test(t, func(t *testing.T) {
+				st := newSyncStore()
+				s, _, p, _ := syncedSession(t, st, true)
+				st.failSyncs(errors.New("disk busy"))
+				if _, err := s.Send(context.Background(), order("O1")); err != nil {
+					t.Fatal(err)
 				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got, want := st.closedAt(), s.NextSenderSeqNum(); got != want {
-				t.Errorf("durable NextSender when closed = %d, want %d", got, want)
-			}
+				p.expectSilentEnd()
+				st.failSyncs(tc.err)
+				err := s.Stop(context.Background())
+				if tc.err != nil {
+					if !errors.Is(err, tc.err) {
+						t.Errorf("Stop = %v, want the Sync error", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got, want := st.closedAt(), s.NextSenderSeqNum(); got != want {
+					t.Errorf("durable NextSender when closed = %d, want %d", got, want)
+				}
+			})
 		})
 	}
 }
@@ -435,22 +444,24 @@ type plainStore struct{ store.Store }
 
 // A store without Syncer works as before.
 func TestStoreWithoutSyncer(t *testing.T) {
-	s, _, p := loggedOn(t, func(c *session.Config) { c.Store = plainStore{memstore.New()} })
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	for _, id := range []string{"O1", "O2", "O3"} {
-		r, err := s.Send(ctx, order(id))
-		if err != nil {
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, func(c *session.Config) { c.Store = plainStore{memstore.New()} })
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, id := range []string{"O1", "O2", "O3"} {
+			r, err := s.Send(ctx, order(id))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Fatal(err)
+			}
+			p.expect("D", "11", id)
+		}
+		if err := s.Stop(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if err := r.Wait(ctx, session.Written); err != nil {
-			t.Fatal(err)
-		}
-		p.expect("D", "11", id)
-	}
-	if err := s.Stop(ctx); err != nil {
-		t.Fatal(err)
-	}
+	})
 }
 
 // targetStore makes SetNextTarget fail on demand, and records what it set.
@@ -509,49 +520,51 @@ func TestStoreTargetFailure(t *testing.T) {
 		{"unknown outcome", store.ErrUnknownOutcome},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &targetStore{Store: memstore.New(), err: tc.err}
-			logged := new(atomic.Int64)
-			l := mem.Listen("acceptor")
-			s, rec, p := logOn(t, l, l, func(c *session.Config) {
-				c.Store = fs
-				c.DeliveryQueue = deliveryQueue
-				c.Logger = slog.New(countLog{msg: "recording received messages processed failed", n: logged})
+			synctest.Test(t, func(t *testing.T) {
+				fs := &targetStore{Store: memstore.New(), err: tc.err}
+				logged := new(atomic.Int64)
+				l := mem.Listen("acceptor")
+				s, rec, p := logOn(t, l, l, func(c *session.Config) {
+					c.Store = fs
+					c.DeliveryQueue = deliveryQueue
+					c.Logger = slog.New(countLog{msg: "recording received messages processed failed", n: logged})
+				})
+				// The Logon recorded first: the failure comes amid the orders.
+				waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+				fs.fail.Store(true)
+				p.sendOrders(300)
+				p.expectEnd(5 * time.Second)
+				time.Sleep(20 * time.Millisecond)
+				read, persisted := s.NextTargetSeqNum(), fs.persisted()
+				if read-persisted > 64+deliveryQueue+4 {
+					t.Errorf("%d messages read beyond the %d recorded", read-persisted, persisted)
+				}
+				rec.mu.Lock()
+				if n := len(rec.apps); uint64(n) > persisted-2+64 {
+					t.Errorf("%d orders processed, %d beyond the %d recorded", n, uint64(n)-(persisted-2), persisted-2)
+				}
+				rec.mu.Unlock()
+				if err := s.Err(); err != nil {
+					t.Errorf("Err = %v, want nil: the counter is set again", err)
+				}
+				// The next connection waits for the processed messages to be
+				// recorded.
+				p2 := acceptPeer(t, l)
+				p2.expectSilentEnd()
+				fs.fail.Store(false)
+				p3 := acceptPeer(t, l)
+				p3.expect("A")
+				waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+				// Every order read is processed: none is lost.
+				rec.mu.Lock()
+				if n, want := len(rec.apps), int(read)-2; n != want {
+					t.Errorf("%d orders processed, want the %d read", n, want)
+				}
+				rec.mu.Unlock()
+				if n := logged.Load(); n != 1 {
+					t.Errorf("failure logged %d times, want once", n)
+				}
 			})
-			// The Logon recorded first: the failure comes amid the orders.
-			waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
-			fs.fail.Store(true)
-			p.sendOrders(300)
-			p.expectEnd(5 * time.Second)
-			time.Sleep(20 * time.Millisecond)
-			read, persisted := s.NextTargetSeqNum(), fs.persisted()
-			if read-persisted > 64+deliveryQueue+4 {
-				t.Errorf("%d messages read beyond the %d recorded", read-persisted, persisted)
-			}
-			rec.mu.Lock()
-			if n := len(rec.apps); uint64(n) > persisted-2+64 {
-				t.Errorf("%d orders processed, %d beyond the %d recorded", n, uint64(n)-(persisted-2), persisted-2)
-			}
-			rec.mu.Unlock()
-			if err := s.Err(); err != nil {
-				t.Errorf("Err = %v, want nil: the counter is set again", err)
-			}
-			// The next connection waits for the processed messages to be
-			// recorded.
-			p2 := acceptPeer(t, l)
-			p2.expectSilentEnd()
-			fs.fail.Store(false)
-			p3 := acceptPeer(t, l)
-			p3.expect("A")
-			waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
-			// Every order read is processed: none is lost.
-			rec.mu.Lock()
-			if n, want := len(rec.apps), int(read)-2; n != want {
-				t.Errorf("%d orders processed, want the %d read", n, want)
-			}
-			rec.mu.Unlock()
-			if n := logged.Load(); n != 1 {
-				t.Errorf("failure logged %d times, want once", n)
-			}
 		})
 	}
 }
@@ -571,23 +584,25 @@ func TestStoreSetNextTargetSeqNumFailure(t *testing.T) {
 		{"error", errors.New("disk full"), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &targetStore{Store: memstore.New(), err: tc.err}
-			s, _, _ := loggedOn(t, func(c *session.Config) { c.Store = fs })
-			waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
-			before := s.NextTargetSeqNum()
-			fs.fail.Store(true)
-			if err := s.SetNextTargetSeqNum(100); !errors.Is(err, tc.err) {
-				t.Fatalf("SetNextTargetSeqNum: %v, want %v", err, tc.err)
-			}
-			if n := s.NextTargetSeqNum(); n != before {
-				t.Errorf("NextTargetSeqNum() = %d, want %d unchanged", n, before)
-			}
-			if halted := s.Err() != nil; halted != tc.halt {
-				t.Errorf("halted = %t (Err() = %v), want %t", halted, s.Err(), tc.halt)
-			}
-			if !tc.halt && s.State() != session.StateLoggedOn {
-				t.Errorf("State() = %s, want %s", s.State(), session.StateLoggedOn)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				fs := &targetStore{Store: memstore.New(), err: tc.err}
+				s, _, _ := loggedOn(t, func(c *session.Config) { c.Store = fs })
+				waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+				before := s.NextTargetSeqNum()
+				fs.fail.Store(true)
+				if err := s.SetNextTargetSeqNum(100); !errors.Is(err, tc.err) {
+					t.Fatalf("SetNextTargetSeqNum: %v, want %v", err, tc.err)
+				}
+				if n := s.NextTargetSeqNum(); n != before {
+					t.Errorf("NextTargetSeqNum() = %d, want %d unchanged", n, before)
+				}
+				if halted := s.Err() != nil; halted != tc.halt {
+					t.Errorf("halted = %t (Err() = %v), want %t", halted, s.Err(), tc.halt)
+				}
+				if !tc.halt && s.State() != session.StateLoggedOn {
+					t.Errorf("State() = %s, want %s", s.State(), session.StateLoggedOn)
+				}
+			})
 		})
 	}
 }
@@ -598,16 +613,18 @@ func TestStoreTargetDivergenceHalts(t *testing.T) {
 	for _, structural := range divergences {
 		for _, err := range withUnknownOutcome(structural) {
 			t.Run(err.Error(), func(t *testing.T) {
-				fs := &targetStore{Store: memstore.New(), err: err}
-				l := mem.Listen("acceptor")
-				s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs; c.DeliveryQueue = deliveryQueue })
-				waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
-				fs.fail.Store(true)
-				p.sendOrders(300)
-				p.expectEnd(5 * time.Second)
-				waitFor(t, func() bool { return s.Err() != nil })
-				expectHalted(t, s, structural)
-				expectNoRedial(t, l)
+				synctest.Test(t, func(t *testing.T) {
+					fs := &targetStore{Store: memstore.New(), err: err}
+					l := mem.Listen("acceptor")
+					s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs; c.DeliveryQueue = deliveryQueue })
+					waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+					fs.fail.Store(true)
+					p.sendOrders(300)
+					p.expectEnd(5 * time.Second)
+					waitFor(t, func() bool { return s.Err() != nil })
+					expectHalted(t, s, structural)
+					expectNoRedial(t, l)
+				})
 			})
 		}
 	}
@@ -616,21 +633,23 @@ func TestStoreTargetDivergenceHalts(t *testing.T) {
 // A healthy store records the processed prefix every 64 messages at most,
 // and all of it once idle.
 func TestStoreTargetBatching(t *testing.T) {
-	fs := &targetStore{Store: memstore.New()}
-	s, rec, p := loggedOn(t, func(c *session.Config) { c.Store = fs })
-	p.sendOrders(300)
-	rec.wait(t, func() bool { return len(rec.apps) == 300 })
-	waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
-	for i := 1; i < len(fs.sets); i++ {
-		if d := fs.sets[i] - fs.sets[i-1]; d > 64 {
-			t.Errorf("NextTarget recorded %d then %d: %d messages apart", fs.sets[i-1], fs.sets[i], d)
+	synctest.Test(t, func(t *testing.T) {
+		fs := &targetStore{Store: memstore.New()}
+		s, rec, p := loggedOn(t, func(c *session.Config) { c.Store = fs })
+		p.sendOrders(300)
+		rec.wait(t, func() bool { return len(rec.apps) == 300 })
+		waitFor(t, func() bool { return fs.persisted() == s.NextTargetSeqNum() })
+		fs.mu.Lock()
+		defer fs.mu.Unlock()
+		for i := 1; i < len(fs.sets); i++ {
+			if d := fs.sets[i] - fs.sets[i-1]; d > 64 {
+				t.Errorf("NextTarget recorded %d then %d: %d messages apart", fs.sets[i-1], fs.sets[i], d)
+			}
 		}
-	}
-	if len(fs.sets) >= 300 {
-		t.Errorf("NextTarget recorded %d times for 300 messages", len(fs.sets))
-	}
+		if len(fs.sets) >= 300 {
+			t.Errorf("NextTarget recorded %d times for 300 messages", len(fs.sets))
+		}
+	})
 }
 
 // resetStore makes Reset, or the Open reloading the state after it, fail
@@ -678,20 +697,22 @@ var resetFailures = []struct {
 func TestStoreResetOnLogonFails(t *testing.T) {
 	for _, tc := range resetFailures {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
-			fs.failReset.Store(true)
-			l := mem.Listen("acceptor")
-			s, _ := startInitiator(t, l, func(c *session.Config) { c.Store = fs; c.ResetOnLogon = true })
-			p := acceptPeer(t, l)
-			p.expectSilentEnd()
-			if tc.halt {
-				expectHalted(t, s, tc.err)
-				expectNoRedial(t, l)
-				return
-			}
-			fs.failReset.Store(false)
-			p2 := acceptPeer(t, l)
-			p2.expect("A", "34", "1", "141", "Y")
+			synctest.Test(t, func(t *testing.T) {
+				fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
+				fs.failReset.Store(true)
+				l := mem.Listen("acceptor")
+				s, _ := startInitiator(t, l, func(c *session.Config) { c.Store = fs; c.ResetOnLogon = true })
+				p := acceptPeer(t, l)
+				p.expectSilentEnd()
+				if tc.halt {
+					expectHalted(t, s, tc.err)
+					expectNoRedial(t, l)
+					return
+				}
+				fs.failReset.Store(false)
+				p2 := acceptPeer(t, l)
+				p2.expect("A", "34", "1", "141", "Y")
+			})
 		})
 	}
 }
@@ -700,34 +721,36 @@ func TestStoreResetOnLogonFails(t *testing.T) {
 func TestStoreResetOnLogonAnswerFails(t *testing.T) {
 	for _, tc := range resetFailures {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
-			fs.failReset.Store(true)
-			l := mem.Listen("acceptor")
-			s, rec := startInitiator(t, l, func(c *session.Config) { c.Store = fs })
-			p := acceptPeer(t, l)
-			p.expect("A", "34", "1")
-			p.send("A", 0, "98", "0", "108", "30", "141", "Y")
-			p.expectSilentEnd()
-			if st := s.State(); st == session.StateLoggedOn {
-				t.Errorf("State = %s after the reset failed", st)
-			}
-			if tc.halt {
-				expectHalted(t, s, tc.err)
-				expectNoRedial(t, l)
-				return
-			}
-			// The next connection logs on, on the generation it had.
-			fs.failReset.Store(false)
-			p2 := acceptPeer(t, l)
-			p2.expect("A", "34", "2")
-			p2.send("A", 0, "98", "0", "108", "30")
-			p2.send("D", 0, "11", "IN1")
-			rec.wait(t, func() bool { return len(rec.apps) == 1 })
-			rec.mu.Lock()
-			defer rec.mu.Unlock()
-			if rec.logons != 1 || len(rec.logouts) != 0 {
-				t.Errorf("OnLogon %d times, OnLogout %d times; want once and never", rec.logons, len(rec.logouts))
-			}
+			synctest.Test(t, func(t *testing.T) {
+				fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
+				fs.failReset.Store(true)
+				l := mem.Listen("acceptor")
+				s, rec := startInitiator(t, l, func(c *session.Config) { c.Store = fs })
+				p := acceptPeer(t, l)
+				p.expect("A", "34", "1")
+				p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+				p.expectSilentEnd()
+				if st := s.State(); st == session.StateLoggedOn {
+					t.Errorf("State = %s after the reset failed", st)
+				}
+				if tc.halt {
+					expectHalted(t, s, tc.err)
+					expectNoRedial(t, l)
+					return
+				}
+				// The next connection logs on, on the generation it had.
+				fs.failReset.Store(false)
+				p2 := acceptPeer(t, l)
+				p2.expect("A", "34", "2")
+				p2.send("A", 0, "98", "0", "108", "30")
+				p2.send("D", 0, "11", "IN1")
+				rec.wait(t, func() bool { return len(rec.apps) == 1 })
+				rec.mu.Lock()
+				defer rec.mu.Unlock()
+				if rec.logons != 1 || len(rec.logouts) != 0 {
+					t.Errorf("OnLogon %d times, OnLogout %d times; want once and never", rec.logons, len(rec.logouts))
+				}
+			})
 		})
 	}
 }
@@ -737,51 +760,53 @@ func TestStoreResetOnLogonAnswerFails(t *testing.T) {
 func TestStoreResetAcceptorFails(t *testing.T) {
 	for _, tc := range resetFailures {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
-			fs.failReset.Store(true)
-			l := mem.Listen("acceptor")
-			a := session.NewAcceptor(session.AcceptorOptions{})
-			rec := newRecorder()
-			// Named as the peer's counterparty: the peer sends as ACC.
-			s, err := a.Add(session.Config{
-				ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
-				Handler:       rec,
-				Store:         fs,
-				LogoutTimeout: 200 * time.Millisecond,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			a.Listen(l)
-			ctx, cancel := context.WithCancel(context.Background())
-			done := make(chan struct{})
-			go func() { defer close(done); a.Run(ctx) }()
-			t.Cleanup(func() { cancel(); <-done })
+			synctest.Test(t, func(t *testing.T) {
+				fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
+				fs.failReset.Store(true)
+				l := mem.Listen("acceptor")
+				a := session.NewAcceptor(session.AcceptorOptions{})
+				rec := newRecorder()
+				// Named as the peer's counterparty: the peer sends as ACC.
+				s, err := a.Add(session.Config{
+					ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+					Handler:       rec,
+					Store:         fs,
+					LogoutTimeout: 200 * time.Millisecond,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				a.Listen(l)
+				ctx, cancel := context.WithCancel(context.Background())
+				done := make(chan struct{})
+				go func() { defer close(done); a.Run(ctx) }()
+				t.Cleanup(func() { cancel(); <-done })
 
-			p := dialPeer(t, l)
-			p.send("A", 0, "98", "0", "108", "30", "141", "Y")
-			p.expectSilentEnd()
-			if st := s.State(); st == session.StateLoggedOn {
-				t.Errorf("State = %s after the reset failed", st)
-			}
-			if tc.halt {
-				expectHalted(t, s, tc.err)
+				p := dialPeer(t, l)
+				p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+				p.expectSilentEnd()
+				if st := s.State(); st == session.StateLoggedOn {
+					t.Errorf("State = %s after the reset failed", st)
+				}
+				if tc.halt {
+					expectHalted(t, s, tc.err)
+					p2 := dialPeer(t, l)
+					p2.send("A", 1, "98", "0", "108", "30", "141", "Y")
+					p2.expectSilentEnd()
+					return
+				}
+				fs.failReset.Store(false)
 				p2 := dialPeer(t, l)
-				p2.send("A", 1, "98", "0", "108", "30", "141", "Y")
-				p2.expectSilentEnd()
-				return
-			}
-			fs.failReset.Store(false)
-			p2 := dialPeer(t, l)
-			p2.send("A", 0, "98", "0", "108", "30", "141", "Y")
-			p2.expect("A", "34", "1", "141", "Y")
-			p2.send("D", 0, "11", "IN1")
-			rec.wait(t, func() bool { return len(rec.apps) == 1 })
-			rec.mu.Lock()
-			defer rec.mu.Unlock()
-			if rec.logons != 1 {
-				t.Errorf("OnLogon %d times, want once", rec.logons)
-			}
+				p2.send("A", 0, "98", "0", "108", "30", "141", "Y")
+				p2.expect("A", "34", "1", "141", "Y")
+				p2.send("D", 0, "11", "IN1")
+				rec.wait(t, func() bool { return len(rec.apps) == 1 })
+				rec.mu.Lock()
+				defer rec.mu.Unlock()
+				if rec.logons != 1 {
+					t.Errorf("OnLogon %d times, want once", rec.logons)
+				}
+			})
 		})
 	}
 }
@@ -791,20 +816,22 @@ func TestStoreResetAcceptorFails(t *testing.T) {
 func TestStoreActiveResetFails(t *testing.T) {
 	for _, tc := range resetFailures {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
-			l := mem.Listen("acceptor")
-			s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
-			fs.failReset.Store(true)
-			p.send("A", 1, "98", "0", "108", "30", "141", "Y")
-			p.expectSilentEnd()
-			if tc.halt {
-				expectHalted(t, s, tc.err)
-				expectNoRedial(t, l)
-				return
-			}
-			if err := s.Err(); err != nil {
-				t.Errorf("Err = %v, want nil", err)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
+				l := mem.Listen("acceptor")
+				s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
+				fs.failReset.Store(true)
+				p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+				p.expectSilentEnd()
+				if tc.halt {
+					expectHalted(t, s, tc.err)
+					expectNoRedial(t, l)
+					return
+				}
+				if err := s.Err(); err != nil {
+					t.Errorf("Err = %v, want nil", err)
+				}
+			})
 		})
 	}
 }
@@ -814,27 +841,29 @@ func TestStoreActiveResetFails(t *testing.T) {
 func TestStoreResetOnDisconnectFails(t *testing.T) {
 	for _, tc := range resetFailures {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
-			l := mem.Listen("acceptor")
-			s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs; c.ResetOnDisconnect = true })
-			if _, err := s.Send(context.Background(), order("O1")); err != nil {
-				t.Fatal(err)
-			}
-			p.expect("D", "34", "2")
-			fs.failReset.Store(true)
-			p.conn.Close()
-			waitFor(t, func() bool { return fs.resets.Load() >= 1 })
-			if tc.halt {
-				waitFor(t, func() bool { return s.Err() != nil })
-				expectHalted(t, s, tc.err)
-				expectNoRedial(t, l)
-				return
-			}
-			p2 := acceptPeer(t, l)
-			p2.expectSilentEnd()
-			fs.failReset.Store(false)
-			p3 := acceptPeer(t, l)
-			p3.expect("A", "34", "1")
+			synctest.Test(t, func(t *testing.T) {
+				fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
+				l := mem.Listen("acceptor")
+				s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs; c.ResetOnDisconnect = true })
+				if _, err := s.Send(context.Background(), order("O1")); err != nil {
+					t.Fatal(err)
+				}
+				p.expect("D", "34", "2")
+				fs.failReset.Store(true)
+				p.conn.Close()
+				waitFor(t, func() bool { return fs.resets.Load() >= 1 })
+				if tc.halt {
+					waitFor(t, func() bool { return s.Err() != nil })
+					expectHalted(t, s, tc.err)
+					expectNoRedial(t, l)
+					return
+				}
+				p2 := acceptPeer(t, l)
+				p2.expectSilentEnd()
+				fs.failReset.Store(false)
+				p3 := acceptPeer(t, l)
+				p3.expect("A", "34", "1")
+			})
 		})
 	}
 }
@@ -842,22 +871,24 @@ func TestStoreResetOnDisconnectFails(t *testing.T) {
 // The state reload failing after a reset halts the session: it does not
 // guess the state.
 func TestStoreOpenAfterResetFails(t *testing.T) {
-	fs := &resetStore{Store: memstore.New()}
-	l := mem.Listen("acceptor")
-	s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
-	fs.failOpen.Store(true)
-	p.send("A", 1, "98", "0", "108", "30", "141", "Y")
-	p.expectSilentEnd()
-	if err := s.Err(); err == nil {
-		t.Error("Err = nil, want the reload failure")
-	}
-	if st := s.State(); st != session.StateStopped {
-		t.Errorf("State = %s, want stopped", st)
-	}
-	if got := s.NextSenderSeqNum(); got != 2 {
-		t.Errorf("NextSenderSeqNum = %d, want 2, unchanged", got)
-	}
-	expectNoRedial(t, l)
+	synctest.Test(t, func(t *testing.T) {
+		fs := &resetStore{Store: memstore.New()}
+		l := mem.Listen("acceptor")
+		s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
+		fs.failOpen.Store(true)
+		p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+		p.expectSilentEnd()
+		if err := s.Err(); err == nil {
+			t.Error("Err = nil, want the reload failure")
+		}
+		if st := s.State(); st != session.StateStopped {
+			t.Errorf("State = %s, want stopped", st)
+		}
+		if got := s.NextSenderSeqNum(); got != 2 {
+			t.Errorf("NextSenderSeqNum = %d, want 2, unchanged", got)
+		}
+		expectNoRedial(t, l)
+	})
 }
 
 // senderStore makes SetNextSender fail.
@@ -871,15 +902,17 @@ func (f *senderStore) SetNextSender(context.Context, uint64, uint64) error { ret
 // SetNextSenderSeqNum halts the session if the store may have moved
 // NextSender: the numbers below may be taken.
 func TestStoreSetNextSenderUncertain(t *testing.T) {
-	fs := &senderStore{Store: memstore.New(), err: store.ErrUnknownOutcome}
-	l := mem.Listen("acceptor")
-	s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
-	if err := s.SetNextSenderSeqNum(10); !errors.Is(err, store.ErrUnknownOutcome) {
-		t.Fatalf("SetNextSenderSeqNum = %v, want ErrUnknownOutcome", err)
-	}
-	p.expectSilentEnd()
-	expectHalted(t, s, store.ErrUnknownOutcome)
-	expectNoRedial(t, l)
+	synctest.Test(t, func(t *testing.T) {
+		fs := &senderStore{Store: memstore.New(), err: store.ErrUnknownOutcome}
+		l := mem.Listen("acceptor")
+		s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
+		if err := s.SetNextSenderSeqNum(10); !errors.Is(err, store.ErrUnknownOutcome) {
+			t.Fatalf("SetNextSenderSeqNum = %v, want ErrUnknownOutcome", err)
+		}
+		p.expectSilentEnd()
+		expectHalted(t, s, store.ErrUnknownOutcome)
+		expectNoRedial(t, l)
+	})
 }
 
 // A Sync that does not return within WriteTimeout drops the connection,
@@ -894,28 +927,30 @@ func TestStoreSyncTimeout(t *testing.T) {
 		{"unknown outcome", store.ErrUnknownOutcome},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			st := newSyncStore()
-			st.hangErr = tc.err
-			t.Cleanup(func() { close(st.release) })
-			d := &durableDialer{l: mem.Listen("acceptor"), st: st}
-			s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = timeout })
-			st.hang.Store(true)
-			if _, err := s.Send(context.Background(), order("O1")); err != nil {
-				t.Fatal(err)
-			}
-			p.expectSilentEnd()
-			// Checked every half WriteTimeout, cancelled once seen running
-			// three times in a row.
-			if took := time.Duration(st.hungFor.Load()); took < timeout || took > timeout*3/2+150*time.Millisecond {
-				t.Errorf("Sync cancelled after %v, want between %v and about %v", took, timeout, timeout*3/2)
-			}
-			if err := s.Err(); err != nil {
-				t.Errorf("Err = %v, want nil", err)
-			}
-			st.hang.Store(false)
-			p2 := acceptPeer(t, d.l)
-			p2.expect("A", "34", "3")
-			d.verify(t)
+			synctest.Test(t, func(t *testing.T) {
+				st := newSyncStore()
+				st.hangErr = tc.err
+				t.Cleanup(func() { close(st.release) })
+				d := &durableDialer{l: mem.Listen("acceptor"), st: st}
+				s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = timeout })
+				st.hang.Store(true)
+				if _, err := s.Send(context.Background(), order("O1")); err != nil {
+					t.Fatal(err)
+				}
+				p.expectSilentEnd()
+				// Checked every half WriteTimeout, cancelled once seen running
+				// three times in a row.
+				if took := time.Duration(st.hungFor.Load()); took < timeout || took > timeout*3/2+150*time.Millisecond {
+					t.Errorf("Sync cancelled after %v, want between %v and about %v", took, timeout, timeout*3/2)
+				}
+				if err := s.Err(); err != nil {
+					t.Errorf("Err = %v, want nil", err)
+				}
+				st.hang.Store(false)
+				p2 := acceptPeer(t, d.l)
+				p2.expect("A", "34", "3")
+				d.verify(t)
+			})
 		})
 	}
 }
@@ -926,19 +961,21 @@ func TestStoreSyncCancelledDivergenceHalts(t *testing.T) {
 	for _, structural := range divergences {
 		for _, err := range withUnknownOutcome(structural) {
 			t.Run(err.Error(), func(t *testing.T) {
-				st := newSyncStore()
-				st.hangErr = err
-				t.Cleanup(func() { close(st.release) })
-				d := &durableDialer{l: mem.Listen("acceptor"), st: st}
-				s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = 100 * time.Millisecond })
-				st.hang.Store(true)
-				if _, err := s.Send(context.Background(), order("O1")); err != nil {
-					t.Fatal(err)
-				}
-				p.expectSilentEnd()
-				waitFor(t, func() bool { return s.Err() != nil })
-				expectHalted(t, s, structural)
-				expectNoRedial(t, d.l)
+				synctest.Test(t, func(t *testing.T) {
+					st := newSyncStore()
+					st.hangErr = err
+					t.Cleanup(func() { close(st.release) })
+					d := &durableDialer{l: mem.Listen("acceptor"), st: st}
+					s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = 100 * time.Millisecond })
+					st.hang.Store(true)
+					if _, err := s.Send(context.Background(), order("O1")); err != nil {
+						t.Fatal(err)
+					}
+					p.expectSilentEnd()
+					waitFor(t, func() bool { return s.Err() != nil })
+					expectHalted(t, s, structural)
+					expectNoRedial(t, d.l)
+				})
 			})
 		}
 	}
@@ -958,73 +995,79 @@ func withUnknownOutcome(err error) []error {
 // Syncs slower than half WriteTimeout, but each shorter than it, are never
 // cancelled.
 func TestStoreSyncSlowNotCancelled(t *testing.T) {
-	const timeout = 300 * time.Millisecond
-	st := newSyncStore()
-	d := &durableDialer{l: mem.Listen("acceptor"), st: st}
-	s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = timeout })
-	st.delay.Store(int64(timeout * 6 / 10))
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for i := range 6 {
-		id := fmt.Sprintf("O%d", i)
-		r, err := s.Send(ctx, order(id))
-		if err != nil {
-			t.Fatal(err)
+	synctest.Test(t, func(t *testing.T) {
+		const timeout = 300 * time.Millisecond
+		st := newSyncStore()
+		d := &durableDialer{l: mem.Listen("acceptor"), st: st}
+		s, _, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st; c.WriteTimeout = timeout })
+		st.delay.Store(int64(timeout * 6 / 10))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		for i := range 6 {
+			id := fmt.Sprintf("O%d", i)
+			r, err := s.Send(ctx, order(id))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Wait(ctx, session.Written); err != nil {
+				t.Fatalf("%s: %v", id, err)
+			}
+			p.expect("D", "11", id)
 		}
-		if err := r.Wait(ctx, session.Written); err != nil {
-			t.Fatalf("%s: %v", id, err)
+		if st := s.State(); st != session.StateLoggedOn {
+			t.Errorf("State = %s, want logged on", st)
 		}
-		p.expect("D", "11", id)
-	}
-	if st := s.State(); st != session.StateLoggedOn {
-		t.Errorf("State = %s, want logged on", st)
-	}
-	d.verify(t)
+		d.verify(t)
+	})
 }
 
 // A Sync the session cancels as its connection drops is no uncertain
 // outcome, whatever the store returns: the batch is not sent, and the next
 // Sync covers it again.
 func TestStoreSyncCancelledByDisconnect(t *testing.T) {
-	st := newSyncStore()
-	st.hangErr = store.ErrUnknownOutcome
-	t.Cleanup(func() { close(st.release) })
-	d := &durableDialer{l: mem.Listen("acceptor"), st: st}
-	s, rec, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st })
-	st.hang.Store(true)
-	if _, err := s.Send(context.Background(), order("O1")); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, func() bool { return st.hung.Load() == 1 })
-	p.conn.Close()
-	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
-	st.hang.Store(false)
-	p2 := acceptPeer(t, d.l)
-	p2.expect("A", "34", "3")
-	if err := s.Err(); err != nil {
-		t.Errorf("Err = %v, want nil", err)
-	}
-	d.verify(t)
+	synctest.Test(t, func(t *testing.T) {
+		st := newSyncStore()
+		st.hangErr = store.ErrUnknownOutcome
+		t.Cleanup(func() { close(st.release) })
+		d := &durableDialer{l: mem.Listen("acceptor"), st: st}
+		s, rec, p := logOn(t, d, d.l, func(c *session.Config) { c.Store = st })
+		st.hang.Store(true)
+		if _, err := s.Send(context.Background(), order("O1")); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, func() bool { return st.hung.Load() == 1 })
+		p.conn.Close()
+		rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		st.hang.Store(false)
+		p2 := acceptPeer(t, d.l)
+		p2.expect("A", "34", "3")
+		if err := s.Err(); err != nil {
+			t.Errorf("Err = %v, want nil", err)
+		}
+		d.verify(t)
+	})
 }
 
 // Stopping a session that resets on disconnection reports no error: its
 // connection, and the reset it makes, are done before the store is synced
 // and closed.
 func TestStoreStopAfterResetOnDisconnect(t *testing.T) {
-	for range 20 {
-		s, _, p := loggedOn(t, func(c *session.Config) { c.ResetOnDisconnect = true })
-		if _, err := s.Send(context.Background(), order("O1")); err != nil {
-			t.Fatal(err)
+	synctest.Test(t, func(t *testing.T) {
+		for range 20 {
+			s, _, p := loggedOn(t, func(c *session.Config) { c.ResetOnDisconnect = true })
+			if _, err := s.Send(context.Background(), order("O1")); err != nil {
+				t.Fatal(err)
+			}
+			p.expect("D")
+			done := make(chan error, 1)
+			go func() { done <- s.Stop(context.Background()) }()
+			p.expect("5")
+			p.send("5", 0)
+			if err := <-done; err != nil {
+				t.Fatalf("Stop = %v", err)
+			}
 		}
-		p.expect("D")
-		done := make(chan error, 1)
-		go func() { done <- s.Stop(context.Background()) }()
-		p.expect("5")
-		p.send("5", 0)
-		if err := <-done; err != nil {
-			t.Fatalf("Stop = %v", err)
-		}
-	}
+	})
 }
 
 // appendStore makes Append fail on demand.
@@ -1042,63 +1085,67 @@ func (f *appendStore) Append(ctx context.Context, gen, seq uint64, raw []byte) e
 
 // An acceptor that cannot store its Logon answer does not log on.
 func TestStoreLogonAnswerNotStored(t *testing.T) {
-	fs := &appendStore{Store: memstore.New()}
-	fs.fail.Store(true)
-	l := mem.Listen("acceptor")
-	a := session.NewAcceptor(session.AcceptorOptions{})
-	rec := newRecorder()
-	s, err := a.Add(session.Config{
-		ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
-		Handler:       rec,
-		Store:         fs,
-		LogoutTimeout: 200 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.Listen(l)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { defer close(done); a.Run(ctx) }()
-	t.Cleanup(func() { cancel(); <-done })
+	synctest.Test(t, func(t *testing.T) {
+		fs := &appendStore{Store: memstore.New()}
+		fs.fail.Store(true)
+		l := mem.Listen("acceptor")
+		a := session.NewAcceptor(session.AcceptorOptions{})
+		rec := newRecorder()
+		s, err := a.Add(session.Config{
+			ID:            session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+			Handler:       rec,
+			Store:         fs,
+			LogoutTimeout: 200 * time.Millisecond,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.Listen(l)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); a.Run(ctx) }()
+		t.Cleanup(func() { cancel(); <-done })
 
-	p := dialPeer(t, l)
-	p.send("A", 0, "98", "0", "108", "30")
-	p.expectSilentEnd()
-	if st := s.State(); st == session.StateLoggedOn {
-		t.Errorf("State = %s without a Logon answer", st)
-	}
-	fs.fail.Store(false)
-	p2 := dialPeer(t, l)
-	p2.send("A", 0, "98", "0", "108", "30")
-	p2.expect("A", "34", "1")
-	p2.send("D", 0, "11", "IN1")
-	rec.wait(t, func() bool { return len(rec.apps) == 1 })
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	if rec.logons != 1 || len(rec.logouts) != 0 {
-		t.Errorf("OnLogon %d times, OnLogout %d times; want once and never", rec.logons, len(rec.logouts))
-	}
+		p := dialPeer(t, l)
+		p.send("A", 0, "98", "0", "108", "30")
+		p.expectSilentEnd()
+		if st := s.State(); st == session.StateLoggedOn {
+			t.Errorf("State = %s without a Logon answer", st)
+		}
+		fs.fail.Store(false)
+		p2 := dialPeer(t, l)
+		p2.send("A", 0, "98", "0", "108", "30")
+		p2.expect("A", "34", "1")
+		p2.send("D", 0, "11", "IN1")
+		rec.wait(t, func() bool { return len(rec.apps) == 1 })
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if rec.logons != 1 || len(rec.logouts) != 0 {
+			t.Errorf("OnLogon %d times, OnLogout %d times; want once and never", rec.logons, len(rec.logouts))
+		}
+	})
 }
 
 // A reset on an established connection whose Logon answer cannot be stored
 // is not answered, and the counterparty's Logon not taken as processed.
 func TestStoreActiveResetAnswerNotStored(t *testing.T) {
-	fs := &appendStore{Store: memstore.New()}
-	l := mem.Listen("acceptor")
-	s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
-	fs.fail.Store(true)
-	p.send("A", 1, "98", "0", "108", "30", "141", "Y")
-	p.expectSilentEnd()
-	if got := s.NextTargetSeqNum(); got != 1 {
-		t.Errorf("NextTargetSeqNum = %d, want 1: the Logon was not answered", got)
-	}
-	if err := s.Err(); err != nil {
-		t.Errorf("Err = %v, want nil", err)
-	}
-	fs.fail.Store(false)
-	p2 := acceptPeer(t, l)
-	p2.expect("A", "34", "1")
+	synctest.Test(t, func(t *testing.T) {
+		fs := &appendStore{Store: memstore.New()}
+		l := mem.Listen("acceptor")
+		s, _, p := logOn(t, l, l, func(c *session.Config) { c.Store = fs })
+		fs.fail.Store(true)
+		p.send("A", 1, "98", "0", "108", "30", "141", "Y")
+		p.expectSilentEnd()
+		if got := s.NextTargetSeqNum(); got != 1 {
+			t.Errorf("NextTargetSeqNum = %d, want 1: the Logon was not answered", got)
+		}
+		if err := s.Err(); err != nil {
+			t.Errorf("Err = %v, want nil", err)
+		}
+		fs.fail.Store(false)
+		p2 := acceptPeer(t, l)
+		p2.expect("A", "34", "1")
+	})
 }
 
 // A new schedule window's reset failing refuses the connection, or halts
@@ -1106,24 +1153,27 @@ func TestStoreActiveResetAnswerNotStored(t *testing.T) {
 func TestStoreResetScheduleWindowFails(t *testing.T) {
 	for _, tc := range resetFailures {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
-			fs.failReset.Store(true)
-			now := time.Now()
-			l := mem.Listen("acceptor")
-			s, _ := startInitiator(t, l, func(c *session.Config) {
-				c.Store = fs
-				c.Schedule = windows{{Start: now.Add(-time.Hour), End: now.Add(time.Hour), ID: "w1"}}
+			synctest.Test(t, func(t *testing.T) {
+				fs := &resetStore{Store: memstore.New(), err: tc.err, commit: tc.commit}
+				fs.failReset.Store(true)
+				now := time.Now()
+				l := mem.Listen("acceptor")
+				s, _ := startInitiator(t, l, func(c *session.Config) {
+					c.Store = fs
+					c.Schedule = windows{{Start: now.Add(-time.Hour), End: now.Add(time.Hour), ID: "w1"}}
+					session.GoTimers(c)
+				})
+				p := acceptPeer(t, l)
+				p.expectSilentEnd()
+				if tc.halt {
+					expectHalted(t, s, tc.err)
+					expectNoRedial(t, l)
+					return
+				}
+				fs.failReset.Store(false)
+				p2 := acceptPeer(t, l)
+				p2.expect("A", "34", "1")
 			})
-			p := acceptPeer(t, l)
-			p.expectSilentEnd()
-			if tc.halt {
-				expectHalted(t, s, tc.err)
-				expectNoRedial(t, l)
-				return
-			}
-			fs.failReset.Store(false)
-			p2 := acceptPeer(t, l)
-			p2.expect("A", "34", "1")
 		})
 	}
 }
@@ -1144,42 +1194,45 @@ func (f *genTargetStore) SetNextTarget(ctx context.Context, gen, next uint64) er
 // A new schedule window does not wait for the previous window's received
 // messages to be recorded: its reset discards them.
 func TestStoreWindowResetBeforeRecording(t *testing.T) {
-	now := time.Now()
-	fs := &genTargetStore{Store: memstore.New()}
-	l := mem.Listen("acceptor")
-	s, _, p := logOn(t, l, l, func(c *session.Config) {
-		c.Store = fs
-		c.Schedule = windows{
-			{Start: now.Add(-time.Hour), End: now.Add(500 * time.Millisecond), ID: "w1"},
-			{Start: now.Add(600 * time.Millisecond), End: now.Add(time.Hour), ID: "w2"},
+	synctest.Test(t, func(t *testing.T) {
+		now := time.Now()
+		fs := &genTargetStore{Store: memstore.New()}
+		l := mem.Listen("acceptor")
+		s, _, p := logOn(t, l, l, func(c *session.Config) {
+			c.Store = fs
+			c.Schedule = windows{
+				{Start: now.Add(-time.Hour), End: now.Add(500 * time.Millisecond), ID: "w1"},
+				{Start: now.Add(600 * time.Millisecond), End: now.Add(time.Hour), ID: "w2"},
+			}
+			session.GoTimers(c)
+		})
+		r, err := s.Send(context.Background(), order("O1"))
+		if err != nil {
+			t.Fatal(err)
 		}
+		p.expect("D")
+		fs.failGen.Store(r.Generation())
+		p.sendOrders(100)
+		p.expectEnd(5 * time.Second)
+		// Connections within the first window are refused: the second
+		// window's logs on.
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			p2 := acceptPeer(t, l)
+			select {
+			case ev := <-p2.frames:
+				if ev.err != nil {
+					continue
+				}
+				m, err := fix.Parse(ev.frame)
+				if err != nil || string(m.MsgType()) != "A" || string(m.Get(34)) != "1" {
+					t.Fatalf("got %s, want a Logon at 1", visible(ev.frame))
+				}
+				return
+			case <-time.After(5 * time.Second):
+				t.Fatal("no Logon")
+			}
+		}
+		t.Fatal("the second window never logged on")
 	})
-	r, err := s.Send(context.Background(), order("O1"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	p.expect("D")
-	fs.failGen.Store(r.Generation())
-	p.sendOrders(100)
-	p.expectEnd(5 * time.Second)
-	// Connections within the first window are refused: the second
-	// window's logs on.
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		p2 := acceptPeer(t, l)
-		select {
-		case ev := <-p2.frames:
-			if ev.err != nil {
-				continue
-			}
-			m, err := fix.Parse(ev.frame)
-			if err != nil || string(m.MsgType()) != "A" || string(m.Get(34)) != "1" {
-				t.Fatalf("got %s, want a Logon at 1", visible(ev.frame))
-			}
-			return
-		case <-time.After(5 * time.Second):
-			t.Fatal("no Logon")
-		}
-	}
-	t.Fatal("the second window never logged on")
 }

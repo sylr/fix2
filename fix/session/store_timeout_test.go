@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix/session"
@@ -56,74 +57,78 @@ func (h *hangStore) Append(ctx context.Context, gen, seq uint64, raw []byte) err
 // connection close, Stop returns when its ctx ends. Once the write returns,
 // the session stays halted.
 func TestStoreTimeout(t *testing.T) {
-	hs := newHangStore()
-	s, p := hangingSession(t, hs)
-	hs.hang.Store(true)
-	sent := make(chan error, 1)
-	go func() {
-		_, err := s.Send(context.Background(), order("O1"))
-		sent <- err
-	}()
-	p.expectEnd(5 * time.Second)
-	if st := s.State(); st != session.StateStopped {
-		t.Errorf("State() = %s, want %s", st, session.StateStopped)
-	}
-	if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
-		t.Errorf("Err() = %v, want %v", err, session.ErrStoreTimeout)
-	}
-	stopped := make(chan error, 1)
-	go func() { stopped <- s.Stop(context.Background()) }()
-	select {
-	case err := <-stopped:
-		if !errors.Is(err, session.ErrStoreTimeout) {
-			t.Errorf("Stop: %v, want %v", err, session.ErrStoreTimeout)
+	synctest.Test(t, func(t *testing.T) {
+		hs := newHangStore()
+		s, p := hangingSession(t, hs)
+		hs.hang.Store(true)
+		sent := make(chan error, 1)
+		go func() {
+			_, err := s.Send(context.Background(), order("O1"))
+			sent <- err
+		}()
+		p.expectEnd(5 * time.Second)
+		if st := s.State(); st != session.StateStopped {
+			t.Errorf("State() = %s, want %s", st, session.StateStopped)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Stop waited for the store write that hangs")
-	}
+		if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
+			t.Errorf("Err() = %v, want %v", err, session.ErrStoreTimeout)
+		}
+		stopped := make(chan error, 1)
+		go func() { stopped <- s.Stop(context.Background()) }()
+		select {
+		case err := <-stopped:
+			if !errors.Is(err, session.ErrStoreTimeout) {
+				t.Errorf("Stop: %v, want %v", err, session.ErrStoreTimeout)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Stop waited for the store write that hangs")
+		}
 
-	hs.unblock()
-	select {
-	case <-sent:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Send never returned once the store answered")
-	}
-	if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
-		t.Errorf("once the write returned: Err() = %v, want %v", err, session.ErrStoreTimeout)
-	}
-	if st := s.State(); st != session.StateStopped {
-		t.Errorf("once the write returned: State() = %s, want %s", st, session.StateStopped)
-	}
-	// The Stop that returned goes on.
-	select {
-	case <-s.Done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("the session never stopped once the store answered")
-	}
+		hs.unblock()
+		select {
+		case <-sent:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Send never returned once the store answered")
+		}
+		if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
+			t.Errorf("once the write returned: Err() = %v, want %v", err, session.ErrStoreTimeout)
+		}
+		if st := s.State(); st != session.StateStopped {
+			t.Errorf("once the write returned: State() = %s, want %s", st, session.StateStopped)
+		}
+		// The Stop that returned goes on.
+		select {
+		case <-s.Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the session never stopped once the store answered")
+		}
+	})
 }
 
 // Stop returns when its own Logout hangs in the store, and the session
 // stops once the write returns.
 func TestStoreTimeout_StopsLogoutHanging(t *testing.T) {
-	hs := newHangStore()
-	s, _ := hangingSession(t, hs)
-	hs.hang.Store(true)
-	stopped := make(chan error, 1)
-	go func() { stopped <- s.Stop(context.Background()) }()
-	select {
-	case err := <-stopped:
-		if !errors.Is(err, session.ErrStoreTimeout) {
-			t.Errorf("Stop: %v, want %v", err, session.ErrStoreTimeout)
+	synctest.Test(t, func(t *testing.T) {
+		hs := newHangStore()
+		s, _ := hangingSession(t, hs)
+		hs.hang.Store(true)
+		stopped := make(chan error, 1)
+		go func() { stopped <- s.Stop(context.Background()) }()
+		select {
+		case err := <-stopped:
+			if !errors.Is(err, session.ErrStoreTimeout) {
+				t.Errorf("Stop: %v, want %v", err, session.ErrStoreTimeout)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Stop waited for its Logout's store write")
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Stop waited for its Logout's store write")
-	}
-	hs.unblock()
-	select {
-	case <-s.Done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("the session never stopped once the store answered")
-	}
+		hs.unblock()
+		select {
+		case <-s.Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the session never stopped once the store answered")
+		}
+	})
 }
 
 // Store writes that answer within StoreTimeout halt nothing.
@@ -225,21 +230,23 @@ func (b blockingLog) Handle(_ context.Context, r slog.Record) error {
 // A logger that hangs keeps neither the connection open nor the session
 // from halting once a store write is found to hang.
 func TestStoreTimeout_LoggerHangs(t *testing.T) {
-	hs := newHangStore()
-	logged := make(chan struct{})
-	s, _, p := loggedOn(t, func(c *session.Config) {
-		c.Store = hs
-		c.StoreTimeout = 100 * time.Millisecond
-		c.Logger = slog.New(blockingLog{msg: "session halted: a store write has run longer than StoreTimeout", release: logged})
+	synctest.Test(t, func(t *testing.T) {
+		hs := newHangStore()
+		logged := make(chan struct{})
+		s, _, p := loggedOn(t, func(c *session.Config) {
+			c.Store = hs
+			c.StoreTimeout = 100 * time.Millisecond
+			c.Logger = slog.New(blockingLog{msg: "session halted: a store write has run longer than StoreTimeout", release: logged})
+		})
+		t.Cleanup(hs.unblock)
+		t.Cleanup(func() { close(logged) })
+		hs.hang.Store(true)
+		go s.Send(context.Background(), order("O1"))
+		p.expectEnd(5 * time.Second)
+		if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
+			t.Errorf("Err() = %v, want %v", err, session.ErrStoreTimeout)
+		}
 	})
-	t.Cleanup(hs.unblock)
-	t.Cleanup(func() { close(logged) })
-	hs.hang.Store(true)
-	go s.Send(context.Background(), order("O1"))
-	p.expectEnd(5 * time.Second)
-	if err := s.Err(); !errors.Is(err, session.ErrStoreTimeout) {
-		t.Errorf("Err() = %v, want %v", err, session.ErrStoreTimeout)
-	}
 }
 
 // waitingOpenStore makes Open wait for its ctx, as for a connection of a
@@ -254,19 +261,21 @@ func (w waitingOpenStore) Open(ctx context.Context) (store.State, error) {
 // A store's Open that waits fails the session's creation after
 // StoreTimeout, rather than hang Add.
 func TestStoreTimeout_Open(t *testing.T) {
-	i := session.NewInitiator(session.InitiatorOptions{})
-	id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
-	added := make(chan error, 1)
-	go func() {
-		_, err := i.Add(session.Config{ID: id, Handler: newRecorder(), Store: waitingOpenStore{memstore.New()}, StoreTimeout: 50 * time.Millisecond}, mem.Listen("acceptor"))
-		added <- err
-	}()
-	select {
-	case err := <-added:
-		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "StoreTimeout") {
-			t.Errorf("Add: %v, want the store's Open past StoreTimeout", err)
+	synctest.Test(t, func(t *testing.T) {
+		i := session.NewInitiator(session.InitiatorOptions{})
+		id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
+		added := make(chan error, 1)
+		go func() {
+			_, err := i.Add(session.Config{ID: id, Handler: newRecorder(), Store: waitingOpenStore{memstore.New()}, StoreTimeout: 50 * time.Millisecond}, mem.Listen("acceptor"))
+			added <- err
+		}()
+		select {
+		case err := <-added:
+			if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "StoreTimeout") {
+				t.Errorf("Add: %v, want the store's Open past StoreTimeout", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Add waited for the store's Open")
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Add waited for the store's Open")
-	}
+	})
 }

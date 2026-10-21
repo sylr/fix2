@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -20,22 +21,24 @@ import (
 // A message whose tag after the header is malformed is rejected in
 // sequence, and counted: the session goes on.
 func TestMalformedTagRejected(t *testing.T) {
-	s, _, p := loggedOn(t, nil)
-	p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|", ""))
-	p.expect("3", "45", "2", "373", "0", "58", "Invalid tag number")
-	p.write(from(session.FIX44, 3), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if got := s.NextTargetSeqNum(); got != 4 {
-		t.Errorf("NextTargetSeqNum = %d, want 4", got)
-	}
-	st := s.Stats()
-	if got := st.RejectsSent.Load(); got != 1 {
-		t.Errorf("%d rejects sent, want 1", got)
-	}
-	// The Logon, the message rejected and the TestRequest.
-	if got := st.MessagesReceived.Load(); got != 3 {
-		t.Errorf("%d messages received, want 3", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, nil)
+		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|", ""))
+		p.expect("3", "45", "2", "373", "0", "58", "Invalid tag number")
+		p.write(from(session.FIX44, 3), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if got := s.NextTargetSeqNum(); got != 4 {
+			t.Errorf("NextTargetSeqNum = %d, want 4", got)
+		}
+		st := s.Stats()
+		if got := st.RejectsSent.Load(); got != 1 {
+			t.Errorf("%d rejects sent, want 1", got)
+		}
+		// The Logon, the message rejected and the TestRequest.
+		if got := st.MessagesReceived.Load(); got != 3 {
+			t.Errorf("%d messages received, want 3", got)
+		}
+	})
 }
 
 // A malformed tag does not spare a message the header checks, whether it
@@ -134,11 +137,13 @@ func TestMalformedTagSubAndLocationIDs(t *testing.T) {
 
 // A malformed tag does not spare a message the BeginString check either.
 func TestMalformedTagBeginString(t *testing.T) {
-	_, _, p := loggedOn(t, nil)
-	p.writeRaw(frameOf("FIX.4.2", "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|"))
-	// What the session cannot see of the message may hold a credential:
-	// the BeginString received is withheld.
-	p.expect("5", "58", "Incorrect BeginString: expected FIX.4.4, received withheld")
+	synctest.Test(t, func(t *testing.T) {
+		_, _, p := loggedOn(t, nil)
+		p.writeRaw(frameOf("FIX.4.2", "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|"))
+		// What the session cannot see of the message may hold a credential:
+		// the BeginString received is withheld.
+		p.expect("5", "58", "Incorrect BeginString: expected FIX.4.4, received withheld")
+	})
 }
 
 // frameOf returns a frame of BeginString begin and body ("|" for SOH).
@@ -298,16 +303,18 @@ func TestMalformedTagTooHigh(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, tc.change)
-			next := tc.run(p)
-			p.write(from(session.FIX44, next), "1", "112", "AFTER")
-			p.expect("0", "112", "AFTER")
-			if got := s.NextTargetSeqNum(); got != uint64(next)+1 {
-				t.Errorf("NextTargetSeqNum = %d, want %d", got, next+1)
-			}
-			if got := s.State(); got != session.StateLoggedOn {
-				t.Errorf("State = %v, want %v", got, session.StateLoggedOn)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, tc.change)
+				next := tc.run(p)
+				p.write(from(session.FIX44, next), "1", "112", "AFTER")
+				p.expect("0", "112", "AFTER")
+				if got := s.NextTargetSeqNum(); got != uint64(next)+1 {
+					t.Errorf("NextTargetSeqNum = %d, want %d", got, next+1)
+				}
+				if got := s.State(); got != session.StateLoggedOn {
+					t.Errorf("State = %v, want %v", got, session.StateLoggedOn)
+				}
+			})
 		})
 	}
 }
@@ -315,42 +322,48 @@ func TestMalformedTagTooHigh(t *testing.T) {
 // A Reset-mode SequenceReset with a malformed tag is rejected, its MsgSeqNum
 // not counted, as that of any Reset-mode one, nor its NewSeqNo trusted.
 func TestMalformedTagSequenceReset(t *testing.T) {
-	s, _, p := loggedOn(t, nil)
-	p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=2|52="+sendingTime()+"|123=N|36=10|abc=1|", ""))
-	p.expect("3", "45", "2", "373", "0")
-	// Counted, or moved to 10, it would make the TestRequest too low.
-	p.write(from(session.FIX44, 2), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if got := s.NextTargetSeqNum(); got != 3 {
-		t.Errorf("NextTargetSeqNum = %d, want 3", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, nil)
+		p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=2|52="+sendingTime()+"|123=N|36=10|abc=1|", ""))
+		p.expect("3", "45", "2", "373", "0")
+		// Counted, or moved to 10, it would make the TestRequest too low.
+		p.write(from(session.FIX44, 2), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if got := s.NextTargetSeqNum(); got != 3 {
+			t.Errorf("NextTargetSeqNum = %d, want 3", got)
+		}
+	})
 }
 
 // The Reject of a Reset-mode SequenceReset whose MsgSeqNum, ignored, is no
 // sequence number has no RefSeqNum: what it holds instead, of a message parsed
 // up to a malformed tag, may be part of a credential.
 func TestMalformedTagRefSeqNum(t *testing.T) {
-	s, _, p := loggedOn(t, nil)
-	p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=S3CRET|52="+sendingTime()+"|123=N|36=10|abc=1|", ""))
-	p.expect("3", "45", "", "373", "0")
-	p.write(from(session.FIX44, 2), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if got := s.NextTargetSeqNum(); got != 3 {
-		t.Errorf("NextTargetSeqNum = %d, want 3", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, nil)
+		p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=S3CRET|52="+sendingTime()+"|123=N|36=10|abc=1|", ""))
+		p.expect("3", "45", "", "373", "0")
+		p.write(from(session.FIX44, 2), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if got := s.NextTargetSeqNum(); got != 3 {
+			t.Errorf("NextTargetSeqNum = %d, want 3", got)
+		}
+	})
 }
 
 // A SequenceReset whose GapFillFlag may follow a malformed tag is taken as a
 // GapFill, a Reset-mode one included: counted, its NewSeqNo not applied.
 func TestMalformedTagSequenceResetWithoutGapFillFlag(t *testing.T) {
-	s, _, p := loggedOn(t, nil)
-	p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=2|52="+sendingTime()+"|36=10|abc=1|", ""))
-	p.expect("3", "45", "2", "373", "0")
-	p.write(from(session.FIX44, 3), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if got := s.NextTargetSeqNum(); got != 4 {
-		t.Errorf("NextTargetSeqNum = %d, want 4", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, nil)
+		p.writeRaw(rawFrame("35=4|49=ACC|56=INI|34=2|52="+sendingTime()+"|36=10|abc=1|", ""))
+		p.expect("3", "45", "2", "373", "0")
+		p.write(from(session.FIX44, 3), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if got := s.NextTargetSeqNum(); got != 4 {
+			t.Errorf("NextTargetSeqNum = %d, want 4", got)
+		}
+	})
 }
 
 // A GapFill counted though its NewSeqNo was not applied, rejected, during a
@@ -390,91 +403,99 @@ func TestUnusableGapFillAsksAgain(t *testing.T) {
 // its turn comes asks again for what is missing after the messages held
 // behind it: not before they are handled.
 func TestUnusableHeldGapFillAsksAgain(t *testing.T) {
-	s, _, p := loggedOn(t, nil)
-	p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "4")
-	p.expect("2", "7", "2", "16", "0")
-	p.write(from(session.FIX44, 4), "0")
-	p.write(from(session.FIX44, 6), "0")
-	p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
-	p.expect("3", "45", "3", "371", "122", "373", "1")
-	p.expect("2", "7", "5", "16", "5")
-	p.write(from(session.FIX44, 5), "0", "43", "Y", "122", origSendingTime())
-	p.write(from(session.FIX44, 7), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if got := s.NextTargetSeqNum(); got != 8 {
-		t.Errorf("NextTargetSeqNum = %d, want 8", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, nil)
+		p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "4")
+		p.expect("2", "7", "2", "16", "0")
+		p.write(from(session.FIX44, 4), "0")
+		p.write(from(session.FIX44, 6), "0")
+		p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+		p.expect("3", "45", "3", "371", "122", "373", "1")
+		p.expect("2", "7", "5", "16", "5")
+		p.write(from(session.FIX44, 5), "0", "43", "Y", "122", origSendingTime())
+		p.write(from(session.FIX44, 7), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if got := s.NextTargetSeqNum(); got != 8 {
+			t.Errorf("NextTargetSeqNum = %d, want 8", got)
+		}
+	})
 }
 
 // A Reset-mode SequenceReset past a held GapFill counted without its NewSeqNo
 // applied asks for nothing it skips.
 func TestUnusableGapFillResetPast(t *testing.T) {
-	_, _, p := loggedOn(t, nil)
-	p.write(from(session.FIX44, 5), "0")
-	p.expect("2", "7", "2", "16", "0")
-	p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "5")
-	p.write(from(session.FIX44, 6), "0")
-	p.write(from(session.FIX44, 7), "4", "36", "10")
-	p.expect("3", "45", "3", "371", "122")
-	p.write(from(session.FIX44, 10), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
+	synctest.Test(t, func(t *testing.T) {
+		_, _, p := loggedOn(t, nil)
+		p.write(from(session.FIX44, 5), "0")
+		p.expect("2", "7", "2", "16", "0")
+		p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "5")
+		p.write(from(session.FIX44, 6), "0")
+		p.write(from(session.FIX44, 7), "4", "36", "10")
+		p.expect("3", "45", "3", "371", "122")
+		p.write(from(session.FIX44, 10), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+	})
 }
 
 // Our Logout sent, a held GapFill counted without its NewSeqNo applied asks
 // for nothing.
 func TestUnusableGapFillAfterLogout(t *testing.T) {
-	_, _, p := loggedOn(t, func(c *session.Config) { c.MaxLatency = 500 * time.Millisecond })
-	p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "5")
-	p.expect("2", "7", "2", "16", "0")
-	p.write(from(session.FIX44, 6), "0")
-	// Stale when received, 7 is rejected: it logs out.
-	stale := from(session.FIX44, 7)
-	stale.sent = time.Now().Add(-time.Second)
-	p.write(stale, "0")
-	p.expect("3", "45", "7", "373", "10")
-	p.expect("5")
-	// Received while logging out, 2 is handled, and the GapFill held after
-	// it: counted, its NewSeqNo not applied.
-	p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
-	p.expect("3", "45", "3", "371", "122")
-	for {
-		select {
-		case ev := <-p.frames:
-			if ev.err != nil {
-				return
+	synctest.Test(t, func(t *testing.T) {
+		_, _, p := loggedOn(t, func(c *session.Config) { c.MaxLatency = 500 * time.Millisecond })
+		p.write(from(session.FIX44, 3), "4", "43", "Y", "123", "Y", "36", "5")
+		p.expect("2", "7", "2", "16", "0")
+		p.write(from(session.FIX44, 6), "0")
+		// Stale when received, 7 is rejected: it logs out.
+		stale := from(session.FIX44, 7)
+		stale.sent = time.Now().Add(-time.Second)
+		p.write(stale, "0")
+		p.expect("3", "45", "7", "373", "10")
+		p.expect("5")
+		// Received while logging out, 2 is handled, and the GapFill held after
+		// it: counted, its NewSeqNo not applied.
+		p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+		p.expect("3", "45", "3", "371", "122")
+		for {
+			select {
+			case ev := <-p.frames:
+				if ev.err != nil {
+					return
+				}
+				if m, err := fix.Parse(ev.frame); err == nil && string(m.MsgType()) == "2" {
+					t.Fatalf("got %s after our Logout", visible(ev.frame))
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("connection still open")
 			}
-			if m, err := fix.Parse(ev.frame); err == nil && string(m.MsgType()) == "2" {
-				t.Fatalf("got %s after our Logout", visible(ev.frame))
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("connection still open")
 		}
-	}
+	})
 }
 
 // Chunked, a request asked again shorter than a chunk is followed by the
 // chunks after it.
 func TestUnusableGapFillChunked(t *testing.T) {
-	s, _, p := loggedOn(t, func(c *session.Config) { c.ResendChunkSize = 10 })
-	gapFill := func(seq, next int) {
-		p.write(from(session.FIX44, seq), "4", "43", "Y", "122", origSendingTime(), "123", "Y", "36", strconv.Itoa(next))
-	}
-	p.write(from(session.FIX44, 30), "0")
-	p.expect("2", "7", "2", "16", "11")
-	p.write(from(session.FIX44, 5), "0")
-	p.write(from(session.FIX44, 2), "4", "43", "Y", "123", "Y", "36", "5")
-	p.expect("3", "45", "2", "371", "122")
-	p.expect("2", "7", "3", "16", "4")
-	gapFill(3, 5)
-	p.expect("2", "7", "6", "16", "15")
-	gapFill(6, 16)
-	p.expect("2", "7", "16", "16", "25")
-	gapFill(16, 30)
-	p.write(from(session.FIX44, 31), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if got := s.NextTargetSeqNum(); got != 32 {
-		t.Errorf("NextTargetSeqNum = %d, want 32", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, func(c *session.Config) { c.ResendChunkSize = 10 })
+		gapFill := func(seq, next int) {
+			p.write(from(session.FIX44, seq), "4", "43", "Y", "122", origSendingTime(), "123", "Y", "36", strconv.Itoa(next))
+		}
+		p.write(from(session.FIX44, 30), "0")
+		p.expect("2", "7", "2", "16", "11")
+		p.write(from(session.FIX44, 5), "0")
+		p.write(from(session.FIX44, 2), "4", "43", "Y", "123", "Y", "36", "5")
+		p.expect("3", "45", "2", "371", "122")
+		p.expect("2", "7", "3", "16", "4")
+		gapFill(3, 5)
+		p.expect("2", "7", "6", "16", "15")
+		gapFill(6, 16)
+		p.expect("2", "7", "16", "16", "25")
+		gapFill(16, 30)
+		p.write(from(session.FIX44, 31), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if got := s.NextTargetSeqNum(); got != 32 {
+			t.Errorf("NextTargetSeqNum = %d, want 32", got)
+		}
+	})
 }
 
 // A counterparty whose GapFills are all unusable is warned of, once a
@@ -544,14 +565,16 @@ func TestMalformedTagHeaderOfDictionary(t *testing.T) {
 			{"SendingTime missing", "49=ACC|56=INI|34=2|11=O1|abc=1|52=" + now + "|", []string{"371", "52", "373", "1"}},
 		} {
 			t.Run(v.name+"/"+tc.name, func(t *testing.T) {
-				s, p := v.start(t)
-				p.writeRaw(frameOf(v.begin, "35=D|"+tc.fields))
-				p.expect("3", append([]string{"45", "2"}, tc.reject...)...)
-				p.write(from(v.begin, 3), "1", "112", "AFTER")
-				p.expect("0", "112", "AFTER")
-				if got := s.NextTargetSeqNum(); got != 4 {
-					t.Errorf("NextTargetSeqNum = %d, want 4", got)
-				}
+				synctest.Test(t, func(t *testing.T) {
+					s, p := v.start(t)
+					p.writeRaw(frameOf(v.begin, "35=D|"+tc.fields))
+					p.expect("3", append([]string{"45", "2"}, tc.reject...)...)
+					p.write(from(v.begin, 3), "1", "112", "AFTER")
+					p.expect("0", "112", "AFTER")
+					if got := s.NextTargetSeqNum(); got != 4 {
+						t.Errorf("NextTargetSeqNum = %d, want 4", got)
+					}
+				})
 			})
 		}
 	}
@@ -560,64 +583,70 @@ func TestMalformedTagHeaderOfDictionary(t *testing.T) {
 // The answer to our Logout with a malformed tag is rejected, not taken as
 // the answer: the session waits for one until LogoutTimeout.
 func TestMalformedTagLogoutAnswer(t *testing.T) {
-	s, rec, p := loggedOn(t, func(c *session.Config) { c.LogoutTimeout = 300 * time.Millisecond })
-	go s.Logout(context.Background(), "bye")
-	p.expect("5", "58", "bye")
-	p.writeRaw(rawFrame("35=5|49=ACC|56=INI|34=2|52="+sendingTime()+"|abc=1|", ""))
-	p.expect("3", "45", "2", "373", "0")
-	p.expectEnd(5 * time.Second)
-	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
-	rec.mu.Lock()
-	reason := rec.logouts[0]
-	rec.mu.Unlock()
-	var le *session.LogoutError
-	if !errors.As(reason, &le) || !strings.HasPrefix(le.Text, "no Logout reply") {
-		t.Errorf("logout reason %v, want no Logout reply", reason)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		s, rec, p := loggedOn(t, func(c *session.Config) { c.LogoutTimeout = 300 * time.Millisecond })
+		go s.Logout(context.Background(), "bye")
+		p.expect("5", "58", "bye")
+		p.writeRaw(rawFrame("35=5|49=ACC|56=INI|34=2|52="+sendingTime()+"|abc=1|", ""))
+		p.expect("3", "45", "2", "373", "0")
+		p.expectEnd(5 * time.Second)
+		rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		rec.mu.Lock()
+		reason := rec.logouts[0]
+		rec.mu.Unlock()
+		var le *session.LogoutError
+		if !errors.As(reason, &le) || !strings.HasPrefix(le.Text, "no Logout reply") {
+			t.Errorf("logout reason %v, want no Logout reply", reason)
+		}
+	})
 }
 
 // The LastMsgSeqNumProcessed of one rejected in sequence acknowledges none
 // of our messages: a rejected message is not acted upon. A well-formed one
 // after it is.
 func TestMalformedTagLastMsgSeqNumProcessed(t *testing.T) {
-	buf := &logBuffer{}
-	_, _, p := loggedOn(t, func(c *session.Config) {
-		c.Retention.Interval = time.Hour
-		c.Logger = slog.New(slog.NewTextHandler(buf, nil))
+	synctest.Test(t, func(t *testing.T) {
+		buf := &logBuffer{}
+		_, _, p := loggedOn(t, func(c *session.Config) {
+			c.Retention.Interval = time.Hour
+			c.Logger = slog.New(slog.NewTextHandler(buf, nil))
+		})
+		const never = "counterparty acknowledges messages we never sent"
+		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|369=99|11=O1|abc=1|", ""))
+		p.expect("3", "45", "2", "373", "0")
+		p.write(from(session.FIX44, 3), "1", "112", "AFTER")
+		p.expect("0", "112", "AFTER")
+		if strings.Contains(buf.String(), never) {
+			t.Errorf("the rejected message's LastMsgSeqNumProcessed was taken:\n%s", buf.String())
+		}
+		p.write(from(session.FIX44, 4), "1", "112", "AGAIN", "369", "99")
+		p.expect("0", "112", "AGAIN")
+		waitFor(t, func() bool { return strings.Contains(buf.String(), never) })
 	})
-	const never = "counterparty acknowledges messages we never sent"
-	p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|369=99|11=O1|abc=1|", ""))
-	p.expect("3", "45", "2", "373", "0")
-	p.write(from(session.FIX44, 3), "1", "112", "AFTER")
-	p.expect("0", "112", "AFTER")
-	if strings.Contains(buf.String(), never) {
-		t.Errorf("the rejected message's LastMsgSeqNumProcessed was taken:\n%s", buf.String())
-	}
-	p.write(from(session.FIX44, 4), "1", "112", "AGAIN", "369", "99")
-	p.expect("0", "112", "AGAIN")
-	waitFor(t, func() bool { return strings.Contains(buf.String(), never) })
 }
 
 // Our Logout sent, one is still checked and rejected; why the session
 // logged out, which a partial message's values do not show, is what the
 // handler is told.
 func TestMalformedTagLogoutSent(t *testing.T) {
-	_, rec, p := loggedOn(t, func(c *session.Config) { c.LogoutTimeout = 5 * time.Second })
-	const why = "Incorrect BeginString: expected FIX.4.4, received withheld"
-	p.writeRaw(frameOf("FIX.4.2", "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|"))
-	p.expect("5", "58", why)
-	p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|", ""))
-	p.expect("3", "45", "2", "373", "0")
-	p.write(from(session.FIX44, 3), "5")
-	p.expectEnd(5 * time.Second)
-	rec.wait(t, func() bool { return len(rec.logouts) == 1 })
-	rec.mu.Lock()
-	reason := rec.logouts[0]
-	rec.mu.Unlock()
-	var le *session.LogoutError
-	if !errors.As(reason, &le) || le.Text != why {
-		t.Errorf("logout reason %v, want Text %q", reason, why)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		_, rec, p := loggedOn(t, func(c *session.Config) { c.LogoutTimeout = 5 * time.Second })
+		const why = "Incorrect BeginString: expected FIX.4.4, received withheld"
+		p.writeRaw(frameOf("FIX.4.2", "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|"))
+		p.expect("5", "58", why)
+		p.writeRaw(rawFrame("35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|abc=1|", ""))
+		p.expect("3", "45", "2", "373", "0")
+		p.write(from(session.FIX44, 3), "5")
+		p.expectEnd(5 * time.Second)
+		rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		rec.mu.Lock()
+		reason := rec.logouts[0]
+		rec.mu.Unlock()
+		var le *session.LogoutError
+		if !errors.As(reason, &le) || le.Text != why {
+			t.Errorf("logout reason %v, want Text %q", reason, why)
+		}
+	})
 }
 
 // A message parsed only up to a malformed tag may hold a credential after
@@ -674,12 +703,14 @@ func TestMalformedTagLogRedaction(t *testing.T) {
 // An initiator's Logon answered with a malformed tag is garbled: counted
 // and logged, not dropped unsaid until the Logon times out.
 func TestMalformedTagLogonAnswer(t *testing.T) {
-	buf := &logBuffer{}
-	l := mem.Listen("acceptor")
-	s, _ := startInitiator(t, l, func(c *session.Config) { c.Logger = slog.New(slog.NewTextHandler(buf, nil)) })
-	p := acceptPeer(t, l)
-	p.expect("A")
-	p.writeRaw(rawFrame("35=A|49=ACC|56=INI|34=1|52="+sendingTime()+"|98=0|108=30|abc=1|", ""))
-	waitFor(t, func() bool { return s.Stats().Garbled.Load() == 1 })
-	waitFor(t, func() bool { return strings.Contains(buf.String(), "garbled message ignored") })
+	synctest.Test(t, func(t *testing.T) {
+		buf := &logBuffer{}
+		l := mem.Listen("acceptor")
+		s, _ := startInitiator(t, l, func(c *session.Config) { c.Logger = slog.New(slog.NewTextHandler(buf, nil)) })
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.writeRaw(rawFrame("35=A|49=ACC|56=INI|34=1|52="+sendingTime()+"|98=0|108=30|abc=1|", ""))
+		waitFor(t, func() bool { return s.Stats().Garbled.Load() == 1 })
+		waitFor(t, func() bool { return strings.Contains(buf.String(), "garbled message ignored") })
+	})
 }

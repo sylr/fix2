@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix/session"
@@ -93,59 +94,61 @@ func TestAddConcurrentWithRemove(t *testing.T) {
 	id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
 	for _, tc := range managers {
 		t.Run(tc.name, func(t *testing.T) {
-			m := tc.new()
-			st := newGatedStore(t, 2)
-			h := newBlockingApp(t)
-			cfg := session.Config{ID: id, Handler: h, Store: st, LogoutTimeout: 100 * time.Millisecond}
-			s, err := m.add(cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			runUntilCleanup(t, m.run)
-			p := m.logOn(t)
-			h.wait(t, func() bool { return h.logons == 1 })
-			p.sendOrders(1)
-			h.waitEntered(t)
+			synctest.Test(t, func(t *testing.T) {
+				m := tc.new()
+				st := newGatedStore(t, 2)
+				h := newBlockingApp(t)
+				cfg := session.Config{ID: id, Handler: h, Store: st, LogoutTimeout: 100 * time.Millisecond}
+				s, err := m.add(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				runUntilCleanup(t, m.run)
+				p := m.logOn(t)
+				h.wait(t, func() bool { return h.logons == 1 })
+				p.sendOrders(1)
+				h.waitEntered(t)
 
-			added := make(chan error, 1)
-			go func() { _, err := m.add(cfg); added <- err }()
-			var addErr error
-			opened := false
-			select {
-			case addErr = <-added:
-			case <-st.entered:
-				opened = true
-			case <-time.After(5 * time.Second):
-				t.Fatal("Add neither returned nor opened the store")
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-			m.remove(ctx, id)
-			cancel()
-			st.release()
-			if opened {
-				t.Error("Add opened the store of the session added")
-				addErr = <-added
-			}
-			if addErr == nil {
-				t.Fatal("Add of a session added succeeded")
-			}
-			if st.closed.Load() {
-				t.Error("refused Add closed the store the removed session still uses")
-			}
-			select {
-			case <-s.Done():
-				t.Error("Done closed while FromApp is stuck")
-			default:
-			}
+				added := make(chan error, 1)
+				go func() { _, err := m.add(cfg); added <- err }()
+				var addErr error
+				opened := false
+				select {
+				case addErr = <-added:
+				case <-st.entered:
+					opened = true
+				case <-time.After(5 * time.Second):
+					t.Fatal("Add neither returned nor opened the store")
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+				m.remove(ctx, id)
+				cancel()
+				st.release()
+				if opened {
+					t.Error("Add opened the store of the session added")
+					addErr = <-added
+				}
+				if addErr == nil {
+					t.Fatal("Add of a session added succeeded")
+				}
+				if st.closed.Load() {
+					t.Error("refused Add closed the store the removed session still uses")
+				}
+				select {
+				case <-s.Done():
+					t.Error("Done closed while FromApp is stuck")
+				default:
+				}
 
-			h.unblock()
-			waitDone(t, s)
-			if n := st.opens.Load(); n != 1 {
-				t.Errorf("store opened %d times, want once: by the removed session alone", n)
-			}
-			if late := st.lateCalls(); len(late) > 0 {
-				t.Errorf("store used after Close: %v", late)
-			}
+				h.unblock()
+				waitDone(t, s)
+				if n := st.opens.Load(); n != 1 {
+					t.Errorf("store opened %d times, want once: by the removed session alone", n)
+				}
+				if late := st.lateCalls(); len(late) > 0 {
+					t.Errorf("store used after Close: %v", late)
+				}
+			})
 		})
 	}
 }
@@ -156,37 +159,39 @@ func TestAddReservesID(t *testing.T) {
 	id := session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"}
 	for _, tc := range managers {
 		t.Run(tc.name, func(t *testing.T) {
-			m := tc.new()
-			first := newGatedStore(t, 1)
-			added := make(chan error, 1)
-			go func() {
-				_, err := m.add(session.Config{ID: id, Handler: session.BaseHandler{}, Store: first})
-				added <- err
-			}()
-			select {
-			case <-first.entered:
-			case <-time.After(5 * time.Second):
-				t.Fatal("first Add did not open its store")
-			}
+			synctest.Test(t, func(t *testing.T) {
+				m := tc.new()
+				first := newGatedStore(t, 1)
+				added := make(chan error, 1)
+				go func() {
+					_, err := m.add(session.Config{ID: id, Handler: session.BaseHandler{}, Store: first})
+					added <- err
+				}()
+				select {
+				case <-first.entered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("first Add did not open its store")
+				}
 
-			second := &closeStore{Store: memstore.New()}
-			cfg := session.Config{ID: id, Handler: session.BaseHandler{}, Store: second}
-			if _, err := m.add(cfg); err == nil || !strings.Contains(err.Error(), "being added") {
-				t.Errorf("Add of an ID being added = %v, want it refused", err)
-			}
-			first.release()
-			if err := <-added; err != nil {
-				t.Errorf("first Add: %v", err)
-			}
-			if first.closed.Load() {
-				t.Error("store of the session added closed")
-			}
-			if _, err := m.add(cfg); err == nil || !strings.Contains(err.Error(), "already added") {
-				t.Errorf("Add of an ID added = %v, want it refused", err)
-			}
-			if n := second.opens.Load(); n != 0 || second.closed.Load() {
-				t.Errorf("refused Adds used their store: opened %d times, closed %v", n, second.closed.Load())
-			}
+				second := &closeStore{Store: memstore.New()}
+				cfg := session.Config{ID: id, Handler: session.BaseHandler{}, Store: second}
+				if _, err := m.add(cfg); err == nil || !strings.Contains(err.Error(), "being added") {
+					t.Errorf("Add of an ID being added = %v, want it refused", err)
+				}
+				first.release()
+				if err := <-added; err != nil {
+					t.Errorf("first Add: %v", err)
+				}
+				if first.closed.Load() {
+					t.Error("store of the session added closed")
+				}
+				if _, err := m.add(cfg); err == nil || !strings.Contains(err.Error(), "already added") {
+					t.Errorf("Add of an ID added = %v, want it refused", err)
+				}
+				if n := second.opens.Load(); n != 0 || second.closed.Load() {
+					t.Errorf("refused Adds used their store: opened %d times, closed %v", n, second.closed.Load())
+				}
+			})
 		})
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -17,41 +18,47 @@ import (
 // QuickFIXTolerations holds what QuickFIX's acceptance tests need, a fresh
 // value every call; a zero Config tolerates nothing.
 func TestQuickFIXTolerations(t *testing.T) {
-	want := session.Tolerations{
-		TolerateUnsupportedDefaultApplVerID:    true,
-		TolerateLogoutBeforeGapRecovery:        true,
-		TolerateNoHeartbeatAwaitingTestRequest: true,
-	}
-	got := session.QuickFIXTolerations()
-	if got != want {
-		t.Errorf("QuickFIXTolerations() = %+v, want %+v", got, want)
-	}
-	got.TolerateLogoutBeforeGapRecovery = false
-	if !session.QuickFIXTolerations().TolerateLogoutBeforeGapRecovery {
-		t.Error("QuickFIXTolerations shares its value")
-	}
-	var c session.Config
-	if c.Tolerations != (session.Tolerations{}) {
-		t.Errorf("a zero Config tolerates %+v", c.Tolerations)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		want := session.Tolerations{
+			TolerateUnsupportedDefaultApplVerID:    true,
+			TolerateLogoutBeforeGapRecovery:        true,
+			TolerateNoHeartbeatAwaitingTestRequest: true,
+		}
+		got := session.QuickFIXTolerations()
+		if got != want {
+			t.Errorf("QuickFIXTolerations() = %+v, want %+v", got, want)
+		}
+		got.TolerateLogoutBeforeGapRecovery = false
+		if !session.QuickFIXTolerations().TolerateLogoutBeforeGapRecovery {
+			t.Error("QuickFIXTolerations shares its value")
+		}
+		var c session.Config
+		if c.Tolerations != (session.Tolerations{}) {
+			t.Errorf("a zero Config tolerates %+v", c.Tolerations)
+		}
+	})
 }
 
 // A Logout ahead of a gap is answered once the gap is recovered, or, with
 // TolerateLogoutBeforeGapRecovery, at once, as QuickFIX does.
 func TestTolerateLogoutBeforeGapRecovery(t *testing.T) {
 	t.Run("strict", func(t *testing.T) {
-		_, rec, p := loggedOn(t, nil)
-		p.write(from(session.FIX44, 3), "5")
-		p.expect("2", "7", "2", "16", "0")
-		p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
-		p.expect("5")
-		rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		synctest.Test(t, func(t *testing.T) {
+			_, rec, p := loggedOn(t, nil)
+			p.write(from(session.FIX44, 3), "5")
+			p.expect("2", "7", "2", "16", "0")
+			p.write(from(session.FIX44, 2), "0", "43", "Y", "122", origSendingTime())
+			p.expect("5")
+			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		})
 	})
 	t.Run("tolerated", func(t *testing.T) {
-		_, rec, p := loggedOn(t, func(c *session.Config) { c.TolerateLogoutBeforeGapRecovery = true })
-		p.write(from(session.FIX44, 3), "5")
-		p.expect("5")
-		rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		synctest.Test(t, func(t *testing.T) {
+			_, rec, p := loggedOn(t, func(c *session.Config) { c.TolerateLogoutBeforeGapRecovery = true })
+			p.write(from(session.FIX44, 3), "5")
+			p.expect("5")
+			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+		})
 	})
 }
 
@@ -64,15 +71,17 @@ func TestServeResendRequestSeqTooLow(t *testing.T) {
 		serve bool
 	}{{"default", false}, {"served", true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, rec, p := loggedOn(t, func(c *session.Config) { c.ServeResendRequestSeqTooLow = tc.serve })
-			p.send("0", 0)
-			p.send("2", 2, "7", "1", "16", "0")
-			if tc.serve {
-				// Our Logon, an admin message, gap-filled.
-				p.expect("4", "34", "1", "43", "Y", "123", "Y", "36", "2")
-			}
-			p.expect("5")
-			rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			synctest.Test(t, func(t *testing.T) {
+				_, rec, p := loggedOn(t, func(c *session.Config) { c.ServeResendRequestSeqTooLow = tc.serve })
+				p.send("0", 0)
+				p.send("2", 2, "7", "1", "16", "0")
+				if tc.serve {
+					// Our Logon, an admin message, gap-filled.
+					p.expect("4", "34", "1", "43", "Y", "123", "Y", "36", "2")
+				}
+				p.expect("5")
+				rec.wait(t, func() bool { return len(rec.logouts) == 1 })
+			})
 		})
 	}
 }
@@ -85,19 +94,21 @@ func TestTolerateSequenceResetWithoutOrigSendingTime(t *testing.T) {
 		tolerate bool
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, func(c *session.Config) { c.TolerateSequenceResetWithoutOrigSendingTime = tc.tolerate })
-			p.write(from(session.FIX44, 5), "0")
-			p.expect("2", "7", "2", "16", "0")
-			p.write(from(session.FIX44, 2), "4", "43", "Y", "123", "Y", "36", "5")
-			if !tc.tolerate {
-				p.expect("3", "45", "2", "371", "122")
-				return
-			}
-			p.write(from(session.FIX44, 6), "1", "112", "AFTER")
-			p.expect("0", "112", "AFTER")
-			if got := s.NextTargetSeqNum(); got != 7 {
-				t.Errorf("NextTargetSeqNum = %d, want 7", got)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, func(c *session.Config) { c.TolerateSequenceResetWithoutOrigSendingTime = tc.tolerate })
+				p.write(from(session.FIX44, 5), "0")
+				p.expect("2", "7", "2", "16", "0")
+				p.write(from(session.FIX44, 2), "4", "43", "Y", "123", "Y", "36", "5")
+				if !tc.tolerate {
+					p.expect("3", "45", "2", "371", "122")
+					return
+				}
+				p.write(from(session.FIX44, 6), "1", "112", "AFTER")
+				p.expect("0", "112", "AFTER")
+				if got := s.NextTargetSeqNum(); got != 7 {
+					t.Errorf("NextTargetSeqNum = %d, want 7", got)
+				}
+			})
 		})
 	}
 }
@@ -111,36 +122,38 @@ func TestTolerateUnsupportedDefaultApplVerID(t *testing.T) {
 		tolerate bool
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			l := mem.Listen("acceptor")
-			_, rec := startInitiator(t, l, func(c *session.Config) {
-				c.ID.BeginString = session.FIXT11
-				strictApps(c)
-				c.TolerateUnsupportedDefaultApplVerID = tc.tolerate
-			})
-			p := acceptPeer(t, l)
-			p.expect("A")
-			p.write(from(session.FIXT11, 1), "A", "98", "0", "108", "30", "1137", "7")
-			if !tc.tolerate {
-				p.expectSilentEnd()
-				rec.mu.Lock()
-				defer rec.mu.Unlock()
-				if rec.logons != 0 {
-					t.Error("logged on")
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("acceptor")
+				_, rec := startInitiator(t, l, func(c *session.Config) {
+					c.ID.BeginString = session.FIXT11
+					strictApps(c)
+					c.TolerateUnsupportedDefaultApplVerID = tc.tolerate
+				})
+				p := acceptPeer(t, l)
+				p.expect("A")
+				p.write(from(session.FIXT11, 1), "A", "98", "0", "108", "30", "1137", "7")
+				if !tc.tolerate {
+					p.expectSilentEnd()
+					rec.mu.Lock()
+					defer rec.mu.Unlock()
+					if rec.logons != 0 {
+						t.Error("logged on")
+					}
+					return
 				}
-				return
-			}
-			rec.wait(t, func() bool { return rec.logons == 1 })
-			// Without ApplVerID, read as FIX 5.0 SP2, our default: a valid
-			// order is delivered, one without Side (54) rejected for it.
-			order := func(seq int, id string, side ...string) {
-				f := append([]string{"11", id}, side...)
-				f = append(f, "60", "20240101-00:00:00.000", "38", "3", "40", "1")
-				p.write(from(session.FIXT11, seq), "D", f...)
-			}
-			order(2, "O1", "54", "1")
-			rec.wait(t, func() bool { return len(rec.apps) == 1 && rec.apps[0] == "O1" })
-			order(3, "O2")
-			p.expect("3", "45", "3", "371", "54", "373", "1")
+				rec.wait(t, func() bool { return rec.logons == 1 })
+				// Without ApplVerID, read as FIX 5.0 SP2, our default: a valid
+				// order is delivered, one without Side (54) rejected for it.
+				order := func(seq int, id string, side ...string) {
+					f := append([]string{"11", id}, side...)
+					f = append(f, "60", "20240101-00:00:00.000", "38", "3", "40", "1")
+					p.write(from(session.FIXT11, seq), "D", f...)
+				}
+				order(2, "O1", "54", "1")
+				rec.wait(t, func() bool { return len(rec.apps) == 1 && rec.apps[0] == "O1" })
+				order(3, "O2")
+				p.expect("3", "45", "3", "371", "54", "373", "1")
+			})
 		})
 	}
 }
@@ -199,16 +212,18 @@ func TestTolerateNoHeartbeatAwaitingTestRequest(t *testing.T) {
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, _, p := loggedOn(t, func(c *session.Config) {
-				c.HeartBtInt = 2 * time.Second
-				c.TolerateNoHeartbeatAwaitingTestRequest = tc.tolerate
+			synctest.Test(t, func(t *testing.T) {
+				_, _, p := loggedOn(t, func(c *session.Config) {
+					c.HeartBtInt = 2 * time.Second
+					c.TolerateNoHeartbeatAwaitingTestRequest = tc.tolerate
+				})
+				p.expect("0", "112", "")     // 2s after our Logon
+				p.expect("1", "112", "TEST") // 2.4s after the peer's
+				if !tc.tolerate {
+					p.expect("0", "112", "") // 2s after the TestRequest
+				}
+				p.expectSilentEnd() // 2.4s after the TestRequest
 			})
-			p.expect("0", "112", "")     // 2s after our Logon
-			p.expect("1", "112", "TEST") // 2.4s after the peer's
-			if !tc.tolerate {
-				p.expect("0", "112", "") // 2s after the TestRequest
-			}
-			p.expectSilentEnd() // 2.4s after the TestRequest
 		})
 	}
 }
@@ -223,15 +238,17 @@ func TestTolerateResetLogonSeqNumNotOne(t *testing.T) {
 		tolerate bool
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, rec, p := acceptorPeer(t, func(c *session.Config) { c.TolerateResetLogonSeqNumNotOne = tc.tolerate })
-			p.write(fromInitiator(5), "A", "98", "0", "108", "30", "141", "Y")
-			if !tc.tolerate {
-				refused(t, rec, p)
-				return
-			}
-			p.expect("A", "34", "1", "141", "Y")
-			p.expect("2", "7", "1", "16", "0")
-			rec.wait(t, func() bool { return rec.logons == 1 })
+			synctest.Test(t, func(t *testing.T) {
+				_, rec, p := acceptorPeer(t, func(c *session.Config) { c.TolerateResetLogonSeqNumNotOne = tc.tolerate })
+				p.write(fromInitiator(5), "A", "98", "0", "108", "30", "141", "Y")
+				if !tc.tolerate {
+					refused(t, rec, p)
+					return
+				}
+				p.expect("A", "34", "1", "141", "Y")
+				p.expect("2", "7", "1", "16", "0")
+				rec.wait(t, func() bool { return rec.logons == 1 })
+			})
 		})
 	}
 }
@@ -255,17 +272,19 @@ func TestTolerateMalformedNextExpectedMsgSeqNum(t *testing.T) {
 				name = tc.name + "/tolerated"
 			}
 			t.Run(name, func(t *testing.T) {
-				_, rec, p := acceptorPeer(t, func(c *session.Config) {
-					tc.change(c)
-					c.TolerateMalformedNextExpectedMsgSeqNum = tolerate
+				synctest.Test(t, func(t *testing.T) {
+					_, rec, p := acceptorPeer(t, func(c *session.Config) {
+						tc.change(c)
+						c.TolerateMalformedNextExpectedMsgSeqNum = tolerate
+					})
+					p.write(fromInitiator(1), "A", "98", "0", "108", "30", "789", "x")
+					if !tolerate {
+						refused(t, rec, p)
+						return
+					}
+					p.expect("A", "34", "1")
+					rec.wait(t, func() bool { return rec.logons == 1 })
 				})
-				p.write(fromInitiator(1), "A", "98", "0", "108", "30", "789", "x")
-				if !tolerate {
-					refused(t, rec, p)
-					return
-				}
-				p.expect("A", "34", "1")
-				rec.wait(t, func() bool { return rec.logons == 1 })
 			})
 		}
 	}
@@ -310,17 +329,19 @@ func TestTolerateMalformedNextExpectedMsgSeqNumRequired(t *testing.T) {
 		{"absent", []string{"98", "0", "108", "30"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, rec, p := acceptorPeer(t, func(c *session.Config) {
-				c.Dictionaries.Session = d
-				c.TolerateMalformedNextExpectedMsgSeqNum = true
+			synctest.Test(t, func(t *testing.T) {
+				_, rec, p := acceptorPeer(t, func(c *session.Config) {
+					c.Dictionaries.Session = d
+					c.TolerateMalformedNextExpectedMsgSeqNum = true
+				})
+				p.write(fromInitiator(1), "A", tc.fields...)
+				if !tc.logon {
+					refused(t, rec, p)
+					return
+				}
+				p.expect("A", "34", "1")
+				rec.wait(t, func() bool { return rec.logons == 1 })
 			})
-			p.write(fromInitiator(1), "A", tc.fields...)
-			if !tc.logon {
-				refused(t, rec, p)
-				return
-			}
-			p.expect("A", "34", "1")
-			rec.wait(t, func() bool { return rec.logons == 1 })
 		})
 	}
 }
@@ -340,21 +361,23 @@ func TestTolerateLogonWithoutEncryptMethodDictionary(t *testing.T) {
 		{"tolerated, a tag not for Logon", true, []string{"55", "X"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			l := mem.Listen("acceptor")
-			_, rec := startInitiator(t, l, func(c *session.Config) {
-				c.Dictionaries.Session = fix44.Dictionary()
-				c.TolerateLogonWithoutEncryptMethod = tc.tolerate
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("acceptor")
+				_, rec := startInitiator(t, l, func(c *session.Config) {
+					c.Dictionaries.Session = fix44.Dictionary()
+					c.TolerateLogonWithoutEncryptMethod = tc.tolerate
+				})
+				p := acceptPeer(t, l)
+				p.expect("A")
+				p.write(from(session.FIX44, 1), "A", append([]string{"108", "30"}, tc.extra...)...)
+				if !tc.logon {
+					refused(t, rec, p)
+					return
+				}
+				rec.wait(t, func() bool { return rec.logons == 1 })
+				p.write(from(session.FIX44, 2), "1", "112", "PING")
+				p.expect("0", "112", "PING")
 			})
-			p := acceptPeer(t, l)
-			p.expect("A")
-			p.write(from(session.FIX44, 1), "A", append([]string{"108", "30"}, tc.extra...)...)
-			if !tc.logon {
-				refused(t, rec, p)
-				return
-			}
-			rec.wait(t, func() bool { return rec.logons == 1 })
-			p.write(from(session.FIX44, 2), "1", "112", "PING")
-			p.expect("0", "112", "PING")
 		})
 	}
 }
@@ -373,14 +396,16 @@ func TestTolerateTagLeadingZerosFirstLogon(t *testing.T) {
 		tolerate bool
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, rec, p := acceptorPeer(t, func(c *session.Config) { c.TolerateTagLeadingZeros = tc.tolerate })
-			p.writeRaw(rawFrame("35=A|49=INI|56=ACC|34=1|52="+sendingTime()+"|98=0|0108=30|", ""))
-			if !tc.tolerate {
-				refused(t, rec, p)
-				return
-			}
-			p.expect("A", "34", "1")
-			rec.wait(t, func() bool { return rec.logons == 1 })
+			synctest.Test(t, func(t *testing.T) {
+				_, rec, p := acceptorPeer(t, func(c *session.Config) { c.TolerateTagLeadingZeros = tc.tolerate })
+				p.writeRaw(rawFrame("35=A|49=INI|56=ACC|34=1|52="+sendingTime()+"|98=0|0108=30|", ""))
+				if !tc.tolerate {
+					refused(t, rec, p)
+					return
+				}
+				p.expect("A", "34", "1")
+				rec.wait(t, func() bool { return rec.logons == 1 })
+			})
 		})
 	}
 }
@@ -398,18 +423,20 @@ func TestRejectUndefinedTagAsInvalidTagNumber(t *testing.T) {
 	}{{"default", false, "3"}, {"invalid tag number", true, "0"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, _, p := loggedOn(t, func(c *session.Config) {
-				c.Dictionaries.Session = fix44.Dictionary()
-				c.RejectUndefinedTagAsInvalidTagNumber = tc.invalid
+			synctest.Test(t, func(t *testing.T) {
+				_, _, p := loggedOn(t, func(c *session.Config) {
+					c.Dictionaries.Session = fix44.Dictionary()
+					c.RejectUndefinedTagAsInvalidTagNumber = tc.invalid
+				})
+				p.send("1", 0, "112", "U", "4999", "x")
+				p.expect("3", "45", "2", "371", "4999", "373", tc.undefined)
+				p.send("1", 0, "112", "N", "11", "x")
+				p.expect("3", "45", "3", "371", "11", "373", "2")
+				p.writeRaw(rawFrame("35=1|49=ACC|56=INI|34=4|52="+sendingTime()+"|112=M|abc=x|", ""))
+				p.expect("3", "45", "4", "373", "0")
+				p.send("1", 5, "112", "AFTER")
+				p.expect("0", "112", "AFTER")
 			})
-			p.send("1", 0, "112", "U", "4999", "x")
-			p.expect("3", "45", "2", "371", "4999", "373", tc.undefined)
-			p.send("1", 0, "112", "N", "11", "x")
-			p.expect("3", "45", "3", "371", "11", "373", "2")
-			p.writeRaw(rawFrame("35=1|49=ACC|56=INI|34=4|52="+sendingTime()+"|112=M|abc=x|", ""))
-			p.expect("3", "45", "4", "373", "0")
-			p.send("1", 5, "112", "AFTER")
-			p.expect("0", "112", "AFTER")
 		})
 	}
 }
@@ -438,40 +465,42 @@ func TestTolerateFinerTimestamps(t *testing.T) {
 		for _, tolerate := range []bool{false, true} {
 			t.Run(v.begin+"/"+map[bool]string{false: "strict", true: "tolerated"}[tolerate], func(t *testing.T) {
 				t.Parallel()
-				l := mem.Listen("acceptor")
-				_, rec := startInitiator(t, l, func(c *session.Config) {
-					c.ID.BeginString = v.begin
-					c.TolerateFinerTimestamps = tolerate
-				})
-				p := acceptPeer(t, l)
-				p.expect("A")
-				now := func(digits int) string { return timestamp(time.Now(), digits) }
-				p.writeRaw(frameOf(v.begin, "35=A|49=ACC|56=INI|34=1|52="+now(v.ok)+"|98=0|108=30|"))
-				rec.wait(t, func() bool { return rec.logons == 1 })
-				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=2|52="+now(v.ok)+"|112=OK|"))
-				p.expect("0", "112", "OK")
-				if v.fine < 0 {
-					return
-				}
-				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=3|52="+now(v.fine)+"|112=FINE|"))
-				orig := timestamp(time.Now().Add(-time.Second), v.fine)
-				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=4|43=Y|52="+now(v.ok)+"|122="+orig+"|112=ORIG|"))
-				switch {
-				case tolerate:
-					p.expect("0", "112", "FINE")
-					p.expect("0", "112", "ORIG")
-				case v.begin == session.FIX43:
-					p.expect("3", "45", "3", "371", "52", "373", "6")
-					p.expect("3", "45", "4", "371", "122", "373", "6")
-				default:
-					// No SessionRejectReason before FIX 4.2: the Text says why.
-					if m := p.expect("3", "45", "3"); !strings.HasPrefix(string(m.Get(58)), "Incorrect data format for value") {
-						t.Errorf("Reject Text %q, want an incorrect data format", m.Get(58))
+				synctest.Test(t, func(t *testing.T) {
+					l := mem.Listen("acceptor")
+					_, rec := startInitiator(t, l, func(c *session.Config) {
+						c.ID.BeginString = v.begin
+						c.TolerateFinerTimestamps = tolerate
+					})
+					p := acceptPeer(t, l)
+					p.expect("A")
+					now := func(digits int) string { return timestamp(time.Now(), digits) }
+					p.writeRaw(frameOf(v.begin, "35=A|49=ACC|56=INI|34=1|52="+now(v.ok)+"|98=0|108=30|"))
+					rec.wait(t, func() bool { return rec.logons == 1 })
+					p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=2|52="+now(v.ok)+"|112=OK|"))
+					p.expect("0", "112", "OK")
+					if v.fine < 0 {
+						return
 					}
-					p.expect("3", "45", "4")
-				}
-				p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=5|52="+now(v.ok)+"|112=AFTER|"))
-				p.expect("0", "112", "AFTER")
+					p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=3|52="+now(v.fine)+"|112=FINE|"))
+					orig := timestamp(time.Now().Add(-time.Second), v.fine)
+					p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=4|43=Y|52="+now(v.ok)+"|122="+orig+"|112=ORIG|"))
+					switch {
+					case tolerate:
+						p.expect("0", "112", "FINE")
+						p.expect("0", "112", "ORIG")
+					case v.begin == session.FIX43:
+						p.expect("3", "45", "3", "371", "52", "373", "6")
+						p.expect("3", "45", "4", "371", "122", "373", "6")
+					default:
+						// No SessionRejectReason before FIX 4.2: the Text says why.
+						if m := p.expect("3", "45", "3"); !strings.HasPrefix(string(m.Get(58)), "Incorrect data format for value") {
+							t.Errorf("Reject Text %q, want an incorrect data format", m.Get(58))
+						}
+						p.expect("3", "45", "4")
+					}
+					p.writeRaw(frameOf(v.begin, "35=1|49=ACC|56=INI|34=5|52="+now(v.ok)+"|112=AFTER|"))
+					p.expect("0", "112", "AFTER")
+				})
 			})
 		}
 	}
@@ -487,17 +516,19 @@ func TestTolerateFinerTimestampsFirstLogon(t *testing.T) {
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, rec, p := acceptorPeer(t, func(c *session.Config) {
-				c.ID.BeginString = session.FIX43
-				c.TolerateFinerTimestamps = tc.tolerate
+			synctest.Test(t, func(t *testing.T) {
+				_, rec, p := acceptorPeer(t, func(c *session.Config) {
+					c.ID.BeginString = session.FIX43
+					c.TolerateFinerTimestamps = tc.tolerate
+				})
+				p.writeRaw(frameOf(session.FIX43, "35=A|49=INI|56=ACC|34=1|52="+timestamp(time.Now(), 6)+"|98=0|108=30|"))
+				if !tc.tolerate {
+					refused(t, rec, p)
+					return
+				}
+				p.expect("A", "34", "1")
+				rec.wait(t, func() bool { return rec.logons == 1 })
 			})
-			p.writeRaw(frameOf(session.FIX43, "35=A|49=INI|56=ACC|34=1|52="+timestamp(time.Now(), 6)+"|98=0|108=30|"))
-			if !tc.tolerate {
-				refused(t, rec, p)
-				return
-			}
-			p.expect("A", "34", "1")
-			rec.wait(t, func() bool { return rec.logons == 1 })
 		})
 	}
 }
@@ -543,22 +574,24 @@ func TestTolerateFinerTimestampsDictionary(t *testing.T) {
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			l := mem.Listen("acceptor")
-			_, rec := startInitiator(t, l, func(c *session.Config) {
-				c.ID.BeginString = session.FIX43
-				c.Dictionaries.Session = d
-				c.TolerateFinerTimestamps = tc.tolerate
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("acceptor")
+				_, rec := startInitiator(t, l, func(c *session.Config) {
+					c.ID.BeginString = session.FIX43
+					c.Dictionaries.Session = d
+					c.TolerateFinerTimestamps = tc.tolerate
+				})
+				p := acceptPeer(t, l)
+				p.expect("A")
+				p.writeRaw(frameOf(session.FIX43, "35=A|49=ACC|56=INI|34=1|52="+sendingTime()+"|98=0|108=30|"))
+				rec.wait(t, func() bool { return rec.logons == 1 })
+				p.writeRaw(frameOf(session.FIX43, "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|60="+timestamp(time.Now(), 6)+"|"))
+				if tc.tolerate {
+					rec.wait(t, func() bool { return len(rec.apps) == 1 })
+					return
+				}
+				p.expect("3", "45", "2", "371", "60", "373", "6")
 			})
-			p := acceptPeer(t, l)
-			p.expect("A")
-			p.writeRaw(frameOf(session.FIX43, "35=A|49=ACC|56=INI|34=1|52="+sendingTime()+"|98=0|108=30|"))
-			rec.wait(t, func() bool { return rec.logons == 1 })
-			p.writeRaw(frameOf(session.FIX43, "35=D|49=ACC|56=INI|34=2|52="+sendingTime()+"|11=O1|60="+timestamp(time.Now(), 6)+"|"))
-			if tc.tolerate {
-				rec.wait(t, func() bool { return len(rec.apps) == 1 })
-				return
-			}
-			p.expect("3", "45", "2", "371", "60", "373", "6")
 		})
 	}
 }
@@ -573,24 +606,26 @@ func TestTolerateFinerTimestampsFIX40Dictionary(t *testing.T) {
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			l := mem.Listen("acceptor")
-			_, rec := startInitiator(t, l, func(c *session.Config) {
-				c.ID.BeginString = session.FIX40
-				c.Dictionaries.Session = fix40.Dictionary()
-				c.TolerateFinerTimestamps = tc.tolerate
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("acceptor")
+				_, rec := startInitiator(t, l, func(c *session.Config) {
+					c.ID.BeginString = session.FIX40
+					c.Dictionaries.Session = fix40.Dictionary()
+					c.TolerateFinerTimestamps = tc.tolerate
+				})
+				p := acceptPeer(t, l)
+				p.expect("A")
+				p.writeRaw(frameOf(session.FIX40, "35=A|49=ACC|56=INI|34=1|52="+timestamp(time.Now(), 0)+"|98=0|108=30|"))
+				rec.wait(t, func() bool { return rec.logons == 1 })
+				p.writeRaw(frameOf(session.FIX40, "35=1|49=ACC|56=INI|34=2|52="+timestamp(time.Now(), 3)+"|112=FINE|"))
+				if tc.tolerate {
+					p.expect("0", "112", "FINE")
+				} else {
+					p.expect("3", "45", "2")
+				}
+				p.writeRaw(frameOf(session.FIX40, "35=1|49=ACC|56=INI|34=3|52="+timestamp(time.Now(), 0)+"|112=AFTER|"))
+				p.expect("0", "112", "AFTER")
 			})
-			p := acceptPeer(t, l)
-			p.expect("A")
-			p.writeRaw(frameOf(session.FIX40, "35=A|49=ACC|56=INI|34=1|52="+timestamp(time.Now(), 0)+"|98=0|108=30|"))
-			rec.wait(t, func() bool { return rec.logons == 1 })
-			p.writeRaw(frameOf(session.FIX40, "35=1|49=ACC|56=INI|34=2|52="+timestamp(time.Now(), 3)+"|112=FINE|"))
-			if tc.tolerate {
-				p.expect("0", "112", "FINE")
-			} else {
-				p.expect("3", "45", "2")
-			}
-			p.writeRaw(frameOf(session.FIX40, "35=1|49=ACC|56=INI|34=3|52="+timestamp(time.Now(), 0)+"|112=AFTER|"))
-			p.expect("0", "112", "AFTER")
 		})
 	}
 }
@@ -638,18 +673,20 @@ func TestTolerateEmptyRequiredGroups(t *testing.T) {
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, rec, p := loggedOn(t, func(c *session.Config) {
-				c.Dictionaries.Session = d
-				c.TolerateEmptyRequiredGroups = tc.tolerate
+			synctest.Test(t, func(t *testing.T) {
+				_, rec, p := loggedOn(t, func(c *session.Config) {
+					c.Dictionaries.Session = d
+					c.TolerateEmptyRequiredGroups = tc.tolerate
+				})
+				p.send("W", 0, "55", "EUR/USD", "268", "0")
+				if tc.tolerate {
+					rec.wait(t, func() bool { return len(rec.apps) == 1 })
+				} else {
+					p.expect("3", "45", "2", "371", "268", "373", "16")
+				}
+				p.send("W", 0, "55", "EUR/USD", "268", "2", "269", "0", "270", "1.1")
+				p.expect("3", "45", "3", "371", "268", "373", "16")
 			})
-			p.send("W", 0, "55", "EUR/USD", "268", "0")
-			if tc.tolerate {
-				rec.wait(t, func() bool { return len(rec.apps) == 1 })
-			} else {
-				p.expect("3", "45", "2", "371", "268", "373", "16")
-			}
-			p.send("W", 0, "55", "EUR/USD", "268", "2", "269", "0", "270", "1.1")
-			p.expect("3", "45", "3", "371", "268", "373", "16")
 		})
 	}
 }
@@ -658,42 +695,44 @@ func TestTolerateEmptyRequiredGroups(t *testing.T) {
 // error, not clamped: FIX 4.0 and 4.1 write whole seconds, FIX 4.3
 // milliseconds, FIX 4.2, 4.4 and FIXT 1.1 down to nanoseconds.
 func TestConfigTimestamps(t *testing.T) {
-	for _, tc := range []struct {
-		begin string
-		ts    session.TimestampPrecision
-		ok    bool
-	}{
-		{session.FIX40, session.DefaultTimestamps, true},
-		{session.FIX40, session.SecondTimestamps, true},
-		{session.FIX40, session.MillisecondTimestamps, false},
-		{session.FIX41, session.MicrosecondTimestamps, false},
-		{session.FIX42, session.NanosecondTimestamps, true},
-		{session.FIX43, session.MillisecondTimestamps, true},
-		{session.FIX43, session.MicrosecondTimestamps, false},
-		{session.FIX44, session.MicrosecondTimestamps, true},
-		{session.FIXT11, session.NanosecondTimestamps, true},
-	} {
-		cfg := session.Config{
-			ID:         session.SessionID{BeginString: tc.begin, SenderCompID: "INI", TargetCompID: "ACC"},
-			Handler:    &session.BaseHandler{},
-			Timestamps: tc.ts,
+	synctest.Test(t, func(t *testing.T) {
+		for _, tc := range []struct {
+			begin string
+			ts    session.TimestampPrecision
+			ok    bool
+		}{
+			{session.FIX40, session.DefaultTimestamps, true},
+			{session.FIX40, session.SecondTimestamps, true},
+			{session.FIX40, session.MillisecondTimestamps, false},
+			{session.FIX41, session.MicrosecondTimestamps, false},
+			{session.FIX42, session.NanosecondTimestamps, true},
+			{session.FIX43, session.MillisecondTimestamps, true},
+			{session.FIX43, session.MicrosecondTimestamps, false},
+			{session.FIX44, session.MicrosecondTimestamps, true},
+			{session.FIXT11, session.NanosecondTimestamps, true},
+		} {
+			cfg := session.Config{
+				ID:         session.SessionID{BeginString: tc.begin, SenderCompID: "INI", TargetCompID: "ACC"},
+				Handler:    &session.BaseHandler{},
+				Timestamps: tc.ts,
+			}
+			if tc.begin == session.FIXT11 {
+				cfg.Dictionaries.DefaultApplVerID = "9"
+			}
+			err := cfg.Validate()
+			if tc.ok && err != nil || !tc.ok && (err == nil || !strings.Contains(err.Error(), "Timestamps:")) {
+				t.Errorf("%s, Timestamps %d: Validate = %v, want valid %v", tc.begin, tc.ts, err, tc.ok)
+			}
 		}
-		if tc.begin == session.FIXT11 {
-			cfg.Dictionaries.DefaultApplVerID = "9"
+		// A FIX 4.4 session writes the microseconds asked for.
+		l := mem.Listen("acceptor")
+		startInitiator(t, l, func(c *session.Config) { c.Timestamps = session.MicrosecondTimestamps })
+		p := acceptPeer(t, l)
+		logon := p.expect("A")
+		if v := logon.Get(52); len(v) != len("20060102-15:04:05.000000") {
+			t.Errorf("SendingTime %q, want microseconds", v)
 		}
-		err := cfg.Validate()
-		if tc.ok && err != nil || !tc.ok && (err == nil || !strings.Contains(err.Error(), "Timestamps:")) {
-			t.Errorf("%s, Timestamps %d: Validate = %v, want valid %v", tc.begin, tc.ts, err, tc.ok)
-		}
-	}
-	// A FIX 4.4 session writes the microseconds asked for.
-	l := mem.Listen("acceptor")
-	startInitiator(t, l, func(c *session.Config) { c.Timestamps = session.MicrosecondTimestamps })
-	p := acceptPeer(t, l)
-	logon := p.expect("A")
-	if v := logon.Get(52); len(v) != len("20060102-15:04:05.000000") {
-		t.Errorf("SendingTime %q, want microseconds", v)
-	}
+	})
 }
 
 func TestTolerateTagLeadingZeros(t *testing.T) {
@@ -702,24 +741,26 @@ func TestTolerateTagLeadingZeros(t *testing.T) {
 		tolerate bool
 	}{{"strict", false}, {"tolerated", true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, p := loggedOn(t, func(c *session.Config) { c.TolerateTagLeadingZeros = tc.tolerate })
-			p.writeRaw(rawFrame("35=1|49=ACC|56=INI|34=2|52="+sendingTime()+"|0112=BODY|", ""))
-			if tc.tolerate {
-				p.expect("0", "112", "BODY")
-			} else {
-				p.expect("3", "45", "2", "371", "112", "373", "0", "58", "Invalid tag number")
-			}
-			p.writeRaw(rawFrame("035=1|49=ACC|56=INI|34=3|52="+sendingTime()+"|112=TYPE|", ""))
-			next := 3
-			if tc.tolerate {
-				p.expect("0", "112", "TYPE")
-				next = 4
-			}
-			p.write(from(session.FIX44, next), "1", "112", "AFTER")
-			p.expect("0", "112", "AFTER")
-			if got, want := s.NextTargetSeqNum(), uint64(next+1); got != want {
-				t.Errorf("NextTargetSeqNum = %d, want %d", got, want)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				s, _, p := loggedOn(t, func(c *session.Config) { c.TolerateTagLeadingZeros = tc.tolerate })
+				p.writeRaw(rawFrame("35=1|49=ACC|56=INI|34=2|52="+sendingTime()+"|0112=BODY|", ""))
+				if tc.tolerate {
+					p.expect("0", "112", "BODY")
+				} else {
+					p.expect("3", "45", "2", "371", "112", "373", "0", "58", "Invalid tag number")
+				}
+				p.writeRaw(rawFrame("035=1|49=ACC|56=INI|34=3|52="+sendingTime()+"|112=TYPE|", ""))
+				next := 3
+				if tc.tolerate {
+					p.expect("0", "112", "TYPE")
+					next = 4
+				}
+				p.write(from(session.FIX44, next), "1", "112", "AFTER")
+				p.expect("0", "112", "AFTER")
+				if got, want := s.NextTargetSeqNum(), uint64(next+1); got != want {
+					t.Errorf("NextTargetSeqNum = %d, want %d", got, want)
+				}
+			})
 		})
 	}
 }

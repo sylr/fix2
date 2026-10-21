@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -156,17 +157,19 @@ func TestResetOnLogon_StrictAnnouncedWhenSequenceMoved(t *testing.T) {
 	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
 		for _, iniAt := range []uint64{1, 5} {
 			t.Run(fmt.Sprintf("%s/initiator at %d", begin, iniAt), func(t *testing.T) {
-				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, false, 5, iniAt)
-				answer := seen.first(t)
-				if got := string(answer.Get(34)); got != "1" {
-					t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
-				}
-				if got := string(answer.Get(141)); got != "Y" {
-					t.Errorf("Logon answer ResetSeqNumFlag %q, want Y", got)
-				}
-				// The initiator's next message is 1, as is the acceptor's
-				// after its Logon answer, 1.
-				exchange(t, begin, ini, acc, ir, ar, 2, 3)
+				synctest.Test(t, func(t *testing.T) {
+					ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, false, 5, iniAt)
+					answer := seen.first(t)
+					if got := string(answer.Get(34)); got != "1" {
+						t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
+					}
+					if got := string(answer.Get(141)); got != "Y" {
+						t.Errorf("Logon answer ResetSeqNumFlag %q, want Y", got)
+					}
+					// The initiator's next message is 1, as is the acceptor's
+					// after its Logon answer, 1.
+					exchange(t, begin, ini, acc, ir, ar, 2, 3)
+				})
 			})
 		}
 	}
@@ -178,15 +181,17 @@ func TestResetOnLogon_StrictAnnouncedWhenSequenceMoved(t *testing.T) {
 func TestResetOnLogon_StrictAnnouncedToStaleInitiator(t *testing.T) {
 	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
 		t.Run(begin, func(t *testing.T) {
-			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, false, 1, 5)
-			answer := seen.first(t)
-			if got := string(answer.Get(34)); got != "1" {
-				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
-			}
-			if got := string(answer.Get(141)); got != "Y" {
-				t.Errorf("Logon answer ResetSeqNumFlag %q, want Y", got)
-			}
-			exchange(t, begin, ini, acc, ir, ar, 2, 3)
+			synctest.Test(t, func(t *testing.T) {
+				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, false, 1, 5)
+				answer := seen.first(t)
+				if got := string(answer.Get(34)); got != "1" {
+					t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
+				}
+				if got := string(answer.Get(141)); got != "Y" {
+					t.Errorf("Logon answer ResetSeqNumFlag %q, want Y", got)
+				}
+				exchange(t, begin, ini, acc, ir, ar, 2, 3)
+			})
 		})
 	}
 }
@@ -199,27 +204,31 @@ func TestResetOnLogon_StrictAnnouncedToStaleInitiator(t *testing.T) {
 func TestResetOnLogon_UnannouncedNotAnnounced(t *testing.T) {
 	for _, begin := range []string{session.FIX42, session.FIX44, session.FIXT11} {
 		t.Run(begin+"/initiator at 1", func(t *testing.T) {
-			ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, true, 5, 1)
-			answer := seen.first(t)
-			if got := string(answer.Get(34)); got != "1" {
-				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
-			}
-			if v := answer.Get(141); v != nil {
-				t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
-			}
-			exchange(t, begin, ini, acc, ir, ar, 3, 3)
+			synctest.Test(t, func(t *testing.T) {
+				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, true, 5, 1)
+				answer := seen.first(t)
+				if got := string(answer.Get(34)); got != "1" {
+					t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
+				}
+				if v := answer.Get(141); v != nil {
+					t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
+				}
+				exchange(t, begin, ini, acc, ir, ar, 3, 3)
+			})
 		})
 		t.Run(begin+"/initiator at 5", func(t *testing.T) {
-			_, _, ir, _, seen := resetOnLogonPair(t, begin, true, 5, 5)
-			if v := seen.first(t).Get(141); v != nil {
-				t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
-			}
-			waitFor(t, func() bool { return seen.logged("MsgSeqNum too low, expecting 5 but received 1") })
-			ir.mu.Lock()
-			defer ir.mu.Unlock()
-			if ir.logons != 0 {
-				t.Error("initiator logged on")
-			}
+			synctest.Test(t, func(t *testing.T) {
+				_, _, ir, _, seen := resetOnLogonPair(t, begin, true, 5, 5)
+				if v := seen.first(t).Get(141); v != nil {
+					t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
+				}
+				waitFor(t, func() bool { return seen.logged("MsgSeqNum too low, expecting 5 but received 1") })
+				ir.mu.Lock()
+				defer ir.mu.Unlock()
+				if ir.logons != 0 {
+					t.Error("initiator logged on")
+				}
+			})
 		})
 	}
 }
@@ -230,12 +239,14 @@ func TestResetOnLogon_FreshNotAnnounced(t *testing.T) {
 	for _, mode := range resetModes {
 		for _, begin := range []string{session.FIX40, session.FIX42, session.FIX44, session.FIXT11} {
 			t.Run(mode.name+"/"+begin, func(t *testing.T) {
-				ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, mode.unannounced, 1, 1)
-				if v := seen.first(t).Get(141); v != nil {
-					t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
-				}
-				// Both Logons count: the next messages are 2.
-				exchange(t, begin, ini, acc, ir, ar, 3, 3)
+				synctest.Test(t, func(t *testing.T) {
+					ini, acc, ir, ar, seen := resetOnLogonPair(t, begin, mode.unannounced, 1, 1)
+					if v := seen.first(t).Get(141); v != nil {
+						t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
+					}
+					// Both Logons count: the next messages are 2.
+					exchange(t, begin, ini, acc, ir, ar, 3, 3)
+				})
 			})
 		}
 	}
@@ -246,15 +257,17 @@ func TestResetOnLogon_FreshNotAnnounced(t *testing.T) {
 func TestResetOnLogon_FIX40CannotAnnounce(t *testing.T) {
 	for _, mode := range resetModes {
 		t.Run(mode.name, func(t *testing.T) {
-			ini, acc, ir, ar, seen := resetOnLogonPair(t, session.FIX40, mode.unannounced, 5, 1)
-			answer := seen.first(t)
-			if got := string(answer.Get(34)); got != "1" {
-				t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
-			}
-			if v := answer.Get(141); v != nil {
-				t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
-			}
-			exchange(t, session.FIX40, ini, acc, ir, ar, 3, 3)
+			synctest.Test(t, func(t *testing.T) {
+				ini, acc, ir, ar, seen := resetOnLogonPair(t, session.FIX40, mode.unannounced, 5, 1)
+				answer := seen.first(t)
+				if got := string(answer.Get(34)); got != "1" {
+					t.Errorf("Logon answer MsgSeqNum %s, want 1", got)
+				}
+				if v := answer.Get(141); v != nil {
+					t.Errorf("Logon answer ResetSeqNumFlag %q, want none", v)
+				}
+				exchange(t, session.FIX40, ini, acc, ir, ar, 3, 3)
+			})
 		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix/session"
@@ -75,45 +76,51 @@ func logOnTo(t *testing.T, rec *recorder, l *mem.Listener, user string, logons i
 // An acceptor whose handler keeps BaseHandler's Authenticate warns once it
 // logs on, once.
 func TestAuthWarning_Default(t *testing.T) {
-	rec, l, warned := authAcceptor(t, func(r *recorder) session.Handler { return r })
-	logOnTo(t, rec, l, "", 1)
-	if n := warned.Load(); n != 1 {
-		t.Errorf("warned %d times, want once", n)
-	}
-	logOnTo(t, rec, l, "", 2)
-	if n := warned.Load(); n != 1 {
-		t.Errorf("warned %d times after a second Logon, want once", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		rec, l, warned := authAcceptor(t, func(r *recorder) session.Handler { return r })
+		logOnTo(t, rec, l, "", 1)
+		if n := warned.Load(); n != 1 {
+			t.Errorf("warned %d times, want once", n)
+		}
+		logOnTo(t, rec, l, "", 2)
+		if n := warned.Load(); n != 1 {
+			t.Errorf("warned %d times after a second Logon, want once", n)
+		}
+	})
 }
 
 // A Logon refused after BaseHandler's Authenticate accepted it does not
 // use up the warning, which the next Logon logging on gets.
 func TestAuthWarning_RefusedLogon(t *testing.T) {
-	rec, l, warned := authAcceptor(t, func(r *recorder) session.Handler { return r })
-	p := dialPeer(t, l)
-	p.send("A", 0, "98", "0") // without HeartBtInt: refused
-	p.expectEnd(5 * time.Second)
-	if n := warned.Load(); n != 0 {
-		t.Errorf("warned %d times for a Logon refused, want never", n)
-	}
-	logOnTo(t, rec, l, "", 1)
-	if n := warned.Load(); n != 1 {
-		t.Errorf("warned %d times, want once", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		rec, l, warned := authAcceptor(t, func(r *recorder) session.Handler { return r })
+		p := dialPeer(t, l)
+		p.send("A", 0, "98", "0") // without HeartBtInt: refused
+		p.expectEnd(5 * time.Second)
+		if n := warned.Load(); n != 0 {
+			t.Errorf("warned %d times for a Logon refused, want never", n)
+		}
+		logOnTo(t, rec, l, "", 1)
+		if n := warned.Load(); n != 1 {
+			t.Errorf("warned %d times, want once", n)
+		}
+	})
 }
 
 // An acceptor whose handler authenticates does not warn; one delegating to
 // BaseHandler's Authenticate does, as it cannot be told from one that
 // does not authenticate.
 func TestAuthWarning_Implemented(t *testing.T) {
-	rec, l, warned := authAcceptor(t, func(r *recorder) session.Handler { return authenticating{r} })
-	logOnTo(t, rec, l, "u", 1)
-	if n := warned.Load(); n != 0 {
-		t.Errorf("authenticating handler: warned %d times, want never", n)
-	}
-	rec, l, warned = authAcceptor(t, func(r *recorder) session.Handler { return delegating{r} })
-	logOnTo(t, rec, l, "u", 1)
-	if n := warned.Load(); n != 1 {
-		t.Errorf("delegating handler: warned %d times, want once", n)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		rec, l, warned := authAcceptor(t, func(r *recorder) session.Handler { return authenticating{r} })
+		logOnTo(t, rec, l, "u", 1)
+		if n := warned.Load(); n != 0 {
+			t.Errorf("authenticating handler: warned %d times, want never", n)
+		}
+		rec, l, warned = authAcceptor(t, func(r *recorder) session.Handler { return delegating{r} })
+		logOnTo(t, rec, l, "u", 1)
+		if n := warned.Load(); n != 1 {
+			t.Errorf("delegating handler: warned %d times, want once", n)
+		}
+	})
 }

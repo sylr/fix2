@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -90,69 +91,73 @@ func (p *peer) expectParsed(prof *fix.Profile, msgType string) *fix.Message {
 // goes out in one of its pairs, from ToAdmin as from Send, a group entry's
 // included, and is refused in a pair only the default profile has.
 func TestSOHInDictionaryDataFields(t *testing.T) {
-	d := customFIX44(t)
-	l := mem.Listen("acceptor")
-	s, rec := startInitiator(t, l, func(c *session.Config) {
-		c.Dictionaries.Session = d
-		c.Handler = blobLogon{c.Handler.(*recorder)}
+	synctest.Test(t, func(t *testing.T) {
+		d := customFIX44(t)
+		l := mem.Listen("acceptor")
+		s, rec := startInitiator(t, l, func(c *session.Config) {
+			c.Dictionaries.Session = d
+			c.Handler = blobLogon{c.Handler.(*recorder)}
+		})
+		p := acceptPeer(t, l)
+		if got := p.expectParsed(d.Profile(), "A").Get(50002); string(got) != "l\x01n" {
+			t.Errorf("Logon's CustomBlob = %q", got)
+		}
+		p.send("A", 0, "98", "0", "108", "30")
+		rec.wait(t, func() bool { return rec.logons == 1 })
+
+		o := order("O1")
+		o.SetGroups(func(dst []fix.Field) []fix.Field {
+			dst = fix.AppendCount(dst, 50003, 1)
+			return append(dst, fix.Field{Tag: 50004, Value: []byte("b")},
+				fix.Field{Tag: 50001, Value: []byte("3")}, fix.Field{Tag: 50002, Value: []byte("o\x01d")})
+		}, 50003)
+		if _, err := s.Send(context.Background(), o); err != nil {
+			t.Fatal(err)
+		}
+		m := p.expectParsed(d.Profile(), "D")
+		if g := m.Groups(50003, []int{50004, 50001, 50002}); len(g) != 1 || string(g[0].Get(50002)) != "o\x01d" {
+			t.Errorf("NoBlobs = %v", g)
+		}
+
+		// EncryptedPassword (1402) is DATA in the default profile, not in the
+		// dictionary: its SOH would end it, a forged Text following.
+		var serr *fix.SOHValueError
+		forged := order("O2").SetInt(1401, 12).SetString(1402, "O1\x0158=forged")
+		if _, err := s.Send(context.Background(), forged); !errors.As(err, &serr) || serr.Tag != 1402 {
+			t.Errorf("Send = %v, want a SOHValueError for 1402", err)
+		}
 	})
-	p := acceptPeer(t, l)
-	if got := p.expectParsed(d.Profile(), "A").Get(50002); string(got) != "l\x01n" {
-		t.Errorf("Logon's CustomBlob = %q", got)
-	}
-	p.send("A", 0, "98", "0", "108", "30")
-	rec.wait(t, func() bool { return rec.logons == 1 })
-
-	o := order("O1")
-	o.SetGroups(func(dst []fix.Field) []fix.Field {
-		dst = fix.AppendCount(dst, 50003, 1)
-		return append(dst, fix.Field{Tag: 50004, Value: []byte("b")},
-			fix.Field{Tag: 50001, Value: []byte("3")}, fix.Field{Tag: 50002, Value: []byte("o\x01d")})
-	}, 50003)
-	if _, err := s.Send(context.Background(), o); err != nil {
-		t.Fatal(err)
-	}
-	m := p.expectParsed(d.Profile(), "D")
-	if g := m.Groups(50003, []int{50004, 50001, 50002}); len(g) != 1 || string(g[0].Get(50002)) != "o\x01d" {
-		t.Errorf("NoBlobs = %v", g)
-	}
-
-	// EncryptedPassword (1402) is DATA in the default profile, not in the
-	// dictionary: its SOH would end it, a forged Text following.
-	var serr *fix.SOHValueError
-	forged := order("O2").SetInt(1401, 12).SetString(1402, "O1\x0158=forged")
-	if _, err := s.Send(context.Background(), forged); !errors.As(err, &serr) || serr.Tag != 1402 {
-		t.Errorf("Send = %v, want a SOHValueError for 1402", err)
-	}
 }
 
 // The session writes MsgType apart from the body: one holding SOH is
 // refused before anything is sequenced, whichever way it was set.
 func TestSOHInMsgType(t *testing.T) {
-	s, _, p := loggedOn(t, nil)
-	for name, send := range map[string]func() error{
-		"NewBuilder": func() error {
-			_, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D\x0158=forged").SetString(11, "O1"))
-			return err
-		},
-		"SetString": func() error {
-			_, err := s.Send(context.Background(), order("O1").SetString(35, "D\x0158=forged"))
-			return err
-		},
-		"SendRaw": func() error {
-			_, err := s.SendRaw(context.Background(), "D\x0158=forged", []byte("11=O1\x01"))
-			return err
-		},
-	} {
-		var serr *fix.SOHValueError
-		if err := send(); !errors.As(err, &serr) || serr.Tag != 35 {
-			t.Errorf("%s: Send = %v, want a SOHValueError for 35", name, err)
+	synctest.Test(t, func(t *testing.T) {
+		s, _, p := loggedOn(t, nil)
+		for name, send := range map[string]func() error{
+			"NewBuilder": func() error {
+				_, err := s.Send(context.Background(), fix.NewBuilder(session.FIX44, "D\x0158=forged").SetString(11, "O1"))
+				return err
+			},
+			"SetString": func() error {
+				_, err := s.Send(context.Background(), order("O1").SetString(35, "D\x0158=forged"))
+				return err
+			},
+			"SendRaw": func() error {
+				_, err := s.SendRaw(context.Background(), "D\x0158=forged", []byte("11=O1\x01"))
+				return err
+			},
+		} {
+			var serr *fix.SOHValueError
+			if err := send(); !errors.As(err, &serr) || serr.Tag != 35 {
+				t.Errorf("%s: Send = %v, want a SOHValueError for 35", name, err)
+			}
 		}
-	}
-	if _, err := s.Send(context.Background(), order("O2")); err != nil {
-		t.Fatal(err)
-	}
-	p.expect("D", "34", "2", "11", "O2")
+		if _, err := s.Send(context.Background(), order("O2")); err != nil {
+			t.Fatal(err)
+		}
+		p.expect("D", "34", "2", "11", "O2")
+	})
 }
 
 // A handler's BusinessRejectError whose RefID holds SOH.
@@ -166,45 +171,49 @@ func (sohRefID) FromApp(context.Context, *session.Session, *fix.Message, session
 // read as fields of their own: the BusinessMessageReject goes without it,
 // with a warning, and the message counts as processed.
 func TestBusinessRejectRefIDWithSOH(t *testing.T) {
-	logs := &logBuffer{}
-	s, _, p := loggedOn(t, func(c *session.Config) {
-		c.Handler = sohRefID{c.Handler.(*recorder)}
-		c.Logger = slog.New(slog.NewTextHandler(logs, nil))
-	})
-	p.send("D", 0, "11", "O1")
-	rej := p.expect("j", "45", "2", "372", "D", "380", "1", "58", "unknown order")
-	if rej.Get(379) != nil {
-		t.Errorf("BusinessRejectRefID sent: %q", rej.Get(379))
-	}
-	n := 0
-	for _, f := range rej.Fields() {
-		if f.Tag == 58 {
-			n++
+	synctest.Test(t, func(t *testing.T) {
+		logs := &logBuffer{}
+		s, _, p := loggedOn(t, func(c *session.Config) {
+			c.Handler = sohRefID{c.Handler.(*recorder)}
+			c.Logger = slog.New(slog.NewTextHandler(logs, nil))
+		})
+		p.send("D", 0, "11", "O1")
+		rej := p.expect("j", "45", "2", "372", "D", "380", "1", "58", "unknown order")
+		if rej.Get(379) != nil {
+			t.Errorf("BusinessRejectRefID sent: %q", rej.Get(379))
 		}
-	}
-	if n != 1 {
-		t.Errorf("%d Text fields, want 1", n)
-	}
-	if out := logs.String(); !strings.Contains(out, "level=WARN") || !strings.Contains(out, "BusinessRejectRefID holds SOH") {
-		t.Errorf("no warning logged:\n%s", out)
-	}
-	if got := s.Stats().RejectsSent.Load(); got != 1 {
-		t.Errorf("RejectsSent = %d, want 1", got)
-	}
-	// Processed: the session goes on, expecting the next one.
-	p.send("1", 0, "112", "T1")
-	p.expect("0", "112", "T1")
-	if got := s.NextTargetSeqNum(); got != 4 {
-		t.Errorf("NextTargetSeqNum = %d, want 4", got)
-	}
+		n := 0
+		for _, f := range rej.Fields() {
+			if f.Tag == 58 {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("%d Text fields, want 1", n)
+		}
+		if out := logs.String(); !strings.Contains(out, "level=WARN") || !strings.Contains(out, "BusinessRejectRefID holds SOH") {
+			t.Errorf("no warning logged:\n%s", out)
+		}
+		if got := s.Stats().RejectsSent.Load(); got != 1 {
+			t.Errorf("RejectsSent = %d, want 1", got)
+		}
+		// Processed: the session goes on, expecting the next one.
+		p.send("1", 0, "112", "T1")
+		p.expect("0", "112", "T1")
+		if got := s.NextTargetSeqNum(); got != 4 {
+			t.Errorf("NextTargetSeqNum = %d, want 4", got)
+		}
+	})
 }
 
 // A ToAdmin setting a value holding SOH cancels the Logon, as a ToAdmin
 // error does: nothing is sent.
 func TestToAdminSOH(t *testing.T) {
-	l := mem.Listen("acceptor")
-	startInitiator(t, l, func(c *session.Config) { c.Handler = user{c.Handler.(*recorder), "a\x0158=forged"} })
-	acceptPeer(t, l).expectNoLogon()
+	synctest.Test(t, func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		startInitiator(t, l, func(c *session.Config) { c.Handler = user{c.Handler.(*recorder), "a\x0158=forged"} })
+		acceptPeer(t, l).expectNoLogon()
+	})
 }
 
 // sohSigner signs its Logons with a Text holding SOH.
@@ -218,9 +227,11 @@ func (sohSigner) SignLogon(_ context.Context, _ *session.Session, _ session.Logo
 // A LogonSigner setting a value holding SOH cancels the Logon, as its error
 // does: nothing is sent.
 func TestLogonSignerSOH(t *testing.T) {
-	l := mem.Listen("acceptor")
-	startInitiator(t, l, func(c *session.Config) { c.Handler = sohSigner{c.Handler.(*recorder)} })
-	acceptPeer(t, l).expectNoLogon()
+	synctest.Test(t, func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		startInitiator(t, l, func(c *session.Config) { c.Handler = sohSigner{c.Handler.(*recorder)} })
+		acceptPeer(t, l).expectNoLogon()
+	})
 }
 
 // expectNoLogon waits for the connection to end before any message.
@@ -242,56 +253,60 @@ func (p *peer) expectNoLogon() {
 // version's, a DATA value holding SOH, as a ToAdmin may send, split
 // otherwise.
 func TestSessionDataFieldRetypedRefused(t *testing.T) {
-	raw, err := os.ReadFile("../dictionary/testdata/FIXT11.xml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	xml := strings.Replace(strings.Replace(string(raw), "<fields>", `<fields>
+	synctest.Test(t, func(t *testing.T) {
+		raw, err := os.ReadFile("../dictionary/testdata/FIXT11.xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		xml := strings.Replace(strings.Replace(string(raw), "<fields>", `<fields>
     <field number='50001' name='CustomBlobLen' type='LENGTH'/>
     <field number='50002' name='CustomBlob' type='DATA'/>`, 1),
-		"<field name='HeartBtInt' required='Y'/>", `<field name='HeartBtInt' required='Y'/>
+			"<field name='HeartBtInt' required='Y'/>", `<field name='HeartBtInt' required='Y'/>
       <field name='CustomBlobLen' required='N'/>
       <field name='CustomBlob' required='N'/>`, 1)
-	transport, err := xmldict.Load(strings.NewReader(xml))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if transport.Profile().DataTag(50001) != 50002 {
-		t.Fatal("transport dictionary: CustomBlob is not DATA")
-	}
-	app, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="5" minor="0" servicepack="2">
+		transport, err := xmldict.Load(strings.NewReader(xml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if transport.Profile().DataTag(50001) != 50002 {
+			t.Fatal("transport dictionary: CustomBlob is not DATA")
+		}
+		app, err := xmldict.Load(strings.NewReader(`<fix type="FIX" major="5" minor="0" servicepack="2">
   <header/><trailer/>
   <messages><message name="News" msgtype="B" msgcat="app"><field name="CustomBlob" required="Y"/></message></messages>
   <components/>
   <fields><field number="50002" name="CustomBlob" type="STRING"/></fields>
 </fix>`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := func(app *dictionary.Dict) session.Config {
-		return session.Config{
-			ID:           session.SessionID{BeginString: session.FIXT11, SenderCompID: "INI", TargetCompID: "ACC"},
-			Handler:      session.BaseHandler{},
-			Dictionaries: session.Dictionaries{Session: transport, DefaultApplVerID: "9", Apps: map[string]*dictionary.Dict{"9": app}},
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	// CustomBlobLen announces a field that is no DATA field any more.
-	if _, err := session.New(cfg(app)); err == nil || !strings.Contains(err.Error(), "session field 50001") {
-		t.Errorf("New = %v, want an error about session field 50001", err)
-	}
-	// An application dictionary leaving the field alone is accepted.
-	if _, err := session.New(cfg(fix50sp2.Dictionary())); err != nil {
-		t.Errorf("New with FIX 5.0 SP2: %v", err)
-	}
+		cfg := func(app *dictionary.Dict) session.Config {
+			return session.Config{
+				ID:           session.SessionID{BeginString: session.FIXT11, SenderCompID: "INI", TargetCompID: "ACC"},
+				Handler:      session.BaseHandler{},
+				Dictionaries: session.Dictionaries{Session: transport, DefaultApplVerID: "9", Apps: map[string]*dictionary.Dict{"9": app}},
+			}
+		}
+		// CustomBlobLen announces a field that is no DATA field any more.
+		if _, err := session.New(cfg(app)); err == nil || !strings.Contains(err.Error(), "session field 50001") {
+			t.Errorf("New = %v, want an error about session field 50001", err)
+		}
+		// An application dictionary leaving the field alone is accepted.
+		if _, err := session.New(cfg(fix50sp2.Dictionary())); err != nil {
+			t.Errorf("New with FIX 5.0 SP2: %v", err)
+		}
+	})
 }
 
 // The identities the session writes in every header cannot hold SOH.
 func TestConfigSOH(t *testing.T) {
-	_, err := session.New(session.Config{
-		ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC", TargetSubID: "a\x01b"},
-		Handler: session.BaseHandler{},
+	synctest.Test(t, func(t *testing.T) {
+		_, err := session.New(session.Config{
+			ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC", TargetSubID: "a\x01b"},
+			Handler: session.BaseHandler{},
+		})
+		if err == nil || !strings.Contains(err.Error(), "ID.TargetSubID") {
+			t.Errorf("New = %v, want an error about ID.TargetSubID", err)
+		}
 	})
-	if err == nil || !strings.Contains(err.Error(), "ID.TargetSubID") {
-		t.Errorf("New = %v, want an error about ID.TargetSubID", err)
-	}
 }
