@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -299,7 +300,8 @@ func storedBodies(s *crashStore, id fixp.SessionID) map[uint64]string {
 
 // A client crashing at its every store write, then restarting: on a
 // Recoverable flow the server receives its messages once each, in order,
-// none skipped; on an Idempotent one, at most once, in order.
+// none skipped; on an Idempotent one, at most once, in order. Each case on
+// synctest's fake clock, as TestCrashReceiverAtEveryWrite's.
 func TestCrashClientAtEveryWrite(t *testing.T) {
 	for _, flow := range []fixp.FlowType{fixp.Recoverable, fixp.Idempotent} {
 		for _, commit := range []bool{false, true} {
@@ -312,67 +314,72 @@ func crashClient(t *testing.T, flow fixp.FlowType, commit bool) {
 	const sends = 6
 	for failAt := 1; ; failAt++ {
 		passed := t.Run(fmt.Sprintf("write %d", failAt), func(t *testing.T) {
-			l := mem.Listen("server")
-			srvH := &delivered{}
-			_, cancelSrv, srvDone := newServer(t, l, newCrashStore(0), srvH, fixp.Unsequenced, nil)
-			defer func() { cancelSrv(); <-srvDone }()
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("server")
+				srvH := &delivered{}
+				_, cancelSrv, srvDone := newServer(t, l, newCrashStore(0), srvH, fixp.Unsequenced, nil)
+				defer func() { cancelSrv(); <-srvDone }()
 
-			cs := newCrashStore(failAt)
-			cs.commit = commit
-			c := newClient(t, l, cs, BaseHandler{}, flow, nil)
-			cancel, done := runClient(c)
-			eventually(t, func() bool { st := c.Session().State(); return st == StateEstablished || st == StateStopped })
-			for i := 1; i <= sends; i++ {
-				if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprintf("a%d", i)}); err != nil {
-					break
+				cs := newCrashStore(failAt)
+				cs.commit = commit
+				c := newClient(t, l, cs, BaseHandler{}, flow, nil)
+				cancel, done := runClient(c)
+				// Stopped once, on a failure too: a bubble must end with none
+				// of its goroutines left.
+				stopCli := sync.OnceFunc(func() { cancel(); <-done })
+				defer func() { stopCli() }()
+				eventually(t, func() bool { st := c.Session().State(); return st == StateEstablished || st == StateStopped })
+				for i := 1; i <= sends; i++ {
+					if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprintf("a%d", i)}); err != nil {
+						break
+					}
 				}
-			}
-			crashed := c.Session().State() == StateStopped
-			if !crashed {
-				eventually(t, func() bool { return len(srvH.got()) == sends || c.Session().State() == StateStopped })
-				crashed = c.Session().State() == StateStopped
-			}
-			cancel()
-			<-done
-			if !crashed {
-				skipRest = true
-				return
-			}
+				crashed := c.Session().State() == StateStopped
+				if !crashed {
+					eventually(t, func() bool { return len(srvH.got()) == sends || c.Session().State() == StateStopped })
+					crashed = c.Session().State() == StateStopped
+				}
+				stopCli()
+				if !crashed {
+					skipRest = true
+					return
+				}
 
-			// The process restarts on what was synced, and sends again.
-			restarted := cs.crash()
-			c = newClient(t, l, restarted, BaseHandler{}, flow, nil)
-			cancel, done = runClient(c)
-			defer func() { cancel(); <-done }()
-			if c.Session().State() == StateUnnegotiated {
-				return // crashed before its negotiation was recorded: a new session
-			}
-			id := c.Session().ID()
-			eventually(t, func() bool { return c.Session().State() == StateEstablished })
-			if _, err := c.Session().Send(bg, appMsg{1, "after"}); err != nil {
-				t.Fatal(err)
-			}
-			eventually(t, func() bool {
-				g := srvH.got()
-				return len(g) > 0 && g[len(g)-1] == fmt.Sprintf("%d:after", c.Session().NextSeqNo()-1)
+				// The process restarts on what was synced, and sends again.
+				restarted := cs.crash()
+				c = newClient(t, l, restarted, BaseHandler{}, flow, nil)
+				cancel, done = runClient(c)
+				stopCli = sync.OnceFunc(func() { cancel(); <-done })
+				if c.Session().State() == StateUnnegotiated {
+					return // crashed before its negotiation was recorded: a new session
+				}
+				id := c.Session().ID()
+				eventually(t, func() bool { return c.Session().State() == StateEstablished })
+				if _, err := c.Session().Send(bg, appMsg{1, "after"}); err != nil {
+					t.Fatal(err)
+				}
+				eventually(t, func() bool {
+					g := srvH.got()
+					return len(g) > 0 && g[len(g)-1] == fmt.Sprintf("%d:after", c.Session().NextSeqNo()-1)
+				})
+				want := storedBodies(restarted, id)
+				got := srvH.got()
+				var prev uint64
+				for i, g := range got {
+					var seq uint64
+					var body string
+					fmt.Sscanf(g, "%d:%s", &seq, &body)
+					if flow == fixp.Recoverable && seq != uint64(i+1) || seq <= prev {
+						t.Fatalf("delivered %q: not in sequence", got)
+					}
+					prev = seq
+					// What was delivered before the crash was written, so
+					// synced: the restarted store holds the same.
+					if w, ok := want[seq]; ok && w != body && body != "after" {
+						t.Fatalf("delivered %q, the store holds %q at %d", got, w, seq)
+					}
+				}
 			})
-			want := storedBodies(restarted, id)
-			got := srvH.got()
-			var prev uint64
-			for i, g := range got {
-				var seq uint64
-				var body string
-				fmt.Sscanf(g, "%d:%s", &seq, &body)
-				if flow == fixp.Recoverable && seq != uint64(i+1) || seq <= prev {
-					t.Fatalf("delivered %q: not in sequence", got)
-				}
-				prev = seq
-				// What was delivered before the crash was written, so
-				// synced: the restarted store holds the same.
-				if w, ok := want[seq]; ok && w != body && body != "after" {
-					t.Fatalf("delivered %q, the store holds %q at %d", got, w, seq)
-				}
-			}
 		})
 		if !passed || skipRest || failAt > 200 {
 			skipRest = false
@@ -476,7 +483,9 @@ func crashServer(t *testing.T, commit bool) {
 // A server receiving a client's flow, crashing at its every store write,
 // its failing write lost or made: on a Recoverable flow it delivers in
 // order, none skipped, at least once across the restart; on an Idempotent
-// one, at most once.
+// one, at most once. Each case on synctest's fake clock: on the real one, a
+// connection lapsing under load loses the Idempotent messages written on
+// it, as it may, and those the test waits for never come.
 func TestCrashReceiverAtEveryWrite(t *testing.T) {
 	for _, flow := range []fixp.FlowType{fixp.Recoverable, fixp.Idempotent} {
 		for _, commit := range []bool{false, true} {
@@ -489,97 +498,101 @@ func crashReceiver(t *testing.T, flow fixp.FlowType, commit bool) {
 	const sends = 6
 	for failAt := 1; ; failAt++ {
 		passed := t.Run(fmt.Sprintf("write %d", failAt), func(t *testing.T) {
-			var cur atomic.Pointer[mem.Listener]
-			cur.Store(mem.Listen("server"))
-			dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) { return cur.Load().Dial(ctx) })
-			ss := newCrashStore(failAt)
-			ss.commit = commit
-			first := &delivered{}
-			srv, cancelSrv, srvDone := newServer(t, cur.Load(), ss, first, fixp.Unsequenced, nil)
-			c := newClient(t, dialer, newCrashStore(0), BaseHandler{}, flow, nil)
-			cancel, done := runClient(c)
-			defer func() { cancel(); <-done }()
-			halted := func() bool {
-				s := srv.Session(c.Session().ID())
-				return s != nil && s.State() == StateStopped
-			}
-			eventually(t, func() bool {
-				st := c.Session().State()
-				return st == StateEstablished || st == StateStopped || halted()
-			})
-			if c.Session().State() == StateStopped {
-				cancelSrv()
-				<-srvDone
-				return // the negotiation refused: the store failed at Create
-			}
-			for i := 1; i <= sends && !halted(); i++ {
-				if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprintf("c%d", i)}); err != nil {
+			synctest.Test(t, func(t *testing.T) {
+				var cur atomic.Pointer[mem.Listener]
+				cur.Store(mem.Listen("server"))
+				dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) { return cur.Load().Dial(ctx) })
+				ss := newCrashStore(failAt)
+				ss.commit = commit
+				first := &delivered{}
+				srv, cancelSrv, srvDone := newServer(t, cur.Load(), ss, first, fixp.Unsequenced, nil)
+				// Stopped once, on a failure too: a bubble must end with
+				// none of its goroutines left.
+				stopSrv := sync.OnceFunc(func() { cancelSrv(); <-srvDone })
+				defer func() { stopSrv() }()
+				c := newClient(t, dialer, newCrashStore(0), BaseHandler{}, flow, nil)
+				cancel, done := runClient(c)
+				defer func() { cancel(); <-done }()
+				halted := func() bool {
+					s := srv.Session(c.Session().ID())
+					return s != nil && s.State() == StateStopped
+				}
+				eventually(t, func() bool {
+					st := c.Session().State()
+					return st == StateEstablished || st == StateStopped || halted()
+				})
+				if c.Session().State() == StateStopped {
+					stopSrv()
+					return // the negotiation refused: the store failed at Create
+				}
+				for i := 1; i <= sends && !halted(); i++ {
+					if _, err := c.Session().Send(bg, appMsg{1, fmt.Sprintf("c%d", i)}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				eventually(t, func() bool { return len(first.got()) == sends || halted() })
+				crashed := halted()
+				stopSrv()
+				if !crashed {
+					skipRest = true
+					return
+				}
+
+				restarted := ss.crash()
+				cur.Store(mem.Listen("server"))
+				second := &delivered{}
+				srv, cancelSrv, srvDone = newServer(t, cur.Load(), restarted, second, fixp.Unsequenced, nil)
+				stopSrv = sync.OnceFunc(func() { cancelSrv(); <-srvDone })
+				rs := srv.Session(c.Session().ID())
+				if rs == nil {
+					return // never recorded established: retired, or a new session
+				}
+				// The restarted's establishment, not the client's state, which
+				// stays Established until it sees its dead connection end: a
+				// message sent then is lost, as an Idempotent flow's may be.
+				eventually(t, func() bool { return rs.State() == StateEstablished && c.Session().State() == StateEstablished })
+				if _, err := c.Session().Send(bg, appMsg{1, "after"}); err != nil {
 					t.Fatal(err)
 				}
-			}
-			eventually(t, func() bool { return len(first.got()) == sends || halted() })
-			crashed := halted()
-			cancelSrv()
-			<-srvDone
-			if !crashed {
-				skipRest = true
-				return
-			}
+				eventually(t, func() bool {
+					g := second.got()
+					return len(g) > 0 && g[len(g)-1] == fmt.Sprintf("%d:after", c.Session().NextSeqNo()-1)
+				})
 
-			restarted := ss.crash()
-			cur.Store(mem.Listen("server"))
-			second := &delivered{}
-			srv, cancelSrv, srvDone = newServer(t, cur.Load(), restarted, second, fixp.Unsequenced, nil)
-			defer func() { cancelSrv(); <-srvDone }()
-			rs := srv.Session(c.Session().ID())
-			if rs == nil {
-				return // never recorded established: retired, or a new session
-			}
-			// The restarted's establishment, not the client's state, which
-			// stays Established until it sees its dead connection end: a
-			// message sent then is lost, as an Idempotent flow's may be.
-			eventually(t, func() bool { return rs.State() == StateEstablished && c.Session().State() == StateEstablished })
-			if _, err := c.Session().Send(bg, appMsg{1, "after"}); err != nil {
-				t.Fatal(err)
-			}
-			eventually(t, func() bool {
-				g := second.got()
-				return len(g) > 0 && g[len(g)-1] == fmt.Sprintf("%d:after", c.Session().NextSeqNo()-1)
+				seqs := func(d []string) []uint64 {
+					var out []uint64
+					for _, g := range d {
+						var seq uint64
+						fmt.Sscanf(g, "%d:", &seq)
+						out = append(out, seq)
+					}
+					return out
+				}
+				a, b := seqs(first.got()), seqs(second.got())
+				for _, run := range [][]uint64{a, b} {
+					for i := 1; i < len(run); i++ {
+						if flow == fixp.Recoverable && run[i] != run[i-1]+1 || run[i] <= run[i-1] {
+							t.Fatalf("delivered %v then %v: not in sequence", a, b)
+						}
+					}
+				}
+				switch flow {
+				case fixp.Recoverable:
+					// The restarted resumes at its durable frontier: at most
+					// where the first stopped, none skipped.
+					if len(a) > 0 && a[0] != 1 || len(b) > 0 && (b[0] < 1 || len(a) > 0 && b[0] > a[len(a)-1]+1 || len(a) == 0 && b[0] != 1) {
+						t.Fatalf("delivered %v then %v: a message skipped", a, b)
+					}
+				case fixp.Idempotent:
+					seen := map[uint64]bool{}
+					for _, seq := range append(a, b...) {
+						if seen[seq] {
+							t.Fatalf("delivered %v then %v: %d twice", a, b, seq)
+						}
+						seen[seq] = true
+					}
+				}
 			})
-
-			seqs := func(d []string) []uint64 {
-				var out []uint64
-				for _, g := range d {
-					var seq uint64
-					fmt.Sscanf(g, "%d:", &seq)
-					out = append(out, seq)
-				}
-				return out
-			}
-			a, b := seqs(first.got()), seqs(second.got())
-			for _, run := range [][]uint64{a, b} {
-				for i := 1; i < len(run); i++ {
-					if flow == fixp.Recoverable && run[i] != run[i-1]+1 || run[i] <= run[i-1] {
-						t.Fatalf("delivered %v then %v: not in sequence", a, b)
-					}
-				}
-			}
-			switch flow {
-			case fixp.Recoverable:
-				// The restarted resumes at its durable frontier: at most
-				// where the first stopped, none skipped.
-				if len(a) > 0 && a[0] != 1 || len(b) > 0 && (b[0] < 1 || len(a) > 0 && b[0] > a[len(a)-1]+1 || len(a) == 0 && b[0] != 1) {
-					t.Fatalf("delivered %v then %v: a message skipped", a, b)
-				}
-			case fixp.Idempotent:
-				seen := map[uint64]bool{}
-				for _, seq := range append(a, b...) {
-					if seen[seq] {
-						t.Fatalf("delivered %v then %v: %d twice", a, b, seq)
-					}
-					seen[seq] = true
-				}
-			}
 		})
 		if !passed || skipRest || failAt > 200 {
 			skipRest = false
