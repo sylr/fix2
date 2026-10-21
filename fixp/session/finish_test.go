@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -102,6 +104,40 @@ func TestFinalizeServerFirst(t *testing.T) {
 	p.srvH.skipUntil(t, "peerfinished")
 	p.srvH.skipUntil(t, "finalized")
 	p.clientH.skipUntil(t, "finalized")
+}
+
+// servedAtFinalized records whether its server still served the session
+// OnFinalized told of.
+type servedAtFinalized struct {
+	*recorder
+	srv    atomic.Pointer[Server]
+	served atomic.Bool
+}
+
+func (h *servedAtFinalized) OnFinalized(ctx context.Context, s *Session) {
+	h.served.Store(h.srv.Load().Session(s.ID()) != nil)
+	h.recorder.OnFinalized(ctx, s)
+}
+
+// The server forgets a finalized session before its handler hears of it,
+// as a retirement does: OnFinalized never finds it still served.
+func TestFinalizedNotServed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var h *servedAtFinalized
+		p := newPair(t, pairOptions{clientFlow: fixp.Idempotent, serverFlow: fixp.Recoverable,
+			server: func(c *ServerConfig) {
+				h = &servedAtFinalized{recorder: c.Handler.(*recorder)}
+				c.Handler = h
+			}})
+		h.srv.Store(p.srv)
+		if err := p.client.Session().Finish(bg); err != nil {
+			t.Fatal(err)
+		}
+		p.srvH.skipUntil(t, "finalized")
+		if h.served.Load() {
+			t.Error("OnFinalized: the session still served")
+		}
+	})
 }
 
 // A Recoverable flow finishing with messages missing: they are asked for,

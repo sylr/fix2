@@ -500,6 +500,52 @@ func TestLogoutAnsweredOnSlowWrite(t *testing.T) {
 	}
 }
 
+// While the writer makes a heartbeat durable, slowly, the session is not
+// idle: no second heartbeat follows before HeartBtInt has passed again.
+// Dating the last write only once written, the timer queued another as
+// soon as the writer had taken the first.
+func TestHeartbeatsDuringSlowSync(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := newSyncStore()
+		l := mem.Listen("acceptor")
+		_, rec := startInitiator(t, l, func(c *session.Config) { c.Store = st; c.HeartBtInt = time.Second })
+		p := acceptPeer(t, l)
+		p.expect("A")
+		p.send("A", 0, "98", "0", "108", "1")
+		rec.wait(t, func() bool { return rec.logons == 1 })
+		st.delay.Store(int64(300 * time.Millisecond))
+		// Ours keep the session from probing us with TestRequests.
+		ours := time.NewTicker(500 * time.Millisecond)
+		defer ours.Stop()
+		silence := time.NewTimer(5 * time.Second)
+		defer silence.Stop()
+		var last time.Time
+		for beats := 0; beats < 5; {
+			select {
+			case <-ours.C:
+				p.send("0", 0)
+			case <-silence.C:
+				t.Fatal("no heartbeat")
+			case ev := <-p.frames:
+				if ev.err != nil {
+					t.Fatalf("connection ended: %v", ev.err)
+				}
+				m, err := fix.Parse(ev.frame)
+				if err != nil || string(m.MsgType()) != "0" {
+					t.Fatalf("got %s, want heartbeats", visible(ev.frame))
+				}
+				now := time.Now()
+				if !last.IsZero() && now.Sub(last) < time.Second {
+					t.Fatalf("heartbeats %v apart, HeartBtInt 1s", now.Sub(last))
+				}
+				last = now
+				beats++
+				silence.Reset(5 * time.Second)
+			}
+		}
+	})
+}
+
 // syncGate is a store whose Sync, once block is set, tells entered and
 // waits for release: what the writer is about to write waits.
 type syncGate struct {

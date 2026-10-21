@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fixp"
@@ -225,4 +227,71 @@ func TestTerminateAnsweredBeforeWriteReturns(t *testing.T) {
 	if e := srvH.expect(t, "unbound"); !errors.As(e.err, &te) || !te.ByPeer {
 		t.Fatalf("server unbound: %v", e.err)
 	}
+}
+
+// lateListener accepts connections whose writes deliver delay late, once
+// delay is set: a peer whose writes run late.
+type lateListener struct {
+	*mem.Listener
+	delay *atomic.Int64 // nanoseconds
+}
+
+func (l lateListener) Accept(ctx context.Context) (transport.Conn, error) {
+	c, err := l.Listener.Accept(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return lateWriteConn{c, l.delay}, nil
+}
+
+type lateWriteConn struct {
+	transport.Conn
+	delay *atomic.Int64
+}
+
+func (c lateWriteConn) Write(b []byte) (int, error) {
+	time.Sleep(time.Duration(c.delay.Load()))
+	return c.Conn.Write(b)
+}
+
+// The side that sent the first Terminate waits for its answer the longer
+// of the two sides' keepalive intervals: a server whose interval is longer
+// than the client's, its writes late, answers past the client's interval
+// and the session is finalized on that connection. Waiting its own
+// interval, the client closed it first, connected again and again, and
+// was finalized only by chance.
+func TestTerminateAnsweredPastOurInterval(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		l := mem.Listen("server")
+		var delay atomic.Int64
+		srvH, cliH := newRecorder(), newRecorder()
+		_, cancelSrv, srvDone := newServer(t, lateListener{l, &delay}, memstore.New(), srvH, fixp.None, func(c *ServerConfig) {
+			c.KeepaliveInterval = time.Second
+		})
+		defer func() { cancelSrv(); <-srvDone }()
+		var dials atomic.Int32
+		dialer := transport.DialerFunc(func(ctx context.Context) (transport.Conn, error) {
+			dials.Add(1)
+			return l.Dial(ctx)
+		})
+		c := newClient(t, dialer, memstore.New(), cliH, fixp.Unsequenced, nil) // 50ms keepalives
+		cancelCli, cliDone := runClient(c)
+		defer func() { cancelCli(); <-cliDone }()
+		cliH.expect(t, "established")
+		srvH.expect(t, "established")
+		delay.Store(int64(200 * time.Millisecond))
+		if err := c.Session().Finish(bg); err != nil {
+			t.Fatal(err)
+		}
+		// Finalized on the first connection, a rejected one ending the
+		// session as well.
+		for e := cliH.next(t); ; e = cliH.next(t) {
+			if dials.Load() > 1 {
+				t.Fatal("connected again: the Terminate's answer was not awaited")
+			}
+			if e.kind == "finalized" {
+				break
+			}
+		}
+	})
 }
