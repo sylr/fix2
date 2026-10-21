@@ -96,6 +96,11 @@ func (c *conn) sealFrame(dst, frame []byte) ([]byte, error) {
 	s := c.s
 	m := &c.wmsg
 	if err := fix.ParseInto(m, frame, s.dicts.parse); err != nil {
+		// Not reached: Send, SendRaw, ToAdmin and LogonSigner refuse what
+		// would not parse, and what the session writes itself does parse,
+		// a handler's BusinessRejectRefID holding a SOH left out. Kept
+		// rather than sealing a message half parsed: the connection closes,
+		// as on a write failure.
 		return dst, err
 	}
 	fields := m.Fields()

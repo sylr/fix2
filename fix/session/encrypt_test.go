@@ -884,17 +884,21 @@ func (b businessRejecter) FromApp(context.Context, *session.Session, *fix.Messag
 	return &session.BusinessRejectError{Reason: session.BusinessRejectOther, RefID: b.refID, Text: "no"}
 }
 
-// A message of ours that does not parse cannot be sealed: the connection
-// closes, as on a write failure. A handler's BusinessRejectRefID holding a
-// SOH makes one.
-func TestEncrypter_UnparsableOwnMessage(t *testing.T) {
+// A handler's BusinessRejectRefID holding a SOH is left out (see
+// TestBusinessRejectRefIDWithSOH): the BusinessMessageReject parses, and is
+// sealed as any other, the session logged on still.
+func TestEncrypter_BusinessRejectRefIDWithSOH(t *testing.T) {
 	g := newGCM(t, "7", "k")
 	s, _, p, _, _ := encryptedInitiator(t, g, func(c *session.Config) {
 		c.Handler = businessRejecter{c.Handler.(*recorder), "a\x01b"}
 	})
 	p.writeRaw(sealedMsg(t, g, 2, "D", "11", "IN"))
-	p.expectSilentEnd()
-	waitFor(t, func() bool { return s.State() != session.StateLoggedOn })
+	if _, plain := p.expectSealed(g, "j", "45", "2", "380", "0"); strings.Contains(plain, "\x01379=") || strings.HasPrefix(plain, "379=") {
+		t.Errorf("BusinessMessageReject seals %q, with BusinessRejectRefID", plain)
+	}
+	if s.State() != session.StateLoggedOn {
+		t.Errorf("state %s, want logged on", s.State())
+	}
 }
 
 // fullOpen opens SecureData to as much as a message may hold, which the
