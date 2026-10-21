@@ -1,7 +1,10 @@
 ---
 name: Go
 on:
+  # A branch is tested through its pull request, master once merged: a
+  # push to a pull request's branch would run every job twice.
   push:
+    branches: [master]
   pull_request:
   schedule:
     # Every night the fuzzers run longer, from the corpus grown so far.
