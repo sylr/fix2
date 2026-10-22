@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -50,16 +51,20 @@ func TestDeadlineExpired(t *testing.T) {
 	}
 }
 
-// A Write expiring once it has written part of its bytes reports them.
+// A Write expiring once it has written part of its bytes reports them. On
+// synctest's fake clock: the deadline passes only once the Write blocks.
 func TestDeadlinePartialWrite(t *testing.T) {
-	a, b := Pipe()
-	defer a.Close()
-	defer b.Close()
-	a.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))
-	n, err := a.Write(make([]byte, maxBuffered+10))
-	if n != maxBuffered || !errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatalf("Write = %d, %v; want %d, deadline exceeded", n, err, maxBuffered)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		a, b := Pipe()
+		defer a.Close()
+		defer b.Close()
+		payload := make([]byte, maxBuffered+10)
+		a.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))
+		n, err := a.Write(payload)
+		if n != maxBuffered || !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("Write = %d, %v; want %d, deadline exceeded", n, err, maxBuffered)
+		}
+	})
 }
 
 // Moving a blocked Read's deadline into the past wakes it.
