@@ -62,6 +62,15 @@ func Pipe() (transport.Conn, transport.Conn) {
 	return c1, c2
 }
 
+// expired reports whether deadline has passed: an expired deadline fails
+// I/O that could complete at once, as on a net.Conn.
+func (c *conn) expired(deadline func() time.Time) bool {
+	c.mu.Lock()
+	d := deadline()
+	c.mu.Unlock()
+	return !d.IsZero() && !time.Now().Before(d)
+}
+
 // wait returns when p changes, the deadline passes or changes, or c closes.
 func (c *conn) wait(signal <-chan struct{}, deadline func() time.Time) error {
 	c.mu.Lock()
@@ -95,6 +104,9 @@ func (c *conn) Read(b []byte) (int, error) {
 			return 0, net.ErrClosed
 		default:
 		}
+		if c.expired(func() time.Time { return c.readDeadline }) {
+			return 0, os.ErrDeadlineExceeded
+		}
 		p := c.in
 		p.mu.Lock()
 		if len(p.buf) > 0 {
@@ -123,6 +135,9 @@ func (c *conn) Write(b []byte) (int, error) {
 		case <-c.closed:
 			return written, net.ErrClosed
 		default:
+		}
+		if c.expired(func() time.Time { return c.writeDeadline }) {
+			return written, os.ErrDeadlineExceeded
 		}
 		p := c.out
 		p.mu.Lock()
