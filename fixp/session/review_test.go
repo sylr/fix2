@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -391,75 +392,83 @@ func TestReestablishWaitsForUnbound(t *testing.T) {
 	})
 }
 
-// A retirement while OnUnbound runs finalizes the session once it returns
-// (A8-01).
-func TestRetireWaitsForUnbound(t *testing.T) {
+// A retirement while OnUnbound runs returns once the session is retired
+// durably, without waiting for the callback; OnFinalized follows when it
+// returns (A8-01).
+func TestRetireDuringUnbound(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var h *gatedUnbound
+		var srvStore *memstore.Store
 		rs := newRawSession(t, fixp.Unsequenced, fixp.Unsequenced, codec.Optional[uint64]{}, func(c *ServerConfig) {
 			h = newGatedUnbound()
 			h.recorder = c.Handler.(*recorder)
 			c.Handler = h
+			srvStore = c.Store.(*memstore.Store)
 		})
 		defer h.open()
 		s := rs.session(t)
 		rs.r.c.Close()
 		<-h.unbound
-		retired := make(chan error, 1)
-		go func() { retired <- rs.srv.Retire(bg, s.ID()) }()
-		noEvent(t, h.recorder, "while OnUnbound runs")
-		select {
-		case err := <-retired:
-			t.Fatalf("Retire returned %v while OnUnbound runs", err)
-		default:
+		if err := rs.srv.Retire(bg, s.ID()); err != nil {
+			t.Fatalf("Retire: %v", err)
 		}
+		if stored, _ := srvStore.Open(bg, s.ID()); !stored.State().Retired {
+			t.Errorf("not retired durably when Retire returned: %+v", stored.State())
+		}
+		noEvent(t, h.recorder, "while OnUnbound runs")
 		h.open()
 		h.expect(t, "unbound")
 		h.expect(t, "finalized")
-		if err := <-retired; err != nil {
-			t.Fatal(err)
-		}
 		if h.overlap.Load() {
 			t.Error("OnFinalized ran beside OnUnbound")
 		}
 	})
 }
 
-// retiringUnbound retires its session from OnUnbound.
+// retiringUnbound retires its session from OnUnbound, with ctx or with a
+// context of its own.
 type retiringUnbound struct {
 	*recorder
 	srv     atomic.Pointer[Server]
+	own     bool
 	retired chan error
 }
 
 func (h *retiringUnbound) OnUnbound(ctx context.Context, s *Session, err error) {
+	if h.own {
+		ctx = context.Background()
+	}
 	h.retired <- h.srv.Load().Retire(ctx, s.ID())
 	h.recorder.OnUnbound(ctx, s, err)
 }
 
-// Retire called from OnUnbound does not wait for it to return: it
-// finalizes the session from within it.
+// Retire called from OnUnbound, whatever its context, returns without
+// waiting for it; OnFinalized follows once it returns.
 func TestRetireFromUnbound(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		h := &retiringUnbound{recorder: newRecorder(), retired: make(chan error, 1)}
-		l := mem.Listen("server")
-		srv, cancel, done := newServer(t, l, memstore.New(), h, fixp.Unsequenced, nil)
-		defer func() { cancel(); <-done }()
-		h.srv.Store(srv)
-		r := dialRaw(t, l)
-		r.negotiate(fixp.Unsequenced, "user:alice")
-		r.establish(1000, codec.Optional[uint64]{}, "user:alice")
-		h.expect(t, "established")
-		r.c.Close()
-		h.expect(t, "finalized")
-		h.expect(t, "unbound")
-		if err := <-h.retired; err != nil {
-			t.Fatal(err)
-		}
-		if srv.Session(r.id) != nil {
-			t.Error("retired session still served")
-		}
-	})
+	for _, own := range []bool{false, true} {
+		t.Run(fmt.Sprintf("own context %v", own), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				h := &retiringUnbound{recorder: newRecorder(), own: own, retired: make(chan error, 1)}
+				l := mem.Listen("server")
+				srv, cancel, done := newServer(t, l, memstore.New(), h, fixp.Unsequenced, nil)
+				defer func() { cancel(); <-done }()
+				h.srv.Store(srv)
+				r := dialRaw(t, l)
+				r.negotiate(fixp.Unsequenced, "user:alice")
+				r.establish(1000, codec.Optional[uint64]{}, "user:alice")
+				h.expect(t, "established")
+				r.c.Close()
+				h.expect(t, "unbound")
+				h.expect(t, "finalized")
+				if err := <-h.retired; err != nil {
+					t.Fatal(err)
+				}
+				if srv.Session(r.id) != nil {
+					t.Error("retired session still served")
+				}
+			})
+		})
+	}
 }
 
 // A retirement while a finished session's OnUnbound runs, before its

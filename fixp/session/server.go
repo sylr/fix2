@@ -206,6 +206,9 @@ var ErrNoSession = errors.New("fixp/session: no such session")
 // finished, durably (store.State.Retired). Its ID stays refused until
 // forgotten (ServerConfig.Retention). Once begun, a retirement completes,
 // ctx done or not: its waits are bounded by the write and store timeouts.
+// Called while the session's OnUnbound runs, from it or not, Retire
+// returns once the session is retired durably, and OnFinalized follows
+// when OnUnbound returns.
 func (srv *Server) Retire(ctx context.Context, id fixp.SessionID) error {
 	srv.mu.Lock()
 	s := srv.sessions[id]
@@ -213,18 +216,17 @@ func (srv *Server) Retire(ctx context.Context, id fixp.SessionID) error {
 	if s == nil {
 		return ErrNoSession
 	}
-	return srv.retireSession(ctx, s, "session retired", false)
+	return srv.retireSession(s, "session retired", false)
 }
 
 // retireSession retires s; automatic, only if it is unbound and was never
 // established. Once claimed, the retirement completes whatever happens to
-// the caller: half done, a restart would resurrect the session. Called
-// from a callback of s, ctx says so.
-func (srv *Server) retireSession(ctx context.Context, s *Session, reason string, automatic bool) error {
+// the caller: half done, a restart would resurrect the session.
+func (srv *Server) retireSession(s *Session, reason string, automatic bool) error {
 	// The claim, under the lock the establishment takes to leave
 	// StateUnbound: one of them wins.
 	s.mu.Lock()
-	c, unbinding, st := s.conn, s.unbinding, s.st
+	c, st := s.conn, s.st
 	switch {
 	case s.state == StateFinalized || s.state == StateFinalizing || st == nil:
 		// Finalizing: its connection's end finalizes it, OnFinalized once.
@@ -253,9 +255,6 @@ func (srv *Server) retireSession(ctx context.Context, s *Session, reason string,
 	if c != nil {
 		c.fail(reason, nil)
 		<-c.unbound // bounded: fail closes within the write timeout
-	} else if unbinding != nil && !(inCallback(ctx) && ctx.Value(callbackKey{}) == s) {
-		// OnFinalized after OnUnbound, unless called from it.
-		<-unbinding
 	}
 	sctx := s.storeCtx()
 	err := st.Retire(sctx, time.Now())
@@ -265,18 +264,31 @@ func (srv *Server) retireSession(ctx context.Context, s *Session, reason string,
 	sctx.cancel()
 	if err != nil {
 		err = fmt.Errorf("fixp/session: retiring: %w", err)
-		s.mu.Lock()
-		s.state, s.err = StateStopped, err
-		s.mu.Unlock()
+	} else {
+		s.logInfo("retired", "reason", reason)
+	}
+	end := func() {
 		s.doneOnce.Do(func() { close(s.done) })
 		s.closeStore()
-		return err
+		if err == nil {
+			s.handler.OnFinalized(s.cbCtx, s)
+		}
 	}
-	s.logInfo("retired", "reason", reason)
-	s.doneOnce.Do(func() { close(s.done) })
-	s.closeStore()
-	s.handler.OnFinalized(s.cbCtx, s)
-	return nil
+	s.mu.Lock()
+	if err != nil {
+		s.state, s.err = StateStopped, err
+	}
+	// OnUnbound running, perhaps on this very goroutine, run ends the
+	// retirement once it returns: nothing here waits for a callback.
+	if s.unbinding != nil {
+		s.afterUnbound = end
+		end = nil
+	}
+	s.mu.Unlock()
+	if end != nil {
+		end()
+	}
+	return err
 }
 
 // idle reports, under s.mu, whether s is retired automatically when
@@ -322,7 +334,7 @@ func (srv *Server) scheduleRetirement(s *Session, negotiatedAt time.Time) {
 		t.Stop() // replaced
 	}
 	srv.retire[s] = time.AfterFunc(max(d, 0), func() {
-		if errors.Is(srv.retireSession(context.Background(), s, "never established", true), errEstablishing) {
+		if errors.Is(srv.retireSession(s, "never established", true), errEstablishing) {
 			// Retired later if the establishment fails.
 			srv.scheduleRetirement(s, time.Now())
 		}

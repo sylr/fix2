@@ -129,7 +129,10 @@ type Session struct {
 	// unbinding is the last connection's unbound while its OnUnbound
 	// runs: the next establishment, and a retirement, wait for it.
 	unbinding chan struct{}
-	err       error
+	// afterUnbound, if set, ends a retirement claimed while OnUnbound ran:
+	// run calls it once it returns.
+	afterUnbound func()
+	err          error
 	// outFin and inFin are the flows' finalization, as stored, changed
 	// under finishMu.
 	outFin, inFin store.Finish
@@ -616,9 +619,14 @@ func (s *Session) run(ctx context.Context, c *conn, reason string) {
 	}
 	s.mu.Lock()
 	s.unbinding = nil
+	after := s.afterUnbound
+	s.afterUnbound = nil
 	s.mu.Unlock()
 	close(c.unbound)
 	if finished {
 		s.finalize()
+	}
+	if after != nil {
+		after()
 	}
 }
