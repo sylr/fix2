@@ -28,6 +28,9 @@ named in the generated package's doc comment:
 
 Each message is a Go struct, encoded and decoded whole. A struct decoded
 into again reuses what it holds: once warm, decoding allocates nothing.
+A group shrinking keeps the entries it drops, and their groups, for
+their capacity, but not their data: past its length, a group holds
+nothing of a frame decoded before.
 Flyweights over the buffer, as Real Logic's generator also offers, may
 come later, if benchmarks call for them.
 

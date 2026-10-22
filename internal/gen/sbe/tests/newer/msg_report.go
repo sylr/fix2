@@ -52,7 +52,7 @@ func (m *Report) decode(b []byte, blockLen, version int, numGroups, numData uint
 			pos += n
 		}
 	} else {
-		m.Wide = m.Wide[:0]
+		truncateWide(&m.Wide, 0)
 	}
 	// The groups the count tells of, the received version's (§7.3.2).
 	{
@@ -328,6 +328,21 @@ func (m *Lines) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *Lines) release() {
+	m.LineBlob = nil
+}
+
+// truncateLines shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateLines(s *[]Lines, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeLines(s *[]Lines, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -337,7 +352,7 @@ func decodeLines(s *[]Lines, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateLines(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -365,7 +380,7 @@ func decodeLines(s *[]Lines, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Lines, n)
 	} else {
-		*s = (*s)[:n]
+		truncateLines(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)
@@ -453,6 +468,11 @@ func (m *Wide) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateWide shortens *s to n entries, n within its capacity.
+func truncateWide(s *[]Wide, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeWide(s *[]Wide, b []byte, version int, entries *int) (int, error) {
 	if len(b) < WideGroupSizeSize {
 		return 0, ErrShort
@@ -462,7 +482,7 @@ func decodeWide(s *[]Wide, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := WideGroupSizeSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateWide(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -487,7 +507,7 @@ func decodeWide(s *[]Wide, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Wide, n)
 	} else {
-		*s = (*s)[:n]
+		truncateWide(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)

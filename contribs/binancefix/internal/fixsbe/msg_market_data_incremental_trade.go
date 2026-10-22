@@ -240,6 +240,11 @@ func (m *MDEntries) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateMDEntries shortens *s to n entries, n within its capacity.
+func truncateMDEntries(s *[]MDEntries, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeMDEntries(s *[]MDEntries, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSize32EncodingSize {
 		return 0, ErrShort
@@ -252,7 +257,7 @@ func decodeMDEntries(s *[]MDEntries, b []byte, version int, entries *int) (int, 
 	}
 	pos := GroupSize32EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMDEntries(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -277,7 +282,7 @@ func decodeMDEntries(s *[]MDEntries, b []byte, version int, entries *int) (int, 
 	if cap(*s) < n {
 		*s = make([]MDEntries, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMDEntries(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

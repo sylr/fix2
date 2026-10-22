@@ -270,6 +270,11 @@ func (m *Lines) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateLines shortens *s to n entries, n within its capacity.
+func truncateLines(s *[]Lines, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeLines(s *[]Lines, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -279,7 +284,7 @@ func decodeLines(s *[]Lines, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateLines(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -304,7 +309,7 @@ func decodeLines(s *[]Lines, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Lines, n)
 	} else {
-		*s = (*s)[:n]
+		truncateLines(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)

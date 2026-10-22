@@ -1079,6 +1079,31 @@ func (g *gen) group(gr *Group) {
 	g.comment(name, what, gr.Description)
 	g.block(name, &gr.Block, dim, false)
 
+	// An entry beyond its group's length keeps its groups' capacity, for
+	// the next decoding, but nothing of a frame decoded before.
+	if borrows(gr) {
+		g.p("\n// release drops what m holds of a decoded frame, its groups keeping their\n// capacity: an entry its group no longer holds keeps no frame alive.")
+		g.p("func (m *%s) release() {", name)
+		for _, sub := range gr.Groups {
+			if borrows(sub) {
+				g.p("truncate%s(&m.%s, 0)", g.groupName[sub], export(sub.Name))
+			}
+		}
+		for _, d := range gr.Data {
+			g.p("m.%s = nil", export(d.Name))
+		}
+		g.p("}")
+	}
+	if borrows(gr) {
+		g.p("\n// truncate%s shortens *s to n entries, n within its capacity, releasing\n// those it drops.", name)
+		g.p("func truncate%s(s *[]%s, n int) {", name, name)
+		g.p("for i := n; i < len(*s); i++ {\n(*s)[i].release()\n}")
+	} else {
+		g.p("\n// truncate%s shortens *s to n entries, n within its capacity.", name)
+		g.p("func truncate%s(s *[]%s, n int) {", name, name)
+	}
+	g.p("*s = (*s)[:n]\n}")
+
 	g.p("\nfunc decode%s(s *[]%s, b []byte, version int, entries *int) (int, error) {", name, name)
 	g.p("if len(b) < %sSize {\nreturn 0, ErrShort\n}", dname)
 	g.p("var d %s\nd.decodeFrom(b[:%sSize], version)", dname, dname)
@@ -1094,7 +1119,7 @@ func (g *gen) group(gr *Group) {
 		g.p("if %s {\nreturn 0, ErrEntries\n}", strings.Join(bounds, " || "))
 	}
 	g.p("pos := %sSize", dname)
-	g.p("if count == 0 {\n*s = (*s)[:0]\nreturn pos, nil\n}")
+	g.p("if count == 0 {\ntruncate%s(s, 0)\nreturn pos, nil\n}", name)
 	g.p("// The block length and the count are bounded by the bytes left before\n// they become ints, which a wide one would wrap.")
 	g.p("if uint64(d.%s) > uint64(len(b)-pos) {\nreturn 0, ErrShort\n}", export("blockLength"))
 	g.p("blockLen := int(d.%s)", export("blockLength"))
@@ -1110,7 +1135,7 @@ func (g *gen) group(gr *Group) {
 	g.p("if count > uint64((len(b)-pos)/minEntry) {\nreturn 0, ErrShort\n}")
 	g.p("n := int(count)")
 	g.p("if *entries += n; *entries > MaxEntries {\nreturn 0, ErrEntries\n}")
-	g.p("if cap(*s) < n {\n*s = make([]%s, n)\n} else {\n*s = (*s)[:n]\n}", name)
+	g.p("if cap(*s) < n {\n*s = make([]%s, n)\n} else {\ntruncate%s(s, n)\n}", name, name)
 	groups, data := countArgs(dim, "d")
 	g.p("for i := range *s {")
 	g.p("c, err := (*s)[i].decode(b[pos:], blockLen, version, %s, %s, entries)", groups, data)
@@ -1189,6 +1214,20 @@ func (g *gen) counted(counts *Type, countName, count, skip string, sinces []int,
 		g.p("return 0, ErrNewer")
 	}
 	g.p("}\n}")
+}
+
+// borrows reports whether an entry of gr can hold part of a decoded frame:
+// it has data, or a group whose entries do.
+func borrows(gr *Group) bool {
+	if len(gr.Data) > 0 {
+		return true
+	}
+	for _, sub := range gr.Groups {
+		if borrows(sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // countArgs returns the numGroups and numVarDataFields of the header or
@@ -1299,7 +1338,7 @@ func (g *gen) block(name string, b *Block, counts *Type, root bool) {
 		}
 		g.p("{\nn, err := decode%s(&m.%s, b[pos:], version, entries)\nif err != nil {\nreturn 0, err\n}\npos += n\n}", g.groupName[gr], gname)
 		if gr.SinceVersion > 0 {
-			g.p("} else {\nm.%s = m.%s[:0]\n}", gname, gname)
+			g.p("} else {\ntruncate%s(&m.%s, 0)\n}", g.groupName[gr], gname)
 		}
 	}
 	// A newer version's groups follow those the schema knows, all present

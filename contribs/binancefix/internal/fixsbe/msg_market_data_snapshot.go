@@ -251,6 +251,11 @@ func (m *MarketDataSnapshotMDEntriesBids) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateMarketDataSnapshotMDEntriesBids shortens *s to n entries, n within its capacity.
+func truncateMarketDataSnapshotMDEntriesBids(s *[]MarketDataSnapshotMDEntriesBids, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeMarketDataSnapshotMDEntriesBids(s *[]MarketDataSnapshotMDEntriesBids, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize16EncodingSize {
 		return 0, ErrShort
@@ -260,7 +265,7 @@ func decodeMarketDataSnapshotMDEntriesBids(s *[]MarketDataSnapshotMDEntriesBids,
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize16EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMarketDataSnapshotMDEntriesBids(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -285,7 +290,7 @@ func decodeMarketDataSnapshotMDEntriesBids(s *[]MarketDataSnapshotMDEntriesBids,
 	if cap(*s) < n {
 		*s = make([]MarketDataSnapshotMDEntriesBids, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMarketDataSnapshotMDEntriesBids(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
@@ -364,6 +369,11 @@ func (m *MarketDataSnapshotMDEntriesAsks) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateMarketDataSnapshotMDEntriesAsks shortens *s to n entries, n within its capacity.
+func truncateMarketDataSnapshotMDEntriesAsks(s *[]MarketDataSnapshotMDEntriesAsks, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeMarketDataSnapshotMDEntriesAsks(s *[]MarketDataSnapshotMDEntriesAsks, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize16EncodingSize {
 		return 0, ErrShort
@@ -373,7 +383,7 @@ func decodeMarketDataSnapshotMDEntriesAsks(s *[]MarketDataSnapshotMDEntriesAsks,
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize16EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMarketDataSnapshotMDEntriesAsks(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -398,7 +408,7 @@ func decodeMarketDataSnapshotMDEntriesAsks(s *[]MarketDataSnapshotMDEntriesAsks,
 	if cap(*s) < n {
 		*s = make([]MarketDataSnapshotMDEntriesAsks, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMarketDataSnapshotMDEntriesAsks(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

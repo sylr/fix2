@@ -290,6 +290,21 @@ func (m *Legs) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *Legs) release() {
+	m.Note = nil
+}
+
+// truncateLegs shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateLegs(s *[]Legs, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeLegs(s *[]Legs, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -299,7 +314,7 @@ func decodeLegs(s *[]Legs, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateLegs(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -325,7 +340,7 @@ func decodeLegs(s *[]Legs, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Legs, n)
 	} else {
-		*s = (*s)[:n]
+		truncateLegs(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)

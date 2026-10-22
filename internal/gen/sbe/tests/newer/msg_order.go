@@ -61,7 +61,7 @@ func (m *Order) decode(b []byte, blockLen, version int, numGroups, numData uint6
 			pos += n
 		}
 	} else {
-		m.Fees = m.Fees[:0]
+		truncateFees(&m.Fees, 0)
 	}
 	// The groups the count tells of, the received version's (§7.3.2).
 	{
@@ -289,7 +289,7 @@ func (m *Legs) decode(b []byte, blockLen, version int, numGroups, numData uint64
 			pos += n
 		}
 	} else {
-		m.Allocs = m.Allocs[:0]
+		truncateAllocs(&m.Allocs, 0)
 	}
 	// The groups the count tells of, the received version's (§7.3.2).
 	{
@@ -400,6 +400,22 @@ func (m *Legs) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *Legs) release() {
+	m.Note = nil
+	m.LegMemo = nil
+}
+
+// truncateLegs shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateLegs(s *[]Legs, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeLegs(s *[]Legs, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -409,7 +425,7 @@ func decodeLegs(s *[]Legs, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateLegs(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -441,7 +457,7 @@ func decodeLegs(s *[]Legs, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Legs, n)
 	} else {
-		*s = (*s)[:n]
+		truncateLegs(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)
@@ -529,6 +545,11 @@ func (m *Allocs) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateAllocs shortens *s to n entries, n within its capacity.
+func truncateAllocs(s *[]Allocs, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeAllocs(s *[]Allocs, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -538,7 +559,7 @@ func decodeAllocs(s *[]Allocs, b []byte, version int, entries *int) (int, error)
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateAllocs(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -563,7 +584,7 @@ func decodeAllocs(s *[]Allocs, b []byte, version int, entries *int) (int, error)
 	if cap(*s) < n {
 		*s = make([]Allocs, n)
 	} else {
-		*s = (*s)[:n]
+		truncateAllocs(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)
@@ -695,6 +716,22 @@ func (m *Fees) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *Fees) release() {
+	truncateTaxes(&m.Taxes, 0)
+	m.FeeMemo = nil
+}
+
+// truncateFees shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateFees(s *[]Fees, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeFees(s *[]Fees, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -704,7 +741,7 @@ func decodeFees(s *[]Fees, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateFees(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -731,7 +768,7 @@ func decodeFees(s *[]Fees, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Fees, n)
 	} else {
-		*s = (*s)[:n]
+		truncateFees(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)
@@ -845,6 +882,21 @@ func (m *Taxes) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *Taxes) release() {
+	m.TaxCode = nil
+}
+
+// truncateTaxes shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateTaxes(s *[]Taxes, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeTaxes(s *[]Taxes, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -854,7 +906,7 @@ func decodeTaxes(s *[]Taxes, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateTaxes(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -880,7 +932,7 @@ func decodeTaxes(s *[]Taxes, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Taxes, n)
 	} else {
-		*s = (*s)[:n]
+		truncateTaxes(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)

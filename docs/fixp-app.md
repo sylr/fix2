@@ -120,7 +120,8 @@ when that matters.
 `msg` is borrowed for the call: the session reuses its buffer once the
 callback returns. A decoded struct's `[]byte` fields, its data fields,
 alias `msg`; its fixed fields and arrays are copies. A struct decoded
-into again reuses its groups' slices, their entries overwritten. Keep
+into again reuses its groups' slices, their entries overwritten, those
+they drop holding nothing of `msg`. Keep
 what outlives the callback, or the next decoding, as a copy of its own:
 its `[]byte` fields cloned (`bytes.Clone`), its group slices cloned, and
 theirs within, recursively; or decode the message again, into a struct

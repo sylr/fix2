@@ -268,6 +268,21 @@ func (m *Items) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *Items) release() {
+	m.Tag = nil
+}
+
+// truncateItems shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateItems(s *[]Items, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeItems(s *[]Items, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -277,7 +292,7 @@ func decodeItems(s *[]Items, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateItems(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -304,7 +319,7 @@ func decodeItems(s *[]Items, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Items, n)
 	} else {
-		*s = (*s)[:n]
+		truncateItems(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
@@ -378,6 +393,11 @@ func (m *Parts) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateParts shortens *s to n entries, n within its capacity.
+func truncateParts(s *[]Parts, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeParts(s *[]Parts, b []byte, version int, entries *int) (int, error) {
 	if len(b) < MidGroupSizeSize {
 		return 0, ErrShort
@@ -387,7 +407,7 @@ func decodeParts(s *[]Parts, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := MidGroupSizeSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateParts(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -412,7 +432,7 @@ func decodeParts(s *[]Parts, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Parts, n)
 	} else {
-		*s = (*s)[:n]
+		truncateParts(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

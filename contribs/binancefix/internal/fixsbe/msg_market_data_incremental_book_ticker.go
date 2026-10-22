@@ -252,6 +252,11 @@ func (m *MarketDataIncrementalBookTickerMDEntriesBids) appendRest(dst []byte) []
 	return dst
 }
 
+// truncateMarketDataIncrementalBookTickerMDEntriesBids shortens *s to n entries, n within its capacity.
+func truncateMarketDataIncrementalBookTickerMDEntriesBids(s *[]MarketDataIncrementalBookTickerMDEntriesBids, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeMarketDataIncrementalBookTickerMDEntriesBids(s *[]MarketDataIncrementalBookTickerMDEntriesBids, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize8EncodingSize {
 		return 0, ErrShort
@@ -261,7 +266,7 @@ func decodeMarketDataIncrementalBookTickerMDEntriesBids(s *[]MarketDataIncrement
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize8EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMarketDataIncrementalBookTickerMDEntriesBids(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -286,7 +291,7 @@ func decodeMarketDataIncrementalBookTickerMDEntriesBids(s *[]MarketDataIncrement
 	if cap(*s) < n {
 		*s = make([]MarketDataIncrementalBookTickerMDEntriesBids, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMarketDataIncrementalBookTickerMDEntriesBids(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
@@ -373,6 +378,11 @@ func (m *MarketDataIncrementalBookTickerMDEntriesAsks) appendRest(dst []byte) []
 	return dst
 }
 
+// truncateMarketDataIncrementalBookTickerMDEntriesAsks shortens *s to n entries, n within its capacity.
+func truncateMarketDataIncrementalBookTickerMDEntriesAsks(s *[]MarketDataIncrementalBookTickerMDEntriesAsks, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeMarketDataIncrementalBookTickerMDEntriesAsks(s *[]MarketDataIncrementalBookTickerMDEntriesAsks, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize8EncodingSize {
 		return 0, ErrShort
@@ -382,7 +392,7 @@ func decodeMarketDataIncrementalBookTickerMDEntriesAsks(s *[]MarketDataIncrement
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize8EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMarketDataIncrementalBookTickerMDEntriesAsks(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -407,7 +417,7 @@ func decodeMarketDataIncrementalBookTickerMDEntriesAsks(s *[]MarketDataIncrement
 	if cap(*s) < n {
 		*s = make([]MarketDataIncrementalBookTickerMDEntriesAsks, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMarketDataIncrementalBookTickerMDEntriesAsks(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

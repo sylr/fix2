@@ -273,6 +273,21 @@ func (m *MarketDataRequestRelatedSym) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *MarketDataRequestRelatedSym) release() {
+	m.Symbol = nil
+}
+
+// truncateMarketDataRequestRelatedSym shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateMarketDataRequestRelatedSym(s *[]MarketDataRequestRelatedSym, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeMarketDataRequestRelatedSym(s *[]MarketDataRequestRelatedSym, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSize16EncodingSize {
 		return 0, ErrShort
@@ -282,7 +297,7 @@ func decodeMarketDataRequestRelatedSym(s *[]MarketDataRequestRelatedSym, b []byt
 	count := uint64(d.NumInGroup)
 	pos := GroupSize16EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMarketDataRequestRelatedSym(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -308,7 +323,7 @@ func decodeMarketDataRequestRelatedSym(s *[]MarketDataRequestRelatedSym, b []byt
 	if cap(*s) < n {
 		*s = make([]MarketDataRequestRelatedSym, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMarketDataRequestRelatedSym(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
@@ -382,6 +397,11 @@ func (m *MDEntryTypes) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateMDEntryTypes shortens *s to n entries, n within its capacity.
+func truncateMDEntryTypes(s *[]MDEntryTypes, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeMDEntryTypes(s *[]MDEntryTypes, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize8EncodingSize {
 		return 0, ErrShort
@@ -391,7 +411,7 @@ func decodeMDEntryTypes(s *[]MDEntryTypes, b []byte, version int, entries *int) 
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize8EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMDEntryTypes(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -416,7 +436,7 @@ func decodeMDEntryTypes(s *[]MDEntryTypes, b []byte, version int, entries *int) 
 	if cap(*s) < n {
 		*s = make([]MDEntryTypes, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMDEntryTypes(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

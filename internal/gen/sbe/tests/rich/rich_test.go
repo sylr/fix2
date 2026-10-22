@@ -415,6 +415,63 @@ func TestDecodeDoesNotAllocate(t *testing.T) {
 	}
 }
 
+// A struct decoded into again releases the entries its groups drop: past
+// their lengths, they hold nothing of the frames decoded before, and keep
+// their own groups' capacity, decoding again allocating nothing.
+func TestReuseReleasesDroppedEntries(t *testing.T) {
+	released := func(t *testing.T, legs []Legs) {
+		t.Helper()
+		for i, l := range legs[len(legs):cap(legs)] {
+			if l.Note != nil || len(l.Fees) != 0 {
+				t.Errorf("dropped leg %d holds Note %q, %d fees", len(legs)+i, l.Note, len(l.Fees))
+			}
+			for j, f := range l.Fees[:cap(l.Fees)] {
+				if f.Memo != nil {
+					t.Errorf("dropped leg %d's fee %d holds Memo %q", len(legs)+i, j, f.Memo)
+				}
+			}
+		}
+		for i, l := range legs {
+			for j, f := range l.Fees[len(l.Fees):cap(l.Fees)] {
+				if f.Memo != nil {
+					t.Errorf("leg %d's dropped fee %d holds Memo %q", i, len(l.Fees)+j, f.Memo)
+				}
+			}
+		}
+	}
+	big := encode(t, full())
+	fewer := full()
+	fewer.Legs = fewer.Legs[1:]                 // one leg, two fees: drops a leg and...
+	fewer.Legs[0].Fees = fewer.Legs[0].Fees[1:] // ...one of its fees
+	small := encode(t, fewer)
+	none := full()
+	none.Legs = nil
+	empty := encode(t, none)
+
+	var got Order
+	for _, b := range [][]byte{big, small, big, empty} {
+		if _, err := got.Decode(b); err != nil {
+			t.Fatal(err)
+		}
+		released(t, got.Legs)
+	}
+	if len(got.Legs) != 0 || cap(got.Legs) != 2 || cap(got.Legs[:2][1].Fees) != 2 {
+		t.Errorf("capacity not kept: %d legs of %d, %d fees", len(got.Legs), cap(got.Legs), cap(got.Legs[:2][1].Fees))
+	}
+	if _, err := got.Decode(big); err != nil || !same(&got, full()) {
+		t.Fatalf("decoded again: %+v, %v", got, err)
+	}
+	if allocs := testing.AllocsPerRun(100, func() {
+		for _, b := range [][]byte{small, empty, big} {
+			if _, err := got.Decode(b); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}); allocs != 0 {
+		t.Errorf("%v allocs, want 0", allocs)
+	}
+}
+
 func FuzzDecode(f *testing.F) {
 	f.Add(encode(f, full()))
 	f.Add(encode(f, &Order{}))

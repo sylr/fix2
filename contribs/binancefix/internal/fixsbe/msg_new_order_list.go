@@ -534,6 +534,22 @@ func (m *NewOrderListOrders) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *NewOrderListOrders) release() {
+	m.ClOrdID = nil
+	m.Symbol = nil
+}
+
+// truncateNewOrderListOrders shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateNewOrderListOrders(s *[]NewOrderListOrders, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeNewOrderListOrders(s *[]NewOrderListOrders, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSize8EncodingSize {
 		return 0, ErrShort
@@ -543,7 +559,7 @@ func decodeNewOrderListOrders(s *[]NewOrderListOrders, b []byte, version int, en
 	count := uint64(d.NumInGroup)
 	pos := GroupSize8EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateNewOrderListOrders(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -571,7 +587,7 @@ func decodeNewOrderListOrders(s *[]NewOrderListOrders, b []byte, version int, en
 	if cap(*s) < n {
 		*s = make([]NewOrderListOrders, n)
 	} else {
-		*s = (*s)[:n]
+		truncateNewOrderListOrders(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
@@ -654,6 +670,11 @@ func (m *ListTriggeringInstructions) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateListTriggeringInstructions shortens *s to n entries, n within its capacity.
+func truncateListTriggeringInstructions(s *[]ListTriggeringInstructions, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeListTriggeringInstructions(s *[]ListTriggeringInstructions, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize8EncodingSize {
 		return 0, ErrShort
@@ -663,7 +684,7 @@ func decodeListTriggeringInstructions(s *[]ListTriggeringInstructions, b []byte,
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize8EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateListTriggeringInstructions(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -688,7 +709,7 @@ func decodeListTriggeringInstructions(s *[]ListTriggeringInstructions, b []byte,
 	if cap(*s) < n {
 		*s = make([]ListTriggeringInstructions, n)
 	} else {
-		*s = (*s)[:n]
+		truncateListTriggeringInstructions(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

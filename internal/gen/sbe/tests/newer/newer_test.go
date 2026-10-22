@@ -430,3 +430,31 @@ func FuzzNewerVersion(f *testing.F) {
 		}
 	})
 }
+
+// A group a version does not have is released when decoded into a struct
+// that held it: its entries, and theirs, hold nothing of the frame before.
+func TestAbsentGroupReleased(t *testing.T) {
+	src := newer.Order{Fees: []newer.Fees{{FeeMemo: []byte("fee"), Taxes: []newer.Taxes{{TaxCode: []byte("tax")}}}}}
+	frame, err := src.AppendTo(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old older.Order
+	oldFrame, err := old.AppendTo(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got newer.Order
+	for _, b := range [][]byte{frame, oldFrame} {
+		if _, err := got.Decode(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(got.Fees) != 0 || cap(got.Fees) != 1 {
+		t.Fatalf("Fees: %d of %d, want 0 of 1", len(got.Fees), cap(got.Fees))
+	}
+	fee := got.Fees[:1][0]
+	if fee.FeeMemo != nil || len(fee.Taxes) != 0 || cap(fee.Taxes) != 1 || fee.Taxes[:1][0].TaxCode != nil {
+		t.Errorf("dropped fee holds %+v", fee)
+	}
+}

@@ -1011,6 +1011,21 @@ func (m *MiscFees) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *MiscFees) release() {
+	m.MiscFeeCurr = nil
+}
+
+// truncateMiscFees shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateMiscFees(s *[]MiscFees, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeMiscFees(s *[]MiscFees, b []byte, version int, entries *int) (int, error) {
 	if len(b) < SmallGroupSize16EncodingSize {
 		return 0, ErrShort
@@ -1020,7 +1035,7 @@ func decodeMiscFees(s *[]MiscFees, b []byte, version int, entries *int) (int, er
 	count := uint64(d.NumInGroup)
 	pos := SmallGroupSize16EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateMiscFees(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -1046,7 +1061,7 @@ func decodeMiscFees(s *[]MiscFees, b []byte, version int, entries *int) (int, er
 	if cap(*s) < n {
 		*s = make([]MiscFees, n)
 	} else {
-		*s = (*s)[:n]
+		truncateMiscFees(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)

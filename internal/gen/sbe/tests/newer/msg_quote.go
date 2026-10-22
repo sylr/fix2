@@ -40,7 +40,7 @@ func (m *Quote) decode(b []byte, blockLen, version int, numGroups, numData uint6
 			pos += n
 		}
 	} else {
-		m.Sizes = m.Sizes[:0]
+		truncateSizes(&m.Sizes, 0)
 	}
 	// The groups the count tells of, the received version's (§7.3.2).
 	{
@@ -250,6 +250,11 @@ func (m *Sizes) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// truncateSizes shortens *s to n entries, n within its capacity.
+func truncateSizes(s *[]Sizes, n int) {
+	*s = (*s)[:n]
+}
+
 func decodeSizes(s *[]Sizes, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSizeEncodingSize {
 		return 0, ErrShort
@@ -259,7 +264,7 @@ func decodeSizes(s *[]Sizes, b []byte, version int, entries *int) (int, error) {
 	count := uint64(d.NumInGroup)
 	pos := GroupSizeEncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateSizes(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -284,7 +289,7 @@ func decodeSizes(s *[]Sizes, b []byte, version int, entries *int) (int, error) {
 	if cap(*s) < n {
 		*s = make([]Sizes, n)
 	} else {
-		*s = (*s)[:n]
+		truncateSizes(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, uint64(d.NumGroups), uint64(d.NumVarDataFields), entries)

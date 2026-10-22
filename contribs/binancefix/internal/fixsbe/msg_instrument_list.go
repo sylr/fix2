@@ -369,6 +369,22 @@ func (m *InstrumentListRelatedSym) appendRest(dst []byte) []byte {
 	return dst
 }
 
+// release drops what m holds of a decoded frame, its groups keeping their
+// capacity: an entry its group no longer holds keeps no frame alive.
+func (m *InstrumentListRelatedSym) release() {
+	m.Symbol = nil
+	m.Currency = nil
+}
+
+// truncateInstrumentListRelatedSym shortens *s to n entries, n within its capacity, releasing
+// those it drops.
+func truncateInstrumentListRelatedSym(s *[]InstrumentListRelatedSym, n int) {
+	for i := n; i < len(*s); i++ {
+		(*s)[i].release()
+	}
+	*s = (*s)[:n]
+}
+
 func decodeInstrumentListRelatedSym(s *[]InstrumentListRelatedSym, b []byte, version int, entries *int) (int, error) {
 	if len(b) < GroupSize16EncodingSize {
 		return 0, ErrShort
@@ -378,7 +394,7 @@ func decodeInstrumentListRelatedSym(s *[]InstrumentListRelatedSym, b []byte, ver
 	count := uint64(d.NumInGroup)
 	pos := GroupSize16EncodingSize
 	if count == 0 {
-		*s = (*s)[:0]
+		truncateInstrumentListRelatedSym(s, 0)
 		return pos, nil
 	}
 	// The block length and the count are bounded by the bytes left before
@@ -405,7 +421,7 @@ func decodeInstrumentListRelatedSym(s *[]InstrumentListRelatedSym, b []byte, ver
 	if cap(*s) < n {
 		*s = make([]InstrumentListRelatedSym, n)
 	} else {
-		*s = (*s)[:n]
+		truncateInstrumentListRelatedSym(s, n)
 	}
 	for i := range *s {
 		c, err := (*s)[i].decode(b[pos:], blockLen, version, 0, 0, entries)
