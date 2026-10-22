@@ -1,0 +1,2 @@
+go mod tidy
+for dir in contribs/binancefix contribs/binancemd contribs/coinbasemd contribs/fixpecho contribs/store/sqlite3 jepsen/infra jepsen/node; do (cd $dir && go mod tidy) || exit 1; done

@@ -1,0 +1,69 @@
+=== RUN   TestAudit7SBETradeTimestampOutput
+=== RUN   TestAudit7SBETradeTimestampOutput/ordinary_control
+    audit8_timestamp_test.go:47: timestamp=1760000000000000 output_lines=3 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":2,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+=== RUN   TestAudit7SBETradeTimestampOutput/year9999_control
+    audit8_timestamp_test.go:47: timestamp=253402300799000000 output_lines=3 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"9999-12-31T23:59:59Z","trade_id":2,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+=== RUN   TestAudit7SBETradeTimestampOutput/max_timestamp
+    audit8_timestamp_test.go:47: timestamp=9223372036854775807 output_lines=2 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+    audit8_timestamp_test.go:54: accepted SBE trade silently lost: got 2 lines, want 3 or a command error
+=== RUN   TestAudit7SBETradeTimestampOutput/negative_timestamp
+    audit8_timestamp_test.go:47: timestamp=-9223372036854775807 output_lines=2 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+    audit8_timestamp_test.go:54: accepted SBE trade silently lost: got 2 lines, want 3 or a command error
+--- FAIL: TestAudit7SBETradeTimestampOutput (0.05s)
+    --- PASS: TestAudit7SBETradeTimestampOutput/ordinary_control (0.02s)
+    --- PASS: TestAudit7SBETradeTimestampOutput/year9999_control (0.01s)
+    --- FAIL: TestAudit7SBETradeTimestampOutput/max_timestamp (0.01s)
+    --- FAIL: TestAudit7SBETradeTimestampOutput/negative_timestamp (0.01s)
+=== RUN   TestAudit7SBETradeTimestampOutput
+=== RUN   TestAudit7SBETradeTimestampOutput/ordinary_control
+    audit8_timestamp_test.go:47: timestamp=1760000000000000 output_lines=3 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":2,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+=== RUN   TestAudit7SBETradeTimestampOutput/year9999_control
+    audit8_timestamp_test.go:47: timestamp=253402300799000000 output_lines=3 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"9999-12-31T23:59:59Z","trade_id":2,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+=== RUN   TestAudit7SBETradeTimestampOutput/max_timestamp
+    audit8_timestamp_test.go:47: timestamp=9223372036854775807 output_lines=2 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+    audit8_timestamp_test.go:54: accepted SBE trade silently lost: got 2 lines, want 3 or a command error
+=== RUN   TestAudit7SBETradeTimestampOutput/negative_timestamp
+    audit8_timestamp_test.go:47: timestamp=-9223372036854775807 output_lines=2 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+    audit8_timestamp_test.go:54: accepted SBE trade silently lost: got 2 lines, want 3 or a command error
+--- FAIL: TestAudit7SBETradeTimestampOutput (0.05s)
+    --- PASS: TestAudit7SBETradeTimestampOutput/ordinary_control (0.01s)
+    --- PASS: TestAudit7SBETradeTimestampOutput/year9999_control (0.01s)
+    --- FAIL: TestAudit7SBETradeTimestampOutput/max_timestamp (0.01s)
+    --- FAIL: TestAudit7SBETradeTimestampOutput/negative_timestamp (0.01s)
+=== RUN   TestAudit7SBETradeTimestampOutput
+=== RUN   TestAudit7SBETradeTimestampOutput/ordinary_control
+    audit8_timestamp_test.go:47: timestamp=1760000000000000 output_lines=3 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":2,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+=== RUN   TestAudit7SBETradeTimestampOutput/year9999_control
+    audit8_timestamp_test.go:47: timestamp=253402300799000000 output_lines=3 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"9999-12-31T23:59:59Z","trade_id":2,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+=== RUN   TestAudit7SBETradeTimestampOutput/max_timestamp
+    audit8_timestamp_test.go:47: timestamp=9223372036854775807 output_lines=2 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+    audit8_timestamp_test.go:54: accepted SBE trade silently lost: got 2 lines, want 3 or a command error
+=== RUN   TestAudit7SBETradeTimestampOutput/negative_timestamp
+    audit8_timestamp_test.go:47: timestamp=-9223372036854775807 output_lines=2 command_error=<nil> output={"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20Z","trade_id":1,"price":"1","qty":"0.01"}
+        {"type":"trade","symbol":"BTCUSDT","time":"2025-10-09T08:53:20.000001Z","trade_id":3,"price":"1","qty":"0.01"}
+    audit8_timestamp_test.go:54: accepted SBE trade silently lost: got 2 lines, want 3 or a command error
+--- FAIL: TestAudit7SBETradeTimestampOutput (0.05s)
+    --- PASS: TestAudit7SBETradeTimestampOutput/ordinary_control (0.01s)
+    --- PASS: TestAudit7SBETradeTimestampOutput/year9999_control (0.01s)
+    --- FAIL: TestAudit7SBETradeTimestampOutput/max_timestamp (0.01s)
+    --- FAIL: TestAudit7SBETradeTimestampOutput/negative_timestamp (0.01s)
+FAIL
+FAIL	github.com/sylr/fix2/contribs/binancemd	0.655s
+FAIL

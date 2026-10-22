@@ -1,0 +1,47 @@
+package rich
+
+import (
+ "runtime"
+ "testing"
+)
+
+// The decoder is the tracked generated rich.Order codec, unchanged.
+// Each successful message is below 80 KiB and 1024 decoded group entries.
+func TestAudit8GroupTailRetention(t *testing.T) {
+ const count = 512
+ run := func(shrink bool) (retained uint64, hidden int) {
+  runtime.GC()
+  var before runtime.MemStats
+  runtime.ReadMemStats(&before)
+  var got Order
+  for step := 0; step <= count; step++ {
+   n := count
+   if shrink { n -= step }
+   src := Order{Text: make([]byte, 65534), Legs: make([]Legs,n)}
+   for i := range src.Legs {
+    src.Legs[i] = Legs{Fees: []Fees{{Memo: []byte{'x'}}}, Note: []byte{'y'}}
+   }
+   frame, err := src.AppendTo(nil)
+   if err != nil { t.Fatal(err) }
+   if len(frame) > 80000 { t.Fatalf("frame exceeds diagnostic bound: %d",len(frame)) }
+   if consumed, err := got.Decode(frame); err != nil || consumed != len(frame) {
+    t.Fatalf("Decode: %d/%d, %v", consumed, len(frame),err)
+   }
+  }
+  if shrink && len(got.Legs) != 0 { t.Fatalf("group did not shrink: %d",len(got.Legs)) }
+  for _, leg := range got.Legs[:cap(got.Legs)] {
+   if len(leg.Note) != 0 { hidden++ }
+  }
+  runtime.GC()
+  var after runtime.MemStats
+  runtime.ReadMemStats(&after)
+  if after.HeapAlloc > before.HeapAlloc { retained = after.HeapAlloc-before.HeapAlloc }
+  runtime.KeepAlive(got)
+  return
+ }
+ control, _ := run(false)
+ shrunk, hidden := run(true)
+ t.Logf("constant-count control retained %d bytes; shrinking group retained %d bytes; hidden live input slices %d",control,shrunk,hidden)
+ if hidden != 0 { t.Errorf("empty decoded group retains %d removed entries and their historical input buffers",hidden) }
+ if shrunk > 16<<20 { t.Errorf("empty decoded group retains %d bytes after GC",shrunk) }
+}

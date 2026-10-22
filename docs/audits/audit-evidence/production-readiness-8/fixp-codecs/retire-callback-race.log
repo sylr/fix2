@@ -1,0 +1,30 @@
+=== RUN   TestAudit8RetireOverlapsUnbound
+=== RUN   TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound
+    audit8_test.go:58: OnFinalized ran while OnUnbound active=true
+    audit8_test.go:64: OnFinalized overlaps OnUnbound for the same session
+=== RUN   TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound
+    audit8_test.go:58: OnFinalized ran while OnUnbound active=false
+--- FAIL: TestAudit8RetireOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RetireOverlapsUnbound
+=== RUN   TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound
+    audit8_test.go:58: OnFinalized ran while OnUnbound active=true
+    audit8_test.go:64: OnFinalized overlaps OnUnbound for the same session
+=== RUN   TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound
+    audit8_test.go:58: OnFinalized ran while OnUnbound active=false
+--- FAIL: TestAudit8RetireOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RetireOverlapsUnbound
+=== RUN   TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound
+    audit8_test.go:58: OnFinalized ran while OnUnbound active=true
+    audit8_test.go:64: OnFinalized overlaps OnUnbound for the same session
+=== RUN   TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound
+    audit8_test.go:58: OnFinalized ran while OnUnbound active=false
+--- FAIL: TestAudit8RetireOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/fixp/session	0.453s
+FAIL

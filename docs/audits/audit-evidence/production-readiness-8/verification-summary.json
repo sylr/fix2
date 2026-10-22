@@ -1,0 +1,1392 @@
+{
+  "revision": "c7e5579227c8e7efc2957ebde0aaf1ce76ba241d",
+  "date": "2026-10-22",
+  "environment": {
+    "go": "go1.27.3",
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "raw_evidence_directory": "/private/tmp/fix2-production-readiness-8",
+  "tests": {
+    "root-tests": {
+      "passed_test_and_subtest_events": 4035,
+      "passed_packages": 40,
+      "exit_code": 0,
+      "passed_package_names": [
+        "github.com/sylr/fix2/fix/internal/dicttest",
+        "github.com/sylr/fix2/cmd/fix2gen",
+        "github.com/sylr/fix2/fix/session/store/storetest",
+        "github.com/sylr/fix2/fix/session/store",
+        "github.com/sylr/fix2/fix/session/schedule",
+        "github.com/sylr/fix2/fix/session/store/memstore",
+        "github.com/sylr/fix2/fix/tests/dicts/fix44",
+        "github.com/sylr/fix2/fix/tests/dicts/fix40",
+        "github.com/sylr/fix2/fix/tests/dicts/fixlatest",
+        "github.com/sylr/fix2/fix/tests/dicts/fix50sp2",
+        "github.com/sylr/fix2/fix/tests/dicts/fixt11",
+        "github.com/sylr/fix2/fixp",
+        "github.com/sylr/fix2/fix",
+        "github.com/sylr/fix2/fix/tests/e2e",
+        "github.com/sylr/fix2/fixp/store",
+        "github.com/sylr/fix2/fixp/internal/codec",
+        "github.com/sylr/fix2/fixp/store/storetest",
+        "github.com/sylr/fix2/fixp/store/memstore",
+        "github.com/sylr/fix2/fix/dictionary/xmldict",
+        "github.com/sylr/fix2/fix/dictionary",
+        "github.com/sylr/fix2/fixp/tests/silverflash",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/older",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/bigrich",
+        "github.com/sylr/fix2/internal/gen/sbe/examples",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/wide",
+        "github.com/sylr/fix2/sofh",
+        "github.com/sylr/fix2/transport",
+        "github.com/sylr/fix2/internal/hrtimer",
+        "github.com/sylr/fix2/transport/mem",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/newer",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/rich",
+        "github.com/sylr/fix2/fix/tests/quickfix-go",
+        "github.com/sylr/fix2/transport/tcp",
+        "github.com/sylr/fix2/fix/session",
+        "github.com/sylr/fix2/fixp/session",
+        "github.com/sylr/fix2/internal/gen/sbe",
+        "github.com/sylr/fix2/internal/gen/tagvalue"
+      ],
+      "failures": [],
+      "skips": [
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestWideSpecDoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session",
+          "Test": "TestConformance"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestRewriteForResend_DoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Idempotent"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Recoverable"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFragmentedCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestBurstCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFinishCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestOrders"
+        }
+      ],
+      "packages_without_tests": []
+    },
+    "simd-tests": {
+      "passed_test_and_subtest_events": 4037,
+      "passed_packages": 29,
+      "exit_code": 0,
+      "passed_package_names": [
+        "github.com/sylr/fix2/cmd/fix2gen",
+        "github.com/sylr/fix2/fix",
+        "github.com/sylr/fix2/fix/dictionary",
+        "github.com/sylr/fix2/fix/dictionary/xmldict",
+        "github.com/sylr/fix2/fix/session/schedule",
+        "github.com/sylr/fix2/fix/session/store/memstore",
+        "github.com/sylr/fix2/fix/tests/dicts/fix44",
+        "github.com/sylr/fix2/fix/tests/dicts/fixlatest",
+        "github.com/sylr/fix2/fix/tests/dicts/fix40",
+        "github.com/sylr/fix2/fix/tests/dicts/fixt11",
+        "github.com/sylr/fix2/fix/tests/e2e",
+        "github.com/sylr/fix2/fix/tests/dicts/fix50sp2",
+        "github.com/sylr/fix2/fixp",
+        "github.com/sylr/fix2/fixp/internal/codec",
+        "github.com/sylr/fix2/fixp/store/memstore",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/bigrich",
+        "github.com/sylr/fix2/internal/gen/sbe/examples",
+        "github.com/sylr/fix2/fixp/tests/silverflash",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/wide",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/newer",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/rich",
+        "github.com/sylr/fix2/sofh",
+        "github.com/sylr/fix2/internal/hrtimer",
+        "github.com/sylr/fix2/transport/tcp",
+        "github.com/sylr/fix2/fix/tests/quickfix-go",
+        "github.com/sylr/fix2/fix/session",
+        "github.com/sylr/fix2/internal/gen/sbe",
+        "github.com/sylr/fix2/fixp/session",
+        "github.com/sylr/fix2/internal/gen/tagvalue"
+      ],
+      "failures": [],
+      "skips": [
+        {
+          "Package": "github.com/sylr/fix2/fix/internal/dicttest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestWideSpecDoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestRewriteForResend_DoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session/store"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session/store/storetest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session",
+          "Test": "TestConformance"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/store"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/store/storetest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Idempotent"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Recoverable"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFragmentedCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestBurstCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFinishCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestOrders"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/older"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled"
+        },
+        {
+          "Package": "github.com/sylr/fix2/transport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/transport/mem"
+        }
+      ],
+      "packages_without_tests": [
+        "github.com/sylr/fix2/fix/internal/dicttest",
+        "github.com/sylr/fix2/fix/session/store",
+        "github.com/sylr/fix2/fix/session/store/storetest",
+        "github.com/sylr/fix2/fixp/store",
+        "github.com/sylr/fix2/fixp/store/storetest",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/older",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled",
+        "github.com/sylr/fix2/transport",
+        "github.com/sylr/fix2/transport/mem"
+      ]
+    },
+    "contrib-tests": {
+      "passed_test_and_subtest_events": 794,
+      "passed_packages": 14,
+      "exit_code": 0,
+      "passed_package_names": [
+        "github.com/sylr/fix2/contribs/binancefix/internal/fakebinance",
+        "github.com/sylr/fix2/contribs/binancefix/internal/lesofh",
+        "github.com/sylr/fix2/contribs/binancefix/internal/fixsbe",
+        "github.com/sylr/fix2/contribs/binancefix/internal/aliasgen",
+        "github.com/sylr/fix2/contribs/binancefix/cmd/binancefix",
+        "github.com/sylr/fix2/contribs/binancefix/internal/probe",
+        "github.com/sylr/fix2/contribs/binancefix",
+        "github.com/sylr/fix2/contribs/binancemd",
+        "github.com/sylr/fix2/contribs/coinbasemd",
+        "github.com/sylr/fix2/contribs/fixpecho",
+        "github.com/sylr/fix2/contribs/store/sqlite3",
+        "github.com/sylr/fix2/jepsen/infra/inventory",
+        "github.com/sylr/fix2/jepsen/infra/run",
+        "github.com/sylr/fix2/jepsen/node"
+      ],
+      "failures": [],
+      "skips": [
+        {
+          "Package": "github.com/sylr/fix2/contribs/binancefix/binancefixtest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/contribs/binancefix",
+          "Test": "TestTestnetLogon"
+        },
+        {
+          "Package": "github.com/sylr/fix2/contribs/binancefix",
+          "Test": "TestTestnetProbes"
+        },
+        {
+          "Package": "github.com/sylr/fix2/contribs/binancemd/internal/spotmd"
+        },
+        {
+          "Package": "github.com/sylr/fix2/contribs/coinbasemd/internal/fixt"
+        },
+        {
+          "Package": "github.com/sylr/fix2/contribs/coinbasemd/internal/md"
+        },
+        {
+          "Package": "github.com/sylr/fix2/jepsen/infra/multipass"
+        }
+      ],
+      "packages_without_tests": [
+        "github.com/sylr/fix2/contribs/binancefix/binancefixtest",
+        "github.com/sylr/fix2/contribs/binancemd/internal/spotmd",
+        "github.com/sylr/fix2/contribs/coinbasemd/internal/fixt",
+        "github.com/sylr/fix2/contribs/coinbasemd/internal/md",
+        "github.com/sylr/fix2/jepsen/infra/multipass"
+      ]
+    },
+    "conformance": {
+      "passed_test_and_subtest_events": 506,
+      "passed_packages": 1,
+      "exit_code": 0,
+      "passed_package_names": [
+        "github.com/sylr/fix2/fix/session"
+      ],
+      "failures": [],
+      "skips": [],
+      "packages_without_tests": []
+    },
+    "benchmark-tests": {
+      "passed_packages": 1,
+      "passed_test_and_subtest_events": 0,
+      "exit_code": 0,
+      "passed_package_names": [
+        "github.com/sylr/fix2/fix/tests/benchmarks/micro"
+      ],
+      "failures": [],
+      "skips": [
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/agents/fix2"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/agents/quickfixgo"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/cmd/fixbench"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/fix2/fix44"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/enum"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/field"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/advertisement"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationinstruction"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationinstructionack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationreportack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/assignmentreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/bidrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/bidresponse"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/businessmessagereject"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralassignment"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralinquiry"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralinquiryack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralresponse"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/confirmation"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/confirmationack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/confirmationrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/crossordercancelreplacerequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/crossordercancelrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/derivativesecuritylist"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/derivativesecuritylistrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/dontknowtrade"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/email"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/executionreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/heartbeat"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ioi"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/listcancelrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/listexecute"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/liststatus"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/liststatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/liststrikeprice"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/logon"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/logout"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdataincrementalrefresh"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequestreject"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatasnapshotfullrefresh"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/massquote"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/massquoteacknowledgement"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/multilegordercancelreplace"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/networkcounterpartysystemstatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/networkcounterpartysystemstatusresponse"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordercross"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/neworderlist"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordermultileg"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordersingle"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/news"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordercancelreject"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordercancelreplacerequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordercancelrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordermasscancelreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordermasscancelrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordermassstatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/orderstatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/positionmaintenancereport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/positionmaintenancerequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/positionreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quote"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quotecancel"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quoterequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quoterequestreject"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quoteresponse"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quotestatusreport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quotestatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/registrationinstructions"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/registrationinstructionsresponse"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/reject"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/requestforpositions"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/requestforpositionsack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/resendrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/rfqrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitydefinition"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitydefinitionrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitylist"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitylistrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitystatus"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitystatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitytyperequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitytypes"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/sequencereset"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/settlementinstructionrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/settlementinstructions"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/testrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereportack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereportrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereportrequestack"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradingsessionstatus"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradingsessionstatusrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/userrequest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/userresponse"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/tag"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/tests/benchmarks/internal/scenario"
+        }
+      ],
+      "packages_without_tests": [
+        "github.com/sylr/fix2/fix/tests/benchmarks/agents/fix2",
+        "github.com/sylr/fix2/fix/tests/benchmarks/agents/quickfixgo",
+        "github.com/sylr/fix2/fix/tests/benchmarks/cmd/fixbench",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/fix2/fix44",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/enum",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/field",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/advertisement",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationinstruction",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationinstructionack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/allocationreportack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/assignmentreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/bidrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/bidresponse",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/businessmessagereject",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralassignment",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralinquiry",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralinquiryack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/collateralresponse",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/confirmation",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/confirmationack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/confirmationrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/crossordercancelreplacerequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/crossordercancelrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/derivativesecuritylist",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/derivativesecuritylistrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/dontknowtrade",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/email",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/executionreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/heartbeat",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ioi",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/listcancelrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/listexecute",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/liststatus",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/liststatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/liststrikeprice",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/logon",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/logout",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdataincrementalrefresh",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequestreject",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatasnapshotfullrefresh",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/massquote",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/massquoteacknowledgement",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/multilegordercancelreplace",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/networkcounterpartysystemstatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/networkcounterpartysystemstatusresponse",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordercross",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/neworderlist",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordermultileg",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordersingle",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/news",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordercancelreject",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordercancelreplacerequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordercancelrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordermasscancelreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordermasscancelrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/ordermassstatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/orderstatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/positionmaintenancereport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/positionmaintenancerequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/positionreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quote",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quotecancel",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quoterequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quoterequestreject",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quoteresponse",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quotestatusreport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/quotestatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/registrationinstructions",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/registrationinstructionsresponse",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/reject",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/requestforpositions",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/requestforpositionsack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/resendrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/rfqrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitydefinition",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitydefinitionrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitylist",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitylistrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitystatus",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitystatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitytyperequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/securitytypes",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/sequencereset",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/settlementinstructionrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/settlementinstructions",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/testrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereport",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereportack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereportrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradecapturereportrequestack",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradingsessionstatus",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/tradingsessionstatusrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/userrequest",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/userresponse",
+        "github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/tag",
+        "github.com/sylr/fix2/fix/tests/benchmarks/internal/scenario"
+      ]
+    },
+    "linux-tests": {
+      "passed_test_and_subtest_events": 3938,
+      "passed_packages": 27,
+      "exit_code": 1,
+      "passed_package_names": [
+        "github.com/sylr/fix2/fix",
+        "github.com/sylr/fix2/fix/dictionary/xmldict",
+        "github.com/sylr/fix2/fix/dictionary",
+        "github.com/sylr/fix2/fix/session/schedule",
+        "github.com/sylr/fix2/fix/tests/dicts/fix44",
+        "github.com/sylr/fix2/fix/tests/dicts/fixt11",
+        "github.com/sylr/fix2/fix/tests/dicts/fix40",
+        "github.com/sylr/fix2/fix/session/store/memstore",
+        "github.com/sylr/fix2/fix/tests/dicts/fixlatest",
+        "github.com/sylr/fix2/fix/tests/e2e",
+        "github.com/sylr/fix2/fix/tests/dicts/fix50sp2",
+        "github.com/sylr/fix2/fixp",
+        "github.com/sylr/fix2/fixp/internal/codec",
+        "github.com/sylr/fix2/fixp/tests/silverflash",
+        "github.com/sylr/fix2/fixp/store/memstore",
+        "github.com/sylr/fix2/internal/gen/sbe/examples",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/bigrich",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/newer",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/wide",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/rich",
+        "github.com/sylr/fix2/sofh",
+        "github.com/sylr/fix2/internal/hrtimer",
+        "github.com/sylr/fix2/transport/tcp",
+        "github.com/sylr/fix2/fix/tests/quickfix-go",
+        "github.com/sylr/fix2/internal/gen/sbe",
+        "github.com/sylr/fix2/fixp/session",
+        "github.com/sylr/fix2/fix/session"
+      ],
+      "failures": [
+        {
+          "Package": "github.com/sylr/fix2/cmd/fix2gen",
+          "Elapsed": 0,
+          "FailedBuild": "github.com/spf13/cobra"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/tagvalue",
+          "Elapsed": 0,
+          "FailedBuild": "github.com/dave/jennifer/jen"
+        }
+      ],
+      "skips": [
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestWideSpecDoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestRewriteForResend_DoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/internal/dicttest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session/store"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session/store/storetest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session",
+          "Test": "TestConformance"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/store"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/store/storetest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Idempotent"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Recoverable"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFragmentedCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestBurstCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFinishCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestOrders"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/older"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled"
+        },
+        {
+          "Package": "github.com/sylr/fix2/transport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/transport/mem"
+        }
+      ],
+      "packages_without_tests": [
+        "github.com/sylr/fix2/fix/internal/dicttest",
+        "github.com/sylr/fix2/fix/session/store",
+        "github.com/sylr/fix2/fix/session/store/storetest",
+        "github.com/sylr/fix2/fixp/store",
+        "github.com/sylr/fix2/fixp/store/storetest",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/older",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled",
+        "github.com/sylr/fix2/transport",
+        "github.com/sylr/fix2/transport/mem"
+      ]
+    },
+    "linux-tests-retry": {
+      "passed_test_and_subtest_events": 4028,
+      "passed_packages": 29,
+      "exit_code": 0,
+      "passed_package_names": [
+        "github.com/sylr/fix2/fix/session/schedule",
+        "github.com/sylr/fix2/fix/tests/dicts/fix44",
+        "github.com/sylr/fix2/fix/tests/dicts/fix40",
+        "github.com/sylr/fix2/fix/session/store/memstore",
+        "github.com/sylr/fix2/fix",
+        "github.com/sylr/fix2/fix/tests/dicts/fix50sp2",
+        "github.com/sylr/fix2/cmd/fix2gen",
+        "github.com/sylr/fix2/fix/tests/dicts/fixt11",
+        "github.com/sylr/fix2/fix/tests/dicts/fixlatest",
+        "github.com/sylr/fix2/fix/tests/e2e",
+        "github.com/sylr/fix2/fix/dictionary",
+        "github.com/sylr/fix2/fix/dictionary/xmldict",
+        "github.com/sylr/fix2/fixp",
+        "github.com/sylr/fix2/fixp/internal/codec",
+        "github.com/sylr/fix2/fixp/store/memstore",
+        "github.com/sylr/fix2/fixp/tests/silverflash",
+        "github.com/sylr/fix2/internal/gen/sbe/examples",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/bigrich",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/newer",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/wide",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/rich",
+        "github.com/sylr/fix2/internal/hrtimer",
+        "github.com/sylr/fix2/sofh",
+        "github.com/sylr/fix2/transport/tcp",
+        "github.com/sylr/fix2/fix/tests/quickfix-go",
+        "github.com/sylr/fix2/internal/gen/sbe",
+        "github.com/sylr/fix2/internal/gen/tagvalue",
+        "github.com/sylr/fix2/fix/session",
+        "github.com/sylr/fix2/fixp/session"
+      ],
+      "failures": [],
+      "skips": [
+        {
+          "Package": "github.com/sylr/fix2/fix/internal/dicttest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session/store"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session/store/storetest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestWideSpecDoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix/session",
+          "Test": "TestConformance"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fix",
+          "Test": "TestRewriteForResend_DoesNotAllocate"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/store"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/store/storetest"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Idempotent"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestPaced/Recoverable"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFragmentedCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestBurstCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestFinishCharacterization"
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "Test": "TestOrders"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/older"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled"
+        },
+        {
+          "Package": "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled"
+        },
+        {
+          "Package": "github.com/sylr/fix2/transport"
+        },
+        {
+          "Package": "github.com/sylr/fix2/transport/mem"
+        }
+      ],
+      "packages_without_tests": [
+        "github.com/sylr/fix2/fix/internal/dicttest",
+        "github.com/sylr/fix2/fix/session/store",
+        "github.com/sylr/fix2/fix/session/store/storetest",
+        "github.com/sylr/fix2/fixp/store",
+        "github.com/sylr/fix2/fixp/store/storetest",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/older",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled",
+        "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled",
+        "github.com/sylr/fix2/transport",
+        "github.com/sylr/fix2/transport/mem"
+      ]
+    }
+  },
+  "vulnerability_scans": {
+    "contribs_binancemd-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    },
+    "contribs_fixpecho-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    },
+    "jepsen_node-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    },
+    "contribs_coinbasemd-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    },
+    "benchmark-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 19,
+      "unique_advisories": [
+        "GO-2024-3333",
+        "GO-2025-3503",
+        "GO-2025-3595",
+        "GO-2026-4440",
+        "GO-2026-4441",
+        "GO-2026-4918",
+        "GO-2026-5025",
+        "GO-2026-5026",
+        "GO-2026-5027",
+        "GO-2026-5028",
+        "GO-2026-5029",
+        "GO-2026-5030",
+        "GO-2026-5942",
+        "GO-2026-6603",
+        "GO-2026-6610",
+        "GO-2026-6611",
+        "GO-2026-6612",
+        "GO-2026-6617"
+      ],
+      "levels": {
+        "module": 18,
+        "package": 1
+      },
+      "errors": ""
+    },
+    "fix_tests_benchmarks-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 1,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": "govulncheck: loading packages: \nThere are errors with the provided package patterns:\n\nagents/fix2/main.go:24:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/fix2/fix44; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/fix2/fix44\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:24:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/fix2/fix44 (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:162:32: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:163:30: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:164:26: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:165:30: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:166:26: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:188:29: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:189:35: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:190:32: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:199:30: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:200:44: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:201:35: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:208:36: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:213:33: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:291:32: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:292:47: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:292:79: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:293:26: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:293:48: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:294:37: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:294:58: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:298:29: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:299:35: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:300:32: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:311:30: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:312:37: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:316:33: not enough arguments in call to present\n\thave (unknown type)\n\twant (T, bool)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:317:31: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/fix2/main.go:318:35: not enough arguments in call to required\n\thave (unknown type)\n\twant (T, bool, error)\nagents/quickfixgo/main.go:20:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/enum; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/enum\nagents/quickfixgo/main.go:21:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/field; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/field\nagents/quickfixgo/main.go:22:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/executionreport; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/executionreport\nagents/quickfixgo/main.go:23:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequest; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequest\nagents/quickfixgo/main.go:24:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatasnapshotfullrefresh; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatasnapshotfullrefresh\nagents/quickfixgo/main.go:25:2: no required module provides package github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordersingle; to add it:\n\tgo get github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordersingle\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:20:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/enum (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:21:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/field (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:22:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/executionreport (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:23:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatarequest (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:24:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/marketdatasnapshotfullrefresh (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:25:2: could not import github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo/fix44/newordersingle (invalid package name: \"\")\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:165:35: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:166:33: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:167:29: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:168:38: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:169:34: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:170:38: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:187:38: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:188:50: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:189:42: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:199:33: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:200:47: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:201:37: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:202:40: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:203:37: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:210:45: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:213:47: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:235:53: not enough arguments in call to x.AddRoute\n\thave (unknown type)\n\twant (string, string, quickfix.MessageRoute)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:236:59: not enough arguments in call to x.AddRoute\n\thave (unknown type)\n\twant (string, string, quickfix.MessageRoute)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:263:35: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:264:50: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:264:85: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:265:29: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:265:54: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:267:39: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:267:62: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:270:38: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:274:42: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:274:80: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:274:115: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:281:33: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:282:40: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:283:39: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:287:36: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:288:33: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:289:37: not enough arguments in call to checked\n\thave (unknown type)\n\twant (T, quickfix.MessageRejectError)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:305:56: not enough arguments in call to c.AddRoute\n\thave (unknown type)\n\twant (string, string, quickfix.MessageRoute)\n/Users/sylvain/git/fix2/fix/tests/benchmarks/agents/quickfixgo/main.go:307:84: not enough arguments in call to c.AddRoute\n\thave (unknown type)\n\twant (string, string, quickfix.MessageRoute)\n\nFor details on package patterns, see https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns.\n\n"
+    },
+    "contribs_binancefix-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    },
+    "_-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    },
+    "jepsen_infra-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 108,
+      "unique_advisories": [
+        "GO-2026-5932",
+        "GO-2026-6603",
+        "GO-2026-6610",
+        "GO-2026-6611",
+        "GO-2026-6612",
+        "GO-2026-6617"
+      ],
+      "levels": {
+        "module": 6,
+        "package": 5,
+        "symbol": 97
+      },
+      "errors": ""
+    },
+    "contribs_store_sqlite3-vuln": {
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-21T00:27:29Z",
+        "go_version": "go1.27.3",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "exit_code": 0,
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {},
+      "errors": ""
+    }
+  },
+  "staticcheck": {
+    "contribs_store_sqlite3-staticcheck": {
+      "exit_code": 0,
+      "diagnostic_count": 0,
+      "diagnostics": []
+    },
+    "_-staticcheck": {
+      "exit_code": 1,
+      "diagnostic_count": 18,
+      "diagnostics": [
+        "fix/dictionary/profile.go:34:36: QF1001: could apply De Morgan's law (staticcheck)",
+        "fix/dictionary/xmldict/orchestra.go:31:17: ST1005: error strings should not be capitalized (staticcheck)",
+        "fix/session/auth_warning_test.go:36:11: QF1008: could remove embedded field \"recorder\" from selector (staticcheck)",
+        "fix/session/initiator_test.go:727:23: QF1008: could remove embedded field \"Store\" from selector (staticcheck)",
+        "fix/session/log_redaction_test.go:224:39: QF1001: could apply De Morgan's law (staticcheck)",
+        "fix/session/receipt.go:137:80: ST1008: error should be returned as the last argument (staticcheck)",
+        "fix/session/store_failure_test.go:112:13: QF1008: could remove embedded field \"Store\" from selector (staticcheck)",
+        "fix/session/store_failure_test.go:488:13: QF1008: could remove embedded field \"Store\" from selector (staticcheck)",
+        "fix/tests/dicts/fix40/dictionary_test.go:20:5: SA4000: identical expressions on the left and right side of the '!=' operator (staticcheck)",
+        "fix/tests/dicts/fix44/dictionary_test.go:20:5: SA4000: identical expressions on the left and right side of the '!=' operator (staticcheck)",
+        "fix/tests/dicts/fix50sp2/dictionary_test.go:20:5: SA4000: identical expressions on the left and right side of the '!=' operator (staticcheck)",
+        "fix/tests/e2e/e2e_test.go:349:3: QF1002: could use tagged switch on i (staticcheck)",
+        "fixp/session/defaults.go:141:51: QF1001: could apply De Morgan's law (staticcheck)",
+        "fixp/session/recovery_test.go:588:5: QF1008: could remove embedded field \"Conn\" from selector (staticcheck)",
+        "fixp/session/recovery_test.go:712:5: QF1008: could remove embedded field \"Conn\" from selector (staticcheck)",
+        "fixp/session/review_test.go:185:75: SA4028: x % 1 is always zero (staticcheck)",
+        "internal/gen/sbe/load.go:337:3: QF1002: could use tagged switch on c.XMLName.Local (staticcheck)",
+        "internal/gen/tagvalue/generate.go:1525:3: QF1002: could use tagged switch on out[0] (staticcheck)"
+      ]
+    },
+    "contribs_fixpecho-staticcheck": {
+      "exit_code": 1,
+      "diagnostic_count": 1,
+      "diagnostics": [
+        "main_test.go:150:5: SA4000: identical expressions on the left and right side of the '||' operator (staticcheck)"
+      ]
+    },
+    "jepsen_node-staticcheck": {
+      "exit_code": 1,
+      "diagnostic_count": 1,
+      "diagnostics": [
+        "node_test.go:311:10: S1024: should use time.Until instead of t.Sub(time.Now()) (staticcheck)"
+      ]
+    },
+    "contribs_binancefix-staticcheck": {
+      "exit_code": 1,
+      "diagnostic_count": 1,
+      "diagnostics": [
+        "internal/probe/probes.go:660:3: QF1002: could use tagged switch on l.Outcome (staticcheck)"
+      ]
+    },
+    "contribs_binancemd-staticcheck": {
+      "exit_code": 0,
+      "diagnostic_count": 0,
+      "diagnostics": []
+    },
+    "jepsen_infra-staticcheck": {
+      "exit_code": 0,
+      "diagnostic_count": 0,
+      "diagnostics": []
+    },
+    "contribs_coinbasemd-staticcheck": {
+      "exit_code": 0,
+      "diagnostic_count": 0,
+      "diagnostics": []
+    }
+  },
+  "checks": {
+    "linux-tests-retry": 0,
+    "timestamp-independent": 1,
+    "simd-tests": 0,
+    "contribs_binancemd-vuln": 0,
+    "fuzz-fixp": 0,
+    "jepsen_infra-staticcheck": 0,
+    "fuzz-xml": 0,
+    "contribs_fixpecho-vuln": 0,
+    "deadline-version-independent": 1,
+    "sbe-retention-independent": 1,
+    "_-staticcheck": 1,
+    "linux-tests": 1,
+    "contribs_coinbasemd-staticcheck": 0,
+    "keepalive-repeat": 0,
+    "benchmark": 0,
+    "transport-independent": 1,
+    "jepsen_infra-vuln": 0,
+    "contribs_fixpecho-staticcheck": 1,
+    "_-vuln": 0,
+    "jepsen-unit": 0,
+    "fix_tests_benchmarks-vuln": 1,
+    "jepsen_node-vuln": 0,
+    "contribs_coinbasemd-vuln": 0,
+    "allocations": 0,
+    "jepsen_node-staticcheck": 1,
+    "contribs_binancefix-staticcheck": 1,
+    "contribs_binancefix-vuln": 0,
+    "callback-independent": 1,
+    "contrib-tests": 0,
+    "mod-tidy": 0,
+    "contribs_store_sqlite3-vuln": 0,
+    "generate": 0,
+    "contribs_store_sqlite3-staticcheck": 0,
+    "vet": 0,
+    "replay-independent": 1,
+    "contribs_binancemd-staticcheck": 0,
+    "fuzz-encrypter": 0,
+    "fuzz-sbe-rich": 0,
+    "root-tests": 0,
+    "conformance": 0
+  },
+  "raw_evidence_sha256": {
+    "linux-tests-retry.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "timestamp-independent.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "simd-tests.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contribs_binancemd-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "fuzz-fixp.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "jepsen_infra-staticcheck.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "linux-tests.json": "fd0103b4803cfa6c82e7bd0d2576eb8d70b04c93c7e8f9456cfba46d32a8bdf2",
+    "fuzz-xml.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contribs_fixpecho-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "deadline-version-independent.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "contribs_binancemd-vuln.json": "80e81a1c25874650c21b47bfbdd94c139b16a8448143f18bbc20f2c76fcfe92c",
+    "simd-tests.json": "a95b89d41b2ca5e829fa72806add007ce033f2d4925305789ce8d695b334068d",
+    "simd-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sbe-retention-independent.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "linux-tests-retry.json": "c274ca98bbd5fcb5347caab35f575f637e01cb14d8f12d6912619dd0964b6878",
+    "vet.log": "e3d9b74a0ca13829dfbda853c721f7663c4ac064926475e67f3184dfb19fed1d",
+    "linux-tests-retry.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "contribs_store_sqlite3-staticcheck.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "contribs_fixpecho-vuln.json": "c219833b6b74ec72c73a38eb9e564e2f49538e53aaf79e55ec53dd53ebcc1ff5",
+    "_-staticcheck.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "linux-tests.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "_-staticcheck.log": "dfe02562af8386896f45a4a1a77b87795ad60893dd9327a5437a17dc8e47391e",
+    "contribs_fixpecho-staticcheck.log": "35dafaa9b5f4f262cac6c72165903cdd2f7689ddc2d7a90cadcc0afde0932044",
+    "deadline-version-independent.log": "a81d6a914ab5419d6b5b80834f4a002ec7fe3424849a8937761c616402fef81e",
+    "root-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "contribs_coinbasemd-staticcheck.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "jepsen_node-vuln.json": "e7b0b5ca5892979f246ce82cd96e4604a60cd5571d54033998e9d4472ab23645",
+    "contribs_coinbasemd-vuln.json": "f336565f9a100f5ad9311d6c2b238944ff5b9fff1a95e54d52e5ecc9151139c1",
+    "keepalive-repeat.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "benchmark-vuln.json": "c9779a06e1f341cf789a7579e33c49027737b82c846687c61d73f09dc1e30c52",
+    "fix_tests_benchmarks-vuln.json": "0a5ebd59d7f0b5b14b918d29c719ae77f706118a636e5800d75834a766a4d793",
+    "benchmark.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "transport-independent.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "contribs_binancefix-vuln.json": "7835d34b72393239c7f326962de4ac2c295dca441dfc873b7ee2500e7fc86e7d",
+    "jepsen_infra-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contribs_fixpecho-staticcheck.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "contribs_binancemd-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "_-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "jepsen-unit.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "fix_tests_benchmarks-vuln.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "jepsen_node-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contribs_coinbasemd-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "allocations.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "_-vuln.json": "464fb92830a737944c0b8adf97c7d08b0bed1dc82093bd30db672fb071c342e0",
+    "contribs_fixpecho-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jepsen_node-staticcheck.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "contribs_binancefix-staticcheck.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "summary-display.json": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "_-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "allocations.log": "c556345d17a3f0aa2e9745102944e50ef2ecf7a0ca3f97c5aaaa603b394fbe07",
+    "sbe-retention-independent.log": "2299ecb9f522752f5723fa23e058d4d011c6a93293ca4f33ca3e5997a7d578ff",
+    "jepsen_infra-vuln.json": "b342868d8c1fb74ed89dd5bd4d3c7076ba92b5628cbed7bd1d8f30692ba5ac61",
+    "contribs_binancefix-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contribs_store_sqlite3-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "benchmark-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "callback-independent.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "conformance.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jepsen_node-staticcheck.log": "9c2c80c12195a6feaca608e1c0e40083254ac924df897400c8e740c34edb3dc2",
+    "contrib-tests.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "timestamp-independent.log": "144c23077b178c9bd2e775bca6af9844718ff7b98927f10d77536977968208a4",
+    "root-coverage.out": "ee0e56082266faa4dfe998c022e7f282429a7be10c8bd408eee38909956449f1",
+    "contribs_store_sqlite3-vuln.json": "c30e7d9248f90133b39c1ae1e0f87946d7a1b82e5cffb65c195c2567bceeccef",
+    "fuzz-xml.log": "6ab4586c21bb88c2fff19dad2b8b9c3dfc25adf9c144ce8c4da052c0fbf14fcf",
+    "contribs_coinbasemd-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "contribs_binancefix-staticcheck.log": "fc733165264c0447b2bc51a14151450d59d470c5eda06b05996ddeb97b276666",
+    "mod-tidy.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "fix_tests_benchmarks-vuln.stderr": "1e40af1a6950ce4bd397f352f09c02693bd25e245d5ef9e93dfc94a82641e0f5",
+    "keepalive-repeat.log": "f39ec2c572ce28d0f89adb3e8e11ae6e7cbd0ace0c7721213349576544b3bfc0",
+    "contribs_store_sqlite3-vuln.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contribs_binancemd-staticcheck.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "fuzz-fixp.log": "fc92ad02d7f06c53ce4ec0e5ddc38094281037ae8dbba9b9f59545a5d217fb2f",
+    "contrib-tests.json": "b8eb8edbddf8af83e5c48dd07e24ccd71979e74685ce91c5a1e708a3e2bdbf73",
+    "generate.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "contrib-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fuzz-encrypter.log": "9934ce55c36067bdff0e47c3b1a55237e3c84f957512b73db6b31ebd7b18d036",
+    "benchmark-generate.log": "87ca0154f2448f9b242d90e213d80fe976d1a8f7d334230fa3fbe17c0454a39c",
+    "contribs_store_sqlite3-staticcheck.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "linux-tests.stderr": "fcc66474ab0a181d4c3af668a6764f96e2037d9a14a1342f6a646635a5126c6a",
+    "jepsen_infra-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay-independent.log": "38026bb1eedf53f006c4df74b938c1045133d940e13ea44c692df23533cbd47d",
+    "contribs_binancefix-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "vet.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "benchmark-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fuzz-sbe-rich.log": "bcd228975a9031e9818f4f435048fc94a3e3c2c09777cced984b2403535bf1ca",
+    "jepsen_infra-staticcheck.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "mod-tidy.log": "d1d3cd8e1317c76d47fd2edc32f173fa08b394b412547782a5e86cfac4451e03",
+    "root-tests.json": "aec4c34ddb2a900d28df329b8e72f8df0d73eaeea30eade5f34283eb25349984",
+    "conformance.json": "bec9f0ceb2a77c01f163838dc7c4a0edbad0002bbbafebb8918df26a322ddaba",
+    "benchmark-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay-independent.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "contribs_binancemd-staticcheck.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "jepsen_node-vuln.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "transport-independent.log": "2caadaaf5850e575caf5edc565245b34c6e4f20b1f3a3a743f58c748941b59b3",
+    "fuzz-encrypter.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "jepsen-unit.log": "4b4a3d3922a1a53430c1191c4a2d65293d38fe194cf76fbb1f89c7fbc3a1d812",
+    "generate.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "callback-independent.log": "919f29b8a032913f07e13971c719d823bb5f3b82a23870a70625b158b136bd35",
+    "contribs_coinbasemd-staticcheck.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "fuzz-sbe-rich.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "benchmark-tests.json": "dd4b0272b0d8773432196b356d08b8f2007e47927fee515f22c53e08bb1eac79",
+    "root-tests.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "conformance.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "generation": {
+    "tracked_go_files_compared": 700,
+    "changed_tracked_go_files": [],
+    "module_pin_changes_after_tidy": []
+  },
+  "commands": {
+    "root-tests": "go test -race -count=1 -json -coverprofile=<raw>/root-coverage.out ./...",
+    "simd-tests": "GOEXPERIMENT=simd go test -race -count=1 -json ./...",
+    "contrib-tests": "make test-contribs GO_TEST_FLAGS='-race -count=1 -json'",
+    "conformance": "FIX2_QUICKFIX_TESTS=/Users/sylvain/git/quickfix-go/_test go test -race -count=1 -json -run '^TestConformance$' ./fix/session",
+    "vet": "make vet",
+    "linux-tests-retry": "docker run --rm --network none with clean HEAD archive, read-only host module cache, golang:1.27-trixie: go test -race -count=1 -json ./...",
+    "generation": "go generate ./... at root and contribs/binancefix, binancemd, coinbasemd in isolated archive; compare every tracked Go file",
+    "benchmark": "make generate && go test -race -count=1 -json ./... && go vet ./... && govulncheck -json ./... in benchmark module archive",
+    "vulnerability_scans": "govulncheck -json ./... in each module; benchmark final scan after generation",
+    "staticcheck": "golangci-lint run --no-config --default none --enable staticcheck --timeout 5m ./... in root and seven contrib/Jepsen modules",
+    "jepsen-unit": "docker run --rm --network none cached fix2-jepsen-control image, clean archived jepsen source: lein -o test"
+  },
+  "diagnostic_exit_codes_are_expected_failures": true,
+  "source_archive_sha256": "52ee606c7c5063bea6d176021715ccb171309ac5a1bf8a57ae2038caac508989",
+  "coverage_total": "total:\t\t\t\t\t\t\t\t\t\t\t\t\t(statements)\t\t\t\t\t\t58.1%"
+}

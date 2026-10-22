@@ -1,0 +1,6 @@
+rm -rf gen/fix2 && mkdir -p gen/fix2/fix44
+go tool fix2gen tagvalue --dict spec/FIX44.xml --pkg fix44 --out gen/fix2/fix44 --dispatch
+touch gen/fix2/.stamp
+rm -rf gen/quickfixgo && mkdir -p gen/quickfixgo
+cd gen/quickfixgo && go tool generate-fix -pkg-root github.com/sylr/fix2/fix/tests/benchmarks/gen/quickfixgo /private/tmp/fix2-production-readiness-8/source/fix/tests/benchmarks/spec/FIX44.xml
+touch gen/quickfixgo/.stamp

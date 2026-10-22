@@ -1,0 +1,71 @@
+package mem_test
+
+import (
+    "errors"
+    "os"
+    "net"
+    "testing"
+    "time"
+
+    "github.com/sylr/fix2/transport/mem"
+)
+
+// Expired deadlines must cover I/O that can complete immediately, as well
+// as blocked I/O. Each control reaches the existing wait path instead.
+func TestAudit8MemExpiredDeadline(t *testing.T) {
+    t.Run("net_pipe_deadline_control", func(t *testing.T) {
+        a, b := net.Pipe()
+        defer a.Close()
+        defer b.Close()
+        if err := a.SetDeadline(time.Unix(1, 0)); err != nil { t.Fatal(err) }
+        for _, op := range []struct { name string; run func() (int, error) }{
+            {"Read", func() (int, error) { var dst [1]byte; return a.Read(dst[:]) }},
+            {"Write", func() (int, error) { return a.Write([]byte("X")) }},
+        } {
+            n, err := op.run()
+            if n != 0 || !errors.Is(err, os.ErrDeadlineExceeded) {
+                t.Errorf("standard net.Pipe %s: n=%d err=%v", op.name, n, err)
+            }
+        }
+        // The concrete in-process connection has all net.Conn methods.
+        m, peer := mem.Pipe()
+        defer m.Close()
+        defer peer.Close()
+        if _, ok := m.(net.Conn); !ok { t.Fatal("mem connection lacks net.Conn methods") }
+    })
+    for _, ready := range []bool{false, true} {
+        name := "read_empty_control"
+        if ready { name = "read_buffered" }
+        t.Run(name, func(t *testing.T) {
+            a, b := mem.Pipe()
+            defer a.Close()
+            defer b.Close()
+            if ready {
+                if _, err := b.Write([]byte("X")); err != nil { t.Fatal(err) }
+            }
+            if err := a.SetReadDeadline(time.Unix(1, 0)); err != nil { t.Fatal(err) }
+            var dst [1]byte
+            n, err := a.Read(dst[:])
+            t.Logf("Read: n=%d data=%q err=%v", n, dst[:n], err)
+            if n != 0 || !errors.Is(err, os.ErrDeadlineExceeded) {
+                t.Errorf("expired Read returned n=%d err=%v, want deadline exceeded", n, err)
+            }
+        })
+        name = "write_full_control"
+        if ready { name = "write_room_available" }
+        t.Run(name, func(t *testing.T) {
+            a, b := mem.Pipe()
+            defer a.Close()
+            defer b.Close()
+            if !ready {
+                if _, err := a.Write(make([]byte, 1 << 20)); err != nil { t.Fatal(err) }
+            }
+            if err := a.SetWriteDeadline(time.Unix(1, 0)); err != nil { t.Fatal(err) }
+            n, err := a.Write([]byte("X"))
+            t.Logf("Write: n=%d err=%v", n, err)
+            if n != 0 || !errors.Is(err, os.ErrDeadlineExceeded) {
+                t.Errorf("expired Write returned n=%d err=%v, want deadline exceeded", n, err)
+            }
+        })
+    }
+}

@@ -1,0 +1,67 @@
+package session
+
+import (
+ "context"
+ "sync/atomic"
+ "testing"
+ "time"
+ "github.com/sylr/fix2/fixp"
+ "github.com/sylr/fix2/fixp/internal/codec"
+)
+
+type audit8RetireHandler struct {
+ *recorder
+ unbound, release, finalized chan struct{}
+ active atomic.Bool
+ overlap atomic.Bool
+}
+
+func (h *audit8RetireHandler) OnUnbound(ctx context.Context, s *Session, err error) {
+ h.active.Store(true)
+ close(h.unbound)
+ <-h.release
+ h.active.Store(false)
+ h.recorder.OnUnbound(ctx,s,err)
+}
+
+func (h *audit8RetireHandler) OnFinalized(ctx context.Context, s *Session) {
+ h.overlap.Store(h.active.Load())
+ h.recorder.OnFinalized(ctx,s)
+ close(h.finalized)
+}
+
+func TestAudit8RetireOverlapsUnbound(t *testing.T) {
+ for _, releaseFirst := range []bool{false,true} {
+  name := "retire during OnUnbound"
+  if releaseFirst { name = "control retire after OnUnbound" }
+  t.Run(name,func(t *testing.T) {
+   var h *audit8RetireHandler
+   rs := newRawSession(t,fixp.Unsequenced,fixp.Unsequenced,codec.Optional[uint64]{},func(c *ServerConfig) {
+    h = &audit8RetireHandler{recorder:c.Handler.(*recorder),unbound:make(chan struct{}),release:make(chan struct{}),finalized:make(chan struct{})}
+    c.Handler=h
+    c.WriteTimeout=20*time.Millisecond
+    c.StoreTimeout=20*time.Millisecond
+   })
+   var released bool
+   defer func(){ if !released { close(h.release) } }()
+   s := rs.session(t)
+   rs.r.c.Close()
+   select { case <-h.unbound: case <-time.After(time.Second): t.Fatal("OnUnbound not called") }
+   if releaseFirst {
+    close(h.release); released=true
+    rs.h.expect(t,"unbound")
+   }
+   done:=make(chan error,1)
+   go func(){ done<-rs.srv.Retire(context.Background(),s.ID()) }()
+   select {
+   case <-h.finalized:
+    t.Logf("OnFinalized ran while OnUnbound active=%v",h.overlap.Load())
+   case <-time.After(100*time.Millisecond):
+    if !released { close(h.release); released=true }
+    select { case <-h.finalized: case <-time.After(time.Second): t.Fatal("retirement stuck after callback release") }
+   }
+   if err:=<-done; err!=nil {t.Fatal(err)}
+   if h.overlap.Load() {t.Error("OnFinalized overlaps OnUnbound for the same session")}
+  })
+ }
+}

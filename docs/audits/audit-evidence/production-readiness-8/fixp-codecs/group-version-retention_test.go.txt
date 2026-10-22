@@ -1,0 +1,27 @@
+package newer_test
+
+import (
+ "testing"
+ "github.com/sylr/fix2/internal/gen/sbe/tests/newer"
+ "github.com/sylr/fix2/internal/gen/sbe/tests/older"
+)
+
+func TestAudit8AbsentGroupRetention(t *testing.T) {
+ src := newer.Order{Fees: []newer.Fees{{FeeMemo: []byte("fee"), Taxes: []newer.Taxes{{TaxCode: []byte("tax")}}}}}
+ frame, err := src.AppendTo(nil)
+ if err != nil { t.Fatal(err) }
+ var got newer.Order
+ if _, err := got.Decode(frame); err != nil { t.Fatal(err) }
+ old := older.Order{}
+ oldFrame, err := old.AppendTo(nil)
+ if err != nil { t.Fatal(err) }
+ if _, err := got.Decode(oldFrame); err != nil { t.Fatal(err) }
+ if len(got.Fees) != 0 { t.Fatal("version 1 must have no Fees") }
+ hidden := got.Fees[:cap(got.Fees)]
+ t.Logf("version-absent public group len=%d cap=%d; hidden memo=%q nested code=%q",len(got.Fees),cap(got.Fees),hidden[0].FeeMemo,hidden[0].Taxes[0].TaxCode)
+ if len(hidden[0].FeeMemo) != 0 || len(hidden[0].Taxes) != 0 { t.Error("absent group retains old frame and nested group") }
+ // There is no generated Reset method; the public zero value is a workaround.
+ got = newer.Order{}
+ if _, err := got.Decode(oldFrame); err != nil { t.Fatal(err) }
+ if cap(got.Fees) != 0 { t.Error("zero-value workaround retained old group") }
+}

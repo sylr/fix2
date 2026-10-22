@@ -1,0 +1,5 @@
+
+lein test jepsen.fix2.checker-test
+
+Ran 20 tests containing 154 assertions.
+0 failures, 0 errors.

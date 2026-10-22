@@ -1,0 +1,116 @@
+=== RUN   TestSBEGapReconnects
+=== RUN   TestSBEGapReconnects/gap
+=== RUN   TestSBEGapReconnects/snapshot_without_update_ID
+--- PASS: TestSBEGapReconnects (0.03s)
+    --- PASS: TestSBEGapReconnects/gap (0.02s)
+    --- PASS: TestSBEGapReconnects/snapshot_without_update_ID (0.01s)
+=== RUN   TestSBENewsReconnects
+--- PASS: TestSBENewsReconnects (0.02s)
+=== RUN   TestSBETrace
+--- PASS: TestSBETrace (0.01s)
+=== RUN   TestSBEShutdownWhileOutputBlocked
+=== RUN   TestSBEShutdownWhileOutputBlocked/logout_answered
+    sbe_test.go:708: stopped in 504.736541ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/exchange_hangs_up
+    sbe_test.go:708: stopped in 500.502917ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/queue_full,_logout_answered
+    sbe_test.go:708: stopped in 501.299208ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/queue_full,_exchange_hangs_up
+    sbe_test.go:708: stopped in 501.683208ms
+--- PASS: TestSBEShutdownWhileOutputBlocked (2.25s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/logout_answered (0.51s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/exchange_hangs_up (0.51s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/queue_full,_logout_answered (0.57s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/queue_full,_exchange_hangs_up (0.66s)
+=== RUN   TestSBEFatalEndWhileOutputBlocked
+=== RUN   TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused,_queue_full
+    sbe_test.go:778: stopped in 513.682583ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/protocol_error,_Logon_refused,_queue_full
+    sbe_test.go:778: stopped in 513.734542ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused
+    sbe_test.go:778: stopped in 512.480792ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/subscription_refused
+    sbe_test.go:778: stopped in 500.755333ms
+--- PASS: TestSBEFatalEndWhileOutputBlocked (2.19s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused,_queue_full (0.59s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/protocol_error,_Logon_refused,_queue_full (0.57s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused (0.52s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/subscription_refused (0.51s)
+=== RUN   TestSBEGapReconnects
+=== RUN   TestSBEGapReconnects/gap
+=== RUN   TestSBEGapReconnects/snapshot_without_update_ID
+--- PASS: TestSBEGapReconnects (0.03s)
+    --- PASS: TestSBEGapReconnects/gap (0.02s)
+    --- PASS: TestSBEGapReconnects/snapshot_without_update_ID (0.01s)
+=== RUN   TestSBENewsReconnects
+--- PASS: TestSBENewsReconnects (0.01s)
+=== RUN   TestSBETrace
+--- PASS: TestSBETrace (0.01s)
+=== RUN   TestSBEShutdownWhileOutputBlocked
+=== RUN   TestSBEShutdownWhileOutputBlocked/logout_answered
+    sbe_test.go:708: stopped in 501.17625ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/exchange_hangs_up
+    sbe_test.go:708: stopped in 500.898375ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/queue_full,_logout_answered
+    sbe_test.go:708: stopped in 501.366625ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/queue_full,_exchange_hangs_up
+    sbe_test.go:708: stopped in 501.426959ms
+--- PASS: TestSBEShutdownWhileOutputBlocked (2.12s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/logout_answered (0.51s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/exchange_hangs_up (0.51s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/queue_full,_logout_answered (0.55s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/queue_full,_exchange_hangs_up (0.55s)
+=== RUN   TestSBEFatalEndWhileOutputBlocked
+=== RUN   TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused,_queue_full
+    sbe_test.go:778: stopped in 513.474042ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/protocol_error,_Logon_refused,_queue_full
+    sbe_test.go:778: stopped in 514.384791ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused
+    sbe_test.go:778: stopped in 513.346125ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/subscription_refused
+    sbe_test.go:778: stopped in 510.17875ms
+--- PASS: TestSBEFatalEndWhileOutputBlocked (2.25s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused,_queue_full (0.56s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/protocol_error,_Logon_refused,_queue_full (0.62s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused (0.54s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/subscription_refused (0.52s)
+=== RUN   TestSBEGapReconnects
+=== RUN   TestSBEGapReconnects/gap
+=== RUN   TestSBEGapReconnects/snapshot_without_update_ID
+--- PASS: TestSBEGapReconnects (0.02s)
+    --- PASS: TestSBEGapReconnects/gap (0.01s)
+    --- PASS: TestSBEGapReconnects/snapshot_without_update_ID (0.01s)
+=== RUN   TestSBENewsReconnects
+--- PASS: TestSBENewsReconnects (0.01s)
+=== RUN   TestSBETrace
+--- PASS: TestSBETrace (0.01s)
+=== RUN   TestSBEShutdownWhileOutputBlocked
+=== RUN   TestSBEShutdownWhileOutputBlocked/logout_answered
+    sbe_test.go:708: stopped in 501.162833ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/exchange_hangs_up
+    sbe_test.go:708: stopped in 501.28825ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/queue_full,_logout_answered
+    sbe_test.go:708: stopped in 511.158ms
+=== RUN   TestSBEShutdownWhileOutputBlocked/queue_full,_exchange_hangs_up
+    sbe_test.go:708: stopped in 500.945459ms
+--- PASS: TestSBEShutdownWhileOutputBlocked (2.15s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/logout_answered (0.51s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/exchange_hangs_up (0.52s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/queue_full,_logout_answered (0.57s)
+    --- PASS: TestSBEShutdownWhileOutputBlocked/queue_full,_exchange_hangs_up (0.56s)
+=== RUN   TestSBEFatalEndWhileOutputBlocked
+=== RUN   TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused,_queue_full
+    sbe_test.go:778: stopped in 514.057167ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/protocol_error,_Logon_refused,_queue_full
+    sbe_test.go:778: stopped in 513.273292ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused
+    sbe_test.go:778: stopped in 514.254875ms
+=== RUN   TestSBEFatalEndWhileOutputBlocked/subscription_refused
+    sbe_test.go:778: stopped in 514.017417ms
+--- PASS: TestSBEFatalEndWhileOutputBlocked (2.18s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused,_queue_full (0.57s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/protocol_error,_Logon_refused,_queue_full (0.56s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/Binance_logs_out,_Logon_refused (0.52s)
+    --- PASS: TestSBEFatalEndWhileOutputBlocked/subscription_refused (0.52s)
+PASS
+ok  	github.com/sylr/fix2/contribs/binancemd	14.688s

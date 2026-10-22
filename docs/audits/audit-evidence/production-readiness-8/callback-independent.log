@@ -1,0 +1,57 @@
+=== RUN   TestAudit8RebindOverlapsUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=true OnMessage overlap=true; session=415d9f44-f21a-4cdc-998b-b9f97e64d3db
+    audit8_rebind_test.go:66: new connection callbacks overlap preceding connection's OnUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=false OnMessage overlap=false; session=17a36915-7a33-4a31-bd4d-da04e0952944
+--- FAIL: TestAudit8RebindOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RetireOverlapsUnbound
+=== RUN   TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound
+    audit8_retire_test.go:58: OnFinalized ran while OnUnbound active=true
+    audit8_retire_test.go:64: OnFinalized overlaps OnUnbound for the same session
+=== RUN   TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound
+    audit8_retire_test.go:58: OnFinalized ran while OnUnbound active=false
+--- FAIL: TestAudit8RetireOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RebindOverlapsUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=true OnMessage overlap=true; session=1116738a-b5a7-4d51-8d79-e50cd84856a7
+    audit8_rebind_test.go:66: new connection callbacks overlap preceding connection's OnUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=false OnMessage overlap=false; session=055515cc-d347-40a9-aef0-1cba2f2c044b
+--- FAIL: TestAudit8RebindOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RetireOverlapsUnbound
+=== RUN   TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound
+    audit8_retire_test.go:58: OnFinalized ran while OnUnbound active=true
+    audit8_retire_test.go:64: OnFinalized overlaps OnUnbound for the same session
+=== RUN   TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound
+    audit8_retire_test.go:58: OnFinalized ran while OnUnbound active=false
+--- FAIL: TestAudit8RetireOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RebindOverlapsUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=true OnMessage overlap=true; session=fc27a39f-e63a-4e82-af09-c859cf89cb87
+    audit8_rebind_test.go:66: new connection callbacks overlap preceding connection's OnUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=false OnMessage overlap=false; session=577ec3d5-611e-4007-abc3-611c62e2291d
+--- FAIL: TestAudit8RebindOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RetireOverlapsUnbound
+=== RUN   TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound
+    audit8_retire_test.go:58: OnFinalized ran while OnUnbound active=true
+    audit8_retire_test.go:64: OnFinalized overlaps OnUnbound for the same session
+=== RUN   TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound
+    audit8_retire_test.go:58: OnFinalized ran while OnUnbound active=false
+--- FAIL: TestAudit8RetireOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RetireOverlapsUnbound/retire_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RetireOverlapsUnbound/control_retire_after_OnUnbound (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/fixp/session	0.537s
+FAIL

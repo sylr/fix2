@@ -1,0 +1,30 @@
+=== RUN   TestAudit8RebindOverlapsUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=true OnMessage overlap=true; session=e79a7323-bdda-463d-bb85-5d318fc39c5b
+    audit8_rebind_test.go:66: new connection callbacks overlap preceding connection's OnUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=false OnMessage overlap=false; session=f02536a0-1b8a-40ca-a61b-59f61f8f96ed
+--- FAIL: TestAudit8RebindOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RebindOverlapsUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=true OnMessage overlap=true; session=08e29e9a-1066-4f04-a4cb-0e1d34e666b7
+    audit8_rebind_test.go:66: new connection callbacks overlap preceding connection's OnUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=false OnMessage overlap=false; session=24938725-e141-4fb4-8b1b-993b23a7712f
+--- FAIL: TestAudit8RebindOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound (0.00s)
+=== RUN   TestAudit8RebindOverlapsUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=true OnMessage overlap=true; session=d07e3be4-b6f4-4c22-9964-6aebad48d0ed
+    audit8_rebind_test.go:66: new connection callbacks overlap preceding connection's OnUnbound
+=== RUN   TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound
+    audit8_rebind_test.go:65: real re-establishment ack and application delivery; OnEstablished overlap=false OnMessage overlap=false; session=cd995c06-6c31-477d-bdbd-a344aecab0eb
+--- FAIL: TestAudit8RebindOverlapsUnbound (0.00s)
+    --- FAIL: TestAudit8RebindOverlapsUnbound/rebind_during_OnUnbound (0.00s)
+    --- PASS: TestAudit8RebindOverlapsUnbound/control_rebind_after_OnUnbound (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/fixp/session	0.526s
+FAIL

@@ -1,0 +1,71 @@
+=== RUN   TestAudit8MemExpiredDeadline
+=== RUN   TestAudit8MemExpiredDeadline/net_pipe_deadline_control
+=== RUN   TestAudit8MemExpiredDeadline/read_empty_control
+    audit8_mem_test.go:49: Read: n=0 data="" err=i/o timeout
+=== RUN   TestAudit8MemExpiredDeadline/write_full_control
+    audit8_mem_test.go:65: Write: n=0 err=i/o timeout
+=== RUN   TestAudit8MemExpiredDeadline/read_buffered
+    audit8_mem_test.go:49: Read: n=1 data="X" err=<nil>
+    audit8_mem_test.go:51: expired Read returned n=1 err=<nil>, want deadline exceeded
+=== RUN   TestAudit8MemExpiredDeadline/write_room_available
+    audit8_mem_test.go:65: Write: n=1 err=<nil>
+    audit8_mem_test.go:67: expired Write returned n=1 err=<nil>, want deadline exceeded
+--- FAIL: TestAudit8MemExpiredDeadline (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/net_pipe_deadline_control (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/read_empty_control (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/write_full_control (0.00s)
+    --- FAIL: TestAudit8MemExpiredDeadline/read_buffered (0.00s)
+    --- FAIL: TestAudit8MemExpiredDeadline/write_room_available (0.00s)
+=== RUN   TestAudit8MemExpiredDeadline
+=== RUN   TestAudit8MemExpiredDeadline/net_pipe_deadline_control
+=== RUN   TestAudit8MemExpiredDeadline/read_empty_control
+    audit8_mem_test.go:49: Read: n=0 data="" err=i/o timeout
+=== RUN   TestAudit8MemExpiredDeadline/write_full_control
+    audit8_mem_test.go:65: Write: n=0 err=i/o timeout
+=== RUN   TestAudit8MemExpiredDeadline/read_buffered
+    audit8_mem_test.go:49: Read: n=1 data="X" err=<nil>
+    audit8_mem_test.go:51: expired Read returned n=1 err=<nil>, want deadline exceeded
+=== RUN   TestAudit8MemExpiredDeadline/write_room_available
+    audit8_mem_test.go:65: Write: n=1 err=<nil>
+    audit8_mem_test.go:67: expired Write returned n=1 err=<nil>, want deadline exceeded
+--- FAIL: TestAudit8MemExpiredDeadline (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/net_pipe_deadline_control (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/read_empty_control (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/write_full_control (0.00s)
+    --- FAIL: TestAudit8MemExpiredDeadline/read_buffered (0.00s)
+    --- FAIL: TestAudit8MemExpiredDeadline/write_room_available (0.00s)
+=== RUN   TestAudit8MemExpiredDeadline
+=== RUN   TestAudit8MemExpiredDeadline/net_pipe_deadline_control
+=== RUN   TestAudit8MemExpiredDeadline/read_empty_control
+    audit8_mem_test.go:49: Read: n=0 data="" err=i/o timeout
+=== RUN   TestAudit8MemExpiredDeadline/write_full_control
+    audit8_mem_test.go:65: Write: n=0 err=i/o timeout
+=== RUN   TestAudit8MemExpiredDeadline/read_buffered
+    audit8_mem_test.go:49: Read: n=1 data="X" err=<nil>
+    audit8_mem_test.go:51: expired Read returned n=1 err=<nil>, want deadline exceeded
+=== RUN   TestAudit8MemExpiredDeadline/write_room_available
+    audit8_mem_test.go:65: Write: n=1 err=<nil>
+    audit8_mem_test.go:67: expired Write returned n=1 err=<nil>, want deadline exceeded
+--- FAIL: TestAudit8MemExpiredDeadline (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/net_pipe_deadline_control (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/read_empty_control (0.00s)
+    --- PASS: TestAudit8MemExpiredDeadline/write_full_control (0.00s)
+    --- FAIL: TestAudit8MemExpiredDeadline/read_buffered (0.00s)
+    --- FAIL: TestAudit8MemExpiredDeadline/write_room_available (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/transport/mem	0.323s
+=== RUN   TestAudit8AbsentGroupRetention
+    audit8_absent_test.go:21: version-absent public group len=0 cap=1; hidden memo="fee" nested code="tax"
+    audit8_absent_test.go:22: absent group retains old frame and nested group
+--- FAIL: TestAudit8AbsentGroupRetention (0.00s)
+=== RUN   TestAudit8AbsentGroupRetention
+    audit8_absent_test.go:21: version-absent public group len=0 cap=1; hidden memo="fee" nested code="tax"
+    audit8_absent_test.go:22: absent group retains old frame and nested group
+--- FAIL: TestAudit8AbsentGroupRetention (0.00s)
+=== RUN   TestAudit8AbsentGroupRetention
+    audit8_absent_test.go:21: version-absent public group len=0 cap=1; hidden memo="fee" nested code="tax"
+    audit8_absent_test.go:22: absent group retains old frame and nested group
+--- FAIL: TestAudit8AbsentGroupRetention (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/internal/gen/sbe/tests/newer	0.322s
+FAIL

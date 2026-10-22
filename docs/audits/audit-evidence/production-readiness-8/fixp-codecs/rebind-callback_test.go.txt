@@ -1,0 +1,69 @@
+package session
+
+import (
+ "context"
+ "sync/atomic"
+ "testing"
+ "time"
+ "github.com/sylr/fix2/fixp"
+ "github.com/sylr/fix2/fixp/internal/codec"
+ "github.com/sylr/fix2/fixp/store/memstore"
+ "github.com/sylr/fix2/transport/mem"
+)
+
+type audit8RebindHandler struct {
+ *recorder
+ unbound, release chan struct{}
+ active atomic.Bool
+ reboundOverlap, messageOverlap atomic.Bool
+ unbounds, establishments atomic.Int32
+}
+func (h *audit8RebindHandler) OnEstablished(ctx context.Context,s *Session) {
+ if h.establishments.Add(1)>1 { h.reboundOverlap.Store(h.active.Load()) }
+ h.recorder.OnEstablished(ctx,s)
+}
+func (h *audit8RebindHandler) OnMessage(ctx context.Context,s *Session,msg []byte,in Inbound) error {
+ h.messageOverlap.Store(h.active.Load())
+ return h.recorder.OnMessage(ctx,s,msg,in)
+}
+func (h *audit8RebindHandler) OnUnbound(ctx context.Context,s *Session,err error) {
+ if h.unbounds.Add(1)==1 {
+  h.active.Store(true)
+  close(h.unbound)
+  <-h.release
+  h.active.Store(false)
+ }
+ h.recorder.OnUnbound(ctx,s,err)
+}
+
+func TestAudit8RebindOverlapsUnbound(t *testing.T) {
+ for _, releaseFirst:=range []bool{false,true} {
+  name:="rebind during OnUnbound"
+  if releaseFirst {name="control rebind after OnUnbound"}
+  t.Run(name,func(t *testing.T) {
+   h:=&audit8RebindHandler{recorder:newRecorder(),unbound:make(chan struct{}),release:make(chan struct{})}
+   l:=mem.Listen("audit8 rebind")
+   srv,cancel,done:=newServer(t,l,memstore.New(),h,fixp.Unsequenced,nil)
+   t.Cleanup(func(){cancel();<-done})
+   released:=false
+   defer func(){if !released {close(h.release)}}()
+   first:=dialRaw(t,l)
+   first.negotiate(fixp.Unsequenced,"user:alice")
+   first.establish(1000,codec.Optional[uint64]{},"user:alice")
+   h.expect(t,"established")
+   first.c.Close()
+   select {case <-h.unbound: case <-time.After(time.Second):t.Fatal("no OnUnbound")}
+   if releaseFirst {close(h.release);released=true;h.expect(t,"unbound")}
+   second:=dialRaw(t,l)
+   second.id=first.id
+   answer:=second.establish(1000,codec.Optional[uint64]{},"user:alice")
+   var ack codec.EstablishmentAck
+   if _,err:=ack.Decode(answer);err!=nil {t.Fatal(err)}
+   h.expect(t,"established")
+   second.send(appMsg{1,"after reconnect"})
+   h.expect(t,"message")
+   t.Logf("real re-establishment ack and application delivery; OnEstablished overlap=%v OnMessage overlap=%v; session=%s",h.reboundOverlap.Load(),h.messageOverlap.Load(),srv.Session(first.id).ID())
+   if h.reboundOverlap.Load() || h.messageOverlap.Load() {t.Error("new connection callbacks overlap preceding connection's OnUnbound")}
+  })
+ }
+}

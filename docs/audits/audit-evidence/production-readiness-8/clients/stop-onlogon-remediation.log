@@ -1,0 +1,22 @@
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.37s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.35s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.36s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.36s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.31s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.32s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.42s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.72s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.37s)
+=== RUN   TestStopFromOnLogon
+--- PASS: TestStopFromOnLogon (0.31s)
+PASS
+ok  	github.com/sylr/fix2/contribs/binancefix	5.393s

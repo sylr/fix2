@@ -1,0 +1,58 @@
+package main
+
+import (
+	"encoding/json"
+	"math"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sylr/fix2/contribs/binancefix"
+	"github.com/sylr/fix2/contribs/binancefix/binancefixtest"
+)
+
+// A trade accepted by the SBE client must either reach JSON output or
+// fail the command. An encoding error must not silently discard it.
+func TestAudit7SBETradeTimestampOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		timestamp int64
+	}{
+		{"ordinary control", 1_760_000_000_000_000},
+		{"year9999 control", time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC).UnixMicro()},
+		{"max timestamp", math.MaxInt64},
+		{"negative timestamp", math.MinInt64 + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			x := sbeExchange(t, binancefixtest.MarketData{})
+			out, cancel, done := startSBE(t, x, nil, "trades", "BTCUSDT")
+			requests(t, x, 1)
+			trade := func(id, ts int64) *binancefix.MarketDataIncrementalTrade {
+				return &binancefix.MarketDataIncrementalTrade{TransactTime: ts, PriceExponent: -2, QtyExponent: -2,
+					Symbol: []byte("BTCUSDT"), MDEntries: []binancefix.MDEntries{{TradeID: id, MDEntryPx: 100, MDEntrySize: 1}}}
+			}
+			x.Broadcast(trade(1, 1_760_000_000_000_000))
+			waitLines(t, out, 1)
+			x.Broadcast(trade(2, tc.timestamp))
+			x.Broadcast(trade(3, 1_760_000_000_000_001))
+			// The later valid trade is a barrier proving both preceding
+			// messages passed the client's serialized handler.
+			deadline := time.Now().Add(5 * time.Second)
+			for !strings.Contains(out.String(), `"trade_id":3`) && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			cancel()
+			err := result(t, done)
+			lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+			t.Logf("timestamp=%d output_lines=%d command_error=%v output=%s", tc.timestamp, len(lines), err, out.String())
+			for _, line := range lines {
+				if !json.Valid([]byte(line)) {
+					t.Errorf("invalid JSON: %s", line)
+				}
+			}
+			if len(lines) != 3 && err == nil {
+				t.Errorf("accepted SBE trade silently lost: got %d lines, want 3 or a command error", len(lines))
+			}
+		})
+	}
+}

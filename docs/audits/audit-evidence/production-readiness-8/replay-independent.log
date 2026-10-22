@@ -1,0 +1,15 @@
+=== RUN   TestAudit7QueuedReplayAfterFinalLogout
+=== RUN   TestAudit7QueuedReplayAfterFinalLogout/crossing_range_excludes_Logout
+    audit8_replay_test.go:117: outbound: [D@1 dup= D@1 dup=Y D@1 dup=Y 5@2 dup=]
+=== RUN   TestAudit7QueuedReplayAfterFinalLogout/crossing_range_includes_Logout
+    audit8_replay_test.go:117: outbound: [D@1 dup= D@1 dup=Y 5@2 dup= D@1 dup=Y 4@2 dup=Y]
+    audit8_replay_test.go:119: traffic written after final Logout: [D@1 dup=Y 4@2 dup=Y]
+=== RUN   TestAudit7QueuedReplayAfterFinalLogout/peer_initiated_infinite_range
+    audit8_replay_test.go:117: outbound: [D@1 dup= D@1 dup=Y D@1 dup=Y 5@2 dup=]
+--- FAIL: TestAudit7QueuedReplayAfterFinalLogout (0.01s)
+    --- PASS: TestAudit7QueuedReplayAfterFinalLogout/crossing_range_excludes_Logout (0.00s)
+    --- FAIL: TestAudit7QueuedReplayAfterFinalLogout/crossing_range_includes_Logout (0.00s)
+    --- PASS: TestAudit7QueuedReplayAfterFinalLogout/peer_initiated_infinite_range (0.00s)
+FAIL
+FAIL	github.com/sylr/fix2/fix/session	0.450s
+FAIL

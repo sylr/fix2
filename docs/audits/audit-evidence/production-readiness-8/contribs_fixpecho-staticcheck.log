@@ -1,0 +1,5 @@
+main_test.go:150:5: SA4000: identical expressions on the left and right side of the '||' operator (staticcheck)
+	if echo(3) != nil || echo(3) != nil || echo(1) != nil {
+	   ^
+1 issues:
+* staticcheck: 1

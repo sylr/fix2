@@ -1,0 +1,6 @@
+=== RUN   TestWideSpecDoesNotAllocate
+--- PASS: TestWideSpecDoesNotAllocate (0.00s)
+=== RUN   TestRewriteForResend_DoesNotAllocate
+--- PASS: TestRewriteForResend_DoesNotAllocate (0.00s)
+PASS
+ok  	github.com/sylr/fix2/fix	0.277s

@@ -1,0 +1,44 @@
+=== RUN   TestCommitFailureSettles
+--- PASS: TestCommitFailureSettles (0.00s)
+=== RUN   TestCheckpoint
+--- PASS: TestCheckpoint (0.06s)
+=== RUN   TestRangeLetsCheckpointsRun
+=== RUN   TestRangeLetsCheckpointsRun/checkpointed=false
+=== RUN   TestRangeLetsCheckpointsRun/checkpointed=true
+--- PASS: TestRangeLetsCheckpointsRun (1.30s)
+    --- PASS: TestRangeLetsCheckpointsRun/checkpointed=false (0.67s)
+    --- PASS: TestRangeLetsCheckpointsRun/checkpointed=true (0.64s)
+=== RUN   TestCloseFromRangeDuringCheckpoint
+--- PASS: TestCloseFromRangeDuringCheckpoint (0.07s)
+=== RUN   TestSyncFlushesEveryCommit
+--- PASS: TestSyncFlushesEveryCommit (0.00s)
+=== RUN   TestRangeWaitsForNoWrite
+--- PASS: TestRangeWaitsForNoWrite (0.00s)
+=== RUN   TestRangeCancelledWaitingForTruncate
+--- PASS: TestRangeCancelledWaitingForTruncate (0.05s)
+=== RUN   TestReplayWaitingForPoolReconnects
+--- PASS: TestReplayWaitingForPoolReconnects (0.02s)
+=== RUN   TestReplayWaitingForPoolStops
+--- PASS: TestReplayWaitingForPoolStops (0.11s)
+=== RUN   TestLogoutWhileReplayWaitsForPool
+=== RUN   TestLogoutWhileReplayWaitsForPool/counterparty's_Logout
+=== RUN   TestLogoutWhileReplayWaitsForPool/crossing_Logouts
+--- PASS: TestLogoutWhileReplayWaitsForPool (0.21s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/counterparty's_Logout (0.11s)
+    --- PASS: TestLogoutWhileReplayWaitsForPool/crossing_Logouts (0.11s)
+=== RUN   TestCloseDiscardsWriter
+--- PASS: TestCloseDiscardsWriter (0.00s)
+=== RUN   TestSync
+--- PASS: TestSync (0.00s)
+=== RUN   TestRangeSnapshotAcrossChunks
+--- PASS: TestRangeSnapshotAcrossChunks (0.08s)
+=== RUN   TestRangeChunkBoundaries
+--- PASS: TestRangeChunkBoundaries (0.08s)
+=== RUN   TestRangeAcrossReset
+--- PASS: TestRangeAcrossReset (0.06s)
+=== RUN   TestTruncateDeletesWhatItKept
+--- PASS: TestTruncateDeletesWhatItKept (0.01s)
+=== RUN   TestTruncateIgnoresPinsOfEarlierGenerations
+--- PASS: TestTruncateIgnoresPinsOfEarlierGenerations (0.00s)
+PASS
+ok  	github.com/sylr/fix2/contribs/store/sqlite3	3.497s

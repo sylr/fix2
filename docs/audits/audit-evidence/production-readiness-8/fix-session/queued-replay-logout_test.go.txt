@@ -1,0 +1,122 @@
+package session
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/sylr/fix2/fix"
+	"github.com/sylr/fix2/fix/session/store"
+	"github.com/sylr/fix2/fix/session/store/memstore"
+	"github.com/sylr/fix2/transport"
+	"github.com/sylr/fix2/transport/mem"
+)
+
+// audit7ReplayGate holds the first Range before reading; other calls and
+// writes proceed, so the reader can queue a resend during Logout grace.
+type audit7ReplayGate struct {
+	*memstore.Store
+	once sync.Once
+	entered, release chan struct{}
+}
+
+func (g *audit7ReplayGate) Range(ctx context.Context, gen, begin, end uint64, fn func(uint64, []byte, store.Hole) error) error {
+	g.once.Do(func() {
+		close(g.entered)
+		select {
+		case <-g.release:
+		case <-ctx.Done():
+		}
+	})
+	return g.Store.Range(ctx, gen, begin, end, fn)
+}
+
+// audit7WireConn records complete writes through a real in-memory stream.
+type audit7WireConn struct { *heldConn }
+
+func (c audit7WireConn) Write(b []byte) (int, error) {
+	c.heldConn.Write(b)
+	return c.Conn.Write(b)
+}
+
+var _ transport.Conn = audit7WireConn{}
+
+func TestAudit7QueuedReplayAfterFinalLogout(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		includeLogout, peerInitiated bool
+	}{
+		{"crossing_range_excludes_Logout", false, false},
+		{"crossing_range_includes_Logout", true, false},
+		{"peer_initiated_infinite_range", true, true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			gate := &audit7ReplayGate{Store: memstore.New(), entered: make(chan struct{}), release: make(chan struct{})}
+			s := fenceSession(t, func(cfg *Config) { cfg.Store = gate; cfg.LogoutTimeout = 2*time.Second })
+			a, b := mem.Pipe()
+			defer b.Close()
+			tc := audit7WireConn{newHeldConn(a)}
+			close(tc.release)
+			c, err := s.attach(tc, nil)
+			if err != nil { t.Fatal(err) }
+			go c.run()
+			s.mu.Lock(); s.phase = phaseEstablished; s.mu.Unlock()
+			sendWritten(t, s, "ORDER", "")
+
+			peer := func(kind string, seq int, body func(*fix.Builder)) {
+				builder := fix.NewBuilder(FIX44, kind).SetInt(34, seq).SetString(49, "B").SetString(56, "A").
+					SetString(52, string(fix.AppendUTCTimestamp(nil, time.Now(), fix.Milliseconds)))
+				if body != nil { body(builder) }
+				if _, err := b.Write(builder.Build()); err != nil { t.Fatal(err) }
+			}
+			peer("2", 1, func(b *fix.Builder) { b.SetInt(7, 1).SetInt(16, 1) })
+			select { case <-gate.entered: case <-time.After(time.Second): t.Fatal("first replay never entered Range") }
+
+			if !testCase.peerInitiated { s.mu.Lock(); s.logoutLocked(c, "planned stop"); s.mu.Unlock() }
+			end := 1
+			if testCase.includeLogout { end = 0 } // infinity: includes our queued Logout only in the crossing case
+			peer("2", 2, func(b *fix.Builder) { b.SetInt(7, 1).SetInt(16, end) })
+			wait := func(check func() bool, why string) {
+				limit := time.Now().Add(time.Second)
+				for {
+					s.mu.Lock(); ok := check(); s.mu.Unlock()
+					if ok { return }
+					if time.Now().After(limit) { close(gate.release); t.Fatal(why) }
+					time.Sleep(time.Millisecond)
+				}
+			}
+			wait(func() bool { return len(c.replayQueue) == 1 }, "second resend did not queue")
+			peer("5", 3, nil) // peer initiates Logout or answers ours while both replays await the gate
+			wait(func() bool { return c.closing && c.peerLoggedOut }, "peer answer did not start final closure")
+			close(gate.release)
+			select { case <-c.finished: case <-time.After(time.Second): t.Fatal("connection did not finish") }
+
+			seenLogout := false
+			var sequence []string
+			var after []string
+			wire, err := io.ReadAll(b)
+			if err != nil { t.Fatal(err) }
+			for _, write := range [][]byte{wire} {
+				framer := fix.NewFramer(bytes.NewReader(write), fix.FramerOptions{})
+				for {
+					raw, err := framer.Next()
+					if err == io.EOF { break }
+					if err != nil { t.Fatal(err) }
+					m, err := fix.Parse(raw)
+					if err != nil { t.Fatal(err) }
+					label := fmt.Sprintf("%s@%s dup=%s", m.MsgType(), m.Get(34), m.Get(43))
+					sequence = append(sequence, label)
+					if seenLogout { after = append(after, label) }
+					if string(m.MsgType()) == "5" { seenLogout = true }
+				}
+			}
+			t.Logf("outbound: %v", sequence)
+			if !seenLogout { t.Fatal("no final Logout written") }
+			if len(after) != 0 { t.Errorf("traffic written after final Logout: %v", after) }
+		})
+	}
+}

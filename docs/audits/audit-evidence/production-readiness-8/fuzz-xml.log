@@ -1,0 +1,11 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/30 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 30/30 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 42929 (14309/sec), new interesting: 198 (total: 228)
+fuzz: elapsed: 6s, execs: 90181 (15750/sec), new interesting: 231 (total: 261)
+fuzz: elapsed: 9s, execs: 129601 (13136/sec), new interesting: 260 (total: 290)
+fuzz: elapsed: 12s, execs: 166457 (12289/sec), new interesting: 308 (total: 338)
+fuzz: elapsed: 15s, execs: 199032 (10857/sec), new interesting: 342 (total: 372)
+fuzz: elapsed: 18s, execs: 243786 (14919/sec), new interesting: 358 (total: 388)
+fuzz: elapsed: 20s, execs: 272823 (13877/sec), new interesting: 360 (total: 390)
+PASS
+ok  	github.com/sylr/fix2/fix/dictionary/xmldict	20.408s

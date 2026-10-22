@@ -1,0 +1,18 @@
+=== RUN   TestAudit8GroupTailRetention
+    audit8_test.go:44: constant-count control retained 167776 bytes; shrinking group retained 39543232 bytes; hidden live input slices 512
+    audit8_test.go:45: empty decoded group retains 512 removed entries and their historical input buffers
+    audit8_test.go:46: empty decoded group retains 39543232 bytes after GC
+--- FAIL: TestAudit8GroupTailRetention (0.72s)
+=== RUN   TestAudit8GroupTailRetention
+    audit8_test.go:44: constant-count control retained 154440 bytes; shrinking group retained 39543568 bytes; hidden live input slices 512
+    audit8_test.go:45: empty decoded group retains 512 removed entries and their historical input buffers
+    audit8_test.go:46: empty decoded group retains 39543568 bytes after GC
+--- FAIL: TestAudit8GroupTailRetention (0.84s)
+=== RUN   TestAudit8GroupTailRetention
+    audit8_test.go:44: constant-count control retained 147248 bytes; shrinking group retained 39543904 bytes; hidden live input slices 512
+    audit8_test.go:45: empty decoded group retains 512 removed entries and their historical input buffers
+    audit8_test.go:46: empty decoded group retains 39543904 bytes after GC
+--- FAIL: TestAudit8GroupTailRetention (0.84s)
+FAIL
+FAIL	github.com/sylr/fix2/internal/gen/sbe/tests/rich	2.736s
+FAIL
