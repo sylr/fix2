@@ -37,7 +37,9 @@ type Handler interface {
 	OnEstablished(ctx context.Context, s *Session)
 	// OnUnbound tells the connection is no longer bound to the session,
 	// after the last message of it delivered: err is a
-	// *fixp.TerminatedError, or the read or write error that ended it.
+	// *fixp.TerminatedError, or the read or write error that ended it. The
+	// next connection's callbacks, and a retirement's OnFinalized, wait for
+	// it to return.
 	OnUnbound(ctx context.Context, s *Session, err error)
 
 	// OnMessage delivers an application message, the SBE message whole,

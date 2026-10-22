@@ -126,7 +126,10 @@ type Session struct {
 	out, in fixp.FlowType
 	st      store.Session // nil until negotiated
 	conn    *conn
-	err     error
+	// unbinding is the last connection's unbound while its OnUnbound
+	// runs: the next establishment, and a retirement, wait for it.
+	unbinding chan struct{}
+	err       error
 	// outFin and inFin are the flows' finalization, as stored, changed
 	// under finishMu.
 	outFin, inFin store.Finish
@@ -592,7 +595,10 @@ func (s *Session) run(ctx context.Context, c *conn, reason string) {
 	err = c.result()
 	finished := c.finishedExchange()
 	s.mu.Lock()
+	// A retirement claimed during the exchange finalizes s instead: once.
+	finished = finished && s.state != StateFinalized
 	s.conn = nil
+	s.unbinding = c.unbound
 	if s.state == StateEstablished || s.state == StateTerminating {
 		s.state = StateUnbound
 		if finished {
@@ -603,10 +609,16 @@ func (s *Session) run(ctx context.Context, c *conn, reason string) {
 	s.mu.Unlock()
 	s.logInfo("unbound", "err", err)
 	s.handler.OnUnbound(s.cbCtx, s, err)
+	// Before the next establishment, which cancels the retirement this
+	// schedules.
+	if !finished && s.onUnbound != nil {
+		s.onUnbound(s)
+	}
+	s.mu.Lock()
+	s.unbinding = nil
+	s.mu.Unlock()
 	close(c.unbound)
 	if finished {
 		s.finalize()
-	} else if s.onUnbound != nil {
-		s.onUnbound(s)
 	}
 }

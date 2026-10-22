@@ -3,7 +3,7 @@ package session
 import (
 	"context"
 	"errors"
-	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -179,10 +179,10 @@ func TestRetireRacesNegotiation(t *testing.T) {
 			}
 		}
 	})
-	for i := range 50 {
+	for range 50 {
 		r := dialRaw(t, l)
 		r.negotiate(fixp.Unsequenced, "user:alice")
-		r.establish(1000, codec.Optional[uint64]{}, fmt.Sprintf("user:alice%d", i%1))
+		r.establish(1000, codec.Optional[uint64]{}, "user:alice")
 	}
 	close(stop)
 	wg.Wait()
@@ -292,6 +292,289 @@ func TestTerminateAnsweredPastOurInterval(t *testing.T) {
 			if e.kind == "finalized" {
 				break
 			}
+		}
+	})
+}
+
+// gatedUnbound holds its first OnUnbound until release, recording whether
+// another of the session's callbacks runs meanwhile.
+type gatedUnbound struct {
+	*recorder
+	unbound, release chan struct{}
+	open             func() // closes release, once
+	unbounds         atomic.Int32
+	active, overlap  atomic.Bool
+}
+
+func newGatedUnbound() *gatedUnbound {
+	h := &gatedUnbound{recorder: newRecorder(), unbound: make(chan struct{}), release: make(chan struct{})}
+	h.open = sync.OnceFunc(func() { close(h.release) })
+	return h
+}
+
+func (h *gatedUnbound) during() {
+	if h.active.Load() {
+		h.overlap.Store(true)
+	}
+}
+
+func (h *gatedUnbound) OnEstablished(ctx context.Context, s *Session) {
+	h.during()
+	h.recorder.OnEstablished(ctx, s)
+}
+
+func (h *gatedUnbound) OnMessage(ctx context.Context, s *Session, msg []byte, in Inbound) error {
+	h.during()
+	return h.recorder.OnMessage(ctx, s, msg, in)
+}
+
+func (h *gatedUnbound) OnFinalized(ctx context.Context, s *Session) {
+	h.during()
+	h.recorder.OnFinalized(ctx, s)
+}
+
+func (h *gatedUnbound) OnUnbound(ctx context.Context, s *Session, err error) {
+	if h.unbounds.Add(1) == 1 {
+		h.active.Store(true)
+		close(h.unbound)
+		<-h.release
+		h.active.Store(false)
+	}
+	h.recorder.OnUnbound(ctx, s, err)
+}
+
+// noEvent checks the handler has heard of nothing, once every goroutine of
+// the bubble is blocked.
+func noEvent(t *testing.T, r *recorder, while string) {
+	t.Helper()
+	synctest.Wait()
+	select {
+	case e := <-r.events:
+		t.Fatalf("%v %s", e, while)
+	default:
+	}
+}
+
+// A connection established while the last one's OnUnbound runs is acked
+// once it returns: its OnEstablished and OnMessage do not run beside it
+// (A8-01).
+func TestReestablishWaitsForUnbound(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newGatedUnbound()
+		l := mem.Listen("server")
+		_, cancel, done := newServer(t, l, memstore.New(), h, fixp.Unsequenced, nil)
+		defer func() { cancel(); <-done }()
+		defer h.open()
+		first := dialRaw(t, l)
+		first.negotiate(fixp.Unsequenced, "user:alice")
+		first.establish(1000, codec.Optional[uint64]{}, "user:alice")
+		h.expect(t, "established")
+		first.c.Close()
+		<-h.unbound
+
+		second := dialRaw(t, l)
+		second.id = first.id
+		second.send(&codec.Establish{SessionId: second.id, Timestamp: nanos(time.Now()), KeepaliveInterval: 1000, Credentials: []byte("user:alice")})
+		noEvent(t, h.recorder, "while OnUnbound runs")
+		h.open()
+		h.expect(t, "unbound")
+		var ack codec.EstablishmentAck
+		if _, err := ack.Decode(second.readTemplate(codec.EstablishmentAckTemplateID)); err != nil {
+			t.Fatal(err)
+		}
+		h.expect(t, "established")
+		second.send(appMsg{1, "after reconnecting"})
+		h.expect(t, "message")
+		if h.overlap.Load() {
+			t.Error("a callback of the new connection ran beside OnUnbound")
+		}
+	})
+}
+
+// A retirement while OnUnbound runs finalizes the session once it returns
+// (A8-01).
+func TestRetireWaitsForUnbound(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var h *gatedUnbound
+		rs := newRawSession(t, fixp.Unsequenced, fixp.Unsequenced, codec.Optional[uint64]{}, func(c *ServerConfig) {
+			h = newGatedUnbound()
+			h.recorder = c.Handler.(*recorder)
+			c.Handler = h
+		})
+		defer h.open()
+		s := rs.session(t)
+		rs.r.c.Close()
+		<-h.unbound
+		retired := make(chan error, 1)
+		go func() { retired <- rs.srv.Retire(bg, s.ID()) }()
+		noEvent(t, h.recorder, "while OnUnbound runs")
+		select {
+		case err := <-retired:
+			t.Fatalf("Retire returned %v while OnUnbound runs", err)
+		default:
+		}
+		h.open()
+		h.expect(t, "unbound")
+		h.expect(t, "finalized")
+		if err := <-retired; err != nil {
+			t.Fatal(err)
+		}
+		if h.overlap.Load() {
+			t.Error("OnFinalized ran beside OnUnbound")
+		}
+	})
+}
+
+// retiringUnbound retires its session from OnUnbound.
+type retiringUnbound struct {
+	*recorder
+	srv     atomic.Pointer[Server]
+	retired chan error
+}
+
+func (h *retiringUnbound) OnUnbound(ctx context.Context, s *Session, err error) {
+	h.retired <- h.srv.Load().Retire(ctx, s.ID())
+	h.recorder.OnUnbound(ctx, s, err)
+}
+
+// Retire called from OnUnbound does not wait for it to return: it
+// finalizes the session from within it.
+func TestRetireFromUnbound(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := &retiringUnbound{recorder: newRecorder(), retired: make(chan error, 1)}
+		l := mem.Listen("server")
+		srv, cancel, done := newServer(t, l, memstore.New(), h, fixp.Unsequenced, nil)
+		defer func() { cancel(); <-done }()
+		h.srv.Store(srv)
+		r := dialRaw(t, l)
+		r.negotiate(fixp.Unsequenced, "user:alice")
+		r.establish(1000, codec.Optional[uint64]{}, "user:alice")
+		h.expect(t, "established")
+		r.c.Close()
+		h.expect(t, "finalized")
+		h.expect(t, "unbound")
+		if err := <-h.retired; err != nil {
+			t.Fatal(err)
+		}
+		if srv.Session(r.id) != nil {
+			t.Error("retired session still served")
+		}
+	})
+}
+
+// A retirement while a finished session's OnUnbound runs, before its
+// finalization, is refused: the session is finalized once, by its
+// connection's end (A8-01).
+func TestRetireWhileFinalizing(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var h *gatedUnbound
+		p := newPair(t, pairOptions{clientFlow: fixp.Unsequenced, serverFlow: fixp.None, server: func(c *ServerConfig) {
+			h = newGatedUnbound()
+			h.recorder = c.Handler.(*recorder)
+			c.Handler = h
+		}})
+		defer h.open()
+		cs, ss := p.client.Session(), p.serverSession(t)
+		id := cs.ID()
+		if err := cs.Finish(bg); err != nil {
+			t.Fatal(err)
+		}
+		<-h.unbound
+		if st := ss.State(); st != StateFinalizing {
+			t.Fatalf("state %s while OnUnbound runs, want finalizing", st)
+		}
+		retired := make(chan error, 1)
+		go func() { retired <- p.srv.Retire(bg, id) }()
+		synctest.Wait()
+		h.open()
+		if err := <-retired; !errors.Is(err, ErrNoSession) {
+			t.Errorf("Retire while finalizing: %v", err)
+		}
+		p.srvH.skipUntil(t, "finalized")
+		noEvent(t, p.srvH, "after finalizing")
+		if h.overlap.Load() {
+			t.Error("OnFinalized ran beside OnUnbound")
+		}
+		stored, _ := p.srvStore.Open(bg, id)
+		if s := stored.State(); s.FinalizedAt.IsZero() || s.Retired {
+			t.Errorf("stored %+v", s)
+		}
+	})
+}
+
+// closeGateListener holds the first Close of each connection it accepts
+// until its gate opens.
+type closeGateListener struct {
+	*mem.Listener
+	conns chan *closeGateConn
+}
+
+func (l closeGateListener) Accept(ctx context.Context) (transport.Conn, error) {
+	c, err := l.Listener.Accept(ctx)
+	if err != nil {
+		return nil, err
+	}
+	g := &closeGateConn{Conn: c, closing: make(chan struct{}), release: make(chan struct{})}
+	g.open = sync.OnceFunc(func() { close(g.release) })
+	l.conns <- g
+	return g, nil
+}
+
+type closeGateConn struct {
+	transport.Conn
+	closing, release chan struct{}
+	open             func() // closes release, once
+	once             sync.Once
+}
+
+func (c *closeGateConn) Close() error {
+	c.once.Do(func() {
+		close(c.closing)
+		<-c.release
+	})
+	return c.Conn.Close()
+}
+
+// A retirement claiming a session whose connection ends on the finished
+// exchange, before the session is unbound, finalizes it alone: the
+// connection's end does not finalize it again (A8-01).
+func TestRetireAfterFinishedExchange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		l := mem.Listen("server")
+		gl := closeGateListener{l, make(chan *closeGateConn, 1)}
+		srvH, cliH := newRecorder(), newRecorder()
+		srvStore := memstore.New()
+		srv, cancelSrv, srvDone := newServer(t, gl, srvStore, srvH, fixp.None, nil)
+		defer func() { cancelSrv(); <-srvDone }()
+		c := newClient(t, l, memstore.New(), cliH, fixp.Unsequenced, nil)
+		cancelCli, cliDone := runClient(c)
+		defer func() { cancelCli(); <-cliDone }()
+		srvH.expect(t, "established")
+		g := <-gl.conns
+		defer g.open()
+		id := c.Session().ID()
+		ss := srv.Session(id)
+		if err := c.Session().Finish(bg); err != nil {
+			t.Fatal(err)
+		}
+		<-g.closing
+		retired := make(chan error, 1)
+		go func() { retired <- srv.Retire(bg, id) }()
+		// Claimed, the retirement then waits on the gated close's Once: a
+		// mutex, which neither synctest.Wait nor the fake clock counts as
+		// blocked.
+		for ss.State() != StateFinalized {
+			runtime.Gosched()
+		}
+		g.open()
+		if err := <-retired; err != nil {
+			t.Fatalf("Retire: %v", err)
+		}
+		srvH.skipUntil(t, "finalized")
+		noEvent(t, srvH, "after the retirement")
+		stored, _ := srvStore.Open(bg, id)
+		if s := stored.State(); !s.Retired {
+			t.Errorf("stored %+v, want retired", s)
 		}
 	})
 }
