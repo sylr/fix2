@@ -1,0 +1,5 @@
+internal/probe/probes.go:660:3: QF1002: could use tagged switch on l.Outcome (staticcheck)
+		switch {
+		^
+1 issues:
+* staticcheck: 1

@@ -1,0 +1,8 @@
+ok  	github.com/sylr/fix2/contribs/binancefix	12.100s
+?   	github.com/sylr/fix2/contribs/binancefix/binancefixtest	[no test files]
+ok  	github.com/sylr/fix2/contribs/binancefix/cmd/binancefix	6.521s
+ok  	github.com/sylr/fix2/contribs/binancefix/internal/aliasgen	2.005s
+ok  	github.com/sylr/fix2/contribs/binancefix/internal/fakebinance	1.534s
+ok  	github.com/sylr/fix2/contribs/binancefix/internal/fixsbe	1.670s
+ok  	github.com/sylr/fix2/contribs/binancefix/internal/lesofh	1.523s
+ok  	github.com/sylr/fix2/contribs/binancefix/internal/probe	10.809s

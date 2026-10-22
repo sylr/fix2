@@ -1,0 +1,69 @@
+package tcp
+
+import (
+    "context"
+    "errors"
+    "testing"
+    "time"
+)
+
+func TestAudit7AcceptCancellationWhileSerialized(t *testing.T) {
+    for _, concurrent := range []bool{false, true} {
+        name := "sole_Accept_control"
+        if concurrent { name = "concurrent_Accept" }
+        t.Run(name, func(t *testing.T) {
+            l, err := Listen("127.0.0.1:0", nil)
+            if err != nil { t.Fatal(err) }
+            defer l.Close()
+            firstCtx, stopFirst := context.WithCancel(context.Background())
+            defer stopFirst()
+            first := make(chan error, 1)
+            if concurrent {
+                go func() {
+                    c, err := l.Accept(firstCtx)
+                    if c != nil { c.Close() }
+                    first <- err
+                }()
+                // First Accept must own the real serialization lock before
+                // launching the second. This does not hold or replace it.
+                limit := time.Now().Add(time.Second)
+                for {
+                    if !l.mu.TryLock() { break }
+                    l.mu.Unlock()
+                    if time.Now().After(limit) { t.Fatal("first Accept did not start") }
+                    time.Sleep(time.Millisecond)
+                }
+            }
+            ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+            defer cancel()
+            result := make(chan error, 1)
+            go func() {
+                c, err := l.Accept(ctx)
+                if c != nil { c.Close() }
+                result <- err
+            }()
+            <-ctx.Done()
+            var got error
+            blocked := false
+            select {
+            case got = <-result:
+            case <-time.After(100*time.Millisecond):
+                blocked = true
+            }
+            stopFirst()
+            if concurrent {
+                select { case <-first: case <-time.After(time.Second): t.Fatal("first Accept did not end") }
+            }
+            if blocked {
+                select {
+                case got = <-result:
+                    t.Logf("second Accept returned only after the first was canceled: %v", got)
+                case <-time.After(time.Second):
+                    t.Fatal("second Accept did not end after first")
+                }
+                t.Error("Accept did not return when its context expired behind another Accept")
+            }
+            if !errors.Is(got, context.DeadlineExceeded) { t.Errorf("Accept error = %v", got) }
+        })
+    }
+}

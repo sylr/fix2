@@ -1,0 +1,10 @@
+ok  	github.com/sylr/fix2/internal/gen/sbe	40.822s
+ok  	github.com/sylr/fix2/internal/gen/sbe/examples	1.397s
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/bigrich	1.336s
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/newer	1.465s
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/older	[no test files]
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/oldersame	[no test files]
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled	[no test files]
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled	[no test files]
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/rich	1.440s
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/wide	1.358s

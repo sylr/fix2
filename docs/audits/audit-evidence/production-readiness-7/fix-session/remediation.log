@@ -1,0 +1,92 @@
+=== RUN   TestCloseDeadlineKeepsRetention
+=== RUN   TestCloseDeadlineKeepsRetention/before_first_message
+=== RUN   TestCloseDeadlineKeepsRetention/after_first_complete_chunk
+=== RUN   TestCloseDeadlineKeepsRetention/success_races_cancellation_with_buffered_tail
+--- PASS: TestCloseDeadlineKeepsRetention (0.15s)
+    --- PASS: TestCloseDeadlineKeepsRetention/before_first_message (0.05s)
+    --- PASS: TestCloseDeadlineKeepsRetention/after_first_complete_chunk (0.05s)
+    --- PASS: TestCloseDeadlineKeepsRetention/success_races_cancellation_with_buffered_tail (0.05s)
+=== RUN   TestClosingRefusesOutput
+--- PASS: TestClosingRefusesOutput (0.00s)
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/Heartbeat
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/counterparty's_Logout
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours,_held
+--- PASS: TestHeldArrival_InSequenceLogoutStopsHeld (0.21s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/Heartbeat (0.20s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/counterparty's_Logout (0.00s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours (0.00s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours,_held (0.00s)
+=== RUN   TestHeldArrival_InSequenceLogoutEndsChunk
+--- PASS: TestHeldArrival_InSequenceLogoutEndsChunk (0.01s)
+=== RUN   TestReplayWaitingHoldsBackLogout
+=== RUN   TestReplayWaitingHoldsBackLogout/counterparty's_Logout
+=== RUN   TestReplayWaitingHoldsBackLogout/crossing_Logouts
+--- PASS: TestReplayWaitingHoldsBackLogout (0.67s)
+    --- PASS: TestReplayWaitingHoldsBackLogout/counterparty's_Logout (0.20s)
+    --- PASS: TestReplayWaitingHoldsBackLogout/crossing_Logouts (0.47s)
+=== RUN   TestStallLogoutIgnoresResetLogon
+--- PASS: TestStallLogoutIgnoresResetLogon (0.35s)
+=== RUN   TestCloseDeadlineKeepsRetention
+=== RUN   TestCloseDeadlineKeepsRetention/before_first_message
+=== RUN   TestCloseDeadlineKeepsRetention/after_first_complete_chunk
+=== RUN   TestCloseDeadlineKeepsRetention/success_races_cancellation_with_buffered_tail
+--- PASS: TestCloseDeadlineKeepsRetention (0.15s)
+    --- PASS: TestCloseDeadlineKeepsRetention/before_first_message (0.05s)
+    --- PASS: TestCloseDeadlineKeepsRetention/after_first_complete_chunk (0.05s)
+    --- PASS: TestCloseDeadlineKeepsRetention/success_races_cancellation_with_buffered_tail (0.05s)
+=== RUN   TestClosingRefusesOutput
+--- PASS: TestClosingRefusesOutput (0.00s)
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/Heartbeat
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/counterparty's_Logout
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours,_held
+--- PASS: TestHeldArrival_InSequenceLogoutStopsHeld (0.22s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/Heartbeat (0.21s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/counterparty's_Logout (0.00s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours (0.00s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours,_held (0.00s)
+=== RUN   TestHeldArrival_InSequenceLogoutEndsChunk
+--- PASS: TestHeldArrival_InSequenceLogoutEndsChunk (0.00s)
+=== RUN   TestReplayWaitingHoldsBackLogout
+=== RUN   TestReplayWaitingHoldsBackLogout/counterparty's_Logout
+=== RUN   TestReplayWaitingHoldsBackLogout/crossing_Logouts
+--- PASS: TestReplayWaitingHoldsBackLogout (0.68s)
+    --- PASS: TestReplayWaitingHoldsBackLogout/counterparty's_Logout (0.21s)
+    --- PASS: TestReplayWaitingHoldsBackLogout/crossing_Logouts (0.47s)
+=== RUN   TestStallLogoutIgnoresResetLogon
+--- PASS: TestStallLogoutIgnoresResetLogon (0.36s)
+=== RUN   TestCloseDeadlineKeepsRetention
+=== RUN   TestCloseDeadlineKeepsRetention/before_first_message
+=== RUN   TestCloseDeadlineKeepsRetention/after_first_complete_chunk
+=== RUN   TestCloseDeadlineKeepsRetention/success_races_cancellation_with_buffered_tail
+--- PASS: TestCloseDeadlineKeepsRetention (0.14s)
+    --- PASS: TestCloseDeadlineKeepsRetention/before_first_message (0.04s)
+    --- PASS: TestCloseDeadlineKeepsRetention/after_first_complete_chunk (0.05s)
+    --- PASS: TestCloseDeadlineKeepsRetention/success_races_cancellation_with_buffered_tail (0.05s)
+=== RUN   TestClosingRefusesOutput
+--- PASS: TestClosingRefusesOutput (0.00s)
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/Heartbeat
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/counterparty's_Logout
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours
+=== RUN   TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours,_held
+--- PASS: TestHeldArrival_InSequenceLogoutStopsHeld (0.21s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/Heartbeat (0.20s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/counterparty's_Logout (0.00s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours (0.00s)
+    --- PASS: TestHeldArrival_InSequenceLogoutStopsHeld/answer_to_ours,_held (0.00s)
+=== RUN   TestHeldArrival_InSequenceLogoutEndsChunk
+--- PASS: TestHeldArrival_InSequenceLogoutEndsChunk (0.00s)
+=== RUN   TestReplayWaitingHoldsBackLogout
+=== RUN   TestReplayWaitingHoldsBackLogout/counterparty's_Logout
+=== RUN   TestReplayWaitingHoldsBackLogout/crossing_Logouts
+--- PASS: TestReplayWaitingHoldsBackLogout (0.66s)
+    --- PASS: TestReplayWaitingHoldsBackLogout/counterparty's_Logout (0.20s)
+    --- PASS: TestReplayWaitingHoldsBackLogout/crossing_Logouts (0.46s)
+=== RUN   TestStallLogoutIgnoresResetLogon
+--- PASS: TestStallLogoutIgnoresResetLogon (0.36s)
+PASS
+ok  	github.com/sylr/fix2/fix/session	5.693s

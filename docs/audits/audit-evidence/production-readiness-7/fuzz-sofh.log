@@ -1,0 +1,10 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/6 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 6/6 completed, now fuzzing with 10 workers
+fuzz: elapsed: 3s, execs: 346618 (115499/sec), new interesting: 15 (total: 21)
+fuzz: elapsed: 6s, execs: 493789 (48882/sec), new interesting: 15 (total: 21)
+fuzz: elapsed: 9s, execs: 646920 (51236/sec), new interesting: 18 (total: 24)
+fuzz: elapsed: 12s, execs: 798436 (50498/sec), new interesting: 19 (total: 25)
+fuzz: elapsed: 15s, execs: 997512 (66373/sec), new interesting: 21 (total: 27)
+fuzz: elapsed: 15s, execs: 997512 (0/sec), new interesting: 21 (total: 27)
+PASS
+ok  	github.com/sylr/fix2/sofh	15.476s

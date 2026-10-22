@@ -1,0 +1,27 @@
+=== RUN   TestAudit7AcceptCancellationWhileSerialized
+=== RUN   TestAudit7AcceptCancellationWhileSerialized/sole_Accept_control
+=== RUN   TestAudit7AcceptCancellationWhileSerialized/concurrent_Accept
+    audit7_accept_test.go:60: second Accept returned only after the first was canceled: context deadline exceeded
+    audit7_accept_test.go:64: Accept did not return when its context expired behind another Accept
+--- FAIL: TestAudit7AcceptCancellationWhileSerialized (0.15s)
+    --- PASS: TestAudit7AcceptCancellationWhileSerialized/sole_Accept_control (0.02s)
+    --- FAIL: TestAudit7AcceptCancellationWhileSerialized/concurrent_Accept (0.12s)
+=== RUN   TestAudit7AcceptCancellationWhileSerialized
+=== RUN   TestAudit7AcceptCancellationWhileSerialized/sole_Accept_control
+=== RUN   TestAudit7AcceptCancellationWhileSerialized/concurrent_Accept
+    audit7_accept_test.go:60: second Accept returned only after the first was canceled: context deadline exceeded
+    audit7_accept_test.go:64: Accept did not return when its context expired behind another Accept
+--- FAIL: TestAudit7AcceptCancellationWhileSerialized (0.14s)
+    --- PASS: TestAudit7AcceptCancellationWhileSerialized/sole_Accept_control (0.02s)
+    --- FAIL: TestAudit7AcceptCancellationWhileSerialized/concurrent_Accept (0.12s)
+=== RUN   TestAudit7AcceptCancellationWhileSerialized
+=== RUN   TestAudit7AcceptCancellationWhileSerialized/sole_Accept_control
+=== RUN   TestAudit7AcceptCancellationWhileSerialized/concurrent_Accept
+    audit7_accept_test.go:60: second Accept returned only after the first was canceled: context deadline exceeded
+    audit7_accept_test.go:64: Accept did not return when its context expired behind another Accept
+--- FAIL: TestAudit7AcceptCancellationWhileSerialized (0.15s)
+    --- PASS: TestAudit7AcceptCancellationWhileSerialized/sole_Accept_control (0.02s)
+    --- FAIL: TestAudit7AcceptCancellationWhileSerialized/concurrent_Accept (0.12s)
+FAIL
+FAIL	github.com/sylr/fix2/transport/tcp	0.870s
+FAIL

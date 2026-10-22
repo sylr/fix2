@@ -1,0 +1,5 @@
+node_test.go:311:10: S1024: should use time.Until instead of t.Sub(time.Now()) (staticcheck)
+	if d := ini.now().Sub(time.Now()); d < 59*time.Minute {
+	        ^
+1 issues:
+* staticcheck: 1

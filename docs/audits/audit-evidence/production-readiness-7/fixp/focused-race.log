@@ -1,0 +1,18 @@
+ok  	github.com/sylr/fix2/fixp	1.322s
+ok  	github.com/sylr/fix2/fixp/internal/codec	1.381s
+ok  	github.com/sylr/fix2/fixp/session	96.398s
+?   	github.com/sylr/fix2/fixp/store	[no test files]
+ok  	github.com/sylr/fix2/fixp/store/memstore	1.440s
+?   	github.com/sylr/fix2/fixp/store/storetest	[no test files]
+ok  	github.com/sylr/fix2/fixp/tests/silverflash	1.493s
+ok  	github.com/sylr/fix2/sofh	1.443s
+ok  	github.com/sylr/fix2/internal/gen/sbe	11.799s
+ok  	github.com/sylr/fix2/internal/gen/sbe/examples	1.458s
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/bigrich	1.423s
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/newer	1.563s
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/older	[no test files]
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/oldersame	[no test files]
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled	[no test files]
+?   	github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled	[no test files]
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/rich	1.562s
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/wide	1.437s

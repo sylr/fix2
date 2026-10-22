@@ -1,0 +1,3 @@
+=== RUN   TestKeepalive
+    session_test.go:50: unexpected event unbound seq=0 body="" err=mem: write to a closed connection
+--- FAIL: TestKeepalive (0.16s)

@@ -1,0 +1,730 @@
+{
+  "revision": "8e9a7f4726de04cf59afb615a9758ac54d1e071c",
+  "date": "2026-10-20",
+  "environment": {
+    "go": "go1.27.2",
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "raw_evidence_directory": "/private/tmp/fix2-production-readiness-7-8e9a7f4",
+  "tests": {
+    "root-tests.json": {
+      "command": "go test -race -count=1 -json -coverprofile=<raw>/root-coverage.out ./...",
+      "exit_code": 1,
+      "passed_test_and_subtest_events": 3883,
+      "passed_packages": 39,
+      "failures": [
+        {
+          "Package": "github.com/sylr/fix2/fixp/session",
+          "Test": "TestKeepalive",
+          "Elapsed": 0.16
+        },
+        {
+          "Package": "github.com/sylr/fix2/fixp/session",
+          "Elapsed": 95.238
+        }
+      ],
+      "skips": [
+        {
+          "package": "github.com/sylr/fix2/fix",
+          "test": "TestWideSpecDoesNotAllocate",
+          "reason": "--- SKIP: TestWideSpecDoesNotAllocate (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fix",
+          "test": "TestRewriteForResend_DoesNotAllocate",
+          "reason": "--- SKIP: TestRewriteForResend_DoesNotAllocate (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestPaced/Idempotent",
+          "reason": "    silverflash_test.go:181: FIX2_SILVERFLASH not set\n--- SKIP: TestPaced/Idempotent (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestPaced/Recoverable",
+          "reason": "    silverflash_test.go:181: FIX2_SILVERFLASH not set\n--- SKIP: TestPaced/Recoverable (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestFragmentedCharacterization",
+          "reason": "    silverflash_test.go:239: FIX2_SILVERFLASH_FRAGMENTED not set\n--- SKIP: TestFragmentedCharacterization (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestBurstCharacterization",
+          "reason": "    silverflash_test.go:265: FIX2_SILVERFLASH_BURST not set\n--- SKIP: TestBurstCharacterization (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestFinishCharacterization",
+          "reason": "    silverflash_test.go:304: FIX2_SILVERFLASH_FINISH not set\n--- SKIP: TestFinishCharacterization (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestOrders",
+          "reason": "    silverflash_test.go:181: FIX2_SILVERFLASH not set\n--- SKIP: TestOrders (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fix/session",
+          "test": "TestConformance",
+          "reason": "    conformance_test.go:36: FIX2_QUICKFIX_TESTS is not set to quickfix-go's _test directory\n--- SKIP: TestConformance (0.00s)\n"
+        }
+      ],
+      "coverage_percent": {
+        "github.com/sylr/fix2/fix/internal/dicttest": 0.0,
+        "github.com/sylr/fix2/cmd/fix2gen": 94.4,
+        "github.com/sylr/fix2/fix/session/store": 0.0,
+        "github.com/sylr/fix2/fix/session/store/storetest": 0.0,
+        "github.com/sylr/fix2/fix/session/schedule": 85.9,
+        "github.com/sylr/fix2/fix/session/store/memstore": 91.9,
+        "github.com/sylr/fix2/fix/tests/dicts/fix44": 2.2,
+        "github.com/sylr/fix2/fix/tests/dicts/fix40": 63.0,
+        "github.com/sylr/fix2/fix/tests/dicts/fixlatest": 2.9,
+        "github.com/sylr/fix2/fix/tests/dicts/fix50sp2": 59.5,
+        "github.com/sylr/fix2/fix/tests/dicts/fixt11": 60.5,
+        "github.com/sylr/fix2/fixp": 88.2,
+        "github.com/sylr/fix2/fixp/internal/codec": 69.4,
+        "github.com/sylr/fix2/fix": 98.5,
+        "github.com/sylr/fix2/fixp/store": 0.0,
+        "github.com/sylr/fix2/fixp/store/storetest": 0.0,
+        "github.com/sylr/fix2/fixp/store/memstore": 88.2,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/bigrich": 69.0,
+        "github.com/sylr/fix2/internal/gen/sbe/examples": 80.1,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/older": 0.0,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame": 0.0,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled": 0.0,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled": 0.0,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/wide": 79.9,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/newer": 25.7,
+        "github.com/sylr/fix2/internal/gen/sbe/tests/rich": 87.3,
+        "github.com/sylr/fix2/sofh": 98.0,
+        "github.com/sylr/fix2/internal/hrtimer": 96.6,
+        "github.com/sylr/fix2/transport": 0.0,
+        "github.com/sylr/fix2/transport/mem": 0.0,
+        "github.com/sylr/fix2/transport/tcp": 93.9,
+        "github.com/sylr/fix2/fix/dictionary": 97.4,
+        "github.com/sylr/fix2/internal/gen/sbe": 75.0,
+        "github.com/sylr/fix2/internal/gen/tagvalue": 96.8,
+        "github.com/sylr/fix2/fixp/session": 90.0,
+        "github.com/sylr/fix2/fix/session": 93.9,
+        "github.com/sylr/fix2/fix/dictionary/xmldict": 99.1
+      }
+    },
+    "simd-tests.json": {
+      "command": "GOEXPERIMENT=simd go test -race -count=1 -json ./...",
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 3882,
+      "passed_packages": 29,
+      "failures": [],
+      "skips": [
+        {
+          "package": "github.com/sylr/fix2/fix/internal/dicttest",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/fix",
+          "test": "TestWideSpecDoesNotAllocate",
+          "reason": "--- SKIP: TestWideSpecDoesNotAllocate (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fix",
+          "test": "TestRewriteForResend_DoesNotAllocate",
+          "reason": "--- SKIP: TestRewriteForResend_DoesNotAllocate (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fix/session/store",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/fix/session/store/storetest",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/store",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/store/storetest",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestPaced/Idempotent",
+          "reason": "    silverflash_test.go:181: FIX2_SILVERFLASH not set\n--- SKIP: TestPaced/Idempotent (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestPaced/Recoverable",
+          "reason": "    silverflash_test.go:181: FIX2_SILVERFLASH not set\n--- SKIP: TestPaced/Recoverable (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestFragmentedCharacterization",
+          "reason": "    silverflash_test.go:239: FIX2_SILVERFLASH_FRAGMENTED not set\n--- SKIP: TestFragmentedCharacterization (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestBurstCharacterization",
+          "reason": "    silverflash_test.go:265: FIX2_SILVERFLASH_BURST not set\n--- SKIP: TestBurstCharacterization (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestFinishCharacterization",
+          "reason": "    silverflash_test.go:304: FIX2_SILVERFLASH_FINISH not set\n--- SKIP: TestFinishCharacterization (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/fixp/tests/silverflash",
+          "test": "TestOrders",
+          "reason": "    silverflash_test.go:181: FIX2_SILVERFLASH not set\n--- SKIP: TestOrders (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/gen/sbe/tests/older",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersame",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/gen/sbe/tests/oldersameunfilled",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/internal/gen/sbe/tests/olderunfilled",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/transport",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/transport/mem",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/fix/session",
+          "test": "TestConformance",
+          "reason": "    conformance_test.go:36: FIX2_QUICKFIX_TESTS is not set to quickfix-go's _test directory\n--- SKIP: TestConformance (0.00s)\n"
+        }
+      ],
+      "coverage_percent": {}
+    },
+    "contrib-tests.json": {
+      "command": "make test-contribs RACE=1 GO_TEST_FLAGS='-race -count=1 -json'",
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 791,
+      "passed_packages": 14,
+      "failures": [],
+      "skips": [
+        {
+          "package": "github.com/sylr/fix2/contribs/binancefix/binancefixtest",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/contribs/binancefix",
+          "test": "TestTestnetLogon",
+          "reason": "--- SKIP: TestTestnetLogon (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/contribs/binancefix",
+          "test": "TestTestnetProbes",
+          "reason": "--- SKIP: TestTestnetProbes (0.00s)\n"
+        },
+        {
+          "package": "github.com/sylr/fix2/contribs/binancemd/internal/spotmd",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/contribs/coinbasemd/internal/md",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/contribs/coinbasemd/internal/fixt",
+          "test": null,
+          "reason": ""
+        },
+        {
+          "package": "github.com/sylr/fix2/jepsen/infra/multipass",
+          "test": null,
+          "reason": ""
+        }
+      ],
+      "coverage_percent": {}
+    },
+    "conformance.json": {
+      "command": "FIX2_QUICKFIX_TESTS=/Users/sylvain/git/quickfix-go/_test go test -race -count=1 -json -run '^TestConformance$' ./fix/session",
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 506,
+      "passed_packages": 1,
+      "failures": [],
+      "skips": [],
+      "coverage_percent": {}
+    }
+  },
+  "vulnerability_scans": {
+    "root-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "contribs-coinbasemd-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "contribs-binancefix-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "contribs-store-sqlite3-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "contribs-fixpecho-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "jepsen-node-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "contribs-binancemd-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 0,
+      "unique_advisories": [],
+      "levels": {
+        "module": 0,
+        "package": 0,
+        "symbol": 0
+      },
+      "interpretation": "No findings in scanned graph"
+    },
+    "jepsen-infra-vuln.json": {
+      "command": "govulncheck -json ./...",
+      "config": {
+        "protocol_version": "v1.0.0",
+        "scanner_name": "govulncheck",
+        "scanner_version": "v1.7.0",
+        "db": "https://vuln.go.dev",
+        "db_last_modified": "2026-10-20T00:20:56Z",
+        "go_version": "go1.27.2",
+        "scan_level": "symbol",
+        "scan_mode": "source"
+      },
+      "finding_records": 108,
+      "unique_advisories": [
+        "GO-2026-5932",
+        "GO-2026-6603",
+        "GO-2026-6610",
+        "GO-2026-6611",
+        "GO-2026-6612",
+        "GO-2026-6617"
+      ],
+      "levels": {
+        "module": 6,
+        "package": 5,
+        "symbol": 97
+      },
+      "interpretation": "Five symbol-reachable x/net advisories plus module-only OpenPGP presence; exploitability not established"
+    }
+  },
+  "staticcheck": {
+    "contribs-binancefix-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 1,
+      "exit_code": 1
+    },
+    "contribs-binancemd-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 0,
+      "exit_code": 0
+    },
+    "contribs-fixpecho-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 1,
+      "exit_code": 1
+    },
+    "contribs-coinbasemd-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 0,
+      "exit_code": 0
+    },
+    "jepsen-infra-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 0,
+      "exit_code": 0
+    },
+    "root-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 18,
+      "exit_code": 1
+    },
+    "contribs-store-sqlite3-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 0,
+      "exit_code": 0
+    },
+    "jepsen-node-staticcheck.log": {
+      "command": "golangci-lint run --no-config --enable-only staticcheck --timeout 5m ./...",
+      "diagnostics": 1,
+      "exit_code": 1
+    }
+  },
+  "fuzz": {
+    "fuzz-builder.log": {
+      "passed": true,
+      "executions": 220903,
+      "requested_seconds": 15
+    },
+    "fuzz-acceptor.log": {
+      "passed": true,
+      "executions": 36649,
+      "requested_seconds": 15
+    },
+    "fuzz-dictionary.log": {
+      "passed": true,
+      "executions": 898120,
+      "requested_seconds": 15
+    },
+    "fuzz-sofh.log": {
+      "passed": true,
+      "executions": 997512,
+      "requested_seconds": 15
+    },
+    "audit7-sbeclient-fuzz.log": {
+      "passed": true,
+      "executions": 201105,
+      "requested_seconds": 15,
+      "command": "go test -run '^$' -fuzz '^FuzzSBEClient$' -fuzztime=15s",
+      "working_directory": "contribs/binancemd",
+      "evidence_file": "clients/audit7-sbeclient-fuzz.log",
+      "sha256": "881ac267553fe5f9dca0e8433b861db04b293e8e7848e69d5e04002e5fe1109d"
+    },
+    "audit7-sbedecode-fuzz.log": {
+      "passed": true,
+      "executions": 2692172,
+      "requested_seconds": 15,
+      "command": "go test -run '^$' -fuzz '^FuzzDecode$' -fuzztime=15s",
+      "working_directory": "internal/gen/sbe/tests/wide",
+      "evidence_file": "clients/audit7-sbedecode-fuzz.log",
+      "sha256": "bbd95a7a215e65791482257a29d4d38d5353557ec2a986eeb1828e1ea9763ddd"
+    }
+  },
+  "generation": {
+    "commands": [
+      "go generate ./... (root archive)",
+      "go generate ./... (each of four generating contrib module archives)"
+    ],
+    "exit_code": 0,
+    "tracked_go_file_differences": [],
+    "archive": "/private/tmp/fix2-audit7-verification",
+    "unexpected_added_go_files": []
+  },
+  "limitations": [
+    "Normal broad race suite failed TestKeepalive once under concurrent verification load; isolated full FIXP scope and 20 focused repetitions passed. Do not report this initial suite as passed.",
+    "Race suites skip allocation assertions; separate non-race allocation check passed.",
+    "Silverflash and Binance live/testnet campaigns were not enabled.",
+    "Jepsen Clojure unit tests ran in isolated HEAD sources in existing Linux control container; no fault campaign or deployed-environment mutation was run.",
+    "Initial cache-restricted test invocation failed setup and was rerun with approved access.",
+    "govulncheck JSON mode process status alone is not evidence of a clean scan; finding objects were parsed.",
+    "No production source or permanent test modified."
+  ],
+  "raw_files": [
+    {
+      "file": "allocations.log",
+      "bytes": 37,
+      "sha256": "d5d3aca6b363fb32e357e271ce8a1913c76122aaf489ec65574ca68ec62c69c8"
+    },
+    {
+      "file": "conformance.json",
+      "bytes": 908274,
+      "sha256": "a58f8398c61bac476ec95ba5e365602e9506adff2da69dc12523f4dadb46b9ee"
+    },
+    {
+      "file": "contrib-generate.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "contrib-tests.json",
+      "bytes": 1096403,
+      "sha256": "f818f01c721d94da7b13014e1b4839964ac66a72f445c07d6f3d2093116bd8ec"
+    },
+    {
+      "file": "contribs-binancefix-staticcheck.log",
+      "bytes": 133,
+      "sha256": "fc733165264c0447b2bc51a14151450d59d470c5eda06b05996ddeb97b276666"
+    },
+    {
+      "file": "contribs-binancefix-vuln.json",
+      "bytes": 572556,
+      "sha256": "ee5675350d654e586343f862037b094c6de05ae1ba052a6df64bf536d640212d"
+    },
+    {
+      "file": "contribs-binancemd-staticcheck.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "file": "contribs-binancemd-vuln.json",
+      "bytes": 576680,
+      "sha256": "876d19e3277fd9691b49a43b45881454d9574ff529be786c1cfdeafde8d14b4f"
+    },
+    {
+      "file": "contribs-coinbasemd-staticcheck.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "file": "contribs-coinbasemd-vuln.json",
+      "bytes": 576645,
+      "sha256": "f120915463a192ae5021a5f13fa49871138d41ca788cb503f1b868c4e2268aa2"
+    },
+    {
+      "file": "contribs-fixpecho-staticcheck.log",
+      "bytes": 202,
+      "sha256": "35dafaa9b5f4f262cac6c72165903cdd2f7689ddc2d7a90cadcc0afde0932044"
+    },
+    {
+      "file": "contribs-fixpecho-vuln.json",
+      "bytes": 572086,
+      "sha256": "859fbeaa9e06b6dedc935f758ef24ee21ea669c6050d3609439b8da2f15271f8"
+    },
+    {
+      "file": "contribs-store-sqlite3-staticcheck.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "file": "contribs-store-sqlite3-vuln.json",
+      "bytes": 572021,
+      "sha256": "a34f1f06ff9a217bf79a38b212493047243a894fd6da24162aadc3dca68c210a"
+    },
+    {
+      "file": "fuzz-acceptor.log",
+      "bytes": 670,
+      "sha256": "de4fc7efbafe6a86506c1c4bd1b1ca906dfec28cc92b25d9b83959678318d927"
+    },
+    {
+      "file": "fuzz-builder.log",
+      "bytes": 655,
+      "sha256": "a0425c398009dc1d1e405a8ed5edaa4145c2ab9f58ae72370df1fcc67ffe9853"
+    },
+    {
+      "file": "fuzz-dictionary.log",
+      "bytes": 688,
+      "sha256": "5924828bf2a3098fc605d8552418647c423d31d76742b59d132f7c8463b91cd2"
+    },
+    {
+      "file": "fuzz-sofh.log",
+      "bytes": 665,
+      "sha256": "41ff71f7c5dcdb2abb4eb8af19202fbca59fc99fdfed914a9219adf576ef18f9"
+    },
+    {
+      "file": "generate.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "jepsen-infra-staticcheck.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "file": "jepsen-infra-vuln.json",
+      "bytes": 1408173,
+      "sha256": "c7a85c124a8f59d508e98428915bbfda6df8c332eccaf2f1940d54eb9dd1e271"
+    },
+    {
+      "file": "jepsen-node-staticcheck.log",
+      "bytes": 188,
+      "sha256": "9c2c80c12195a6feaca608e1c0e40083254ac924df897400c8e740c34edb3dc2"
+    },
+    {
+      "file": "jepsen-node-vuln.json",
+      "bytes": 576276,
+      "sha256": "00502c1ab5d3be4318c2c21caa8cfc78b272536e6795aaafadcb1604d67f576d"
+    },
+    {
+      "file": "jepsen-unit.log",
+      "bytes": 1475,
+      "sha256": "43334f34d52fe6978eba3582b61b09fe986e5f5bf7a42dcafaacb161acc24b39"
+    },
+    {
+      "file": "root-coverage.out",
+      "bytes": 1432820,
+      "sha256": "bb1ee4dd4ec00077b823df69b334718e9a7d6a55419cf2da546112ec4bccf613"
+    },
+    {
+      "file": "root-staticcheck.log",
+      "bytes": 3308,
+      "sha256": "8130ef4a4cf68da4e0da223a9f4e6e0fbd907f792989ec5c3009832f2d670d4a"
+    },
+    {
+      "file": "root-tests.json",
+      "bytes": 3042237,
+      "sha256": "f9cb303102c298ca735b68c0bd1bcae170c7280d0ed6e5386ef769e3ec8d6bf7"
+    },
+    {
+      "file": "root-vuln.json",
+      "bytes": 574057,
+      "sha256": "08c7766bd8e3ad7acd2736b1d4f322db534f8db98f9dc2ec359e2acb95fec841"
+    },
+    {
+      "file": "simd-tests.json",
+      "bytes": 3033520,
+      "sha256": "06842da19861375445cf025c90ba107f4232359d14e03a14a65aff440f5eb3f9"
+    },
+    {
+      "file": "vet.log",
+      "bytes": 249,
+      "sha256": "088ce088f5af2623545440903f417f8c0a92f32969e8821cfe70f918c254ec23"
+    }
+  ],
+  "additional_verification": {
+    "vet": "passed root and seven contrib/Jepsen modules",
+    "jepsen_checker_unit": {
+      "tests": 20,
+      "assertions": 154,
+      "failures": 0,
+      "errors": 0,
+      "environment": "isolated HEAD sources in existing Linux container"
+    },
+    "normal_keepalive_followup": {
+      "isolated_scope_passed": true,
+      "focused_repetitions_passed": 20,
+      "initial_failure_retained": true
+    },
+    "independent_diagnostics": {
+      "A7-01": "expected fail; two controls pass, including peer-stream output validation",
+      "A7-02": "expected fail; sole-Accept control passes",
+      "A7-03": "two expected failures; ordinary and year9999 controls pass"
+    }
+  },
+  "no_reported_races_in_broad_test_streams": true
+}

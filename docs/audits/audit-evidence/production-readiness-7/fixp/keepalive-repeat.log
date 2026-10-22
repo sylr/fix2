@@ -1,0 +1,162 @@
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:49.778+02:00 level=INFO msg=negotiated fixp_session=f6354fc4-c09d-4bb1-92b0-664e6f5fc6fb role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:49.778+02:00 level=INFO msg=negotiated fixp_session=f6354fc4-c09d-4bb1-92b0-664e6f5fc6fb role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:49.779+02:00 level=INFO msg=established fixp_session=f6354fc4-c09d-4bb1-92b0-664e6f5fc6fb role=server remote=mem:1
+time=2026-10-20T15:26:49.779+02:00 level=INFO msg=established fixp_session=f6354fc4-c09d-4bb1-92b0-664e6f5fc6fb role=client remote=mem:2
+time=2026-10-20T15:26:50.279+02:00 level=INFO msg=unbound fixp_session=f6354fc4-c09d-4bb1-92b0-664e6f5fc6fb role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:50.279+02:00 level=INFO msg=unbound fixp_session=f6354fc4-c09d-4bb1-92b0-664e6f5fc6fb role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:50.280+02:00 level=INFO msg=negotiated fixp_session=6b28b92d-b95b-4a53-afe6-04eecbc6729d role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:50.280+02:00 level=INFO msg=negotiated fixp_session=6b28b92d-b95b-4a53-afe6-04eecbc6729d role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:50.280+02:00 level=INFO msg=established fixp_session=6b28b92d-b95b-4a53-afe6-04eecbc6729d role=server remote=mem:1
+time=2026-10-20T15:26:50.280+02:00 level=INFO msg=established fixp_session=6b28b92d-b95b-4a53-afe6-04eecbc6729d role=client remote=mem:2
+time=2026-10-20T15:26:50.782+02:00 level=INFO msg=unbound fixp_session=6b28b92d-b95b-4a53-afe6-04eecbc6729d role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:50.782+02:00 level=INFO msg=unbound fixp_session=6b28b92d-b95b-4a53-afe6-04eecbc6729d role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:50.783+02:00 level=INFO msg=negotiated fixp_session=800c1f90-e27e-40c1-9188-4397988dd633 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:50.783+02:00 level=INFO msg=negotiated fixp_session=800c1f90-e27e-40c1-9188-4397988dd633 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:50.783+02:00 level=INFO msg=established fixp_session=800c1f90-e27e-40c1-9188-4397988dd633 role=server remote=mem:1
+time=2026-10-20T15:26:50.783+02:00 level=INFO msg=established fixp_session=800c1f90-e27e-40c1-9188-4397988dd633 role=client remote=mem:2
+time=2026-10-20T15:26:51.285+02:00 level=INFO msg=unbound fixp_session=800c1f90-e27e-40c1-9188-4397988dd633 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:51.285+02:00 level=INFO msg=unbound fixp_session=800c1f90-e27e-40c1-9188-4397988dd633 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:51.285+02:00 level=INFO msg=negotiated fixp_session=2c1e35a3-4278-4780-96a7-c9a45be79c00 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:51.285+02:00 level=INFO msg=negotiated fixp_session=2c1e35a3-4278-4780-96a7-c9a45be79c00 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:51.286+02:00 level=INFO msg=established fixp_session=2c1e35a3-4278-4780-96a7-c9a45be79c00 role=server remote=mem:1
+time=2026-10-20T15:26:51.286+02:00 level=INFO msg=established fixp_session=2c1e35a3-4278-4780-96a7-c9a45be79c00 role=client remote=mem:2
+time=2026-10-20T15:26:51.787+02:00 level=INFO msg=unbound fixp_session=2c1e35a3-4278-4780-96a7-c9a45be79c00 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:51.787+02:00 level=INFO msg=unbound fixp_session=2c1e35a3-4278-4780-96a7-c9a45be79c00 role=server err="fixp: terminated by the peer: Finished"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:51.788+02:00 level=INFO msg=negotiated fixp_session=2050b72e-ccfa-418e-97fd-10098e8571d0 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:51.788+02:00 level=INFO msg=negotiated fixp_session=2050b72e-ccfa-418e-97fd-10098e8571d0 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:51.788+02:00 level=INFO msg=established fixp_session=2050b72e-ccfa-418e-97fd-10098e8571d0 role=server remote=mem:1
+time=2026-10-20T15:26:51.788+02:00 level=INFO msg=established fixp_session=2050b72e-ccfa-418e-97fd-10098e8571d0 role=client remote=mem:2
+time=2026-10-20T15:26:52.289+02:00 level=INFO msg=unbound fixp_session=2050b72e-ccfa-418e-97fd-10098e8571d0 role=client err="fixp: terminated by the peer: Finished: server stopping"
+time=2026-10-20T15:26:52.290+02:00 level=INFO msg=unbound fixp_session=2050b72e-ccfa-418e-97fd-10098e8571d0 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:52.290+02:00 level=INFO msg=negotiated fixp_session=f2aed0ca-478d-4bc8-9573-fad0c4e33e39 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:52.290+02:00 level=INFO msg=negotiated fixp_session=f2aed0ca-478d-4bc8-9573-fad0c4e33e39 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:52.290+02:00 level=INFO msg=established fixp_session=f2aed0ca-478d-4bc8-9573-fad0c4e33e39 role=server remote=mem:1
+time=2026-10-20T15:26:52.290+02:00 level=INFO msg=established fixp_session=f2aed0ca-478d-4bc8-9573-fad0c4e33e39 role=client remote=mem:2
+time=2026-10-20T15:26:52.792+02:00 level=INFO msg=unbound fixp_session=f2aed0ca-478d-4bc8-9573-fad0c4e33e39 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:52.792+02:00 level=INFO msg=unbound fixp_session=f2aed0ca-478d-4bc8-9573-fad0c4e33e39 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:52.793+02:00 level=INFO msg=negotiated fixp_session=3ac1cfcc-d5aa-4cf0-9ea3-a293c9de6781 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:52.793+02:00 level=INFO msg=negotiated fixp_session=3ac1cfcc-d5aa-4cf0-9ea3-a293c9de6781 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:52.793+02:00 level=INFO msg=established fixp_session=3ac1cfcc-d5aa-4cf0-9ea3-a293c9de6781 role=server remote=mem:1
+time=2026-10-20T15:26:52.793+02:00 level=INFO msg=established fixp_session=3ac1cfcc-d5aa-4cf0-9ea3-a293c9de6781 role=client remote=mem:2
+time=2026-10-20T15:26:53.294+02:00 level=INFO msg=unbound fixp_session=3ac1cfcc-d5aa-4cf0-9ea3-a293c9de6781 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:53.294+02:00 level=INFO msg=unbound fixp_session=3ac1cfcc-d5aa-4cf0-9ea3-a293c9de6781 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:53.295+02:00 level=INFO msg=negotiated fixp_session=191526d4-ffc8-4309-bfcb-39af5eece5fa role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:53.295+02:00 level=INFO msg=negotiated fixp_session=191526d4-ffc8-4309-bfcb-39af5eece5fa role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:53.295+02:00 level=INFO msg=established fixp_session=191526d4-ffc8-4309-bfcb-39af5eece5fa role=server remote=mem:1
+time=2026-10-20T15:26:53.295+02:00 level=INFO msg=established fixp_session=191526d4-ffc8-4309-bfcb-39af5eece5fa role=client remote=mem:2
+time=2026-10-20T15:26:53.796+02:00 level=INFO msg=unbound fixp_session=191526d4-ffc8-4309-bfcb-39af5eece5fa role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:53.796+02:00 level=INFO msg=unbound fixp_session=191526d4-ffc8-4309-bfcb-39af5eece5fa role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:53.797+02:00 level=INFO msg=negotiated fixp_session=e7257be4-d82a-4530-8a2a-3e2db5619567 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:53.797+02:00 level=INFO msg=negotiated fixp_session=e7257be4-d82a-4530-8a2a-3e2db5619567 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:53.797+02:00 level=INFO msg=established fixp_session=e7257be4-d82a-4530-8a2a-3e2db5619567 role=server remote=mem:1
+time=2026-10-20T15:26:53.797+02:00 level=INFO msg=established fixp_session=e7257be4-d82a-4530-8a2a-3e2db5619567 role=client remote=mem:2
+time=2026-10-20T15:26:54.298+02:00 level=INFO msg=unbound fixp_session=e7257be4-d82a-4530-8a2a-3e2db5619567 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:54.298+02:00 level=INFO msg=unbound fixp_session=e7257be4-d82a-4530-8a2a-3e2db5619567 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:54.299+02:00 level=INFO msg=negotiated fixp_session=4a2e94c3-f251-4489-925b-3fda3b9a472e role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:54.299+02:00 level=INFO msg=negotiated fixp_session=4a2e94c3-f251-4489-925b-3fda3b9a472e role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:54.299+02:00 level=INFO msg=established fixp_session=4a2e94c3-f251-4489-925b-3fda3b9a472e role=server remote=mem:1
+time=2026-10-20T15:26:54.300+02:00 level=INFO msg=established fixp_session=4a2e94c3-f251-4489-925b-3fda3b9a472e role=client remote=mem:2
+time=2026-10-20T15:26:54.800+02:00 level=INFO msg=unbound fixp_session=4a2e94c3-f251-4489-925b-3fda3b9a472e role=client err="fixp: terminated by the peer: Finished: server stopping"
+time=2026-10-20T15:26:54.800+02:00 level=INFO msg=unbound fixp_session=4a2e94c3-f251-4489-925b-3fda3b9a472e role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:54.801+02:00 level=INFO msg=negotiated fixp_session=6d0aa681-77f0-4234-9951-b846cfb1e134 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:54.801+02:00 level=INFO msg=negotiated fixp_session=6d0aa681-77f0-4234-9951-b846cfb1e134 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:54.801+02:00 level=INFO msg=established fixp_session=6d0aa681-77f0-4234-9951-b846cfb1e134 role=server remote=mem:1
+time=2026-10-20T15:26:54.801+02:00 level=INFO msg=established fixp_session=6d0aa681-77f0-4234-9951-b846cfb1e134 role=client remote=mem:2
+time=2026-10-20T15:26:55.303+02:00 level=INFO msg=unbound fixp_session=6d0aa681-77f0-4234-9951-b846cfb1e134 role=server err="fixp: terminated by us: Finished: server stopping"
+time=2026-10-20T15:26:55.303+02:00 level=INFO msg=unbound fixp_session=6d0aa681-77f0-4234-9951-b846cfb1e134 role=client err="fixp: terminated by us: Finished"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:55.304+02:00 level=INFO msg=negotiated fixp_session=815209dc-5216-4974-ba01-aff7ba259c50 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:55.304+02:00 level=INFO msg=negotiated fixp_session=815209dc-5216-4974-ba01-aff7ba259c50 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:55.304+02:00 level=INFO msg=established fixp_session=815209dc-5216-4974-ba01-aff7ba259c50 role=server remote=mem:1
+time=2026-10-20T15:26:55.304+02:00 level=INFO msg=established fixp_session=815209dc-5216-4974-ba01-aff7ba259c50 role=client remote=mem:2
+time=2026-10-20T15:26:55.805+02:00 level=INFO msg=unbound fixp_session=815209dc-5216-4974-ba01-aff7ba259c50 role=server err="fixp: terminated by us: Finished: server stopping"
+time=2026-10-20T15:26:55.805+02:00 level=INFO msg=unbound fixp_session=815209dc-5216-4974-ba01-aff7ba259c50 role=client err="fixp: terminated by us: Finished"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:55.805+02:00 level=INFO msg=negotiated fixp_session=7a959c1f-9375-4716-86cd-c0e2d16bdc0f role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:55.805+02:00 level=INFO msg=negotiated fixp_session=7a959c1f-9375-4716-86cd-c0e2d16bdc0f role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:55.805+02:00 level=INFO msg=established fixp_session=7a959c1f-9375-4716-86cd-c0e2d16bdc0f role=server remote=mem:1
+time=2026-10-20T15:26:55.805+02:00 level=INFO msg=established fixp_session=7a959c1f-9375-4716-86cd-c0e2d16bdc0f role=client remote=mem:2
+time=2026-10-20T15:26:56.307+02:00 level=INFO msg=unbound fixp_session=7a959c1f-9375-4716-86cd-c0e2d16bdc0f role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:56.307+02:00 level=INFO msg=unbound fixp_session=7a959c1f-9375-4716-86cd-c0e2d16bdc0f role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:56.308+02:00 level=INFO msg=negotiated fixp_session=563b8ade-04d3-4856-8750-c9904cdcf454 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:56.308+02:00 level=INFO msg=negotiated fixp_session=563b8ade-04d3-4856-8750-c9904cdcf454 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:56.308+02:00 level=INFO msg=established fixp_session=563b8ade-04d3-4856-8750-c9904cdcf454 role=server remote=mem:1
+time=2026-10-20T15:26:56.308+02:00 level=INFO msg=established fixp_session=563b8ade-04d3-4856-8750-c9904cdcf454 role=client remote=mem:2
+time=2026-10-20T15:26:56.808+02:00 level=INFO msg=unbound fixp_session=563b8ade-04d3-4856-8750-c9904cdcf454 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:56.808+02:00 level=INFO msg=unbound fixp_session=563b8ade-04d3-4856-8750-c9904cdcf454 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:56.809+02:00 level=INFO msg=negotiated fixp_session=728d0e6c-887d-4a7f-83e1-513685bd5bae role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:56.810+02:00 level=INFO msg=negotiated fixp_session=728d0e6c-887d-4a7f-83e1-513685bd5bae role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:56.810+02:00 level=INFO msg=established fixp_session=728d0e6c-887d-4a7f-83e1-513685bd5bae role=server remote=mem:1
+time=2026-10-20T15:26:56.810+02:00 level=INFO msg=established fixp_session=728d0e6c-887d-4a7f-83e1-513685bd5bae role=client remote=mem:2
+time=2026-10-20T15:26:57.310+02:00 level=INFO msg=unbound fixp_session=728d0e6c-887d-4a7f-83e1-513685bd5bae role=server err="fixp: terminated by us: Finished: server stopping"
+time=2026-10-20T15:26:57.310+02:00 level=INFO msg=unbound fixp_session=728d0e6c-887d-4a7f-83e1-513685bd5bae role=client err="fixp: terminated by us: Finished"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:57.311+02:00 level=INFO msg=negotiated fixp_session=9bc4fc6b-ad32-4d3a-82ed-8ddc2b6bbe61 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:57.311+02:00 level=INFO msg=negotiated fixp_session=9bc4fc6b-ad32-4d3a-82ed-8ddc2b6bbe61 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:57.312+02:00 level=INFO msg=established fixp_session=9bc4fc6b-ad32-4d3a-82ed-8ddc2b6bbe61 role=server remote=mem:1
+time=2026-10-20T15:26:57.312+02:00 level=INFO msg=established fixp_session=9bc4fc6b-ad32-4d3a-82ed-8ddc2b6bbe61 role=client remote=mem:2
+time=2026-10-20T15:26:57.812+02:00 level=INFO msg=unbound fixp_session=9bc4fc6b-ad32-4d3a-82ed-8ddc2b6bbe61 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:57.812+02:00 level=INFO msg=unbound fixp_session=9bc4fc6b-ad32-4d3a-82ed-8ddc2b6bbe61 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:57.813+02:00 level=INFO msg=negotiated fixp_session=803f3400-55b2-4fdb-9529-9811900cc7e0 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:57.813+02:00 level=INFO msg=negotiated fixp_session=803f3400-55b2-4fdb-9529-9811900cc7e0 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:57.813+02:00 level=INFO msg=established fixp_session=803f3400-55b2-4fdb-9529-9811900cc7e0 role=server remote=mem:1
+time=2026-10-20T15:26:57.813+02:00 level=INFO msg=established fixp_session=803f3400-55b2-4fdb-9529-9811900cc7e0 role=client remote=mem:2
+time=2026-10-20T15:26:58.313+02:00 level=INFO msg=unbound fixp_session=803f3400-55b2-4fdb-9529-9811900cc7e0 role=client err="fixp: terminated by us: Finished"
+time=2026-10-20T15:26:58.313+02:00 level=INFO msg=unbound fixp_session=803f3400-55b2-4fdb-9529-9811900cc7e0 role=server err="fixp: terminated by us: Finished: server stopping"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:58.315+02:00 level=INFO msg=negotiated fixp_session=b195cdcd-8f59-41fc-9f20-ec877f0cff48 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:58.315+02:00 level=INFO msg=negotiated fixp_session=b195cdcd-8f59-41fc-9f20-ec877f0cff48 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:58.315+02:00 level=INFO msg=established fixp_session=b195cdcd-8f59-41fc-9f20-ec877f0cff48 role=server remote=mem:1
+time=2026-10-20T15:26:58.315+02:00 level=INFO msg=established fixp_session=b195cdcd-8f59-41fc-9f20-ec877f0cff48 role=client remote=mem:2
+time=2026-10-20T15:26:58.815+02:00 level=INFO msg=unbound fixp_session=b195cdcd-8f59-41fc-9f20-ec877f0cff48 role=server err="fixp: terminated by us: Finished: server stopping"
+time=2026-10-20T15:26:58.815+02:00 level=INFO msg=unbound fixp_session=b195cdcd-8f59-41fc-9f20-ec877f0cff48 role=client err="fixp: terminated by us: Finished"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:58.816+02:00 level=INFO msg=negotiated fixp_session=10f99336-0733-4d19-ac2a-004ec630281d role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:58.816+02:00 level=INFO msg=negotiated fixp_session=10f99336-0733-4d19-ac2a-004ec630281d role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:58.817+02:00 level=INFO msg=established fixp_session=10f99336-0733-4d19-ac2a-004ec630281d role=server remote=mem:1
+time=2026-10-20T15:26:58.817+02:00 level=INFO msg=established fixp_session=10f99336-0733-4d19-ac2a-004ec630281d role=client remote=mem:2
+time=2026-10-20T15:26:59.317+02:00 level=INFO msg=unbound fixp_session=10f99336-0733-4d19-ac2a-004ec630281d role=server err="fixp: terminated by us: Finished: server stopping"
+time=2026-10-20T15:26:59.317+02:00 level=INFO msg=unbound fixp_session=10f99336-0733-4d19-ac2a-004ec630281d role=client err="fixp: terminated by us: Finished"
+--- PASS: TestKeepalive (0.50s)
+=== RUN   TestKeepalive
+time=2026-10-20T15:26:59.318+02:00 level=INFO msg=negotiated fixp_session=6570063d-0737-47b8-8e59-2c1c66470362 role=server owner=alice client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:59.318+02:00 level=INFO msg=negotiated fixp_session=6570063d-0737-47b8-8e59-2c1c66470362 role=client client_flow=Unsequenced server_flow=Idempotent
+time=2026-10-20T15:26:59.319+02:00 level=INFO msg=established fixp_session=6570063d-0737-47b8-8e59-2c1c66470362 role=server remote=mem:1
+time=2026-10-20T15:26:59.319+02:00 level=INFO msg=established fixp_session=6570063d-0737-47b8-8e59-2c1c66470362 role=client remote=mem:2
+time=2026-10-20T15:26:59.821+02:00 level=INFO msg=unbound fixp_session=6570063d-0737-47b8-8e59-2c1c66470362 role=server err="fixp: terminated by the peer: Finished"
+time=2026-10-20T15:26:59.821+02:00 level=INFO msg=unbound fixp_session=6570063d-0737-47b8-8e59-2c1c66470362 role=client err="fixp: terminated by us: Finished"
+--- PASS: TestKeepalive (0.50s)
+PASS
+ok  	github.com/sylr/fix2/fixp/session	11.439s

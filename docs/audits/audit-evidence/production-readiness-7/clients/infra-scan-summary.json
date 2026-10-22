@@ -1,0 +1,104 @@
+{
+  "source": "/private/tmp/fix2-production-readiness-7-8e9a7f4/jepsen-infra-vuln.json",
+  "config": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.7.0",
+    "db": "https://vuln.go.dev",
+    "db_last_modified": "2026-10-20T00:20:56Z",
+    "go_version": "go1.27.2",
+    "scan_level": "symbol",
+    "scan_mode": "source"
+  },
+  "finding_records": 108,
+  "levels": {
+    "module": 6,
+    "package": 5,
+    "symbol": 97
+  },
+  "unique_advisories": 6,
+  "advisories": [
+    {
+      "id": "GO-2026-5932",
+      "records": 1,
+      "levels": {
+        "module": 1
+      },
+      "modules": [
+        "golang.org/x/crypto"
+      ],
+      "version": "v0.57.0",
+      "fixed_version": ""
+    },
+    {
+      "id": "GO-2026-6603",
+      "records": 26,
+      "levels": {
+        "module": 1,
+        "package": 1,
+        "symbol": 24
+      },
+      "modules": [
+        "golang.org/x/net"
+      ],
+      "version": "v0.59.0",
+      "fixed_version": "v0.60.0"
+    },
+    {
+      "id": "GO-2026-6610",
+      "records": 3,
+      "levels": {
+        "module": 1,
+        "package": 1,
+        "symbol": 1
+      },
+      "modules": [
+        "golang.org/x/net"
+      ],
+      "version": "v0.59.0",
+      "fixed_version": "v0.60.0"
+    },
+    {
+      "id": "GO-2026-6611",
+      "records": 26,
+      "levels": {
+        "module": 1,
+        "package": 1,
+        "symbol": 24
+      },
+      "modules": [
+        "golang.org/x/net"
+      ],
+      "version": "v0.59.0",
+      "fixed_version": "v0.60.0"
+    },
+    {
+      "id": "GO-2026-6612",
+      "records": 26,
+      "levels": {
+        "module": 1,
+        "package": 1,
+        "symbol": 24
+      },
+      "modules": [
+        "golang.org/x/net"
+      ],
+      "version": "v0.59.0",
+      "fixed_version": "v0.60.0"
+    },
+    {
+      "id": "GO-2026-6617",
+      "records": 26,
+      "levels": {
+        "module": 1,
+        "package": 1,
+        "symbol": 24
+      },
+      "modules": [
+        "golang.org/x/net"
+      ],
+      "version": "v0.59.0",
+      "fixed_version": "v0.60.0"
+    }
+  ]
+}

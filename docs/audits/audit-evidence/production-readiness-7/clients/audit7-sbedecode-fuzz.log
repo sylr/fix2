@@ -1,0 +1,10 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/1 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 1/1 completed, now fuzzing with 10 workers
+fuzz: elapsed: 3s, execs: 456006 (151998/sec), new interesting: 22 (total: 23)
+fuzz: elapsed: 6s, execs: 945538 (163151/sec), new interesting: 25 (total: 26)
+fuzz: elapsed: 9s, execs: 1483755 (179399/sec), new interesting: 26 (total: 27)
+fuzz: elapsed: 12s, execs: 2103874 (206749/sec), new interesting: 27 (total: 28)
+fuzz: elapsed: 15s, execs: 2692172 (196094/sec), new interesting: 27 (total: 28)
+fuzz: elapsed: 15s, execs: 2692172 (0/sec), new interesting: 27 (total: 28)
+PASS
+ok  	github.com/sylr/fix2/internal/gen/sbe/tests/wide	15.431s
