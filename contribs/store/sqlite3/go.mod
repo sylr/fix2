@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.52
-	github.com/sylr/fix2 v0.0.0
+	github.com/sylr/fix2 v0.1.0
 )
 
 require golang.org/x/sys v0.47.0 // indirect

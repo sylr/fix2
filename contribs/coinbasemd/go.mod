@@ -6,7 +6,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
-	github.com/sylr/fix2 v0.0.0
+	github.com/sylr/fix2 v0.1.0
 )
 
 require (
