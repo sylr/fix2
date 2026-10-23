@@ -72,9 +72,16 @@ type Handler interface {
 	// handler must stay ready for them once logged out.
 	OnLogout(ctx context.Context, s *Session, reason error)
 
-	// ToAdmin may add fields to a Logon (35=A) or Logout (35=5) before it
-	// is sent, such as Username and Password. An error cancels a Logon: the
-	// connection is closed.
+	// ToAdmin may add fields to the Logons (35=A) and Logouts (35=5) the
+	// session sends on a connection, such as Username and Password. It runs
+	// once for each, msgType telling which, before the connection's first
+	// Logon is sent or answered, outside the session's lock: the fields it
+	// adds to a Logon go on the connection's Logons, the answer to a reset
+	// Logon included, and those it adds to a Logout on every Logout sent on
+	// the connection, whoever logs out and why. They are not asked for again
+	// and may go unused. The fields the session writes cannot be set, nor,
+	// on a Logout, Text (58), the reason logging out. An error cancels the
+	// Logon: the connection is closed.
 	ToAdmin(ctx context.Context, s *Session, msgType string, b *fix.Builder) error
 	// FromAdmin tells of an administrative message the session processed,
 	// a Logout or Reject refusing our Logon included.

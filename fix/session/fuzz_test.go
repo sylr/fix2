@@ -177,7 +177,10 @@ func (h *fuzzHandler) ToAdmin(_ context.Context, _ *session.Session, msgType str
 	if msgType == "A" && h.cfg&fuzzExtra != 0 && h.cfg&fuzzRefuse != 0 {
 		return errors.New("cancelled")
 	}
-	b.SetString(58, "fuzz")
+	if msgType == "A" {
+		// A Logout's Text is the session's.
+		b.SetString(58, "fuzz")
+	}
 	return nil
 }
 

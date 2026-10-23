@@ -469,7 +469,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		refuse("session "+s.id.String()+": "+ErrStopped.Error(), slog.String("session", s.id.String()))
 		return
 	}
-	extra, err := s.toAdmin("A")
+	extra, logoutExtra, err := s.adminExtras()
 	s.detached.Done()
 	if err != nil {
 		refuse("Logon answer cancelled by the handler", slog.String("session", s.id.String()), slog.Any("error", err))
@@ -483,7 +483,7 @@ func (a *Acceptor) serve(ctx context.Context, tc transport.Conn) {
 		return
 	}
 	s.mu.Lock()
-	c.logonExtra = extra
+	c.logonExtra, c.logoutExtra = extra, logoutExtra
 	s.mu.Unlock()
 	release()
 	c.handleFrame(frame)

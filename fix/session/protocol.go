@@ -1428,7 +1428,8 @@ func (s *Session) logoutLocked(c *conn, text string) {
 	s.armLocked(c)
 }
 
-// sendLogoutLocked sends a Logout with text.
+// sendLogoutLocked sends a Logout with text, and the fields the handler adds
+// to c's Logouts.
 func (s *Session) sendLogoutLocked(c *conn, text string) {
 	if text != "" {
 		s.log.LogAttrs(context.Background(), slog.LevelInfo, "logging out", slog.String("text", text))
@@ -1437,6 +1438,7 @@ func (s *Session) sendLogoutLocked(c *conn, text string) {
 	if text != "" {
 		b = b.str(tagText, cleanText(text))
 	}
+	b = append(b, c.logoutExtra...)
 	s.sendAdminLocked(&header{msgType: "5"}, b)
 }
 

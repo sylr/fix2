@@ -26,18 +26,42 @@ func (s *Session) logonReserved(tag int) bool {
 	return s.reservedTag(tag)
 }
 
+// logoutReserved reports whether tag is one of a Logout the session writes,
+// on top of the reserved ones: Text (58), which the reason logging out
+// gives.
+func (s *Session) logoutReserved(tag int) bool {
+	return tag == tagText || s.reservedTag(tag)
+}
+
 // toAdmin asks the handler for the extra fields of a Logon or Logout.
 func (s *Session) toAdmin(msgType string) ([]byte, error) {
 	b := fix.NewBuilder(s.id.BeginString, msgType)
 	if err := s.handler.ToAdmin(s.callbackCtx(), s, msgType, b); err != nil {
 		return nil, err
 	}
-	return b.AppendBody(nil, s.dicts.adminProfile(), s.logonReserved)
+	reserved := s.logonReserved
+	if msgType == "5" {
+		reserved = s.logoutReserved
+	}
+	return b.AppendBody(nil, s.dicts.adminProfile(), reserved)
+}
+
+// adminExtras asks the handler for the extra fields of a connection's
+// Logons and Logouts, before its first Logon is sent or answered: the
+// Logouts are sent under the lock, which no callback runs under.
+func (s *Session) adminExtras() (logon, logout []byte, err error) {
+	if logon, err = s.toAdmin("A"); err != nil {
+		return nil, nil, err
+	}
+	if logout, err = s.toAdmin("5"); err != nil {
+		return nil, nil, err
+	}
+	return logon, logout, nil
 }
 
 // logon sends the initiator's Logon on c.
 func (s *Session) logon(c *conn) error {
-	extra, err := s.toAdmin("A")
+	extra, logoutExtra, err := s.adminExtras()
 	if err != nil {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -49,6 +73,9 @@ func (s *Session) logon(c *conn) error {
 	if c.closed || s.c != c {
 		return c.reason
 	}
+	// Kept for the answer to a reset Logon (see fenceReset) and the
+	// Logouts, the signature apart: it covers this Logon only.
+	c.logonExtra, c.logoutExtra = extra, logoutExtra
 	s.sentReset = false
 	if s.cfg.ResetOnLogon {
 		if err := s.resetStoreLocked("ResetOnLogon"); err != nil {
@@ -75,7 +102,7 @@ func (s *Session) logon(c *conn) error {
 			s.disconnectLocked(c, &LogoutError{Text: "Logon signature failed", Err: err})
 			return err
 		}
-		extra = append(extra, sig...)
+		extra = append(slices.Clip(extra), sig...)
 	}
 	b := s.logonBody(s.sentReset, s.st.NextTarget)
 	b = append(b, extra...)
@@ -473,7 +500,9 @@ func (s *Session) fenceReset(c *conn) {
 	}
 	s.epoch++
 	c.epoch = s.epoch
-	s.sendAdminLocked(&header{msgType: "A"}, s.logonBody(true, 2))
+	b := s.logonBody(true, 2)
+	b = append(b, c.logonExtra...)
+	s.sendAdminLocked(&header{msgType: "A"}, b)
 	if c.closed || s.c != c {
 		// The answer could not be stored: disconnected, not answered.
 		return

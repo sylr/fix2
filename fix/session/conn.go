@@ -87,8 +87,9 @@ type conn struct {
 	testReqs            uint64 // TestRequests sent, for their IDs
 	probeWanted         bool   // an acknowledgement probe waits for AckProbeMinInterval
 
-	logonExtra []byte // fields the handler added to the Logon we answer with
-	loggedOn   bool   // the connection got to log on
+	logonExtra  []byte // fields the handler added to our Logons
+	logoutExtra []byte // fields the handler added to our Logouts
+	loggedOn    bool   // the connection got to log on
 	// encrypted tells the Logon exchange agreed on an EncryptMethod (98)
 	// other than 0: every message but a Logon is sealed (see seal) and
 	// opened (see open). Set by the reader, which reads it without the lock.
