@@ -118,3 +118,54 @@ func TestStopFromCallback(t *testing.T) {
 		}
 	}
 }
+
+// stopFromToAdmin stops its session from ToAdmin answering a Logon, with
+// stop.
+type stopFromToAdmin struct {
+	session.BaseHandler
+	stop func(ctx context.Context, s *session.Session)
+}
+
+func (h stopFromToAdmin) ToAdmin(ctx context.Context, s *session.Session, msgType string, _ *fix.Builder) error {
+	if msgType == "A" {
+		h.stop(ctx, s)
+	}
+	return nil
+}
+
+// A session stopped from the ToAdmin answering a Logon does not answer it:
+// the connection is closed without a word, though the stop goes on in the
+// background once ToAdmin returned.
+func TestStopFromAcceptorToAdmin(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		stop func(a *session.Acceptor) func(context.Context, *session.Session)
+	}{
+		{"Stop", func(*session.Acceptor) func(context.Context, *session.Session) {
+			return func(ctx context.Context, s *session.Session) { s.Stop(ctx) }
+		}},
+		{"Remove", func(a *session.Acceptor) func(context.Context, *session.Session) {
+			return func(ctx context.Context, s *session.Session) { a.Remove(ctx, s.ID()) }
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				l := mem.Listen("acceptor")
+				a := session.NewAcceptor(session.AcceptorOptions{})
+				s, err := a.Add(session.Config{
+					ID:      session.SessionID{BeginString: session.FIX44, SenderCompID: "INI", TargetCompID: "ACC"},
+					Handler: stopFromToAdmin{stop: tc.stop(a)},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				a.Listen(l)
+				runUntilCleanup(t, a.Run)
+				p := dialPeer(t, l)
+				p.send("A", 0, "98", "0", "108", "30")
+				p.expectSilentEnd()
+				waitDone(t, s)
+			})
+		})
+	}
+}

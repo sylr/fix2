@@ -148,9 +148,12 @@ func (s *Session) stop(ctx context.Context, r logoutReq) error {
 		if s.stuck.Load() != nil && !s.stopQueued.CompareAndSwap(false, true) {
 			return nil
 		}
+		// Marked now, not by the goroutine: a connection the callback is
+		// for, as an acceptor's ToAdmin answering a Logon, is attached once
+		// it returns, which may be before the goroutine runs.
+		s.markStopping()
 		// What stopping waits for includes the callback calling it.
 		go func() {
-			s.markStopping()
 			s.logout(context.Background(), r)
 			if idle := s.markStopped(); idle != nil {
 				<-idle
@@ -180,11 +183,10 @@ func (s *Session) stop(ctx context.Context, r logoutReq) error {
 	}
 }
 
-// markStopping records that the session is stopping.
+// markStopping records that the session is stopping, without the lock: a
+// store write that hangs may hold it.
 func (s *Session) markStopping() {
-	s.mu.Lock()
-	s.stopping = true
-	s.mu.Unlock()
+	s.stopping.Store(true)
 }
 
 // stopNow stops the session, as Stop does from no callback.
@@ -455,7 +457,7 @@ func (s *Session) syncStored(ctx context.Context) error {
 func (s *Session) startDetached() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stopped || s.stopping {
+	if s.stopped || s.stopping.Load() {
 		return false
 	}
 	s.detached.Add(1)
@@ -486,7 +488,7 @@ func (r stoppingSessions) check(id SessionID) error {
 func (s *Session) isStopped() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.stopped || s.stopping
+	return s.stopped || s.stopping.Load()
 }
 
 // SetNextSenderSeqNum moves the MsgSeqNum of the next message sent forward

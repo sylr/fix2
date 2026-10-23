@@ -131,10 +131,10 @@ type Session struct {
 	c         *conn // the current connection, nil when disconnected
 	prev      *conn // the last connection, whose end a new one waits for
 	stopped   bool
-	stopping  bool   // Stop runs: no new connection
-	halted    error  // a store failure left the persisted state uncertain: no new connection
-	resetOwed string // why a reset on disconnection that failed is owed: the next connection makes it first
-	stalled   bool   // a handler callback is stuck, see Config.MaxDeliveryStall
+	stopping  atomic.Bool // Stop runs: no new connection
+	halted    error       // a store failure left the persisted state uncertain: no new connection
+	resetOwed string      // why a reset on disconnection that failed is owed: the next connection makes it first
+	stalled   bool        // a handler callback is stuck, see Config.MaxDeliveryStall
 	resetting bool
 	heartBt   time.Duration
 	// logoutWait is the LogoutTimeout of heartBt (see setHeartBtLocked),

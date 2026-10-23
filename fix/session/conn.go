@@ -166,7 +166,7 @@ func (s *Session) attach(tc transport.Conn, framer *fix.Framer) (*conn, error) {
 	}
 	defer s.mu.Unlock()
 	switch {
-	case s.stopped || s.stopping:
+	case s.stopped || s.stopping.Load():
 		return nil, ErrStopped
 	case s.halted != nil:
 		return nil, s.halted
