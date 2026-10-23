@@ -257,15 +257,15 @@ func (s *Session) onLogonLocked(c *conn, m *fix.Message, in Inbound, now time.Ti
 				slog.String("value", withhold(m, tagNextExpectedMsgSeqNum, quoteValue(m.Get(tagNextExpectedMsgSeqNum)), "withheld")))
 		}
 		if peerNext > nextBefore {
-			s.sendLogoutLocked(c, withhold(m, tagNextExpectedMsgSeqNum,
+			s.sendLogoutReqLocked(c, logoutReq{text: withhold(m, tagNextExpectedMsgSeqNum,
 				fmt.Sprintf("Tag 789 (NextExpectedMsgSeqNum) is higher than expected. Expected %d, Received %d", nextBefore, peerNext),
-				"Tag 789 (NextExpectedMsgSeqNum) is higher than expected"))
+				"Tag 789 (NextExpectedMsgSeqNum) is higher than expected"), status: statusNextTooHigh})
 			s.closeAfterFlushLocked(c, &LogoutError{Text: "counterparty expects messages we never sent"})
 			return
 		}
 	}
 	if in.Seq < s.st.NextTarget {
-		s.sendLogoutLocked(c, s.seqTooLowText(m, s.st.NextTarget, in.Seq))
+		s.sendLogoutReqLocked(c, logoutReq{text: s.seqTooLowText(m, s.st.NextTarget, in.Seq), status: statusSeqTooLow})
 		s.closeAfterFlushLocked(c, &LogoutError{Text: "Logon MsgSeqNum too low"})
 		return
 	}

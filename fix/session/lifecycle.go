@@ -45,11 +45,13 @@ func (s *Session) LogoutWithOptions(ctx context.Context, o LogoutOptions) error 
 }
 
 // logoutReq is a Logout to send: its text and, if replace, the fields
-// replacing those the handler added to the connection's Logouts.
+// replacing those the handler added to the connection's Logouts; status is
+// its SessionStatus (1409), set where the session dictionary allows it.
 type logoutReq struct {
 	text    string
 	extra   []byte
 	replace bool
+	status  string
 }
 
 // logoutReq returns the Logout o asks for, its Fields encoded as ToAdmin's

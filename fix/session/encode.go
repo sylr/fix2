@@ -43,6 +43,14 @@ const (
 	tagNextExpectedMsgSeqNum  = 789
 	tagApplVerID              = 1128
 	tagDefaultApplVerID       = 1137
+	tagSessionStatus          = 1409
+)
+
+// SessionStatus (1409) values of the Logouts the session sends for a
+// sequence number it cannot accept.
+const (
+	statusSeqTooLow   = "9"  // Received MsgSeqNum too low
+	statusNextTooHigh = "10" // Received NextExpectedMsgSeqNum too high
 )
 
 // reservedTags are the tags the session writes on every message it sends:

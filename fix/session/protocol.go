@@ -706,7 +706,7 @@ func (s *Session) checkSeqLocked(c *conn, m *fix.Message, in Inbound) seqVerdict
 		// One whose PossDupFlag may follow a malformed tag too: a message
 		// with a malformed tag is not garbled, which FIX would have us
 		// disregard, and it does not show PossDupFlag = Y.
-		s.logoutLocked(c, s.seqTooLowText(m, s.st.NextTarget, in.Seq))
+		s.logoutReqLocked(c, logoutReq{text: s.seqTooLowText(m, s.st.NextTarget, in.Seq), status: statusSeqTooLow})
 		return seqDone
 	}
 	if !s.origTimeOK(c, m, false) {
@@ -1454,8 +1454,69 @@ func (s *Session) sendLogoutReqLocked(c *conn, r logoutReq) {
 	if r.replace {
 		extra = r.extra
 	}
+	if r.status != "" && s.statusAllowed(r.status) {
+		b = b.str(tagSessionStatus, r.status)
+		// Ours tells why the session logs out, which the handler's could
+		// not know: theirs gives way.
+		extra = dropField(extra, tagSessionStatus, s.dicts.adminProfile())
+	}
 	b = append(b, extra...)
 	s.sendAdminLocked(&header{msgType: "5"}, b)
+}
+
+// statusAllowed reports whether the session dictionary lets a Logout hold
+// SessionStatus (1409) value v. Without a session dictionary, nothing tells
+// the counterparty knows the field: it is not sent.
+func (s *Session) statusAllowed(v string) bool {
+	d := s.dicts.session
+	if d == nil || !d.Defines("5", tagSessionStatus) {
+		return false
+	}
+	f := d.Fields[tagSessionStatus]
+	if f == nil || f.Enums == nil {
+		return f != nil
+	}
+	_, ok := f.Enums[v]
+	return ok
+}
+
+// dropField returns body, fields as Builder.AppendBody encodes them with
+// profile p, without those of tag: body itself if it has none.
+func dropField(body []byte, tag int, p *fix.Profile) []byte {
+	var out []byte
+	dropped := false
+	data, n := 0, 0 // the DATA field the previous one announced, and its length
+	for i := 0; i < len(body); {
+		eq := i + bytes.IndexByte(body[i:], '=')
+		t, _ := strconv.Atoi(string(body[i:eq]))
+		start := eq + 1
+		// A DATA value is read by its length, if the length ends it at a
+		// SOH: a handler may give a length its value does not have, which
+		// AppendBody does not check, and the value holds no SOH then.
+		end := start + n
+		if data == 0 || t != data || n < 0 || n >= len(body)-start || body[end] != 1 {
+			end = start + bytes.IndexByte(body[start:], 1)
+		}
+		next := end + 1
+		if t == tag {
+			dropped = true
+		} else {
+			out = append(out, body[i:next]...)
+		}
+		data, n = p.DataTag(t), 0
+		if data != 0 {
+			if v, err := fix.ParseInt(body[start:end]); err == nil {
+				n = int(v)
+			} else {
+				data = 0
+			}
+		}
+		i = next
+	}
+	if !dropped {
+		return body
+	}
+	return out
 }
 
 // onLogoutLocked handles a Logout: the answer to ours ends the connection;
