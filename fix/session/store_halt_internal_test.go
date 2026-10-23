@@ -188,7 +188,7 @@ func TestStoreHalt_Shutdown(t *testing.T) {
 	}
 	defer release()
 	done := make(chan struct{})
-	go func() { defer close(done); shutdown([]*Session{s}) }()
+	go func() { defer close(done); shutdown([]*Session{s}, nil) }()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):

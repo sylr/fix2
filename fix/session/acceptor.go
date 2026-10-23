@@ -1,11 +1,13 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -54,8 +56,11 @@ type Acceptor struct {
 	stopping  stoppingSessions            // removed, not yet done
 	byWire    map[SessionID][]*Session    // keyed by the counterparty's view of the wire identity
 	listeners []transport.Listener
-	ctx       context.Context // set while running
-	closing   bool            // Run is shutting down: no session added
+	ctx       context.Context    // set while running
+	cancel    context.CancelFunc // ends Run, set while running
+	ran       chan struct{}      // closed once Run returned, set while running
+	closing   bool               // Run is shutting down: no session added
+	logout    *LogoutOptions     // the Logout Shutdown asked for, nil for Run's own
 	wg        sync.WaitGroup
 	pending   chan struct{}               // semaphore of connections before their Logon
 	resolving map[SessionID]chan struct{} // wire identities Resolve is creating, closed once done
@@ -165,6 +170,7 @@ func (a *Acceptor) add(s *Session) error {
 		return fmt.Errorf("session %s: same wire identity as session %s: set AcceptorOptions.Route to tell them apart", s.id, others[0].id)
 	}
 	s.initiator = false
+	s.acceptor = a
 	a.sessions[s.id] = s
 	a.byWire[wire] = append(a.byWire[wire], s)
 	if a.ctx != nil {
@@ -261,22 +267,29 @@ func (a *Acceptor) Sessions() []*Session {
 }
 
 // Listen serves connections from l, now if the acceptor runs, else once it
-// does.
+// does. While Run shuts down, l is closed at once, as Run closes the
+// listeners it served.
 func (a *Acceptor) Listen(l transport.Listener) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.listeners = append(a.listeners, l)
+	if a.closing || (a.ctx != nil && a.ctx.Err() != nil) {
+		l.Close()
+		return
+	}
 	if a.ctx != nil {
 		a.wg.Add(1)
 		go a.acceptLoop(a.ctx, l)
 	}
 }
 
-// Run serves the listeners until ctx is done, then closes them and stops
-// every session (see Session.Stop): the sessions cannot be run again.
-// What it waits for before returning is as for Initiator.Run: not for a
-// stuck callback of a session's delivery goroutine, which its Done tells
-// the end of.
+// Run serves the listeners until ctx is done or Shutdown is called, then
+// closes them and the connections not yet logged on, and stops every
+// session (see Session.Stop), logging it out with the text "shutting down"
+// or the one Shutdown gives: the sessions cannot be run again. What it
+// waits for before returning is as for Initiator.Run: not for a stuck
+// callback of a session's delivery goroutine, which its Done tells the end
+// of.
 func (a *Acceptor) Run(ctx context.Context) error {
 	a.mu.Lock()
 	if a.ctx != nil {
@@ -285,7 +298,9 @@ func (a *Acceptor) Run(ctx context.Context) error {
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	a.ctx = runCtx
+	ran := make(chan struct{})
+	defer close(ran)
+	a.ctx, a.cancel, a.ran = runCtx, cancel, ran
 	for _, s := range a.sessions {
 		s.startSchedule(runCtx)
 	}
@@ -305,30 +320,101 @@ func (a *Acceptor) Run(ctx context.Context) error {
 	for _, s := range a.sessions {
 		sessions = append(sessions, s)
 	}
+	o := a.logout
 	a.mu.Unlock()
-	shutdown(sessions)
+	shutdown(sessions, o)
 	a.wg.Wait()
 	a.mu.Lock()
-	a.ctx, a.closing = nil, false
+	a.ctx, a.cancel, a.ran, a.closing, a.logout = nil, nil, nil, false, nil
 	a.mu.Unlock()
 	return nil
 }
 
+// Shutdown ends Run, as its ctx ending does, the sessions' Logouts saying
+// text: Run first closes the listeners and the connections not yet logged
+// on, one whose Logon a ToAdmin is answering once it returned, then logs
+// every session out and stops it, so that no counterparty logs on again
+// meanwhile. It is for a venue restarting its acceptor: the
+// counterparties' initiators reconnect once it listens again, as after any
+// Logout. Shutdown waits for Run to return until ctx is done; called with
+// the ctx of one of the sessions' handler callbacks, or one derived from
+// it, it returns at once, as Session.Stop does. Called again, or once Run's
+// ctx ended, it waits as well, the Logouts saying what the first asked for.
+// It fails if the acceptor is not running.
+func (a *Acceptor) Shutdown(ctx context.Context, text string) error {
+	return a.ShutdownWithOptions(ctx, LogoutOptions{Text: text})
+}
+
+// ShutdownWithOptions is Shutdown, the sessions' Logouts saying what o
+// says (see Session.LogoutWithOptions). It fails, shutting nothing down, if
+// o's Fields could not be sent on one of the sessions.
+func (a *Acceptor) ShutdownWithOptions(ctx context.Context, o LogoutOptions) error {
+	a.mu.Lock()
+	if a.ctx == nil {
+		a.mu.Unlock()
+		return errors.New("session: acceptor not running")
+	}
+	if a.logout == nil && a.ctx.Err() == nil && !a.closing {
+		for _, s := range a.sessions {
+			if _, err := s.logoutReq(o); err != nil {
+				a.mu.Unlock()
+				return err
+			}
+		}
+		// The caller's values may change once it returned.
+		o.Fields = slices.Clone(o.Fields)
+		for i := range o.Fields {
+			o.Fields[i].Value = bytes.Clone(o.Fields[i].Value)
+		}
+		a.logout = &o
+		// No session added from now on: each was checked.
+		a.closing = true
+	}
+	cancel, ran := a.cancel, a.ran
+	// A session removed since included: its callback may run on a
+	// connection's goroutine, which Run waits for.
+	cb := callbackSession(ctx)
+	own := cb != nil && cb.acceptor == a
+	a.mu.Unlock()
+	cancel()
+	if own {
+		// Run waits for the callback calling Shutdown, or stops its
+		// session once the callback returned: waiting here would wait for
+		// itself.
+		return nil
+	}
+	select {
+	case <-ran:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // shutdown stops sessions, in parallel: each refuses new connections, logs
-// out within its LogoutTimeout plus a margin, delivers what it received and
-// closes its store, or leaves the last two to finish once a stuck callback
-// returns (see Session.Done).
-func shutdown(sessions []*Session) {
+// out with o, Run's own Logout if nil, within its LogoutTimeout plus a
+// margin, delivers what it received and closes its store, or leaves the
+// last two to finish once a stuck callback returns (see Session.Done).
+func shutdown(sessions []*Session, o *LogoutOptions) {
 	var wg sync.WaitGroup
 	for _, s := range sessions {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			r := logoutReq{text: "shutting down"}
+			if o != nil {
+				var err error
+				if r, err = s.logoutReq(*o); err != nil {
+					// Checked by Shutdown, which no session was added after.
+					s.log.LogAttrs(context.Background(), slog.LevelError, "the Logout Shutdown asked for cannot be sent: its Text only is", slog.Any("error", err))
+					r = logoutReq{text: o.Text}
+				}
+			}
 			// Read without the lock, which a store write that hangs holds:
 			// stop knows how not to wait for it.
 			ctx, cancel := context.WithTimeout(context.Background(), s.logoutTimeout()+time.Second)
 			defer cancel()
-			s.stop(ctx, "shutting down")
+			s.stop(ctx, r)
 		}()
 	}
 	wg.Wait()

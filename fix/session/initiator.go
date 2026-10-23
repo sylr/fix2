@@ -235,7 +235,7 @@ func (i *Initiator) Run(ctx context.Context) error {
 		sessions = append(sessions, is.s)
 	}
 	i.mu.Unlock()
-	shutdown(sessions)
+	shutdown(sessions, nil)
 	cancel()
 	i.wg.Wait()
 	i.mu.Lock()

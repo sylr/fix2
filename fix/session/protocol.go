@@ -1408,6 +1408,12 @@ func (s *Session) businessRejectLocked(m *fix.Message, reason int, refID, text s
 // logoutLocked sends a Logout with text and waits for the counterparty's,
 // at most LogoutTimeout, before disconnecting; not logged on, it disconnects.
 func (s *Session) logoutLocked(c *conn, text string) {
+	s.logoutReqLocked(c, logoutReq{text: text})
+}
+
+// logoutReqLocked is logoutLocked for Logout r.
+func (s *Session) logoutReqLocked(c *conn, r logoutReq) {
+	text := r.text
 	if c.closed || c.closing || s.c != c {
 		// Closing, our Logout is queued already.
 		return
@@ -1421,7 +1427,7 @@ func (s *Session) logoutLocked(c *conn, text string) {
 		s.disconnectLocked(c, &LogoutError{Text: text})
 		return
 	}
-	s.sendLogoutLocked(c, text)
+	s.sendLogoutReqLocked(c, r)
 	s.phase = phaseLogoutSent
 	c.logoutText = text
 	c.logoutDeadline = time.Now().Add(s.logoutTimeout())
@@ -1431,14 +1437,24 @@ func (s *Session) logoutLocked(c *conn, text string) {
 // sendLogoutLocked sends a Logout with text, and the fields the handler adds
 // to c's Logouts.
 func (s *Session) sendLogoutLocked(c *conn, text string) {
-	if text != "" {
-		s.log.LogAttrs(context.Background(), slog.LevelInfo, "logging out", slog.String("text", text))
+	s.sendLogoutReqLocked(c, logoutReq{text: text})
+}
+
+// sendLogoutReqLocked sends Logout r: its text, and its fields if it
+// replaces those the handler adds to c's Logouts, theirs otherwise.
+func (s *Session) sendLogoutReqLocked(c *conn, r logoutReq) {
+	if r.text != "" {
+		s.log.LogAttrs(context.Background(), slog.LevelInfo, "logging out", slog.String("text", r.text))
 	}
 	var b adminBody
-	if text != "" {
-		b = b.str(tagText, cleanText(text))
+	if r.text != "" {
+		b = b.str(tagText, cleanText(r.text))
 	}
-	b = append(b, c.logoutExtra...)
+	extra := c.logoutExtra
+	if r.replace {
+		extra = r.extra
+	}
+	b = append(b, extra...)
 	s.sendAdminLocked(&header{msgType: "5"}, b)
 }
 

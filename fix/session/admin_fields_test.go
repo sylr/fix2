@@ -166,3 +166,29 @@ func TestResetAnswerToAdminFields(t *testing.T) {
 		})
 	})
 }
+
+// signedAdminFields is adminFields signing its Logons with field 20003.
+type signedAdminFields struct{ adminFields }
+
+func (signedAdminFields) SignLogon(_ context.Context, _ *session.Session, _ session.LogonHeader, b *fix.Builder) error {
+	b.SetString(20003, "sig")
+	return nil
+}
+
+// The answer to a reset Logon carries the fields ToAdmin added to the
+// initiator's Logon, not the signature of that Logon, which covers it only.
+func TestResetAnswerWithoutLogonSignature(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		l := mem.Listen("acceptor")
+		_, rec := startInitiator(t, l, func(c *session.Config) {
+			c.Handler = signedAdminFields{adminFields{recorder: c.Handler.(*recorder)}}
+		})
+		p := acceptPeer(t, l)
+		p.expect("A", "553", "trader", "20003", "sig")
+		p.send("A", 0, "98", "0", "108", "30")
+		rec.wait(t, func() bool { return rec.logons == 1 })
+		p.seq = 1
+		p.send("A", 0, "98", "0", "108", "30", "141", "Y")
+		p.expect("A", "34", "1", "141", "Y", "553", "trader", "20003", "")
+	})
+}

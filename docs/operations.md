@@ -2,9 +2,9 @@
 
 What a deployment has to size, configure and watch: memory,
 authentication, transport security, what the logs hold, audit trails, the
-SQLite store, and a disk that stops answering. Defaults are those of
-`session.Config` (`github.com/sylr/fix2/fix/session`) when a field is left at
-zero.
+SQLite store, a disk that stops answering, and restarting an acceptor.
+Defaults are those of `session.Config` (`github.com/sylr/fix2/fix/session`)
+when a field is left at zero.
 
 ## Memory
 
@@ -324,3 +324,34 @@ connection), `Send` returns `ErrNotLoggedOn`, and a Reject the handler
 returns is logged, not sent. A resend asked for before still goes first.
 What the counterparty sends after its own Logout, or held after it, is not
 handled at all: it is asked for again on the next connection.
+
+## Restarting an acceptor
+
+FIX has no Logout telling a counterparty to come back later: Text (58) is
+free text, and none of SessionStatus's (1409) values, in the editions that
+have it, means "restarting". A venue restarting its acceptor logs every
+session out and relies on the counterparties' initiators reconnecting, as
+they do after any Logout; their sequence numbers carry on, the store
+keeping ours, unless a reset on logout or disconnection is configured.
+
+`Acceptor.Shutdown(ctx, text)` does it in that order: it closes the
+listeners and the connections not yet logged on, one whose Logon a
+`ToAdmin` is answering once it returned, so that no counterparty logs on
+again meanwhile, then logs every session out with `text`, in
+parallel, each waiting `LogoutTimeout` at most for the answer, and stops
+it, as `Session.Stop` does, its store synced and closed. It returns once
+`Run` has, or when its ctx ends, the shutdown going on. Cancelling `Run`'s
+ctx does the same with the text "shutting down".
+
+`Acceptor.ShutdownWithOptions` and `Session.LogoutWithOptions` also set the
+Logout's other fields, SessionStatus for one where the dictionary has it:
+`LogoutOptions.Fields` replace on that Logout those `Handler.ToAdmin` added
+to the connection's Logouts. `ToAdmin` runs for a Logout once per
+connection, before its Logon, outside the session's lock: what it adds goes
+on every Logout of the connection, including those the session sends on
+its own, a MsgSeqNum too low say, and cannot depend on why the session logs
+out. A field the session writes, or Text, is refused: `ShutdownWithOptions`
+then shuts nothing down.
+
+Announce a restart before it, as a News (35=B) or out of band: the Logout
+reaches only the counterparties logged on at the time.

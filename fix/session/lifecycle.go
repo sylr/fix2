@@ -15,6 +15,68 @@ import (
 // Logout until ctx is done or LogoutTimeout passes, then disconnects. It
 // returns at once if the session is not connected.
 func (s *Session) Logout(ctx context.Context, text string) error {
+	return s.logout(ctx, logoutReq{text: text})
+}
+
+// LogoutOptions are what a Logout says, beyond the fields the session
+// writes.
+type LogoutOptions struct {
+	// Text is the Logout's Text (58), the reason logging out; none if
+	// empty.
+	Text string
+	// Fields, if not nil, replace on this Logout the fields Handler.ToAdmin
+	// added to the connection's Logouts: written in order, the fields of a
+	// repeating group as the group is. Empty, the Logout has none. Neither
+	// the fields the session writes nor Text may be set, and a value may
+	// hold SOH only in a DATA field after its length, as for ToAdmin.
+	Fields []fix.Field
+}
+
+// LogoutWithOptions logs the session out as Logout does, its Logout saying
+// what o says. A Logout already sent, as when the counterparty logged out
+// first, is not sent again. It fails without logging out if o's Fields
+// could not be sent.
+func (s *Session) LogoutWithOptions(ctx context.Context, o LogoutOptions) error {
+	r, err := s.logoutReq(o)
+	if err != nil {
+		return err
+	}
+	return s.logout(ctx, r)
+}
+
+// logoutReq is a Logout to send: its text and, if replace, the fields
+// replacing those the handler added to the connection's Logouts.
+type logoutReq struct {
+	text    string
+	extra   []byte
+	replace bool
+}
+
+// logoutReq returns the Logout o asks for, its Fields encoded as ToAdmin's
+// are, or why they cannot be sent.
+func (s *Session) logoutReq(o LogoutOptions) (logoutReq, error) {
+	r := logoutReq{text: o.Text}
+	if o.Fields == nil {
+		return r, nil
+	}
+	b := fix.NewBuilder(s.id.BeginString, "5")
+	for _, f := range o.Fields {
+		// Checked before Append, which panics for BodyLength and CheckSum.
+		if s.logoutReserved(f.Tag) {
+			return r, fmt.Errorf("session %s: Logout: %w", s.id, &fix.ReservedTagError{Tag: f.Tag})
+		}
+		b.Append(f.Tag, f.Value)
+	}
+	extra, err := b.AppendBody(nil, s.dicts.adminProfile(), s.logoutReserved)
+	if err != nil {
+		return r, fmt.Errorf("session %s: Logout: %w", s.id, err)
+	}
+	r.extra, r.replace = extra, true
+	return r, nil
+}
+
+// logout logs the session out with r, as Logout does.
+func (s *Session) logout(ctx context.Context, r logoutReq) error {
 	s.mu.Lock()
 	c := s.c
 	if c == nil {
@@ -23,10 +85,10 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 	}
 	switch s.phase {
 	case phaseEstablished:
-		s.logoutLocked(c, text)
+		s.logoutReqLocked(c, r)
 	case phaseLogoutSent:
 	default:
-		s.disconnectLocked(c, &LogoutError{Text: text})
+		s.disconnectLocked(c, &LogoutError{Text: r.text})
 	}
 	s.mu.Unlock()
 	select {
@@ -34,7 +96,7 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 		return nil
 	case <-ctx.Done():
 		s.mu.Lock()
-		s.disconnectLocked(c, &LogoutError{Text: text, Err: ctx.Err()})
+		s.disconnectLocked(c, &LogoutError{Text: r.text, Err: ctx.Err()})
 		s.mu.Unlock()
 		return ctx.Err()
 	}
@@ -62,7 +124,7 @@ func (s *Session) Logout(ctx context.Context, text string) error {
 // own, not derived from a callback's, or waits for Done. Initiators and
 // acceptors stop the sessions they remove.
 func (s *Session) Stop(ctx context.Context) error {
-	return s.stop(ctx, "session stopped")
+	return s.stop(ctx, logoutReq{text: "session stopped"})
 }
 
 // Done returns a channel closed once the session is stopped and its
@@ -76,7 +138,8 @@ func (s *Session) Stop(ctx context.Context) error {
 // logged.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
-func (s *Session) stop(ctx context.Context, text string) error {
+// stop stops the session as Stop does, logging out with r.
+func (s *Session) stop(ctx context.Context, r logoutReq) error {
 	if s.ownCallback(ctx) {
 		// One stop, however many Stops are called, once a store write
 		// hangs (see below).
@@ -86,7 +149,7 @@ func (s *Session) stop(ctx context.Context, text string) error {
 		// What stopping waits for includes the callback calling it.
 		go func() {
 			s.markStopping()
-			s.Logout(context.Background(), text)
+			s.logout(context.Background(), r)
 			if idle := s.markStopped(); idle != nil {
 				<-idle
 				s.closeLate()
@@ -100,12 +163,12 @@ func (s *Session) stop(ctx context.Context, text string) error {
 	// stop however many Stops are called then.
 	if err := s.stuck.Load(); err != nil {
 		if s.stopQueued.CompareAndSwap(false, true) {
-			go s.stopNow(context.Background(), text)
+			go s.stopNow(context.Background(), r)
 		}
 		return *err
 	}
 	stopped := make(chan error, 1)
-	go func() { stopped <- s.stopNow(ctx, text) }()
+	go func() { stopped <- s.stopNow(ctx, r) }()
 	select {
 	case err := <-stopped:
 		return err
@@ -123,9 +186,9 @@ func (s *Session) markStopping() {
 }
 
 // stopNow stops the session, as Stop does from no callback.
-func (s *Session) stopNow(ctx context.Context, text string) error {
+func (s *Session) stopNow(ctx context.Context, r logoutReq) error {
 	s.markStopping()
-	err := s.Logout(ctx, text)
+	err := s.logout(ctx, r)
 	idle := s.markStopped()
 	if idle == nil {
 		select {
@@ -157,11 +220,19 @@ func (s *Session) stopNow(ctx context.Context, text string) error {
 // ownCallback reports whether ctx is, or derives from, the ctx of one of the
 // session's handler callbacks while a callback of that kind runs.
 func (s *Session) ownCallback(ctx context.Context) bool {
+	return callbackSession(ctx) == s
+}
+
+// callbackSession returns the session whose handler callback ctx is, or
+// derives from, while a callback of that kind runs; nil if none.
+func callbackSession(ctx context.Context) *Session {
 	if ctx == nil {
-		return false
+		return nil
 	}
-	c, _ := ctx.Value(callKey{}).(*callCtx)
-	return c != nil && c.s == s && c.running.Load() > 0
+	if c, _ := ctx.Value(callKey{}).(*callCtx); c != nil && c.running.Load() > 0 {
+		return c.s
+	}
+	return nil
 }
 
 // callKey keys a callCtx in the ctx it is.
