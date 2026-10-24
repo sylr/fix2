@@ -3,7 +3,7 @@ module github.com/sylr/fix2/jepsen/node
 go 1.27
 
 require (
-	github.com/sylr/fix2 v0.0.0
+	github.com/sylr/fix2 v0.1.0
 	github.com/sylr/fix2/contribs/store/sqlite3 v0.0.0
 	golang.org/x/sys v0.47.0
 )
