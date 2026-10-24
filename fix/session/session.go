@@ -98,14 +98,15 @@ type Session struct {
 	// without authentication.
 	authWarned atomic.Bool
 
-	// lockedWrites and closeWrites are bumped before and after each store
-	// write, odd while one runs (see watchStore): those made holding mu,
-	// one at a time, and the store's Close, made once, when the session
-	// stops, maybe while a setter writes. stuck holds why the session
-	// halted when one took longer than StoreTimeout, which watchStore tells
-	// without the lock the write holds; cur is the connection it closes.
-	lockedWrites atomic.Uint64
-	closeWrites  atomic.Uint64
+	// lockedWrites and closeWrites time the store writes (see watchStore):
+	// those made holding mu, one at a time, and the store's Close, made
+	// once, when the session stops, maybe while a setter writes; born is
+	// what they time from. stuck holds why the session halted when one took
+	// longer than StoreTimeout, which watchStore tells without the lock the
+	// write holds; cur is the connection it closes.
+	lockedWrites storeWrites
+	closeWrites  storeWrites
+	born         time.Time
 	stuck        atomic.Pointer[error]
 	stuckCh      chan struct{} // closed with stuck set
 	cur          atomic.Pointer[conn]
@@ -236,6 +237,7 @@ func New(cfg Config) (*Session, error) {
 		store:   cfg.Store,
 		done:    make(chan struct{}),
 		stuckCh: make(chan struct{}),
+		born:    time.Now(),
 	}
 	s.reservedTag = reserved
 	if cfg.Encrypter != nil {
@@ -389,55 +391,65 @@ func (s *Session) storeLocked(f func() error) error {
 	return err
 }
 
-// storeWrite runs f, a store write counted by writes, one at a time, where
-// watchStore sees it.
-func (s *Session) storeWrite(writes *atomic.Uint64, f func() error) error {
-	writes.Add(1)
+// storeWrite runs f, a store write of the kind w times, one at a time,
+// where watchStore sees it.
+func (s *Session) storeWrite(w *storeWrites, f func() error) error {
+	w.began.Store(int64(time.Since(s.born)))
+	w.n.Add(1)
 	if !s.watching.Load() && s.watching.CompareAndSwap(false, true) {
-		time.AfterFunc(max(s.cfg.StoreTimeout/2, time.Millisecond), func() { s.watchStore(writeWatch{}, writeWatch{}, 0) })
+		time.AfterFunc(s.watchEvery(), func() { s.watchStore(0) })
 	}
 	err := f()
-	writes.Add(1)
+	w.n.Add(1)
 	return err
 }
 
-// writeWatch is what watchStore saw of a kind of store writes: the count
-// of the one running, and at how many checks in a row.
-type writeWatch struct {
-	seen  uint64
-	times int
+// storeWrites times a kind of store writes, made one at a time: n is
+// bumped before and after each, odd while one runs, and began holds when
+// the one running began, as time since the session's birth.
+type storeWrites struct {
+	n     atomic.Uint64
+	began atomic.Int64
 }
 
-// see records n, the count of a kind of writes, and reports whether one
-// has run at three checks in a row: for StoreTimeout at least, and at most
-// half more.
-func (w *writeWatch) see(n uint64) bool {
-	switch {
-	case n%2 == 0:
-		w.times = 0
-	case n == w.seen:
-		w.times++
-	default:
-		w.seen, w.times = n, 1
+// running reports whether a write runs, and for how long at now, time
+// since the session's birth. began is stored before n is bumped: read
+// after n, it is the running write's, or a later one's, which only makes
+// the write seem younger.
+func (w *storeWrites) running(now time.Duration) (time.Duration, bool) {
+	if w.n.Load()%2 == 0 {
+		return 0, false
 	}
-	return w.times >= 3
+	return now - time.Duration(w.began.Load()), true
 }
 
-// watchStore checks, every half StoreTimeout, whether a store write, of
-// either kind, has run for StoreTimeout (see writeWatch.see): the session is
-// stuck (see storeStuck). It stops once none ran at two checks in a row,
-// idle counting them: the next write starts it again.
-func (s *Session) watchStore(locked, closing writeWatch, idle int) {
-	l, c := s.lockedWrites.Load(), s.closeWrites.Load()
-	if locked.see(l) || closing.see(c) {
+// watchEvery is how often watchStore checks: a write is found stuck a
+// quarter of StoreTimeout after it is due at most, give or take the
+// timer's lateness, within the half Config.StoreTimeout allows. Every
+// millisecond at least: a StoreTimeout under 4ms is found later than that.
+func (s *Session) watchEvery() time.Duration {
+	return max(s.cfg.StoreTimeout/4, time.Millisecond)
+}
+
+// watchStore checks, every watchEvery, whether a store write, of either
+// kind, has run for StoreTimeout: the session is stuck (see storeStuck).
+// Measured from when the write began, not counted in checks, a check that
+// comes late delays the halt by its lateness alone. It stops once none ran
+// at two checks in a row, idle counting them: the next write starts it
+// again.
+func (s *Session) watchStore(idle int) {
+	now := time.Since(s.born)
+	l, locked := s.lockedWrites.running(now)
+	c, closing := s.closeWrites.running(now)
+	if l >= s.cfg.StoreTimeout || c >= s.cfg.StoreTimeout {
 		s.storeStuck()
 		return
 	}
-	if l%2 == 0 && c%2 == 0 {
+	if !locked && !closing {
 		if idle++; idle >= 2 {
 			s.watching.Store(false)
 			// A write started meanwhile saw the chain running.
-			if s.lockedWrites.Load()%2 == 0 && s.closeWrites.Load()%2 == 0 || !s.watching.CompareAndSwap(false, true) {
+			if s.lockedWrites.n.Load()%2 == 0 && s.closeWrites.n.Load()%2 == 0 || !s.watching.CompareAndSwap(false, true) {
 				return
 			}
 			idle = 0
@@ -445,7 +457,7 @@ func (s *Session) watchStore(locked, closing writeWatch, idle int) {
 	} else {
 		idle = 0
 	}
-	time.AfterFunc(max(s.cfg.StoreTimeout/2, time.Millisecond), func() { s.watchStore(locked, closing, idle) })
+	time.AfterFunc(s.watchEvery(), func() { s.watchStore(idle) })
 }
 
 // storeStuck halts the session whose lock a store write that does not

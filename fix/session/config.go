@@ -326,9 +326,11 @@ type Config struct {
 	// StoreTimeout is how long a store write made under the session's lock
 	// (Append, SetNextTarget, SetNextSender, Reset, Truncate) may take, 30s
 	// if 0. One taking longer, between once and one and a half times it,
-	// halts the session without waiting for it: State and Err tell it at
-	// once, the connection is closed, and Stop returns, the session
-	// stopping once the write returns. It stays halted then (see Err). The
+	// give or take a timer firing late on a loaded host, or 1ms for a
+	// StoreTimeout under 4ms, halts the session without waiting for it:
+	// State and Err tell it at once, the connection is closed, and Stop
+	// returns, the session stopping once the write returns. It stays
+	// halted then (see Err). The
 	// store's Close, when the session stops, is bounded alike. The store's
 	// Open, when the session is created, gets a ctx ending after it: New,
 	// and the Add that calls it, fail rather than wait longer, unless the

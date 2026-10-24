@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sylr/fix2/fix"
@@ -420,6 +421,29 @@ func TestWatchStoreCloseHangsWritesGoOn(t *testing.T) {
 	}
 }
 
+// A write that hangs is found stuck StoreTimeout after it began, a quarter
+// of it later at most, wherever the watchdog's checks fall: here, the
+// write begins just after one, the watchdog kept running by the write
+// before.
+func TestWatchStoreBound(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const timeout = 100 * time.Millisecond
+		s := fenceSession(t, func(c *Config) { c.StoreTimeout = timeout })
+		s.storeWrite(&s.lockedWrites, func() error {
+			time.Sleep(timeout/2 + time.Millisecond)
+			return nil
+		})
+		release := make(chan struct{})
+		defer close(release)
+		began := time.Now()
+		go s.storeWrite(&s.lockedWrites, func() error { <-release; return nil })
+		<-s.stuckCh
+		if took := time.Since(began); took < timeout || took > timeout+timeout/4 {
+			t.Errorf("found stuck %s after the write began, want between %s and %s", took, timeout, timeout+timeout/4)
+		}
+	})
+}
+
 // State called while a write that hangs holds the lock, before it is found
 // stuck, returns once it is.
 func TestStateWhileWriteHangs(t *testing.T) {
@@ -431,7 +455,7 @@ func TestStateWhileWriteHangs(t *testing.T) {
 		defer s.mu.Unlock()
 		s.storeLocked(func() error { <-release; return nil })
 	}()
-	for s.lockedWrites.Load()%2 == 0 {
+	for s.lockedWrites.n.Load()%2 == 0 {
 		time.Sleep(time.Millisecond)
 	}
 	state := make(chan State, 1)
