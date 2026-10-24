@@ -345,9 +345,9 @@ func TestAcceptorShutdownFromRemovedSessionCallback(t *testing.T) {
 		if err := waitErr(t, h.ret, "Shutdown from ToAdmin"); err != nil {
 			t.Fatalf("Shutdown = %v", err)
 		}
-		// The Logon may be answered first: a Stop from a callback marks the
-		// session stopping in the background.
-		p.expectEnd(5 * time.Second)
+		// The session was removed before ToAdmin returned: its Logon is
+		// never answered.
+		p.expectSilentEnd()
 		if err := waitErr(t, ran, "Run"); err != nil {
 			t.Fatalf("Run = %v", err)
 		}
